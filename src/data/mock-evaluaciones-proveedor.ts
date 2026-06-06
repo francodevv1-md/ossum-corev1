@@ -1,0 +1,40 @@
+import type { EvaluacionProveedor } from "@/types"
+
+export const mockEvaluacionesProveedor: EvaluacionProveedor[] = [
+  {
+    id: "EVA-0001",
+    proveedorId: "PROV-0001",
+    proveedorName: "Zimmer Argentina S.A.",
+    fecha: "2026-04-30",
+    calidad: 5,
+    puntualidad: 4,
+    precio: 3,
+    servicio: 5,
+    promedio: 4.25,
+    observaciones: "Excelente calidad de producto. Entregas generalmente puntuales. Precios competitivos pero con aumentos frecuentes.",
+  },
+  {
+    id: "EVA-0002",
+    proveedorId: "PROV-0002",
+    proveedorName: "Synthes Argentina",
+    fecha: "2026-04-30",
+    calidad: 5,
+    puntualidad: 5,
+    precio: 4,
+    servicio: 5,
+    promedio: 4.75,
+    observaciones: "Proveedor confiable. Entregas puntuales. Excelente servicio post-venta.",
+  },
+  {
+    id: "EVA-0003",
+    proveedorId: "PROV-0005",
+    proveedorName: "Arthrex Argentina",
+    fecha: "2026-04-30",
+    calidad: 4,
+    puntualidad: 3,
+    precio: 4,
+    servicio: 3,
+    promedio: 3.5,
+    observaciones: "Buenos productos pero demoras en entregas. Servicio comercial con tiempos de respuesta lentos.",
+  },
+]

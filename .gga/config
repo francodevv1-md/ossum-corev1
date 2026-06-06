@@ -1,0 +1,20 @@
+# Gentleman Guardian Angel Configuration
+# OSSUM COR — project-level config overrides global
+
+# AI Provider for code review
+PROVIDER="opencode"
+
+# File patterns to review (scoped to OSSUM COR stack)
+FILE_PATTERNS="*.ts,*.tsx,*.js,*.jsx,*.css,*.json,*.prisma,*.md"
+
+# Patterns to exclude (tests, builds, memory chunks, archived docs)
+EXCLUDE_PATTERNS="*.test.*,*.spec.*,*.d.ts,dist/*,build/*,node_modules/*,.next/*,.engram/*,knowledge/archive/*"
+
+# Rules file
+RULES_FILE="AGENTS.md"
+
+# Strict mode (fail on ambiguous AI responses)
+STRICT_MODE="true"
+
+# Review timeout in seconds
+TIMEOUT="300"
