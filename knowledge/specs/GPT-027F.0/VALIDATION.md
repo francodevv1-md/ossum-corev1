@@ -299,3 +299,193 @@ Decisiones cerradas por Franco para iniciar 5A:
 | `.gga/config` exists | `PROVIDER=opencode`, `FILE_PATTERNS` scoped, `EXCLUDE_PATTERNS` completos ✅ |
 | `QUALITY_GATES.md` updated | Nuevo gate GGA documentado ✅ |
 | No se tocó `src/`, `prisma/`, `public/`, `package.json`, `.env` | ✅ |
+
+---
+
+## Validación GPT-027F.5A-00C — Prisma 7 config para Supabase/PostgreSQL
+
+### Modificaciones aplicadas
+
+- `prisma/schema.prisma`: datasource actualizado de `sqlite` a `postgresql`. Línea `url` eliminada (Prisma 7 la declara en `prisma.config.ts`). Modelos demo (`User`, `Post`) preservados.
+- `prisma.config.ts`: ya existía con formato Prisma 7 correcto. Sin cambios.
+
+### Resultado
+
+```text
+$ npx prisma validate
+Loaded Prisma config from prisma.config.ts.
+The schema at prisma\schema.prisma is valid 🚀
+```
+
+### Decisión
+
+- Prisma 7 con `prisma.config.ts` para la configuración del datasource (URL vía `env("DATABASE_URL")`).
+- Schema sin `url` ni `directUrl` — todo delegado a `prisma.config.ts`.
+- Provider `postgresql` listo para Supabase.
+- `DATABASE_URL` debe ser la connection string de Supabase PostgreSQL.
+
+### Estados previos vs actual
+
+| Aspecto | Antes | Ahora |
+|---|---|---|
+| Provider | `sqlite` | `postgresql` |
+| `url` en schema | `env("DATABASE_URL")` | Eliminado (está en `prisma.config.ts`) |
+| `prisma.config.ts` | No existía | Creado por Prisma 7 init (formato correcto) |
+| Valida | ❌ (sqlite con postgres pendiente) | ✅ `valid 🚀` |
+| Modelos de dominio | ❌ No creados | ✅ Creados (5A-01) |
+
+---
+
+## Validación GPT-027F.5A-01 — Schema inicial Prisma OSSUM COR
+
+### Modelos creados (12)
+
+| Modelo | Descripción | Multiempresa |
+|---|---|---|
+| `Organization` | Tenant / grupo empresarial | N/A (raíz) |
+| `Company` | Empresa operativa | FK → Organization |
+| `Branch` | Sucursal | FK → Company |
+| `User` | Usuario del sistema | Global (acceso vía UserCompanyAccess) |
+| `UserCompanyAccess` | Vínculo usuario → empresa con rol | FK → Company |
+| `Contact` | Persona/institución (paciente, médico, etc.) | Global (vínculo vía ContactCompanyLink) |
+| `ContactCompanyLink` | Vínculo contacto → empresa | FK → Company |
+| `ContactGroup` | Grupo de contactos por empresa | FK → Company |
+| `ContactGroupMembership` | Miembro de grupo | FK → ContactGroup |
+| `ContactAddress` | Dirección de contacto | FK → Contact |
+| `Surgery` | Cirugía mínima V1 | FK → Company |
+| `AuditEvent` | Trazabilidad de acciones críticas | FK → Company |
+
+### Decisión de diseño
+
+- **IDs**: `@default(cuid())` — portables, no secuenciales.
+- **Timestamps**: `createdAt` + `updatedAt` en todas las entidades operativas.
+- **Multiempresa**: `companyId` en toda entidad operativa. `Organization` → `Company` → `Branch`.
+- **Roles**: `String` en vez de enum — flexibilidad sin migraciones por cada nuevo rol.
+- **Auditoría**: `AuditEvent` con `entityType`, `entityId`, `action`, `oldValue`, `newValue`, `module`, `metadata`.
+- **Cirugía**: mínima V1 — `patientId`, `doctorId?`, `institutionId?`, `surgeryDate`, `status`. Sin presupuestos, preparación, remitos, consumos, devoluciones ni stock.
+- **Sin enums rígidos**: `contactType`, `role`, `status`, `addressType` como `String`.
+- **Sin RLS**: la validación multiempresa se implementa en backend services. RLS es capa adicional posterior.
+- **Sin modelos demo**: `User` y `Post` reemplazados.
+
+### Reglas aplicadas desde reference docs
+
+| Documento | Reglas aplicadas |
+|---|---|
+| `DATA_MODEL_RULES.md` | Multiempresa, IDs técnicos, timestamps, evitar enums rígidos, separar entidad base de vínculo |
+| `MULTI_COMPANY_ACCESS.md` | Org → Company → Branch, UserCompanyAccess con role, company_id en entidades operativas |
+| `AUDIT_EVENT_POLICY.md` | AuditEvent con company_id, user_id, entity_type, entity_id, action, old/new value, module |
+| `BACKEND_FOUNDATION_PLAN.md` | 11 modelos núcleo + ContactGroupMembership, sin stock, sin facturación, sin remitos |
+
+### Validaciones
+
+| Check | Resultado |
+|---|---|
+| `npx prisma format` | ✅ Formatted in 26ms |
+| `npx prisma validate` | ✅ `valid 🚀` |
+| Modelos demo eliminados (`User`, `Post`) | ✅ Reemplazados |
+| Total modelos | 12 |
+| `companyId` en entidades operativas | ✅ |
+| No stock, remitos, consumos, facturación | ✅ |
+| No enums rígidos (strings flexibles) | ✅ |
+| No RLS en schema | ✅ |
+| No `src/`, `public/`, `package.json`, `.env` | ✅ |
+
+---
+
+## Validación GPT-027F.5A-03 — Primera migración DEV contra Supabase
+
+### Diagnóstico P1000
+
+El error P1000 persistente tenía como causa raíz un **project ref mismatch** en `.env`:
+
+- `SUPABASE_URL` apuntaba a project ref `izzrlwsqrnrcgyyqnfge`.
+- `DATABASE_URL` y `DIRECT_URL` usaban username `postgres.yywqcdromnmmelikvspi` (otro proyecto).
+- Las credenciales no correspondían al mismo proyecto Supabase.
+- Conectividad TCP a ambos pooler ports era correcta.
+- PgBouncer resolvía el tenant pero PostgreSQL rechazaba la autenticación.
+
+Solución: Franco actualizó `.env` con credenciales del proyecto correcto.
+
+### Resultado migración
+
+```text
+$ npx prisma migrate dev --name init_backend_foundation
+Applying migration `20260606063628_init_backend_foundation`
+Your database is now in sync with your schema.
+```
+
+### Tablas creadas (12)
+
+| Tabla | Descripción | FK |
+|---|---|---|
+| `Organization` | Tenant raíz | — |
+| `Company` | Empresa operativa | → Organization |
+| `Branch` | Sucursal | → Company |
+| `User` | Usuario del sistema | — |
+| `UserCompanyAccess` | Acceso usuario → empresa con rol | → User, Company |
+| `Contact` | Persona/institución unificada | — |
+| `ContactCompanyLink` | Vínculo contacto → empresa | → Contact, Company |
+| `ContactGroup` | Grupo de contactos | → Company |
+| `ContactGroupMembership` | Miembro de grupo | → ContactGroup, Contact |
+| `ContactAddress` | Dirección de contacto | → Contact |
+| `Surgery` | Cirugía mínima V1 | → Company, Branch?, Contact (×3) |
+| `AuditEvent` | Trazabilidad de acciones | → Company, User |
+
+### Índices creados
+
+**Unique indexes (8):**
+
+| Índice | Columna(s) |
+|---|---|
+| `Organization_slug_key` | slug |
+| `User_supabaseAuthId_key` | supabaseAuthId |
+| `User_email_key` | email |
+| `UserCompanyAccess_userId_companyId_key` | userId, companyId |
+| `ContactCompanyLink_contactId_companyId_key` | contactId, companyId |
+| `ContactGroupMembership_groupId_contactId_key` | groupId, contactId |
+
+**Composite indexes (3):**
+
+| Índice | Columna(s) |
+|---|---|
+| `AuditEvent_entityType_entityId_idx` | entityType, entityId |
+| `AuditEvent_companyId_createdAt_idx` | companyId, createdAt |
+| `AuditEvent_userId_createdAt_idx` | userId, createdAt |
+
+### Config Prisma 7
+
+- `prisma.config.ts` usa `env("DIRECT_URL")` para CLI/migrations.
+- `schema.prisma` declara solo `provider = "postgresql"` sin `url`.
+- `DIRECT_URL` apunta a session pooler `aws-1-sa-east-1.pooler.supabase.com:5432`.
+- `DATABASE_URL` apunta a transaction pooler `aws-1-sa-east-1.pooler.supabase.com:6543`.
+- Host directo `db.[ref].supabase.co` devuelve NXDOMAIN — no disponible.
+
+### Validaciones post-migración
+
+| Check | Resultado |
+|---|---|
+| Conexión pg driver (DIRECT_URL) | ✅ PostgreSQL 17.6 |
+| `npx prisma migrate dev` | ✅ Migration applied |
+| Tablas en BD | ✅ 12 tablas + `_prisma_migrations` |
+| Migración registrada | ✅ 1 migration finished |
+| `npx prisma validate` | ✅ valid |
+| `npx prisma generate` | ✅ Prisma Client v7.8.0 |
+| `npm run typecheck` | ✅ next typegen + tsc --noEmit |
+| `npm run build` | ✅ Next.js 16.2.6, 38 routes |
+
+### Config Supabase
+
+| Variable | Propósito | Formato |
+|---|---|---|
+| `DATABASE_URL` | App runtime (transaction pooler) | `postgresql://postgres.[ref]:[pass]@aws-1-sa-east-1.pooler.supabase.com:6543/postgres` |
+| `DIRECT_URL` | CLI/migrations (session pooler) | `postgresql://postgres.[ref]:[pass]@aws-1-sa-east-1.pooler.supabase.com:5432/postgres` |
+| `SUPABASE_URL` | Supabase client API | `https://[ref].supabase.co` |
+| `SUPABASE_ANON_KEY` | Public API key | `eyJ...` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key | `eyJ...` |
+
+### Lecciones aprendidas
+
+- **Project ref mismatch**: P1000 con Supabase pooler puede deberse a credenciales de otro proyecto. Siempre verificar que el project ref en el username coincida con `SUPABASE_URL`.
+- **DIRECT_URL para migraciones**: `prisma.config.ts` debe usar `DIRECT_URL` (session pooler puerto 5432), no `DATABASE_URL` (transaction pooler puerto 6543 con PgBouncer).
+- **Host directo no disponible**: `db.[ref].supabase.co` puede devolver NXDOMAIN según el plan Supabase. Usar session pooler como alternativa.
+- **Prisma 7**: `datasource.url` se declara en `prisma.config.ts`, no en `schema.prisma`.

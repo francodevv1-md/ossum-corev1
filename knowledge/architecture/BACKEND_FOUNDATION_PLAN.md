@@ -106,3 +106,15 @@ Stock puede dividirse a subtarea posterior si amenaza la validación.
 - Documentación de migración desde Zustand/localStorage.
 - Quality gates ejecutados.
 
+---
+
+## Decisión técnica: Prisma 7 config
+
+- Prisma 7 detectado en el proyecto (v7.8.0).
+- `prisma.config.ts` es el archivo de configuración estándar de Prisma 7.
+- `datasource.url` se declara en `prisma.config.ts` vía `env("DATABASE_URL")`, no en `schema.prisma`.
+- `schema.prisma` solo declara `provider = "postgresql"` sin `url` ni `directUrl`.
+- Validado con `npx prisma validate` → ✅.
+
+Ver `VALIDATION.md` sección GPT-027F.5A-00C para detalles.
+

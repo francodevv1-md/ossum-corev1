@@ -568,3 +568,208 @@ Next:
 
 - Decidir si instalar GGA hook (`gga install`) o mantenerlo como gate manual opcional.
 - Validar guardrails con una prueba controlada de permisos y concurrencia.
+
+---
+
+## 2026-06-05 — GPT-027F.5A-00C Prisma 7 config para Supabase
+
+Done:
+
+- `prisma/schema.prisma`: datasource actualizado de `sqlite` a `postgresql`. Línea `url` eliminada (Prisma 7 la maneja desde `prisma.config.ts`).
+- `prisma.config.ts`: verificado — ya existía con formato Prisma 7 correcto (`defineConfig`, `env("DATABASE_URL")`, schema path, migrations path). Sin cambios.
+- Validación: `npx prisma validate` → ✅ `The schema is valid 🚀`.
+- Modelos demo (`User`, `Post`) preservados. No se crearon modelos de dominio todavía.
+- Documentado en `VALIDATION.md` y `BACKEND_FOUNDATION_PLAN.md`.
+
+Changed:
+
+- `prisma/schema.prisma` — provider: sqlite → postgresql, url removido.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md` — nueva sección 5A-00C.
+- `knowledge/worklog/WORKLOG.md` — entrada 5A-00C agregada.
+- `knowledge/architecture/BACKEND_FOUNDATION_PLAN.md` — nota de Prisma 7 agregada.
+
+Validations:
+
+| Check | Resultado |
+|---|---|
+| `npx prisma validate` | ✅ `valid 🚀` |
+| Provider | `postgresql` ✅ |
+| `url` en schema | Eliminado ✅ |
+| `prisma.config.ts` | `defineConfig`, `env("DATABASE_URL")`, `schema`, `migrations.path` ✅ |
+| No se tocaron modelos de dominio | ✅ (solo demo User/Post preservados) |
+| No se tocó `src/`, `public/`, `package.json`, `.env` | ✅ |
+
+Risks:
+
+- `DATABASE_URL` actualmente apunta a la DB de SQLite del prototipo si existe en `.env`. Al conectar con Supabase, la URL debe reemplazarse.
+- Modelos demo (`User`, `Post`) están en el schema pero no corresponden al modelo de negocio de OSSUM COR. Serán reemplazados cuando se definan las entidades reales.
+- `prisma.config.ts` fue creado por `prisma init` y puede necesitar ajustes (ej: `migrations.path` heredado).
+
+Next:
+
+- Reemplazar modelos demo por entidades reales de OSSUM COR (Organization, Company, Branch, User, etc.) según `BACKEND_FOUNDATION_PLAN.md`.
+- Configurar Supabase project y obtener `DATABASE_URL`.
+- Crear `prisma/seed.ts` con datos multiempresa.
+- Ejecutar `prisma migrate dev --name init` contra Supabase.
+
+---
+
+## 2026-06-05 — GPT-027F.5A-01 Schema inicial Prisma OSSUM COR
+
+Done:
+
+- Reemplazados modelos demo (`User`, `Post`) por schema real de OSSUM COR con **12 modelos**:
+  - Organization, Company, Branch, User, UserCompanyAccess
+  - Contact, ContactCompanyLink, ContactGroup, ContactGroupMembership, ContactAddress
+  - Surgery (mínima V1), AuditEvent
+- Aplicadas reglas de `DATA_MODEL_RULES.md`, `MULTI_COMPANY_ACCESS.md`, `AUDIT_EVENT_POLICY.md`.
+- Multiempresa desde inicio: `Organization` → `Company` → `Branch`, `companyId` en cada entidad operativa.
+- Auditoría preparada: `AuditEvent` con entityType, entityId, action, old/new value, module.
+- Sin enums rígidos: roles, tipos y estados como `String`.
+- Sin RLS, sin stock, sin presupuestos, sin remitos, sin consumos, sin facturación.
+- Validado: `npx prisma format` ✅ + `npx prisma validate` ✅.
+
+Changed:
+
+- `prisma/schema.prisma` — reemplazo completo (modelos demo → 12 modelos OSSUM COR).
+- `knowledge/specs/GPT-027F.0/VALIDATION.md` — nueva sección 5A-01 con tabla de modelos, decisiones de diseño, reglas aplicadas y validaciones.
+- `knowledge/worklog/WORKLOG.md` — entrada 5A-01 agregada.
+
+Files:
+
+- `prisma/schema.prisma` — 221 líneas, 12 modelos.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md` — sección 5A-01 agregada.
+- `knowledge/worklog/WORKLOG.md` — entrada 5A-01 agregada.
+
+Validations:
+
+| Check | Resultado |
+|---|---|
+| `npx prisma format` | ✅ 26ms |
+| `npx prisma validate` | ✅ `valid 🚀` |
+| Modelos demo eliminados | ✅ |
+| 12 modelos creados | ✅ |
+| `companyId` en entidades operativas | ✅ |
+| Sin stock, facturación, remitos | ✅ |
+| Sin enums rígidos | ✅ |
+| Sin RLS en schema | ✅ |
+| No `src/`, `public/`, `package.json`, `.env` | ✅ |
+
+Risks:
+
+- `DATABASE_URL` aún no configurada para Supabase. El schema valida pero no se puede migrar ni generar cliente sin una URL real de PostgreSQL.
+- `ContactGroupMembership` no estaba en la lista requerida explícita del task brief, pero es necesaria para que `ContactGroup` sea funcional. Incluida por coherencia con `BACKEND_FOUNDATION_PLAN.md`.
+- Surgery mínima V1 puede necesitar ajustes (números visibles, secuencia, prefijo) según `DATA_MODEL_RULES.md` cuando se integre con presupuestos y remitos.
+
+Next:
+
+- Configurar Supabase project, obtener `DATABASE_URL` y setear en `.env`.
+- Crear `prisma/seed.ts` con datos multiempresa (Districorr / Casa Salud).
+- Ejecutar `npx prisma migrate dev --name init`.
+- Generar cliente Prisma y crear server-side services.
+
+---
+
+## 2026-06-06 — GPT-027F.5A-01R Schema review + ajustes + validación no destructiva
+
+Done:
+
+- GPT-027F.5A-01R-A: Read-only Backend/DB review del schema inicial; encontró 3 issues críticos (User lacks Supabase Auth link, Contact can't model non-person entities, Surgery allows cross-company contact references).
+- GPT-027F.5A-01R-B: Independent QA audit; encontró branchId missing en Surgery, AuditEvent sin entity index, Contact sin legalName/isCompany.
+- GPT-027F.5A-01R-C: Comparison; identificó acuerdo en Contact/AuditEvent gaps y desacuerdo en migration readiness.
+- GPT-027F.5A-02A: Decision brief; `User.supabaseAuthId`, Contact unificado con `legalName`/`isCompany` + first/last name optional, `branchId` nullable en Surgery, AuditEvent indexes + Json payloads.
+- GPT-027F.5A-02B: Aplicados ajustes mínimos en `prisma/schema.prisma`.
+- GPT-027F.5A-01R-D: Validación no destructiva; `prisma generate` falló por Prisma 6/7 version mismatch.
+- GPT-027F.5A-01R-E: Alineadas dependencias Prisma a `^7.8.0`.
+- GPT-027F.5A-01R-F: Corregido `tsc --noEmit` standalone failure; excluidos `.next/types/app/**/*.ts` y `.next/dev/types/**/*.ts` del tsconfig; agregado script `typecheck`.
+- GPT-027F.5A-01R-D2: Validación final no destructiva completa; todos los checks pasaron (validate, generate, typecheck, tsc, build).
+
+Changed:
+
+- `prisma/schema.prisma` — User.supabaseAuthId, Contact flexible, Surgery.branchId nullable, AuditEvent Json+indexes.
+- `package.json` — `@prisma/client` `^7.8.0`, `prisma` movido a devDeps `^7.8.0`, script `typecheck` agregado.
+- `package-lock.json` — dependencias alineadas.
+- `tsconfig.json` — excludes `.next/types/app/**/*.ts` y `.next/dev/types/**/*.ts`.
+
+Files:
+
+- `prisma/schema.prisma` — 12 modelos ajustados.
+- `package.json` — versión Prisma, typecheck script.
+- `tsconfig.json` — excludes agregados.
+
+Validations:
+
+| Check | Resultado |
+|---|---|
+| `npx prisma validate` | ✅ valid |
+| `npx prisma generate` | ✅ Prisma Client v7.8.0 |
+| `npm run typecheck` | ✅ types generated + tsc --noEmit |
+| `npx tsc --noEmit` | ✅ no errors |
+| `npm run build` | ✅ Next.js 16.2.6 compiled |
+
+Risks:
+
+- `DATABASE_URL` y `DIRECT_URL` todavía no configuradas para Supabase. Schema listo pero sin migración aplicada.
+- BD vacía — sin migración, sin seed.
+
+---
+
+## 2026-06-06 — GPT-027F.5A-03 Primera migración DEV contra Supabase
+
+Done:
+
+- GPT-027F.5A-03: Intento inicial de `prisma migrate dev` → P1000 Authentication failed.
+- GPT-027F.5A-03A: Cambiado `prisma.config.ts` de `DATABASE_URL` a `DIRECT_URL`.
+- GPT-027F.5A-03B: Reintento con DIRECT_URL → P1000 persiste en puerto 5432.
+- Múltiples reintentos: P1000 auth failed, `ENOTFOUND tenant/user`, P1000 again.
+- Diagnóstico final: **project ref mismatch** — `DATABASE_URL` y `DIRECT_URL` usaban project ref `yywqcdromnmmelikvspi` mientras `SUPABASE_URL` usaba `izzrlwsqrnrcgyyqnfge`. Las credenciales no correspondían al mismo proyecto Supabase.
+- Franco actualizó `.env` con credenciales correctas (project ref consistente).
+- Conexión exitosa a PostgreSQL 17.6 en Supabase verificada con pg driver.
+- `npx prisma migrate dev --name init_backend_foundation` ejecutado exitosamente.
+- 12 tablas creadas, 8 unique indexes, 3 composite indexes, 18 foreign keys.
+- `_prisma_migrations` registrada como finished.
+- Post-migration validations: prisma validate ✅, generate ✅, typecheck ✅, build ✅.
+
+Changed:
+
+- `.env` — credenciales DB corregidas (project ref consistente).
+- `prisma/migrations/20260606063628_init_backend_foundation/migration.sql` — migración inicial creada.
+- `prisma/migrations/migration_lock.toml` — lock file creado (provider: postgresql).
+
+Files:
+
+- `prisma/schema.prisma` — 12 modelos OSSUM COR (sin cambios adicionales).
+- `prisma.config.ts` — usa `DIRECT_URL` para CLI datasource.
+- `prisma/migrations/20260606063628_init_backend_foundation/migration.sql` — migración inicial.
+- `prisma/migrations/migration_lock.toml` — provider postgresql.
+- `package.json` — Prisma 7.8.0, typecheck script.
+- `tsconfig.json` — .next types excluidos.
+- `.env` — credenciales corregidas (no commiteado).
+
+Validations:
+
+| Check | Resultado |
+|---|---|
+| Conexión pg driver (DIRECT_URL) | ✅ PostgreSQL 17.6 |
+| `npx prisma migrate dev` | ✅ Migration applied |
+| Tablas en BD | ✅ 12 tablas + `_prisma_migrations` |
+| Migración registrada | ✅ 1 migration finished |
+| `npx prisma validate` | ✅ valid |
+| `npx prisma generate` | ✅ Prisma Client v7.8.0 |
+| `npm run typecheck` | ✅ types generated + tsc --noEmit |
+| `npm run build` | ✅ Next.js 16.2.6, 38 routes |
+
+Risks:
+
+- BD vacía — sin seed data.
+- No API routes/server services todavía — solo schema.
+- No Supabase Auth integration — `supabaseAuthId` existe pero sin flujo.
+- `DIRECT_URL` usa session pooler (`aws-1-sa-east-1.pooler.supabase.com:5432`) porque `db.[ref].supabase.co` devuelve NXDOMAIN. Puede variar según plan Supabase.
+- `.env` no debe commitearse (contiene credenciales).
+
+Next:
+
+- Commit de todos los cambios pendientes.
+- Crear `prisma/seed.ts` con datos multiempresa iniciales.
+- Implementar server-side services y API routes.
+- Integrar Supabase Auth para User.supabaseAuthId.
