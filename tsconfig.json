@@ -38,6 +38,8 @@
   ],
   "exclude": [
     "node_modules",
+    ".next/types/app/**/*.ts",
+    ".next/dev/types/**/*.ts",
     "upload",
     "download",
     "agent-ctx",

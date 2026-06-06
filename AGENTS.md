@@ -166,42 +166,145 @@ Revisa diff, duplicación, coherencia con arquitectura, riesgos y reglas canóni
 
 ---
 
-## 9. Trabajo paralelo
+## 9. Multiagent Operating Policy
 
-Permitido:
+### 9.1 Model selection
 
-- repo-explorer leyendo archivos.
-- docs-handoff documentando.
-- reviewer-qa revisando diff.
-- browser-qa validando UI.
-- agentes en ramas separadas o paquetes distintos.
+- Model selection is task-based, not permanently role-based.
+- Los modelos no tienen rol fijo permanente.
+- Codex puede ser preferido para backend crítico, DB, schema, seguridad o permisos, pero no es obligatorio para todo.
+- DeepSeek, Qwen, GLM, Kimi, MiniMax u otros pueden usarse para frontend, QA, docs, testing, exploración, refactor o backend no crítico si el ownership está claro.
+- El Orchestrator asigna agente/modelo según riesgo, scope, archivos afectados, permisos y disponibilidad.
 
-Prohibido:
+### 9.2 Required task declaration
 
-- dos agentes editando el mismo archivo;
-- dos agentes tocando `prisma/schema.prisma`;
-- dos agentes tocando `src/lib/store.ts`;
-- dos agentes tocando Cirugías al mismo tiempo;
-- dos agentes modificando el mismo service/API;
-- merge sin revisión humana.
+Toda tarea multiagente debe declarar, como mínimo:
 
-Regla práctica:
+- Task ID / Name
+- Agent Role
+- Selected LLM
+- Mode: `read-only` / `review` / `implementation` / `docs` / `QA` / `testing`
+- Scope
+- Allowed files
+- Forbidden files
+- Allowed commands
+- Forbidden commands
+- Validation required
+- Output format
+- Expected handoff
+- Stop conditions / escalation rules
 
-> Un archivo crítico, un agente escritor por vez.
+Regla madre operativa:
+
+> 1 task = 1 owner = 1 scope = 1 set of files = 1 handoff.
+
+### 9.3 File ownership and locks
+
+- No two agents may write to the same critical file at the same time.
+- Critical or shared files require explicit ownership lock before edits.
+- El lock mínimo debe indicar: `task`, `agent role`, `selected model`, `owned files/folders`, `status`.
+- Estados válidos del lock: `reserved`, `editing`, `review`, `released`.
+- Si aparece solapamiento de archivos críticos, el agente debe frenar y escalar al Orchestrator.
+
+### 9.4 Parallel work rules
+
+Se puede paralelizar cuando:
+
+- las tareas son `read-only`;
+- repo-explorer solo lee estructura, imports o duplicados;
+- QA, browser QA o smoke test no pisan archivos del implementador;
+- docs/handoff trabajan sobre archivos separados;
+- frontend modular toca componentes o páginas distintas;
+- implementación ocurre en carpetas no relacionadas;
+- un agente implementa y otro documenta;
+- un agente explora y otro implementa sin tocar los mismos archivos.
+
+No se puede paralelizar cuando:
+
+- dos agentes tocan el mismo archivo;
+- dos agentes tocan `prisma/schema.prisma`;
+- hay cambios de auth, permisos o multiempresa;
+- hay migraciones o acciones destructivas;
+- hay refactor transversal;
+- hay cambios en tipos base;
+- hay cambios en la misma cadena API/service/validator;
+- el alcance es ambiguo;
+- no existe lock visible;
+- no existe validador final definido;
+- se pretende mergear sin revisión humana.
+
+### 9.5 Human approval boundaries
+
+Franco debe aprobar antes de:
+
+- arquitectura;
+- base de datos;
+- migraciones;
+- auth;
+- storage;
+- seguridad;
+- multiempresa;
+- reglas de negocio;
+- cambios productivos;
+- cambios críticos de Cirugías;
+- cambios destructivos o borrado masivo;
+- cambios de proveedor.
+
+### 9.6 Prompt template reusable
+
+```md
+# AGENT TASK — OSSUM COR
+
+## Task ID / Name
+
+## Objective
+
+## Agent Role
+
+## Selected LLM
+
+## Mode
+read-only / review / implementation / docs / QA / testing
+
+## Scope
+
+## Allowed files
+
+## Forbidden files
+
+## Allowed commands
+
+## Forbidden commands
+
+## Dependencies / Related agents
+
+## Validation required
+
+## Output format
+
+## Expected handoff
+
+## Stop and escalate if
+- scope expands
+- critical file overlap appears
+- approval boundary is crossed
+- migration or destructive action is needed
+- business rule is unclear
+```
 
 ---
 
 ## 10. Archivos sensibles
 
-Muy alto riesgo:
+Lock obligatorio / muy alto riesgo:
 
-- `src/lib/store.ts`
 - `prisma/schema.prisma`
+- `src/lib/db.ts`
+- `src/lib/store.ts`
 - `prisma/seed.ts`
 - `src/types/index.ts`
 - `src/app/cirugias/page.tsx`
 - `src/components/cirugias/*`
-- `src/components/expediente/*`
 - `src/hooks/useCirugiaActions.ts`
 - `src/hooks/useCirugiasFilters.ts`
 - `src/hooks/useCirugiaSelection.ts`
@@ -209,10 +312,17 @@ Muy alto riesgo:
 - `src/lib/automations.ts`
 - `src/lib/cirugias.constants.ts`
 - `src/lib/cirugias.utils.ts`
+
+Alto riesgo / coordinar ownership por carpeta o cadena funcional:
+
 - `src/app/api/*`
 - `src/lib/services/*`
 - `src/lib/validators/*`
 - `src/lib/permissions/*`
+- `src/components/expediente/*`
+- `src/components/operational-boards/*`
+- `src/app/coordinadores/page.tsx`
+- `src/app/calendario/page.tsx`
 
 Antes de tocar un archivo crítico:
 
@@ -270,6 +380,18 @@ Risks:
 Next:
 ```
 
+Plantilla corta reusable:
+
+```md
+## Handoff
+### Done
+### Changed
+### Files
+### Validations
+### Risks
+### Next
+```
+
 ### Regla Caveman obligatoria
 
 Todo cierre de tarea, handoff, resumen de subagente, validación operativa y reporte de estado debe usar el formato Caveman (Done / Changed / Files / Validations / Risks / Next).
@@ -286,4 +408,3 @@ No usar Caveman para:
 Para bugs, tests fallidos, build roto, errores TypeScript, errores Prisma, loops UI o `storage.setItem is not a function`, el agente debe ejecutar el ciclo Diagnose (Reproduce / Scope / Evidence / Hypothesis / Minimal Fix / Validate / Regression Check / Handoff) **antes** de aplicar cualquier fix.
 
 No aplicar fixes a ciegas ni cambios de arquitectura sin evidencia reproducible. Si Diagnose resuelve el bug, el cierre puede comprimirse con Caveman.
-
