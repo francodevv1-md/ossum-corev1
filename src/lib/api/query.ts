@@ -25,6 +25,20 @@ export function getNumberParam(
   return parsed;
 }
 
+export function getNonNegativeIntegerParam(
+  searchParams: URLSearchParams,
+  name: string
+): number | undefined {
+  const parsed = getNumberParam(searchParams, name);
+  if (parsed === undefined) return undefined;
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw badRequest(`${name} must be a non-negative integer`);
+  }
+
+  return parsed;
+}
+
 export function getBooleanParam(
   searchParams: URLSearchParams,
   name: string

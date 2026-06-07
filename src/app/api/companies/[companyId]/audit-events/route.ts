@@ -1,4 +1,6 @@
 import { badRequest } from "../../../../../lib/api/errors";
+import { getActorUserIdFromRequest, requireCompanyReadAccess } from "../../../../../lib/api/guards";
+import { getDateParam, getNonNegativeIntegerParam, getStringParam } from "../../../../../lib/api/query";
 import { errorResponse, ok } from "../../../../../lib/api/responses";
 import prisma from "../../../../../lib/prisma";
 import {
@@ -10,35 +12,16 @@ type RouteContext = {
   params: Promise<{ companyId: string }>;
 };
 
-function parseOptionalDate(value: string | null, name: string) {
-  if (value === null) return undefined;
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    throw badRequest(`${name} must be a valid date`);
-  }
-
-  return parsed;
-}
-
-function parseOptionalNumber(value: string | null, name: string) {
-  if (value === null) return undefined;
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw badRequest(`${name} must be a non-negative integer`);
-  }
-
-  return parsed;
-}
-
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { companyId } = await params;
+    const actorUserId = getActorUserIdFromRequest(request);
     const searchParams = new URL(request.url).searchParams;
-    const entityType = searchParams.get("entityType") ?? undefined;
-    const entityId = searchParams.get("entityId") ?? undefined;
-    const take = parseOptionalNumber(searchParams.get("take"), "take");
+    const entityType = getStringParam(searchParams, "entityType");
+    const entityId = getStringParam(searchParams, "entityId");
+    const take = getNonNegativeIntegerParam(searchParams, "take");
+
+    await requireCompanyReadAccess(prisma, companyId, actorUserId);
 
     if ((entityType && !entityId) || (!entityType && entityId)) {
       throw badRequest("entityType and entityId must be provided together");
@@ -53,10 +36,10 @@ export async function GET(request: Request, { params }: RouteContext) {
     }
 
     const events = await listAuditEventsByCompany(prisma, companyId, {
-      module: searchParams.get("module") ?? undefined,
-      userId: searchParams.get("userId") ?? undefined,
-      from: parseOptionalDate(searchParams.get("from"), "from"),
-      to: parseOptionalDate(searchParams.get("to"), "to"),
+      module: getStringParam(searchParams, "module"),
+      userId: getStringParam(searchParams, "userId"),
+      from: getDateParam(searchParams, "from"),
+      to: getDateParam(searchParams, "to"),
       take,
     });
 
