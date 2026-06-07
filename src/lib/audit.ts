@@ -3,10 +3,12 @@
 // Services call this after critical write operations.
 // Does NOT audit reads in V1.
 
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
+
+export type AuditPrismaClient = PrismaClient | Prisma.TransactionClient;
 
 export interface AuditEventInput {
-  prisma: PrismaClient;
+  prisma: AuditPrismaClient;
   companyId: string;
   userId: string;
   entityType: string;
