@@ -1,11 +1,10 @@
 import { badRequest } from "../../../../../../../lib/api/errors";
-import { getActorUserIdFromRequest, requireCompanyMutationAccess } from "../../../../../../../lib/api/guards";
+import { getApiAuthContext } from "../../../../../../../lib/api/auth-context";
+import { requireCompanyMutationAccess } from "../../../../../../../lib/api/guards";
 import { errorResponse, ok } from "../../../../../../../lib/api/responses";
 import { validateSurgeryStatusPatchBody } from "../../../../../../../lib/api/validators/surgery-status-route.validator";
 import prisma from "../../../../../../../lib/prisma";
 import { updateSurgeryStatus } from "../../../../../../../lib/services/surgery.service";
-
-// Franco approved GPT-027F.5A-06B2-B for DEV/internal mutation route before real Auth.
 
 type RouteContext = {
   params: Promise<{ companyId: string; surgeryId: string }>;
@@ -34,21 +33,16 @@ async function parseJsonBody(request: Request): Promise<unknown> {
 export async function PATCH(request: Request, { params }: RouteContext) {
   try {
     const { companyId, surgeryId } = await params;
-    const actorUserId = getActorUserIdFromRequest(request);
+    const ctx = await getApiAuthContext(request, companyId);
     const body = validateSurgeryStatusPatchBody(await parseJsonBody(request));
 
-    await requireCompanyMutationAccess(
-      prisma,
-      companyId,
-      actorUserId,
-      SURGERY_STATUS_MUTATION_ROLES
-    );
+    requireCompanyMutationAccess(ctx, SURGERY_STATUS_MUTATION_ROLES);
 
     const result = await updateSurgeryStatus(
       prisma,
       {
-        companyId,
-        actorUserId,
+        companyId: ctx.companyId,
+        actorUserId: ctx.actorUserId,
         source: body.source,
         module: "surgery",
       },

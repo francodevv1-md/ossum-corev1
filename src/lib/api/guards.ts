@@ -1,58 +1,30 @@
-// OSSUM COR — Minimal explicit API guards.
-// No real Auth lookup here: actor identity is temporarily passed by header.
-// TEMP DEV/internal only until Supabase Auth is integrated; do NOT use this as productive security.
+// OSSUM COR — API guards for company-scoped access.
+// Guards expect a pre-resolved ApiAuthContext from getApiAuthContext().
+// No direct header parsing here — auth resolution is centralized in auth-context.ts.
 
-import type { PrismaClient } from "@prisma/client";
+import type { ApiAuthContext } from "./auth-context";
+import { forbidden } from "./errors";
 
-import { forbidden, unauthorized } from "./errors";
+export { type ApiAuthContext } from "./auth-context";
 
-export const TEMP_DEV_ACTOR_HEADER = "x-ossum-actor-user-id";
-
-export function getActorUserIdFromRequest(request: Request): string {
-  const actorUserId = request.headers.get(TEMP_DEV_ACTOR_HEADER)?.trim();
-
-  if (!actorUserId) {
-    throw unauthorized("Missing actor user header", "missing_actor_user_id");
-  }
-
-  return actorUserId;
+/**
+ * Validate that the actor has read access to the target company.
+ * Any active company membership grants read access.
+ */
+export function requireCompanyReadAccess(ctx: ApiAuthContext): void {
+  // Access already validated in getApiAuthContext — guard is a defensive no-op
+  // but provides semantic clarity in route code.
+  void ctx;
 }
 
-export async function requireCompanyReadAccess(
-  prisma: PrismaClient,
-  companyId: string,
-  actorUserId: string
-): Promise<void> {
-  const access = await prisma.userCompanyAccess.findFirst({
-    where: {
-      userId: actorUserId,
-      companyId,
-      isActive: true,
-    },
-    select: { id: true },
-  });
-
-  if (!access) {
-    throw forbidden("Company access denied", "company_access_denied");
-  }
-}
-
-export async function requireCompanyMutationAccess(
-  prisma: PrismaClient,
-  companyId: string,
-  actorUserId: string,
+/**
+ * Validate that the actor has mutation access with an allowed role.
+ */
+export function requireCompanyMutationAccess(
+  ctx: ApiAuthContext,
   allowedRoles: readonly string[]
-): Promise<void> {
-  const access = await prisma.userCompanyAccess.findFirst({
-    where: {
-      userId: actorUserId,
-      companyId,
-      isActive: true,
-    },
-    select: { role: true },
-  });
-
-  if (!access || !allowedRoles.includes(access.role)) {
+): void {
+  if (!allowedRoles.includes(ctx.role)) {
     throw forbidden("Company mutation access denied", "company_mutation_access_denied");
   }
 }

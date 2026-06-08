@@ -1,4 +1,5 @@
-import { getActorUserIdFromRequest, requireCompanyReadAccess } from "../../../../../lib/api/guards";
+import { getApiAuthContext } from "../../../../../lib/api/auth-context";
+import { requireCompanyReadAccess } from "../../../../../lib/api/guards";
 import { getBooleanParam, getNonNegativeIntegerParam, getStringParam } from "../../../../../lib/api/query";
 import { errorResponse, ok } from "../../../../../lib/api/responses";
 import prisma from "../../../../../lib/prisma";
@@ -11,12 +12,12 @@ type RouteContext = {
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { companyId } = await params;
-    const actorUserId = getActorUserIdFromRequest(request);
+    const ctx = await getApiAuthContext(request, companyId);
+    requireCompanyReadAccess(ctx);
+
     const searchParams = new URL(request.url).searchParams;
 
-    await requireCompanyReadAccess(prisma, companyId, actorUserId);
-
-    const contacts = await listContactsByCompany(prisma, companyId, {
+    const contacts = await listContactsByCompany(prisma, ctx.companyId, {
       role: getStringParam(searchParams, "role"),
       contactType: getStringParam(searchParams, "contactType"),
       isActive: getBooleanParam(searchParams, "isActive"),
