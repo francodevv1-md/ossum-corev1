@@ -489,3 +489,69 @@ Your database is now in sync with your schema.
 - **DIRECT_URL para migraciones**: `prisma.config.ts` debe usar `DIRECT_URL` (session pooler puerto 5432), no `DATABASE_URL` (transaction pooler puerto 6543 con PgBouncer).
 - **Host directo no disponible**: `db.[ref].supabase.co` puede devolver NXDOMAIN según el plan Supabase. Usar session pooler como alternativa.
 - **Prisma 7**: `datasource.url` se declara en `prisma.config.ts`, no en `schema.prisma`.
+
+---
+
+## Validación GPT-027F.5A-06B — API base validada
+
+### Rutas creadas (5)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | /api/companies/[companyId]/surgeries | Lista de cirugías de la empresa |
+| GET | /api/companies/[companyId]/surgeries/[surgeryId] | Detalle de una cirugía |
+| PATCH | /api/companies/[companyId]/surgeries/[surgeryId]/status | Cambio de estado de cirugía |
+| GET | /api/companies/[companyId]/contacts | Lista de contactos de la empresa |
+| GET | /api/companies/[companyId]/audit-events | Eventos de auditoría de la empresa |
+
+### Commits relevantes
+
+| Commit | Descripción |
+|---|---|
+| 6e2e401 | feat(api): add company read routes |
+| 80ae672 | feat(api): add surgery status mutation route |
+| a55025e | feat(api): add read guards to company routes |
+
+### Mecanismo de protección
+
+- **Header temporal DEV/internal**: `x-ossum-actor-user-id`.
+- **Read guard**: `requireCompanyReadAccess` valida acceso de lectura por empresa.
+- **Mutation guard**: `requireCompanyMutationAccess` valida acceso de escritura.
+- **Query parsing**: Centralizado en `src/lib/api/query.ts` (paginación, filtros).
+- **Validator**: `surgery-status.ts` valida body del PATCH status (rechaza `actorUserId` en body).
+
+### Resultados smoke tests
+
+| Test | Esperado | Resultado |
+|---|---|---|
+| GET /api | 200 | ✅ 200 |
+| GET surgeries sin header | 401 | ✅ 401 (missing_actor_user_id) |
+| PATCH status sin header | 401 | ✅ 401 (missing_actor_user_id) |
+| GET surgeries con header válido | 200 | ✅ 200 |
+| GET contacts con header válido | 200 | ✅ 200 |
+| GET audit-events con header válido | 200 | ✅ 200 |
+| GET surgery detail con header válido | 200 | ✅ 200 |
+| PATCH status con body inválido | 400 | ✅ 400 (forbidden_body_field) |
+| PATCH real de transición | omitido | 🔲 Por seguridad de datos |
+
+### Validaciones de build
+
+| Check | Resultado |
+|---|---|
+| prisma validate | ✅ valid |
+| prisma generate | ✅ Prisma Client v7.8.0 |
+| typecheck | ✅ types + tsc --noEmit |
+| tsc --noEmit | ✅ no errors |
+| build | ✅ Next.js compiled |
+
+### Limitaciones actuales
+
+- Auth: solo header temporal DEV/internal. Sin Supabase Auth integrado.
+- Seguridad: requiere integración Auth real antes de exponer a producción.
+- Dev script: `npm run dev` roto en Windows por dependencia de `tee`. Workaround: `npx next dev -p 3000`.
+- `_smoke_query.js` untracked pendiente de limpieza.
+- PATCH real de transición de status no testeado para preservar datos del seed.
+
+### Decisión de cierre
+
+GPT-027F.5A-06B queda validada como API base funcional. Las rutas GET/PATCH responden correctamente con código 401/200/400 según corresponda. Habilita avanzar a Autenticación real o al próximo bloque funcional con base API comprobada.

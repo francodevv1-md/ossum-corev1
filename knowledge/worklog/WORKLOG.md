@@ -773,3 +773,72 @@ Next:
 - Crear `prisma/seed.ts` con datos multiempresa iniciales.
 - Implementar server-side services y API routes.
 - Integrar Supabase Auth para User.supabaseAuthId.
+
+---
+
+## 2026-06-07/08 — GPT-027F.5A-06B API routes y smoke tests
+
+Done:
+
+- **5A-06B**: Creadas API read routes:
+  - GET /api/companies/[companyId]/surgeries
+  - GET /api/companies/[companyId]/surgeries/[surgeryId]
+  - GET /api/companies/[companyId]/contacts
+  - GET /api/companies/[companyId]/audit-events
+- **5A-06B2-B**: Creada mutation route:
+  - PATCH /api/companies/[companyId]/surgeries/[surgeryId]/status
+- **5A-06B2-C**: Agregados read guards y query parsing centralizado:
+  - Header temporal DEV/internal: x-ossum-actor-user-id.
+  - requireCompanyReadAccess para GET.
+  - requireCompanyMutationAccess para PATCH.
+  - Centralizado query parsing en src/lib/api/query.ts.
+- **5A-06B3-DIAGNOSE**: Diagnóstico de timeouts en dev server.
+  - Causa: script npm dev depende de tee, no disponible en Windows.
+  - Servidor colgado para todos los endpoints (/, /api, rutas company).
+- **5A-06B3-RETRY4**: Reinicio exitoso con npx next dev -p 3000.
+  - Smoke tests ejecutados y pasados.
+- **5A-06B3-CLOSE**: Cierre documental.
+
+Changed:
+
+- src/app/api/companies/[companyId]/surgeries/route.ts.
+- src/app/api/companies/[companyId]/surgeries/[surgeryId]/route.ts.
+- src/app/api/companies/[companyId]/surgeries/[surgeryId]/status/route.ts.
+- src/app/api/companies/[companyId]/contacts/route.ts.
+- src/app/api/companies/[companyId]/audit-events/route.ts.
+- src/app/api/route.ts — Hello World endpoint.
+- src/lib/api/query.ts — query parsing centralizado.
+- src/lib/guards/ — requireCompanyReadAccess, requireCompanyMutationAccess.
+- src/lib/validators/surgery-status.ts — validator de body PATCH.
+- src/lib/prisma.ts — adapter @prisma/adapter-pg + pg Pool.
+
+Files:
+
+- 4 GET route files bajo src/app/api/companies/*.
+- 1 PATCH route file bajo src/app/api/companies/*.
+- src/lib/api/query.ts — helpers de paginación.
+- src/lib/guards/ — guards de acceso.
+- src/lib/validators/surgery-status.ts.
+
+Validations:
+
+- prisma validate OK.
+- prisma generate OK.
+- typecheck OK.
+- tsc --noEmit OK.
+- build OK.
+- Smoke tests: 401 sin header, 200 con header válido (surgeries, contacts, audit-events, detail), 400 body inválido en PATCH.
+
+Risks:
+
+- Auth real fuera de scope.
+- Seguridad actual es DEV/internal con header temporal.
+- npm run dev roto en Windows por dependencia de tee (workaround: npx next dev -p 3000).
+- _smoke_query.js untracked persiste en working tree.
+- PATCH real de transición de status omitido para no arriesgar datos.
+
+Next:
+
+- Limpiar _smoke_query.js con aprobación explícita.
+- Corregir script dev Windows (tee).
+- Avanzar a Auth real o próximo bloque funcional.
