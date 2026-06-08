@@ -842,3 +842,45 @@ Next:
 - Limpiar _smoke_query.js con aprobación explícita.
 - Corregir script dev Windows (tee).
 - Avanzar a Auth real o próximo bloque funcional.
+
+---
+
+## 2026-06-08 — GPT-027F.5A-GGA-FIX Fix hook GGA en Windows
+
+Done:
+
+- Diagnosticada la causa raíz del error `Argument list too long` del hook GGA.
+- El proveedor `opencode` en `providers.sh` pasaba el prompt entero como argumento CLI, excediendo el límite de ~32K caracteres de Windows.
+- Creado fix: función helper `_opencode_run_via_file()` en `providers.sh` que escribe el prompt a un archivo temporal `.md` y lo pasa con `-f`, evitando el límite de argumentos.
+- El fix se aplicó en `execute_opencode()` y en el caso opencode de `execute_provider_with_timeout()`.
+- El fix es externo al repo OSSUM COR (está en `C:\Users\franc\bin\lib\gga\providers.sh`).
+- Eliminado `_smoke_query.js` (archivo temporal untracked de un smoke test fallido previo).
+- Validado con commit documental sin `--no-verify`: GGA corrió correctamente.
+
+Changed:
+
+- `C:\Users\franc\bin\lib\gga\providers.sh` — helper `_opencode_run_via_file()` + `execute_opencode()` y `execute_provider_with_timeout()` actualizadas.
+- `_smoke_query.js` — eliminado del working tree.
+- `knowledge/worklog/WORKLOG.md` — entrada 5A-GGA-FIX agregada.
+
+Files:
+
+- `C:\Users\franc\bin\lib\gga\providers.sh` — fix proveedor opencode.
+- `_smoke_query.js` — eliminado.
+
+Validations:
+
+- typecheck OK.
+- tsc --noEmit OK.
+- build OK.
+- Hook GGA ejecutado sin error de argumentos en commit de prueba.
+
+Risks:
+
+- El fix no fue reportado upstream al repo `Gentleman-Programming/gentleman-guardian-angel`.
+- Si `opencode run -f` cambia su comportamiento en futuras versiones, el fix podría necesitar ajuste.
+
+Next:
+
+- Reportar fix upstream si se desea.
+- Avanzar a Auth real inicial o próximo bloque funcional.
