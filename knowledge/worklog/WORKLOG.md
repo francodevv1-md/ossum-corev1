@@ -24,6 +24,19 @@ Changed:
 - knowledge/workflow/*.
 - knowledge/specs/GPT-027F.0/*.
 
+Files:
+
+- AGENTS.md.
+- knowledge/KNOWLEDGE_INDEX.md.
+- knowledge/core/*.
+- knowledge/domain/*.
+- knowledge/architecture/*.
+- knowledge/workflow/*.
+- knowledge/specs/GPT-027F.0/*.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
+
 Risks:
 
 - Completar CURRENT_STATE.md contra repo real.
@@ -62,6 +75,23 @@ Changed:
 - `knowledge/worklog/WORKLOG.md`.
 - `knowledge/archive/legacy-pre-v2/*`.
 
+Files:
+
+- `knowledge/KNOWLEDGE_INDEX.md`.
+- `knowledge/workflow/SESSION_START_CHECKLIST.md`.
+- `knowledge/workflow/SESSION_END_CHECKLIST.md`.
+- `knowledge/workflow/ENGRAM_TAGS.md`.
+- `knowledge/workflow/ENGRAM_POLICY.md`.
+- `knowledge/archive/README.md`.
+- `knowledge/domain/PRESUPUESTOS.md`.
+- `knowledge/domain/PREPARACION_REMITOS_CONSUMO.md`.
+- `knowledge/domain/FACTURACION_COBROS.md`.
+- `knowledge/worklog/WORKLOG.md`.
+- `knowledge/archive/legacy-pre-v2/*`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
+
 Risks:
 
 - Puede quedar contexto útil en legacy aún no absorbido si una tarea futura necesita más detalle histórico.
@@ -90,6 +120,17 @@ Changed:
 - `knowledge/worklog/WORKLOG.md`.
 - `knowledge/archive/README.md`.
 - `knowledge/archive/legacy-pre-v2/README.md`.
+
+Files:
+
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+- `knowledge/specs/GPT-027F.0/TASKS.md`.
+- `knowledge/worklog/WORKLOG.md`.
+- `knowledge/archive/README.md`.
+- `knowledge/archive/legacy-pre-v2/README.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
 
 Risks:
 
@@ -120,6 +161,18 @@ Changed:
 - `knowledge/specs/GPT-027F.0/TASKS.md`.
 - `knowledge/specs/GPT-027F.0/VALIDATION.md`.
 
+Files:
+
+- `.opencode/opencode.json`.
+- `.opencode/plugins/background-agents.ts`.
+- `.opencode/plugins/model-variants.ts`.
+- `knowledge/worklog/WORKLOG.md`.
+- `knowledge/specs/GPT-027F.0/TASKS.md`.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
+
 Risks:
 
 - La configuración legacy en `.config/opencode/` sigue existiendo y puede confundir hasta unificarla en una tarea posterior.
@@ -146,6 +199,13 @@ Done:
 Changed:
 
 - `knowledge/worklog/WORKLOG.md`.
+
+Files:
+
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
 
 Risks:
 
@@ -175,6 +235,16 @@ Changed:
 - `knowledge/specs/GPT-027F.0/TASKS.md`.
 - `knowledge/specs/GPT-027F.0/VALIDATION.md`.
 
+Files:
+
+- `.opencode/opencode.json`.
+- `knowledge/worklog/WORKLOG.md`.
+- `knowledge/specs/GPT-027F.0/TASKS.md`.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
+
 Risks:
 
 - Context7 sigue pendiente porque no existe una definición MCP previa en las configs permitidas.
@@ -203,6 +273,14 @@ Changed:
 
 - `knowledge/worklog/WORKLOG.md`.
 - `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+
+Files:
+
+- `knowledge/worklog/WORKLOG.md`.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
 
 Risks:
 
@@ -236,6 +314,20 @@ Changed:
 - `knowledge/specs/GPT-027F.0/VALIDATION.md`.
 - `knowledge/worklog/WORKLOG.md`.
 
+Files:
+
+- `.opencode/skills/productivity/caveman/SKILL.md`.
+- `.opencode/skills/engineering/diagnose/SKILL.md`.
+- `knowledge/workflow/AI_GENTLE_STACK.md`.
+- `knowledge/workflow/AGENT_WORKFLOW.md`.
+- `knowledge/workflow/QUALITY_GATES.md`.
+- `knowledge/specs/GPT-027F.0/TASKS.md`.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
+
 Risks:
 
 - Las skills nuevas requieren restart de OpenCode para carga efectiva en runtime.
@@ -260,6 +352,13 @@ Done:
 Changed:
 
 - `knowledge/worklog/WORKLOG.md`.
+
+Files:
+
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
 
 Risks:
 
@@ -287,6 +386,15 @@ Changed:
 - `knowledge/specs/GPT-027F.0/TASKS.md`.
 - `knowledge/specs/GPT-027F.0/VALIDATION.md`.
 - `knowledge/worklog/WORKLOG.md`.
+
+Files:
+
+- `knowledge/specs/GPT-027F.0/TASKS.md`.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
 
 Risks:
 
@@ -322,6 +430,18 @@ Changed:
 - `knowledge/workflow/QUALITY_GATES.md`.
 - `knowledge/workflow/GUARDRAILS.md`.
 
+Files:
+
+- `AGENTS.md`.
+- `knowledge/specs/GPT-027F.0/TASKS.md`.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+- `knowledge/worklog/WORKLOG.md`.
+- `knowledge/workflow/QUALITY_GATES.md`.
+- `knowledge/workflow/GUARDRAILS.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
+
 Risks:
 
 - Engram Sync sigue sin verificación explícita; diferido a 5A.
@@ -350,6 +470,15 @@ Changed:
 - `knowledge/specs/GPT-027F.0/TASKS.md`.
 - `knowledge/specs/GPT-027F.0/VALIDATION.md`.
 - `knowledge/worklog/WORKLOG.md`.
+
+Files:
+
+- `knowledge/specs/GPT-027F.0/TASKS.md`.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+- No ejecutadas — tarea puramente documental.
 
 Risks:
 
@@ -381,6 +510,14 @@ Changed:
 - `knowledge/specs/GPT-027F.0/VALIDATION.md`.
 - `knowledge/worklog/WORKLOG.md`.
 
+Files:
+
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+- No ejecutadas — decisión de arquitectura, no código.
+
 Risks:
 
 - Supabase project setup (URL, keys) pendiente de ejecución.
@@ -411,6 +548,17 @@ Changed:
 - `src/lib/store.ts` — `localStorage` → `window.localStorage` (1 token en línea 1305).
 - `knowledge/worklog/WORKLOG.md`.
 
+Files:
+
+- `src/__tests__/setup.ts` — localStorage polyfill agregado (19 líneas).
+- `src/lib/store.ts` — `localStorage` → `window.localStorage` (1 token en línea 1305).
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+
+- npm test: 28/28 files pass, 598/598 tests pass, 0 failures.
+- npx tsc --noEmit: sin errores.
+
 Risks:
 
 - La advertencia `--localstorage-file was provided without a valid path` de Node v25 persiste (cosmética, no bloqueante).
@@ -440,6 +588,18 @@ Changed:
 - `knowledge/worklog/WORKLOG.md` — entrada 0B-FULL-01C agregada.
 - `knowledge/specs/GPT-027F.0/VALIDATION.md` — sección Engram Sync actualizada.
 
+Files:
+
+- `.opencode/opencode.json` — MCP command de engram: agregado `--project ossum_cor_project`.
+- `knowledge/workflow/ENGRAM_POLICY.md` — documentado proyecto canónico y estado de sync.
+- `knowledge/worklog/WORKLOG.md` — entrada 0B-FULL-01C agregada.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md` — sección Engram Sync actualizada.
+
+Validations:
+
+- engram doctor --json: 4 checks OK.
+- engram sync --status: Local: 1, Remote: 1, Pending: 0.
+
 Risks:
 
 - Proyectos fragmentados `ossum_cor` (7 obs) y `e:\ossum_cor_project` (0 obs) aún no consolidados. Pendiente para tarea separada.
@@ -467,6 +627,13 @@ Done:
 - Se actualizó `VALIDATION.md`: pendiente no bloqueante de Engram Sync marcado como consolidado y cerrado. Nueva sección FULL-01D con estado consolidado, histórico de cierre y pendientes opcionales.
 
 Changed:
+
+- `knowledge/workflow/ENGRAM_POLICY.md` — reglas operativas + sync actualizados con consolidación.
+- `knowledge/specs/GPT-027F.0/TASKS.md` — Engram Sync marcado completo.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md` — pendiente actualizado, nueva sección FULL-01D.
+- `knowledge/worklog/WORKLOG.md` — entrada FULL-01D agregada.
+
+Files:
 
 - `knowledge/workflow/ENGRAM_POLICY.md` — reglas operativas + sync actualizados con consolidación.
 - `knowledge/specs/GPT-027F.0/TASKS.md` — Engram Sync marcado completo.
@@ -508,7 +675,16 @@ Done:
 - Se actualizó `VALIDATION.md`: pendiente de Context7 portable marcado como resuelto. Nueva sección FULL-03B agregada al final.
 - Se documentó que la config global (`C:\Users\franc\.config\opencode\opencode.json`) queda como fallback.
 
-Validación post-cambio:
+Changed:
+- `.opencode/opencode.json` — bloque context7 agregado en MCP.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md` — sección FULL-03B agregada.
+
+Files:
+- `.opencode/opencode.json` — entrada MCP context7.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md`.
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
 
 | Check | Resultado |
 |---|---|
@@ -522,6 +698,9 @@ Risks:
 - No hay riesgo de seguridad: Context7 es un MCP remoto público sin auth ni API key.
 - Si en el futuro Context7 requiere autenticación, habrá que migrar la definición. Hoy no aplica.
 - La definición duplicada (global + proyecto) puede generar advertencia menor en OpenCode. El proyecto gana en caso de conflicto.
+
+Next:
+- Context7 portable queda resuelto. No requiere acción adicional.
 
 ---
 
@@ -540,6 +719,14 @@ Done:
 - **Hook no instalado** — queda pendiente de decisión.
 
 Changed:
+
+- `.gitignore` — reemplazado (1 línea → bloque completo).
+- `.gga/config` — creado (nuevo).
+- `knowledge/workflow/QUALITY_GATES.md` — nuevo gate GGA agregado al final.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md` — pendientes actualizados, nueva sección FULL-04B.
+- `knowledge/worklog/WORKLOG.md` — entrada FULL-04B agregada.
+
+Files:
 
 - `.gitignore` — reemplazado (1 línea → bloque completo).
 - `.gga/config` — creado (nuevo).
@@ -582,6 +769,13 @@ Done:
 - Documentado en `VALIDATION.md` y `BACKEND_FOUNDATION_PLAN.md`.
 
 Changed:
+
+- `prisma/schema.prisma` — provider: sqlite → postgresql, url removido.
+- `knowledge/specs/GPT-027F.0/VALIDATION.md` — nueva sección 5A-00C.
+- `knowledge/worklog/WORKLOG.md` — entrada 5A-00C agregada.
+- `knowledge/architecture/BACKEND_FOUNDATION_PLAN.md` — nota de Prisma 7 agregada.
+
+Files:
 
 - `prisma/schema.prisma` — provider: sqlite → postgresql, url removido.
 - `knowledge/specs/GPT-027F.0/VALIDATION.md` — nueva sección 5A-00C.
@@ -711,6 +905,10 @@ Risks:
 
 - `DATABASE_URL` y `DIRECT_URL` todavía no configuradas para Supabase. Schema listo pero sin migración aplicada.
 - BD vacía — sin migración, sin seed.
+
+Next:
+- Commit de cambios pendientes del schema.
+- Configurar Supabase y ejecutar migración.
 
 ---
 
