@@ -3,11 +3,41 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import type { Session, User } from "@supabase/supabase-js"
+import { apiFetch } from "@/lib/api/client"
 import { supabaseBrowserClient } from "@/lib/auth/client"
+
+const DEFAULT_COMPANY_ID = process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID
+
+export type InternalCurrentUser = {
+  id: string
+  email: string
+  firstName: string | null
+  lastName: string | null
+  displayName: string
+}
+
+export type CurrentUserAccess = {
+  role: string
+}
+
+export type ActiveCompany = {
+  id: string
+  name: string
+}
+
+type CurrentUserResponse = {
+  user: InternalCurrentUser
+  access: CurrentUserAccess
+  activeCompany: ActiveCompany
+}
 
 type AuthContextValue = {
   session: Session | null
   user: User | null
+  currentUser: InternalCurrentUser | null
+  currentAccess: CurrentUserAccess | null
+  activeCompany: ActiveCompany | null
+  currentUserLoading: boolean
   isLoading: boolean
   isAuthenticated: boolean
   signOut: () => Promise<void>
@@ -20,12 +50,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState<InternalCurrentUser | null>(null)
+  const [currentAccess, setCurrentAccess] = useState<CurrentUserAccess | null>(null)
+  const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null)
+  const [currentUserLoading, setCurrentUserLoading] = useState(false)
+
+  const clearCurrentUserContext = useCallback(() => {
+    setCurrentUser(null)
+    setCurrentAccess(null)
+    setActiveCompany(null)
+    setCurrentUserLoading(false)
+  }, [])
 
   const signOut = useCallback(async () => {
     await supabaseBrowserClient.auth.signOut()
     setSession(null)
+    clearCurrentUserContext()
     router.replace("/login")
-  }, [router])
+  }, [clearCurrentUserContext, router])
 
   useEffect(() => {
     let active = true
@@ -48,6 +90,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (!session || !DEFAULT_COMPANY_ID) {
+      clearCurrentUserContext()
+      return
+    }
+
+    let active = true
+    setCurrentUserLoading(true)
+
+    apiFetch<CurrentUserResponse>(`/api/companies/${encodeURIComponent(DEFAULT_COMPANY_ID)}/me`)
+      .then((data) => {
+        if (!active) return
+        setCurrentUser(data.user)
+        setCurrentAccess(data.access)
+        setActiveCompany(data.activeCompany)
+      })
+      .catch(() => {
+        if (!active) return
+        setCurrentUser(null)
+        setCurrentAccess(null)
+        setActiveCompany(null)
+      })
+      .finally(() => {
+        if (!active) return
+        setCurrentUserLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [clearCurrentUserContext, session])
+
+  useEffect(() => {
     const handleAuthExpired = () => {
       void signOut()
     }
@@ -66,11 +140,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       session,
       user: session?.user ?? null,
+      currentUser,
+      currentAccess,
+      activeCompany,
+      currentUserLoading,
       isLoading,
       isAuthenticated: Boolean(session),
       signOut,
     }),
-    [isLoading, session, signOut]
+    [activeCompany, currentAccess, currentUser, currentUserLoading, isLoading, session, signOut]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

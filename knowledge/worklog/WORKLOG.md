@@ -4,6 +4,41 @@ Estado: inicial
 
 ---
 
+## 2026-06-09 — GPT-027F.5A-07C Auth UX Polish / Current User Context
+
+Done:
+- Se agregó endpoint company-scoped `GET /api/companies/[companyId]/me` para resolver usuario interno actual, rol y empresa activa.
+- Se integró `AuthProvider` con `NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID` para cargar contexto interno sin romper la sesión Supabase si falla.
+- Se actualizó `UserMenu` para mostrar nombre interno, rol y empresa cuando están disponibles, con fallback a email Supabase.
+
+Changed:
+- Nuevo endpoint usa `getApiAuthContext(request, companyId)`, `requireCompanyReadAccess(ctx)`, Prisma y respuestas `ok/errorResponse`.
+- El contexto auth expone `currentUser`, `currentAccess`, `activeCompany` y `currentUserLoading`.
+- `.env.example` documenta default company id público como default UX, no como seguridad.
+
+Files:
+- `src/app/api/companies/[companyId]/me/route.ts`
+- `src/components/auth/AuthProvider.tsx`
+- `src/components/layout/UserMenu.tsx`
+- `.env.example`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npm run typecheck` OK (`next typegen && tsc --noEmit`).
+- `npx tsc --noEmit` OK.
+- `npm run build` OK — Next.js 16.2.6, endpoint `/api/companies/[companyId]/me` incluido.
+- Smoke 07C OK: `/me` sin token devuelve `401`; `/me` con Bearer devuelve `200`; header muestra `displayName`/rol/empresa interna; logout OK.
+- API smoke OK: GET contacts con Bearer token sigue devolviendo `200`; no se ejecutó PATCH real.
+
+Risks:
+- Requiere `NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID` configurado con una empresa a la que el usuario tenga acceso.
+- Multiempresa selector y `/api/me` global siguen diferidos.
+
+Next:
+- Parent debe ejecutar validaciones y smoke de login/current-user.
+
+---
+
 ## 2026-06-09 — GPT-027F.5A-07B Auth frontend mínimo
 
 Done:

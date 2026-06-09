@@ -13,18 +13,21 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/components/auth/AuthProvider"
 
-function getInitials(email?: string | null) {
-  if (!email) return "OC"
-  const name = email.split("@")[0] ?? ""
-  const parts = name.split(/[._-]/).filter(Boolean)
+function getInitials(value?: string | null) {
+  if (!value) return "OC"
+  const name = value.includes("@") ? (value.split("@")[0] ?? "") : value
+  const parts = name.split(/[\s._-]/).filter(Boolean)
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
   return name.slice(0, 2).toUpperCase() || "OC"
 }
 
 export function UserMenu() {
-  const { user, signOut } = useAuth()
+  const { user, currentUser, currentAccess, activeCompany, signOut } = useAuth()
   const email = user?.email ?? "Usuario OSSUM COR"
-  const initials = getInitials(email)
+  const displayName = currentUser?.displayName ?? email
+  const roleLabel = currentAccess?.role ?? "Usuario OSSUM COR"
+  const companyName = activeCompany?.name
+  const initials = getInitials(displayName)
 
   return (
     <DropdownMenu>
@@ -36,16 +39,19 @@ export function UserMenu() {
             </AvatarFallback>
           </Avatar>
           <div className="hidden max-w-40 flex-col items-start sm:flex">
-            <span className="truncate text-[11px] font-medium leading-tight">{email}</span>
-            <span className="text-[9px] leading-tight text-muted-foreground">Usuario OSSUM COR</span>
+            <span className="truncate text-[11px] font-medium leading-tight">{displayName}</span>
+            <span className="text-[9px] leading-tight text-muted-foreground">{roleLabel}</span>
           </div>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>
           <div className="flex flex-col">
-            <span>Sesión activa</span>
+            <span className="truncate">{displayName}</span>
             <span className="truncate text-xs font-normal text-muted-foreground">{email}</span>
+            {companyName ? (
+              <span className="truncate text-xs font-normal text-muted-foreground">{companyName}</span>
+            ) : null}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
