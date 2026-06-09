@@ -12,7 +12,9 @@ function requireEnv(name: string): string {
   return value;
 }
 
-const supabaseUrl = requireEnv("SUPABASE_URL");
+// SUPABASE_URL may include /rest/v1/ path; strip it for the JS client
+// which auto-appends auth/v1, rest/v1, etc. based on the operation.
+const supabaseUrl = requireEnv("SUPABASE_URL").replace(/\/rest\/v1\/?$/, "");
 const supabaseServiceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 /**
