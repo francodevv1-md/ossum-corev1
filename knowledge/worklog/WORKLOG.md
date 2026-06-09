@@ -4,6 +4,48 @@ Estado: inicial
 
 ---
 
+## 2026-06-09 — GPT-027F.5A-07B Auth frontend mínimo
+
+Done:
+- Se implementó login frontend mínimo con Supabase Auth client-side para OSSUM COR.
+- Se agregó guard de rutas sin route groups ni cambios backend.
+- Se reemplazó el usuario hardcodeado del header por email real de Supabase y logout.
+- Se validó smoke real con credenciales locales desde `.env.local` sin imprimir secretos.
+
+Changed:
+- Cliente Supabase browser singleton con aliases `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- Helper `apiFetch` que inyecta Bearer token y maneja errores `{ error }` / éxito `{ data }`.
+- Root layout delega shell autenticado a `AuthGuard` y deja `/login` sin app shell.
+
+Files:
+- `src/lib/auth/client.ts`
+- `src/lib/api/client.ts`
+- `src/components/auth/AuthProvider.tsx`
+- `src/components/auth/AuthGuard.tsx`
+- `src/components/auth/LoginForm.tsx`
+- `src/app/login/page.tsx`
+- `src/components/layout/UserMenu.tsx`
+- `src/components/layout/header.tsx`
+- `src/app/layout.tsx`
+- `.env.example`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- Smoke real OK: `/login` sin shell, login Supabase OK, redirect a `/`, header muestra email, logout vuelve a `/login`, `/cirugias` sin sesión redirige a `/login`.
+- API smoke OK: GET contacts sin token devuelve `401`; GET contacts con Bearer token devuelve `200`.
+- `npm run typecheck` OK.
+- `npx tsc --noEmit` OK.
+- `npm run build` OK — Next.js 16.2.6, `/login` incluido, 41 páginas estáticas.
+
+Risks:
+- Requiere variables públicas Supabase reales en entorno runtime/build.
+- `/api/me` queda diferido a GPT-027F.5A-07C; header muestra solo email Supabase.
+
+Next:
+- Avanzar a GPT-027F.5A-07C — Auth UX polish / API client adoption / endpoint seguro de usuario actual.
+
+---
+
 ## 2026-06-03 — GPT-027F.0A inicial
 
 Done:

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation"
 import { useSidebar } from "./app-shell"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import {
   DropdownMenu,
@@ -15,12 +14,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { UserMenu } from "./UserMenu"
 import {
   Bell,
-  User,
-  Settings,
-  LogOut,
-  HelpCircle,
   Menu,
   PanelLeftOpen,
   PanelLeftClose,
@@ -94,7 +90,7 @@ export function Header() {
     return () => clearInterval(interval)
   }, [])
 
-  const pageTitle = ROUTE_LABELS[pathname] || "OrtoTrack"
+  const pageTitle = ROUTE_LABELS[pathname] || "OSSUM COR"
 
   const unreadCount = MOCK_NOTIFICATIONS.filter((n) => !n.read).length
 
@@ -196,50 +192,7 @@ export function Header() {
 
         <Separator orientation="vertical" className="h-5" />
 
-        {/* User dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 px-2 h-8">
-              <Avatar className="size-6">
-                <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">
-                  CA
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden sm:flex flex-col items-start">
-                <span className="text-[11px] font-medium leading-tight">Carlos Admin</span>
-                <span className="text-[9px] text-muted-foreground leading-tight">Administrador</span>
-              </div>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <div className="flex flex-col">
-                <span>Carlos Admin</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  carlos@ortotrack.com
-                </span>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 size-4" />
-              Mi Perfil
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="mr-2 size-4" />
-              Configuración
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <HelpCircle className="mr-2 size-4" />
-              Ayuda
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">
-              <LogOut className="mr-2 size-4" />
-              Cerrar sesión
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UserMenu />
       </div>
     </header>
   )
