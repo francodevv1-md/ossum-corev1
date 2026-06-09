@@ -555,3 +555,81 @@ Your database is now in sync with your schema.
 ### Decisión de cierre
 
 GPT-027F.5A-06B queda validada como API base funcional. Las rutas GET/PATCH responden correctamente con código 401/200/400 según corresponda. Habilita avanzar a Autenticación real o al próximo bloque funcional con base API comprobada.
+
+---
+
+## Validación GPT-027F.5A-06C — Supabase Auth server-side
+
+### Commits
+
+| Commit | Descripción |
+|---|---|
+| 8a2b1d7 | feat(auth): add Supabase server auth context |
+| 12a8c3b | fix(auth): normalize Supabase server URL |
+| 0ed528b | fix(api): map all surgery validation errors to 400 |
+
+### Arquitectura de Auth
+
+| Componente | Descripción |
+|---|---|
+| `supabaseServerClient` | Cliente Supabase con `SERVICE_ROLE_KEY`, solo server-side |
+| `getApiAuthContext()` | Resuelve identidad desde Bearer token (primary) o header DEV (fallback) |
+| `ApiAuthContext` | `{ actorUserId, supabaseAuthId, companyId, role, source }` |
+| `requireCompanyReadAccess(ctx)` | Guard de lectura (no-op defensivo) |
+| `requireCompanyMutationAccess(ctx, roles)` | Guard de escritura con roles permitidos |
+
+### Flujo de autenticación
+
+1. Request con `Authorization: Bearer <token>`.
+2. `supabase.auth.getUser(token)` → `user.id` (UUID Supabase).
+3. `getUserBySupabaseAuthId(user.id)` → `User.id` interno.
+4. Validación de `isActive` y `UserCompanyAccess` (empresa + rol).
+5. Devuelve `ApiAuthContext` con `source: "supabase-auth"`.
+
+Fallback DEV: solo si `NODE_ENV !== "production"`, usa `x-ossum-actor-user-id`.
+
+### Smoke test matrix (token real)
+
+| # | Test | Esperado | Resultado |
+|---|---|---|---|
+| 1 | GET surgeries sin token | 401 | ✅ |
+| 2 | GET surgeries + token inválido | 401 | ✅ |
+| 3 | GET surgeries + token válido | 200 | ✅ |
+| 4 | GET contacts + token válido | 200 | ✅ |
+| 5 | GET audit-events + token válido | 200 | ✅ |
+| 6 | GET surgery detail + token válido | 200 | ✅ |
+| 7 | PATCH status sin token | 401 | ✅ |
+| 8 | PATCH status + body inválido + token | 400 | ✅ |
+| 9 | PATCH real de transición | — | 🔲 omitido |
+
+### Mapeo de usuario
+
+| Campo | Valor |
+|---|---|
+| User ID interno | `usdevadmin100000000000000` |
+| Email | `admin.dev@ossum.local` |
+| Supabase Auth UUID | seteado en DB DEV |
+| UserCompanyAccess | admin, activo |
+
+### Limitaciones actuales
+
+- Header DEV todavía existe como fallback en desarrollo.
+- No hay login UI, middleware ni RLS.
+- Token de Supabase expira (~1h).
+- `src/lib/api/context.ts` (`ApiContext` original) queda huérfano.
+- Sin `.env.example`.
+- PATCH real de transición de status no ejecutado en smoke.
+
+### Validaciones de build
+
+| Check | Resultado |
+|---|---|
+| prisma validate | ✅ valid |
+| typecheck | ✅ OK |
+| tsc --noEmit | ✅ OK |
+| build | ✅ OK |
+| GGA (commit 0ed528b) | ✅ CODE REVIEW PASSED |
+
+### Decisión de cierre
+
+GPT-027F.5A-06C queda validada como Auth server-side funcional con Supabase. Las rutas GET/PATCH responden correctamente con token real Bearer. Habilita avanzar a Auth UI, limpieza técnica o siguiente bloque funcional con base Auth comprobada.

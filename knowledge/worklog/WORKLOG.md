@@ -1082,3 +1082,65 @@ Next:
 
 - Reportar fix upstream si se desea.
 - Avanzar a Auth real inicial o próximo bloque funcional.
+
+---
+
+## 2026-06-08 — GPT-027F.5A-06C Supabase Auth server-side
+
+Done:
+
+- **5A-06C-A**: Diseño de integración Supabase Auth.
+  - Estrategia: `@supabase/supabase-js` server-side con `SERVICE_ROLE_KEY`.
+  - `getApiAuthContext()` como punto único de resolución de identidad.
+  - Fallback DEV `x-ossum-actor-user-id` solo fuera de production.
+- **5A-06C-B**: Implementación Auth server-side inicial.
+  - `src/lib/supabase/server.ts` — cliente Supabase admin.
+  - `src/lib/api/auth-context.ts` — `getApiAuthContext(request, companyId)` con doble fuente.
+  - Guards refactorizados: `requireCompanyReadAccess(ctx)`, `requireCompanyMutationAccess(ctx, roles)`.
+  - 5 rutas API adaptadas al nuevo `ApiAuthContext`.
+  - Limpiadas dependencias scaffold legacy (`z-ai-web-dev-sdk`, `bun-types`).
+- **5A-06C-C**: Smoke tests con token real de Supabase Auth.
+  - Token obtenido vía `signInWithPassword`.
+  - `User.supabaseAuthId` seteado en DB DEV.
+  - `server.ts` corregido: URL base sin `/rest/v1/` para `auth.getUser()`.
+  - Fix de `surgery.validator.ts`: todos los `Error` → `badRequest` (400).
+  - Smoke matrix: 8/8 tests pasaron con token real.
+- **5A-06C-C-CLOSE**: Cierre documental.
+
+Changed:
+
+- `src/lib/supabase/server.ts` — cliente Supabase + fix URL.
+- `src/lib/api/auth-context.ts` — resolución unificada de identidad.
+- `src/lib/api/guards.ts` — `ApiAuthContext`, guards simplificados.
+- `src/lib/validators/surgery.validator.ts` — `Error` → `badRequest`.
+- 5 rutas API bajo `src/app/api/companies/*`.
+- `package.json` + `package-lock.json` — `@supabase/supabase-js`.
+- DB DEV: `User.supabaseAuthId` seteado en admin user.
+
+Files:
+
+- `src/lib/supabase/server.ts`.
+- `src/lib/api/auth-context.ts`.
+- `src/lib/api/guards.ts`.
+- `src/lib/validators/surgery.validator.ts`.
+- 5 rutas API bajo `src/app/api/companies/*`.
+- `package.json` + `package-lock.json`.
+
+Validations:
+
+- Smoke matrix Auth: 8/8 tests pasaron (401 sin token, 401 token inválido, 200 con token válido ×4, 400 body inválido, 401 sin token en PATCH).
+- typecheck, tsc --noEmit, build: OK.
+- GGA: CODE REVIEW PASSED en todos los commits.
+
+Risks:
+
+- Header DEV todavía funciona como fallback en desarrollo.
+- No hay login UI, middleware ni RLS.
+- Token de Supabase expira (~1h) — regenerar para futuros smoke tests.
+
+Next:
+
+- Limpiar `src/lib/api/context.ts` huérfano.
+- Crear `.env.example`.
+- Auth UI / login posterior.
+- Evaluar RLS/middleware más adelante.
