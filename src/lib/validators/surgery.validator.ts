@@ -1,3 +1,5 @@
+import { badRequest } from "../api/errors";
+
 export type CreateSurgeryInput = {
   branchId?: string | null;
   patientId: string;
@@ -76,11 +78,11 @@ function isSurgeryStatus(value: string): value is SurgeryStatus {
 
 export function validateSurgeryStatus(status: string): SurgeryStatus {
   if (typeof status !== "string" || status.trim().length === 0) {
-    throw new Error("status is required");
+    throw badRequest("status is required", "missing_status");
   }
 
   if (!isSurgeryStatus(status)) {
-    throw new Error(`Invalid surgery status: ${status}`);
+    throw badRequest(`Invalid surgery status: ${status}`, "invalid_surgery_status");
   }
 
   return status;
@@ -94,16 +96,16 @@ export function validateSurgeryStatusTransition(
   const next = validateSurgeryStatus(nextStatus);
 
   if (current === next) {
-    throw new Error(`Surgery status is already ${next}`);
+    throw badRequest(`Surgery status is already ${next}`, "status_unchanged");
   }
 
   if (SURGERY_TERMINAL_STATUSES.includes(current as never)) {
-    throw new Error(`Cannot change terminal surgery status ${current}`);
+    throw badRequest(`Cannot change terminal surgery status ${current}`, "terminal_status_immutable");
   }
 
   const allowedNextStatuses = SURGERY_STATUS_TRANSITIONS[current];
   if (!allowedNextStatuses?.includes(next)) {
-    throw new Error(`Invalid surgery status transition: ${current} -> ${next}`);
+    throw badRequest(`Invalid surgery status transition: ${current} -> ${next}`, "invalid_status_transition");
   }
 
   return next;
@@ -122,7 +124,7 @@ function validateOptionalNullableString(
   }
 
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`${fieldName} must be a non-empty string when provided`);
+    throw badRequest(`${fieldName} must be a non-empty string when provided`, "invalid_field");
   }
 
   return value;
@@ -137,7 +139,7 @@ function validateOptionalString(
   }
 
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`${fieldName} must be a non-empty string when provided`);
+    throw badRequest(`${fieldName} must be a non-empty string when provided`, "invalid_field");
   }
 
   return value;
@@ -147,11 +149,11 @@ export function validateCreateSurgeryInput(
   data: CreateSurgeryInput
 ): CreateSurgeryInput {
   if (typeof data.patientId !== "string" || data.patientId.trim().length === 0) {
-    throw new Error("patientId is required");
+    throw badRequest("patientId is required", "missing_patient_id");
   }
 
   if (!isValidDate(data.surgeryDate)) {
-    throw new Error("surgeryDate must be a valid Date");
+    throw badRequest("surgeryDate must be a valid Date", "invalid_surgery_date");
   }
 
   validateOptionalNullableString(data.branchId, "branchId");
@@ -160,7 +162,7 @@ export function validateCreateSurgeryInput(
   if (data.status !== undefined) {
     const status = validateSurgeryStatus(data.status);
     if (status !== SURGERY_INITIAL_STATUS) {
-      throw new Error(`Initial surgery status must be ${SURGERY_INITIAL_STATUS}`);
+      throw badRequest(`Initial surgery status must be ${SURGERY_INITIAL_STATUS}`, "invalid_initial_status");
     }
   }
 
@@ -169,7 +171,7 @@ export function validateCreateSurgeryInput(
     data.notes !== null &&
     typeof data.notes !== "string"
   ) {
-    throw new Error("notes must be a string when provided");
+    throw badRequest("notes must be a string when provided", "invalid_notes");
   }
 
   return { ...data, status: SURGERY_INITIAL_STATUS };
@@ -187,7 +189,7 @@ export function validateUpdateSurgeryInput(
   }
 
   if (data.surgeryDate !== undefined && !isValidDate(data.surgeryDate)) {
-    throw new Error("surgeryDate must be a valid Date when provided");
+    throw badRequest("surgeryDate must be a valid Date when provided", "invalid_surgery_date");
   }
 
   if (
@@ -195,7 +197,7 @@ export function validateUpdateSurgeryInput(
     data.notes !== null &&
     typeof data.notes !== "string"
   ) {
-    throw new Error("notes must be a string when provided");
+    throw badRequest("notes must be a string when provided", "invalid_notes");
   }
 
   return data;
