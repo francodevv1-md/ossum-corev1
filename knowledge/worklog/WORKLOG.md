@@ -4,6 +4,42 @@ Estado: inicial
 
 ---
 
+## 2026-06-10 — GPT-027F.5A-08B Contactos API Client Adoption
+
+Done:
+- Created `src/lib/api/contact-adapter.ts` with `mapApiContactToContacto` and `mapApiContactListToContactos` mapping Prisma API contacts → frontend Contacto domain type.
+- Integrated API-based contact loading into `src/app/contactos/page.tsx` using `apiFetch` + `useAuth().activeCompany` via `useEffect`.
+- Kept Zustand store as fallback: `contactSource = apiContacts ?? store.contactos`.
+- Added slim loading indicator ("Cargando contactos del servidor…") in toolbar area during API fetch.
+- All Zustand write actions (create/edit/toggle status) preserved unchanged.
+
+Changed:
+- `src/lib/api/contact-adapter.ts` — new file: maps linkRole→ContactRole (cliente/proveedor/interno/others→cliente), builds code from first 6 chars of id, resolves nombre from firstName+lastName/legalName, maps documentType→cuit/dni.
+- `src/app/contactos/page.tsx` — added useEffect API fetch, contactSource derived variable, loading indicator, updated counts/header to use contactSource.
+- `knowledge/worklog/WORKLOG.md` — added 08B entry.
+
+Files:
+- `src/lib/api/contact-adapter.ts` — new file (93 lines).
+- `src/app/contactos/page.tsx` — API loading + fallback + indicator.
+- `knowledge/worklog/WORKLOG.md` — 08B entry.
+
+Validations:
+- `npx tsc --noEmit` OK.
+- `npm run typecheck` OK (next typegen + tsc).
+- `npm run build` OK (Next.js 16.2.6, 41 pages, 0 errors).
+- `npm test` OK (28 files, 598 tests passed, 0 failures).
+
+Risks:
+- API call uses `?isActive=true&take=100` — will miss inactive contacts. Acceptable for V1 (status filter UI already exists on page).
+- Adapter maps single `linkRole` to `ContactRole[]`. Multi-role support not yet implemented server-side.
+- `codigoContacto` is derived from UUID first 6 chars — not sequential like legacy numeric codes. OK for V1.
+
+Next:
+- Parent validates: npm run typecheck, npx tsc --noEmit, npm run build.
+- Consider adding `?isActive=false` fetch or `status` param for inactive contacts tab.
+
+---
+
 ## 2026-06-09 — GPT-027F.5A-07C Auth UX Polish / Current User Context
 
 Done:

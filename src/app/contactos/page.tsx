@@ -1,8 +1,11 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect } from "react"
 import { useOrtoTrackStore } from "@/lib/store"
 import type { Contacto, ContactRole } from "@/types"
+import { apiFetch } from "@/lib/api/client"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { mapApiContactListToContactos } from "@/lib/api/contact-adapter"
 import {
   CONTACT_ROLE_LABELS,
   CONTACT_ROLE_BADGE_COLORS,
@@ -70,6 +73,43 @@ type StatusFilter = "todos" | "activos" | "inactivos"
 
 export default function ContactosPage() {
   const store = useOrtoTrackStore()
+  const { activeCompany } = useAuth()
+
+  // ── API-based contact loading ──
+  const [apiContacts, setApiContacts] = useState<Contacto[] | null>(null)
+  const [apiLoading, setApiLoading] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!activeCompany?.id) return
+
+    let cancelled = false
+    setApiLoading(true)
+    setApiError(null)
+
+    apiFetch<Array<Record<string, unknown>>>(
+      `/api/companies/${encodeURIComponent(activeCompany.id)}/contacts?isActive=true&take=100`
+    )
+      .then((data) => {
+        if (cancelled) return
+        setApiContacts(mapApiContactListToContactos(data))
+        setApiLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        const msg =
+          err instanceof Error ? err.message : "Error loading contacts"
+        setApiError(msg)
+        setApiLoading(false)
+        toast.error(
+          "No se pudieron cargar contactos desde el servidor. Mostrando datos locales."
+        )
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeCompany?.id])
 
   // ── State ──
   const [searchQuery, setSearchQuery] = useState("")
@@ -93,9 +133,12 @@ export default function ContactosPage() {
     return CONTACT_GROUPS.filter((g) => g.role === roleFilter && g.activo)
   }, [roleFilter])
 
+  // ── Contact source (API first, Zustand fallback) ──
+  const contactSource = apiContacts ?? store.contactos
+
   // ── Filtered contacts ──
   const filteredContactos = useMemo(() => {
-    let result = store.contactos
+    let result = contactSource
 
     // Status filter
     if (statusFilter === "activos") {
@@ -130,11 +173,11 @@ export default function ContactosPage() {
 
     // Sort by code
     return result.sort((a, b) => a.codigoContacto.localeCompare(b.codigoContacto))
-  }, [store.contactos, searchQuery, roleFilter, groupFilter, statusFilter])
+  }, [contactSource, searchQuery, roleFilter, groupFilter, statusFilter])
 
   // ── Counts ──
-  const activeCount = store.contactos.filter((c) => c.estado === "activo").length
-  const inactiveCount = store.contactos.filter((c) => c.estado === "inactivo").length
+  const activeCount = contactSource.filter((c) => c.estado === "activo").length
+  const inactiveCount = contactSource.filter((c) => c.estado === "inactivo").length
 
   // ── Handlers ──
   const handleNewContact = () => {
@@ -190,7 +233,7 @@ export default function ContactosPage() {
           <div>
             <h1 className="text-xl font-bold">Maestro de Contactos</h1>
             <p className="text-xs text-muted-foreground">
-              {activeCount} activos · {inactiveCount} inactivos · {store.contactos.length} total
+              {activeCount} activos · {inactiveCount} inactivos · {contactSource.length} total
             </p>
           </div>
         </div>
@@ -198,6 +241,11 @@ export default function ContactosPage() {
 
       {/* Toolbar */}
       <div className="shrink-0 border-b bg-card/50 px-6 py-3">
+        {apiLoading && (
+          <div className="text-xs text-muted-foreground mb-2 transition-opacity">
+            Cargando contactos del servidor…
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px] max-w-sm">
