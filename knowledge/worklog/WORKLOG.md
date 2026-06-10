@@ -4,6 +4,35 @@ Estado: inicial
 
 ---
 
+## 2026-06-10 — GPT-027F.5A-09B Auditoría Page
+
+Done:
+- Se creó página `/auditoria` read-only con `apiFetch` para eventos de auditoría.
+- Se agregó item "Auditoría" en sidebar SISTEMA con ícono Shield.
+
+Changed:
+- Página nueva consume `GET /api/companies/[companyId]/audit-events?take=50` usando empresa activa del AuthProvider.
+- Tabla muestra fecha, módulo, acción, entidad, ID, usuario y detalle.
+- Filtro client-side por módulo.
+- Loading, empty y error states implementados.
+
+Files:
+- `src/app/auditoria/page.tsx`
+- `src/components/layout/sidebar.tsx`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- Pendiente parent: `npm run typecheck`, `npx tsc --noEmit`, `npm run build`, smoke.
+
+Risks:
+- Solo 1 evento seed en DB DEV.
+- userId sin userName en respuesta API; se muestra truncado.
+
+Next:
+- Parent ejecuta validaciones y smoke de auditoría.
+
+---
+
 ## 2026-06-10 — GPT-027F.5A-08B Contactos API Client Adoption
 
 Done:

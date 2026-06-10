@@ -156,6 +156,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Reportes", href: "/reportes", icon: PieChart },
       { label: "Roles", href: "/roles", icon: Shield },
       { label: "Usuarios", href: "/usuarios", icon: Users },
+      { label: "Auditoría", href: "/auditoria", icon: Shield },
       { label: "Configuración", href: "/configuracion", icon: Settings },
     ],
   },
