@@ -26,8 +26,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Save, UserPlus } from "lucide-react"
+import { Save, UserPlus, Loader2 } from "lucide-react"
 import { CONTACT_GROUPS, CONTACT_ROLE_LABELS, getGroupsForRole } from "@/lib/contacts.constants"
+import { apiFetch } from "@/lib/api/client"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { mapContactoToApiPayload } from "@/lib/api/contact-adapter"
 
 // ═══════════════════════════════════════════════════════════════
 // Constants
@@ -81,7 +84,12 @@ function ContactoFormInner({
   defaultGroups?: string[]
 }) {
   const store = useOrtoTrackStore()
+  const { activeCompany } = useAuth()
   const isEditing = !!contacto
+
+  // ── API mutation state ──
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // ── Form state — initialized from contacto prop ──
   const [codigoContacto, setCodigoContacto] = useState(contacto?.codigoContacto ?? "")
@@ -168,9 +176,12 @@ function ContactoFormInner({
     return valid
   }
 
-  // ── Handle save ──
-  const handleSave = () => {
+  // ── Handle save (API first, Zustand fallback) ──
+  const handleSave = async () => {
     if (!validate()) return
+
+    setSaving(true)
+    setSaveError(null)
 
     const telefonos = telefono.trim() ? [telefono.trim()] : undefined
 
@@ -200,59 +211,155 @@ function ContactoFormInner({
           }
         : undefined
 
-    if (isEditing && contacto) {
-      store.updateContacto(contacto.id, {
-        codigoContacto: codigoContacto.trim(),
-        tipoPersona,
-        nombre: nombre.trim(),
-        nombreFantasia: nombreFantasia.trim() || undefined,
-        razonSocial: razonSocial.trim() || undefined,
-        cuit: cuit.trim() || undefined,
-        dni: dni.trim() || undefined,
-        estado,
-        observaciones: observaciones.trim() || undefined,
-        telefonos,
-        email: email.trim() || undefined,
-        domicilio: domicilio.trim() || undefined,
-        provincia: provincia.trim() || undefined,
-        localidad: localidad.trim() || undefined,
-        codigoPostal: codigoPostal.trim() || undefined,
-        roles,
-        groups,
-        datosClientePagador,
-        datosMedico,
-        datosInstitucion,
-      })
-      const updated = store.getContactoById(contacto.id)
-      toast.success(`Contacto ${codigoContacto} actualizado`)
-      onSaved?.(updated!)
-      onOpenChange(false)
-    } else {
-      const created = store.createContacto({
-        codigoContacto: codigoContacto.trim(),
-        tipoPersona,
-        nombre: nombre.trim(),
-        nombreFantasia: nombreFantasia.trim() || undefined,
-        razonSocial: razonSocial.trim() || undefined,
-        cuit: cuit.trim() || undefined,
-        dni: dni.trim() || undefined,
-        estado,
-        observaciones: observaciones.trim() || undefined,
-        telefonos,
-        email: email.trim() || undefined,
-        domicilio: domicilio.trim() || undefined,
-        provincia: provincia.trim() || undefined,
-        localidad: localidad.trim() || undefined,
-        codigoPostal: codigoPostal.trim() || undefined,
-        roles,
-        groups,
-        datosClientePagador,
-        datosMedico,
-        datosInstitucion,
-      })
-      toast.success(`Contacto ${codigoContacto} creado`)
-      onSaved?.(created)
-      onOpenChange(false)
+    // Build form data for API payload mapping
+    const formData: Partial<Contacto> = {
+      tipoPersona,
+      nombre: nombre.trim(),
+      razonSocial: razonSocial.trim() || undefined,
+      cuit: cuit.trim() || undefined,
+      dni: dni.trim() || undefined,
+      email: email.trim() || undefined,
+      telefonos,
+      roles,
+    }
+
+    const apiPayload = mapContactoToApiPayload(formData)
+
+    // Track whether the status changed (for edit)
+    const statusChanged = isEditing && contacto && contacto.estado !== estado
+    const patchPayload = isEditing && statusChanged
+      ? { ...apiPayload, isActive: estado === "activo" }
+      : apiPayload
+
+    try {
+      if (isEditing && contacto) {
+        // ── Edit via PATCH ──
+        const url = `/api/companies/${encodeURIComponent(activeCompany?.id ?? "")}/contacts/${encodeURIComponent(contacto.id)}`
+        await apiFetch(url, {
+          method: "PATCH",
+          body: JSON.stringify(patchPayload),
+          headers: { "Content-Type": "application/json" },
+        })
+
+        // Update Zustand for local fields not persisted by API
+        store.updateContacto(contacto.id, {
+          codigoContacto: codigoContacto.trim(),
+          tipoPersona,
+          nombre: nombre.trim(),
+          nombreFantasia: nombreFantasia.trim() || undefined,
+          razonSocial: razonSocial.trim() || undefined,
+          cuit: cuit.trim() || undefined,
+          dni: dni.trim() || undefined,
+          estado,
+          observaciones: observaciones.trim() || undefined,
+          telefonos,
+          email: email.trim() || undefined,
+          domicilio: domicilio.trim() || undefined,
+          provincia: provincia.trim() || undefined,
+          localidad: localidad.trim() || undefined,
+          codigoPostal: codigoPostal.trim() || undefined,
+          roles,
+          groups,
+          datosClientePagador,
+          datosMedico,
+          datosInstitucion,
+        })
+        const updated = store.getContactoById(contacto.id)
+        toast.success(`Contacto ${codigoContacto} actualizado`)
+        onSaved?.(updated!)
+        onOpenChange(false)
+      } else {
+        // ── Create via POST ──
+        const url = `/api/companies/${encodeURIComponent(activeCompany?.id ?? "")}/contacts`
+        await apiFetch(url, {
+          method: "POST",
+          body: JSON.stringify(apiPayload),
+          headers: { "Content-Type": "application/json" },
+        })
+
+        // Create in Zustand as well (local fields)
+        const created = store.createContacto({
+          codigoContacto: codigoContacto.trim(),
+          tipoPersona,
+          nombre: nombre.trim(),
+          nombreFantasia: nombreFantasia.trim() || undefined,
+          razonSocial: razonSocial.trim() || undefined,
+          cuit: cuit.trim() || undefined,
+          dni: dni.trim() || undefined,
+          estado,
+          observaciones: observaciones.trim() || undefined,
+          telefonos,
+          email: email.trim() || undefined,
+          domicilio: domicilio.trim() || undefined,
+          provincia: provincia.trim() || undefined,
+          localidad: localidad.trim() || undefined,
+          codigoPostal: codigoPostal.trim() || undefined,
+          roles,
+          groups,
+          datosClientePagador,
+          datosMedico,
+          datosInstitucion,
+        })
+        toast.success(`Contacto ${codigoContacto} creado`)
+        onSaved?.(created)
+        onOpenChange(false)
+      }
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Error al guardar contacto"
+      setSaveError(msg)
+      toast.error(msg)
+
+      // Fallback: save to Zustand only if API fails
+      if (isEditing && contacto) {
+        store.updateContacto(contacto.id, {
+          codigoContacto: codigoContacto.trim(),
+          tipoPersona,
+          nombre: nombre.trim(),
+          nombreFantasia: nombreFantasia.trim() || undefined,
+          razonSocial: razonSocial.trim() || undefined,
+          cuit: cuit.trim() || undefined,
+          dni: dni.trim() || undefined,
+          estado,
+          observaciones: observaciones.trim() || undefined,
+          telefonos,
+          email: email.trim() || undefined,
+          domicilio: domicilio.trim() || undefined,
+          provincia: provincia.trim() || undefined,
+          localidad: localidad.trim() || undefined,
+          codigoPostal: codigoPostal.trim() || undefined,
+          roles,
+          groups,
+          datosClientePagador,
+          datosMedico,
+          datosInstitucion,
+        })
+      } else {
+        store.createContacto({
+          codigoContacto: codigoContacto.trim(),
+          tipoPersona,
+          nombre: nombre.trim(),
+          nombreFantasia: nombreFantasia.trim() || undefined,
+          razonSocial: razonSocial.trim() || undefined,
+          cuit: cuit.trim() || undefined,
+          dni: dni.trim() || undefined,
+          estado,
+          observaciones: observaciones.trim() || undefined,
+          telefonos,
+          email: email.trim() || undefined,
+          domicilio: domicilio.trim() || undefined,
+          provincia: provincia.trim() || undefined,
+          localidad: localidad.trim() || undefined,
+          codigoPostal: codigoPostal.trim() || undefined,
+          roles,
+          groups,
+          datosClientePagador,
+          datosMedico,
+          datosInstitucion,
+        })
+      }
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -627,10 +734,20 @@ function ContactoFormInner({
         )}
       </div>
 
+      {saveError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {saveError}
+        </div>
+      )}
+
       <DialogFooter className="gap-2 sm:gap-0">
-        <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-        <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700">
-          <Save className="size-4 mr-1" />
+        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+        <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+          {saving ? (
+            <Loader2 className="size-4 mr-1 animate-spin" />
+          ) : (
+            <Save className="size-4 mr-1" />
+          )}
           {isEditing ? "Guardar Cambios" : "Crear Contacto"}
         </Button>
       </DialogFooter>

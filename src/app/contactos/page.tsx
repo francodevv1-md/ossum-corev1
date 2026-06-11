@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useEffect } from "react"
+import React, { useState, useMemo, useEffect, useCallback } from "react"
 import { useOrtoTrackStore } from "@/lib/store"
 import type { Contacto, ContactRole } from "@/types"
 import { apiFetch } from "@/lib/api/client"
@@ -80,10 +80,9 @@ export default function ContactosPage() {
   const [apiLoading, setApiLoading] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const fetchContacts = useCallback(() => {
     if (!activeCompany?.id) return
 
-    let cancelled = false
     setApiLoading(true)
     setApiError(null)
 
@@ -91,12 +90,10 @@ export default function ContactosPage() {
       `/api/companies/${encodeURIComponent(activeCompany.id)}/contacts?isActive=true&take=100`
     )
       .then((data) => {
-        if (cancelled) return
         setApiContacts(mapApiContactListToContactos(data))
         setApiLoading(false)
       })
       .catch((err: unknown) => {
-        if (cancelled) return
         const msg =
           err instanceof Error ? err.message : "Error loading contacts"
         setApiError(msg)
@@ -105,11 +102,11 @@ export default function ContactosPage() {
           "No se pudieron cargar contactos desde el servidor. Mostrando datos locales."
         )
       })
-
-    return () => {
-      cancelled = true
-    }
   }, [activeCompany?.id])
+
+  useEffect(() => {
+    fetchContacts()
+  }, [fetchContacts])
 
   // ── State ──
   const [searchQuery, setSearchQuery] = useState("")
@@ -198,22 +195,48 @@ export default function ContactosPage() {
     setConfirmOpen(true)
   }
 
-  const confirmToggleStatus = () => {
+  const confirmToggleStatus = async () => {
     if (!confirmAction) return
-    if (confirmAction.action === "inactivate") {
-      store.inactivateContacto(confirmAction.contacto.id)
-      toast.success(`Contacto ${confirmAction.contacto.codigoContacto} inactivado`)
-    } else {
-      store.reactivateContacto(confirmAction.contacto.id)
-      toast.success(`Contacto ${confirmAction.contacto.codigoContacto} reactivado`)
-    }
+
+    const { contacto, action } = confirmAction
+    const newState = action === "inactivate" ? false : true
+
     setConfirmOpen(false)
     setConfirmAction(null)
+
+    try {
+      const url = `/api/companies/${encodeURIComponent(activeCompany?.id ?? "")}/contacts/${encodeURIComponent(contacto.id)}`
+      await apiFetch(url, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: newState }),
+        headers: { "Content-Type": "application/json" },
+      })
+
+      toast.success(
+        action === "inactivate"
+          ? `Contacto ${contacto.codigoContacto} inactivado`
+          : `Contacto ${contacto.codigoContacto} reactivado`
+      )
+      fetchContacts()
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Error al cambiar estado"
+
+      // Fallback: use Zustand store
+      if (action === "inactivate") {
+        store.inactivateContacto(contacto.id)
+      } else {
+        store.reactivateContacto(contacto.id)
+      }
+
+      toast.error(msg)
+    }
   }
 
   const handleFormSaved = () => {
     setFormOpen(false)
     setEditingContacto(null)
+    fetchContacts()
   }
 
   // Reset group filter when role changes

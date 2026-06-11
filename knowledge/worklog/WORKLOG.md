@@ -4,6 +4,49 @@ Estado: inicial
 
 ---
 
+## 2026-06-10 — GPT-027F.5A-10B Contacts Mutations with Audit
+
+Done:
+- Agregado POST handler en `GET /api/companies/[companyId]/contacts` para crear contactos con auditoría.
+- Creada ruta `PATCH /api/companies/[companyId]/contacts/[contactId]` para editar y toggle activo/inactivo con auditoría.
+- Agregado `mapContactoToApiPayload` en `contact-adapter.ts` para mapear formulario Contacto → payload API.
+- Integrado `ContactoFormDialog` con API (POST create, PATCH edit) usando `apiFetch`, con Zustand fallback y loading/error states.
+- Integrada página contactos con PATCH toggle vía API + `refetchContacts()` post-mutación, con Zustand fallback.
+
+Changed:
+- `src/app/api/companies/[companyId]/contacts/route.ts` — POST handler + guards + audit + imports.
+- `src/app/api/companies/[companyId]/contacts/[contactId]/route.ts` — PATCH handler nuevo con update/toggle + audit.
+- `src/lib/api/contact-adapter.ts` — `mapContactoToApiPayload()` function.
+- `src/components/contactos/ContactoFormDialog.tsx` — API integration, `useAuth`, saving/error states, `Loader2`.
+- `src/app/contactos/page.tsx` — `fetchContacts` refactor, API toggle, `handleFormSaved` refetch.
+- `knowledge/worklog/WORKLOG.md` — 10B entry.
+
+Files:
+- `src/app/api/companies/[companyId]/contacts/route.ts`
+- `src/app/api/companies/[companyId]/contacts/[contactId]/route.ts` (new)
+- `src/lib/api/contact-adapter.ts`
+- `src/components/contactos/ContactoFormDialog.tsx`
+- `src/app/contactos/page.tsx`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npx tsc --noEmit` OK.
+- `npm run typecheck` OK (next typegen + tsc).
+- `npm run build` OK (Next.js 16.2.6, 2 new API routes listed).
+- `npm test` OK (28 files, 598 tests passed, 0 failures).
+
+Risks:
+- API calls depend on `activeCompany.id` del `AuthProvider` — si es null, las URLs serán `/api/companies//contacts` y fallarán con 404/401.
+- `mapContactoToApiPayload` omite campos locales (groups, datosClientePagador, datosMedico, etc.) — estos persisten solo en Zustand.
+- PATCH de toggle y update en una sola call no soportado por el frontend actual; solo hace toggle OR update separados.
+- Sin smoke tests de API real — las rutas compilan pero no se probaron contra DB DEV.
+
+Next:
+- Parent ejecuta smoke tests de POST y PATCH contra DB DEV.
+- Evaluar persistencia de campos locales (groups, datosMedico, etc.) en el backend futuro.
+
+---
+
 ## 2026-06-10 — GPT-027F.5A-09B Auditoría Page
 
 Done:

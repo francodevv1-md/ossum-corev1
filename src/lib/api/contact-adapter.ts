@@ -91,3 +91,69 @@ export function mapApiContactListToContactos(
 ): Contacto[] {
   return apiContacts.map(mapApiContactToContacto)
 }
+
+// ─── Form → API payload mapper ────────────────────────────────────────
+
+/**
+ * Converts frontend Contacto form data into an API payload for POST/PATCH.
+ * Maps domain fields (tipoPersona, nombre, cuit, dni, roles, telefonos)
+ * to Prisma Contact fields (isCompany, legalName, firstName, lastName, etc.).
+ *
+ * Fields NOT mapped (kept only in Zustand/local):
+ *   codigoContacto, nombreFantasia, domicilio, provincia, localidad,
+ *   codigoPostal, observaciones, datosClientePagador, datosMedico,
+ *   datosInstitucion, groups
+ */
+export function mapContactoToApiPayload(
+  formData: Partial<Contacto>
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {}
+
+  // Person type → isCompany + name split
+  if (formData.tipoPersona === "juridica") {
+    payload.isCompany = true
+    if (formData.razonSocial?.trim()) {
+      payload.legalName = formData.razonSocial.trim()
+    }
+  } else {
+    payload.isCompany = false
+    const fullName = formData.nombre?.trim()
+    if (fullName) {
+      const spaceIdx = fullName.indexOf(" ")
+      if (spaceIdx > 0) {
+        payload.firstName = fullName.slice(0, spaceIdx)
+        payload.lastName = fullName.slice(spaceIdx + 1)
+      } else {
+        payload.firstName = fullName
+      }
+    }
+  }
+
+  // Email
+  if (formData.email?.trim()) {
+    payload.email = formData.email.trim()
+  }
+
+  // Phone (first phone from the array)
+  if (formData.telefonos?.[0]?.trim()) {
+    payload.phone = formData.telefonos[0].trim()
+  }
+
+  // Document: CUIT takes precedence over DNI
+  if (formData.cuit?.trim()) {
+    payload.documentType = "CUIT"
+    payload.documentNumber = formData.cuit.trim()
+  } else if (formData.dni?.trim()) {
+    payload.documentType = "DNI"
+    payload.documentNumber = formData.dni.trim()
+  }
+
+  // Role → contactType + role
+  const firstRole = formData.roles?.[0]
+  if (firstRole) {
+    payload.contactType = firstRole
+    payload.role = firstRole
+  }
+
+  return payload
+}
