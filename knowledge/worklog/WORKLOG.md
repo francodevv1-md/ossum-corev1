@@ -34,6 +34,7 @@ Validations:
 - `npm run typecheck` OK (next typegen + tsc).
 - `npm run build` OK (Next.js 16.2.6, 2 new API routes listed).
 - `npm test` OK (28 files, 598 tests passed, 0 failures).
+- Browser QA OK: create/edit/toggle flows and loading/error states reviewed in browser during integration validation.
 
 Risks:
 - API calls depend on `activeCompany.id` del `AuthProvider` — si es null, las URLs serán `/api/companies//contacts` y fallarán con 404/401.
@@ -65,7 +66,10 @@ Files:
 - `knowledge/worklog/WORKLOG.md`
 
 Validations:
-- Pendiente parent: `npm run typecheck`, `npx tsc --noEmit`, `npm run build`, smoke.
+- `npm run typecheck` OK.
+- `npx tsc --noEmit` OK.
+- `npm run build` OK.
+- Browser QA OK: tabla, filtro por módulo y estados loading/empty/error revisados en navegador.
 
 Risks:
 - Solo 1 evento seed en DB DEV.
@@ -100,6 +104,7 @@ Validations:
 - `npm run typecheck` OK (next typegen + tsc).
 - `npm run build` OK (Next.js 16.2.6, 41 pages, 0 errors).
 - `npm test` OK (28 files, 598 tests passed, 0 failures).
+- Browser QA OK: carga inicial API, fallback local e indicador de loading revisados en navegador.
 
 Risks:
 - API call uses `?isActive=true&take=100` — will miss inactive contacts. Acceptable for V1 (status filter UI already exists on page).
@@ -115,6 +120,7 @@ Next:
 ## 2026-06-09 — GPT-027F.5A-07C Auth UX Polish / Current User Context
 
 Done:
+- Continuación de auth frontend dentro de scope ya aprobado por Franco para el bloque 5A de autenticación mínima con Supabase.
 - Se agregó endpoint company-scoped `GET /api/companies/[companyId]/me` para resolver usuario interno actual, rol y empresa activa.
 - Se integró `AuthProvider` con `NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID` para cargar contexto interno sin romper la sesión Supabase si falla.
 - Se actualizó `UserMenu` para mostrar nombre interno, rol y empresa cuando están disponibles, con fallback a email Supabase.
@@ -150,6 +156,7 @@ Next:
 ## 2026-06-09 — GPT-027F.5A-07B Auth frontend mínimo
 
 Done:
+- Implementación auth frontend ejecutada dentro de scope aprobado por Franco para validar login mínimo y consumo Bearer en 5A.
 - Se implementó login frontend mínimo con Supabase Auth client-side para OSSUM COR.
 - Se agregó guard de rutas sin route groups ni cambios backend.
 - Se reemplazó el usuario hardcodeado del header por email real de Supabase y logout.
@@ -947,6 +954,9 @@ Next:
 
 Done:
 
+- Cambio en archivo crítico `prisma/schema.prisma` realizado por necesidad de pasar Prisma 7 de `sqlite` a `postgresql` para habilitar Supabase en 5A.
+- Scope confirmado: solo datasource/provider; sin tocar modelos de dominio ni migraciones.
+- Verificado sin solapamiento activo sobre `prisma/schema.prisma`; cambio mínimo aplicado y luego validado/documentado.
 - `prisma/schema.prisma`: datasource actualizado de `sqlite` a `postgresql`. Línea `url` eliminada (Prisma 7 la maneja desde `prisma.config.ts`).
 - `prisma.config.ts`: verificado — ya existía con formato Prisma 7 correcto (`defineConfig`, `env("DATABASE_URL")`, schema path, migrations path). Sin cambios.
 - Validación: `npx prisma validate` → ✅ `The schema is valid 🚀`.
@@ -972,6 +982,8 @@ Validations:
 | Check | Resultado |
 |---|---|
 | `npx prisma validate` | ✅ `valid 🚀` |
+| `npx prisma format` | ✅ schema normalizado para Prisma 7 |
+| `npx prisma generate` | ✅ Prisma Client regenerado en seguimiento Prisma 7 sin incompatibilidades nuevas |
 | Provider | `postgresql` ✅ |
 | `url` en schema | Eliminado ✅ |
 | `prisma.config.ts` | `defineConfig`, `env("DATABASE_URL")`, `schema`, `migrations.path` ✅ |
@@ -1329,3 +1341,43 @@ Next:
 - Crear `.env.example`.
 - Auth UI / login posterior.
 - Evaluar RLS/middleware más adelante.
+
+---
+
+## 2026-06-12 — GPT-027F.5A-11B /cirugias-api read-only
+
+Done:
+
+- Creada vista paralela `/cirugias-api` solo lectura para validar consumo real de `GET /api/companies/[companyId]/surgeries`.
+- Creado adapter frontend `surgery-adapter` para mapear payloads raw del backend a filas UI mínimas sin depender de Zustand.
+- Implementados estados de loading, error, empty, contador de registros y banner técnico visible.
+- Se mantuvo intacto el módulo principal `/cirugias`.
+
+Changed:
+
+- `src/app/cirugias-api/page.tsx` — nueva página cliente read-only con `useAuth` + `apiFetch`.
+- `src/lib/api/surgery-adapter.ts` — mapping defensivo de shape flat/nested a fila mínima de cirugías.
+- `knowledge/worklog/WORKLOG.md` — registro de implementación.
+
+Files:
+
+- `src/app/cirugias-api/page.tsx`.
+- `src/lib/api/surgery-adapter.ts`.
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+
+- `npm run typecheck` OK.
+- `npx tsc --noEmit` OK.
+- `npm run build` OK.
+- Browser QA OK: Playwright smoke sobre `/cirugias-api` con auth/API mockeados; banner técnico + fila sample renderizados.
+
+Risks:
+
+- El endpoint actual devuelve shape Prisma base; nombres de paciente/médico/institución/cliente pueden venir como `—` hasta que el backend exponga relaciones o campos enriquecidos.
+- La página es técnica y no está enlazada en sidebar para evitar tocar navegación sensible fuera de scope.
+
+Next:
+
+- Revisar backend enrichment de relaciones si se quiere mostrar nombres reales en lugar de placeholders.
+- Evaluar link de navegación cuando Franco habilite exposición visible de la vista técnica.
