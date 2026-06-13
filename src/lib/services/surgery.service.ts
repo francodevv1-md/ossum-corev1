@@ -3,7 +3,7 @@
 // Contact references are global and MUST be validated through ContactCompanyLink.
 // Services receive prisma as dependency injection.
 
-import type { PrismaClient, Surgery } from "@prisma/client";
+import type { Prisma, PrismaClient, Surgery } from "@prisma/client";
 
 import { assertContactsBelongToCompany } from "./contact.service";
 import { createAuditEvent } from "../audit";
@@ -41,6 +41,59 @@ type ListSurgeriesOptions = {
   take?: number;
   skip?: number;
 };
+
+const surgeryReadSelect = {
+  id: true,
+  companyId: true,
+  branchId: true,
+  patientId: true,
+  doctorId: true,
+  institutionId: true,
+  surgeryDate: true,
+  status: true,
+  notes: true,
+  createdAt: true,
+  updatedAt: true,
+  patient: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      legalName: true,
+    },
+  },
+  doctor: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      legalName: true,
+    },
+  },
+  institution: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      legalName: true,
+    },
+  },
+} satisfies Prisma.SurgerySelect;
+
+type SurgeryAuditShape = Pick<
+  Surgery,
+  | "id"
+  | "companyId"
+  | "branchId"
+  | "patientId"
+  | "doctorId"
+  | "institutionId"
+  | "surgeryDate"
+  | "status"
+  | "notes"
+  | "createdAt"
+  | "updatedAt"
+>;
 
 async function assertBranchBelongsToCompany(
   prisma: PrismaClient,
@@ -97,7 +150,7 @@ async function assertActorCanMutateSurgery(
   return scopedContext;
 }
 
-function serializeSurgeryForAudit(surgery: Surgery | null) {
+function serializeSurgeryForAudit(surgery: SurgeryAuditShape | null) {
   if (!surgery) {
     return null;
   }
@@ -153,6 +206,7 @@ export async function listSurgeriesByCompany(
   const scopedCompanyId = requireCompanyId(companyId);
 
   return prisma.surgery.findMany({
+    select: surgeryReadSelect,
     where: {
       companyId: scopedCompanyId,
       status: options?.status,
@@ -176,6 +230,7 @@ export async function getSurgeryById(
   const scopedCompanyId = requireCompanyId(companyId);
 
   return prisma.surgery.findFirst({
+    select: surgeryReadSelect,
     where: {
       id: surgeryId,
       companyId: scopedCompanyId,

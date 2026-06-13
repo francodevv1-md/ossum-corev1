@@ -4,6 +4,35 @@ Estado: inicial
 
 ---
 
+## 2026-06-12 — GPT-027F.5A-11D Enrich Surgeries API Payload
+
+Done:
+- Se enriqueció la lectura de cirugías en backend con contactos relacionados `patient`, `doctor` e `institution`.
+- Se preservaron todos los campos escalares actuales de `Surgery` en la respuesta read-only.
+- Se reutilizó un `select` compartido en listado por empresa y detalle por ID.
+
+Changed:
+- `src/lib/services/surgery.service.ts` — agregado `surgeryReadSelect` tipado con Prisma para respuestas enriquecidas sin cambiar filtros, scoping ni ordering.
+- `knowledge/worklog/WORKLOG.md` — nueva entrada 11D.
+
+Files:
+- `src/lib/services/surgery.service.ts`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npm run typecheck` OK.
+- `npx tsc --noEmit` OK.
+- `npm run build` OK.
+
+Risks:
+- Si existiera código consumidor acoplado a shape estrictamente escalar, ahora recibirá también relaciones anidadas en GET/list sin romper campos existentes.
+
+Next:
+- Ejecutar validaciones requeridas.
+- Stagear solo archivos permitidos y commit si todo pasa.
+
+---
+
 ## 2026-06-10 — GPT-027F.5A-10B Contacts Mutations with Audit
 
 Done:
