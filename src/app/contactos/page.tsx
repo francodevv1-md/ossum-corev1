@@ -79,6 +79,7 @@ export default function ContactosPage() {
   const [apiContacts, setApiContacts] = useState<Contacto[] | null>(null)
   const [apiLoading, setApiLoading] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+  const [apiFetched, setApiFetched] = useState(false)
 
   const fetchContacts = useCallback(() => {
     if (!activeCompany?.id) return
@@ -92,12 +93,14 @@ export default function ContactosPage() {
       .then((data) => {
         setApiContacts(mapApiContactListToContactos(data))
         setApiLoading(false)
+        setApiFetched(true)
       })
       .catch((err: unknown) => {
         const msg =
           err instanceof Error ? err.message : "Error loading contacts"
         setApiError(msg)
         setApiLoading(false)
+        setApiFetched(true)
         toast.error(
           "No se pudieron cargar contactos desde el servidor. Mostrando datos locales."
         )
@@ -130,8 +133,10 @@ export default function ContactosPage() {
     return CONTACT_GROUPS.filter((g) => g.role === roleFilter && g.activo)
   }, [roleFilter])
 
-  // ── Contact source (API first, Zustand fallback) ──
-  const contactSource = apiContacts ?? store.contactos
+  // ── Contact source (API first, Zustand fallback only on error) ──
+  // Never render Zustand data while API is loading (prevents flicker).
+  const contactSource: Contacto[] = apiContacts
+    ?? (apiFetched && apiError ? store.contactos : [])
 
   // ── Filtered contacts ──
   const filteredContactos = useMemo(() => {
@@ -264,9 +269,9 @@ export default function ContactosPage() {
 
       {/* Toolbar */}
       <div className="shrink-0 border-b bg-card/50 px-6 py-3">
-        {apiLoading && (
-          <div className="text-xs text-muted-foreground mb-2 transition-opacity">
-            Cargando contactos del servidor…
+        {apiError && (
+          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1.5 mb-2">
+            ⚠ {apiError}. Mostrando datos locales.
           </div>
         )}
         <div className="flex flex-wrap items-center gap-3">
@@ -345,7 +350,21 @@ export default function ContactosPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredContactos.length === 0 ? (
+            {apiLoading && !apiFetched ? (
+              // Loading skeleton — never show Zustand rows during API fetch
+              Array.from({ length: 8 }).map((_, i) => (
+                <TableRow key={`skel-${i}`}>
+                  <TableCell className="font-mono text-xs"><div className="h-3 w-14 bg-muted animate-pulse rounded" /></TableCell>
+                  <TableCell><div className="h-3 w-40 bg-muted animate-pulse rounded" /></TableCell>
+                  <TableCell><div className="h-3 w-24 bg-muted animate-pulse rounded" /></TableCell>
+                  <TableCell><div className="h-3 w-20 bg-muted animate-pulse rounded" /></TableCell>
+                  <TableCell><div className="h-3 w-16 bg-muted animate-pulse rounded" /></TableCell>
+                  <TableCell><div className="h-3 w-16 bg-muted animate-pulse rounded" /></TableCell>
+                  <TableCell><div className="h-3 w-14 bg-muted animate-pulse rounded" /></TableCell>
+                  <TableCell><div className="h-3 w-16 bg-muted animate-pulse rounded" /></TableCell>
+                </TableRow>
+              ))
+            ) : filteredContactos.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="h-32 text-center text-muted-foreground text-sm">
                   No se encontraron contactos
