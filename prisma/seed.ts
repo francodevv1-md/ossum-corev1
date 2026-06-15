@@ -91,10 +91,12 @@ async function main() {
   // ─── 4. User admin ──────────────────────────────────────────────────
   const user = await prisma.user.upsert({
     where: { email: "admin.dev@ossum.local" },
-    update: {},
+    update: {
+      supabaseAuthId: "7b5a7a3c-566a-446e-b447-ab50c9bb6da8",
+    },
     create: {
       id: IDS.user,
-      supabaseAuthId: null,
+      supabaseAuthId: "7b5a7a3c-566a-446e-b447-ab50c9bb6da8",
       email: "admin.dev@ossum.local",
       firstName: "Admin",
       lastName: "DEV",
