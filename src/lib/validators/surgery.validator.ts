@@ -2,110 +2,177 @@ import { badRequest } from "../api/errors";
 
 export type CreateSurgeryInput = {
   branchId?: string | null;
+  visibleNumber?: string | null;
   patientId: string;
   doctorId?: string | null;
   institutionId?: string | null;
-  surgeryDate: Date;
-  status?: string;
+  payerContactId?: string | null;
+  classification?: string | null;
+  description?: string | null;
+  priority?: string | null;
+  cxStatus?: string;
+  prepStatus?: string | null;
+  probableDate?: Date | null;
+  scheduledDate?: Date | null;
+  surgeryDate?: Date | null;
+  performedDate?: Date | null;
+  cancelledDate?: Date | null;
+  source?: string | null;
   notes?: string | null;
 };
 
 export type UpdateSurgeryInput = {
   branchId?: string | null;
+  visibleNumber?: string | null;
   patientId?: string;
   doctorId?: string | null;
   institutionId?: string | null;
-  surgeryDate?: Date;
-  status?: string;
+  payerContactId?: string | null;
+  classification?: string | null;
+  description?: string | null;
+  priority?: string | null;
+  cxStatus?: string;
+  prepStatus?: string | null;
+  probableDate?: Date | null;
+  scheduledDate?: Date | null;
+  surgeryDate?: Date | null;
+  performedDate?: Date | null;
+  cancelledDate?: Date | null;
+  source?: string | null;
   notes?: string | null;
 };
 
-export type UpdateSurgeryStatusInput = {
-  status: string;
+export type UpdateSurgeryCxStatusInput = {
+  cxStatus: string;
 };
 
-export const SURGERY_STATUSES = [
+export const CX_STATUS = [
   "unauthorized",
   "authorized",
   "pending",
-  "preparing",
-  "in_transit",
+  "scheduled",
   "performed",
-  "no_consumption",
   "finalized",
   "suspended",
   "cancelled",
 ] as const;
 
-export type SurgeryStatus = (typeof SURGERY_STATUSES)[number];
+export const PREP_STATUS = [
+  "preparing",
+  "frozen",
+  "frozen_with_missing",
+  "shipped",
+  "delivered",
+  "returned",
+] as const;
 
-export const SURGERY_STATUS_LABELS: Record<SurgeryStatus, string> = {
+export const SURGERY_PRIORITY = ["normal", "urgent", "scheduled"] as const;
+
+export const SURGERY_CONTACT_ROLE = [
+  "coordinator",
+  "salesperson",
+  "instrumentator",
+  "transporter",
+  "assistant",
+  "observer",
+  "other",
+] as const;
+
+export type CxStatus = (typeof CX_STATUS)[number];
+export type PrepStatus = (typeof PREP_STATUS)[number];
+export type SurgeryPriority = (typeof SURGERY_PRIORITY)[number];
+export type SurgeryContactRole = (typeof SURGERY_CONTACT_ROLE)[number];
+
+export const CX_STATUS_LABELS: Record<CxStatus, string> = {
   unauthorized: "No autorizada",
   authorized: "Autorizada",
   pending: "Pendiente",
-  preparing: "En preparación",
-  in_transit: "En tránsito",
+  scheduled: "Programada",
   performed: "Realizada",
-  no_consumption: "Sin consumo",
   finalized: "Finalizada",
   suspended: "Suspendida",
   cancelled: "Cancelada",
 };
 
-export const SURGERY_INITIAL_STATUS: SurgeryStatus = "pending";
-
-export const SURGERY_TERMINAL_STATUSES = [
-  "finalized",
-  "cancelled",
-  "suspended",
-] as const satisfies readonly SurgeryStatus[];
-
-export const SURGERY_STATUS_TRANSITIONS: Partial<
-  Record<SurgeryStatus, readonly SurgeryStatus[]>
-> = {
-  unauthorized: ["authorized", "pending", "suspended", "cancelled"],
-  authorized: ["pending", "preparing", "suspended", "cancelled"],
-  pending: ["authorized", "preparing", "suspended", "cancelled"],
-  preparing: ["in_transit", "suspended", "cancelled"],
-  in_transit: ["performed", "suspended", "cancelled"],
-  performed: ["no_consumption", "finalized"],
-  no_consumption: ["finalized"],
+export const PREP_STATUS_LABELS: Record<PrepStatus, string> = {
+  preparing: "En preparación",
+  frozen: "Congelada",
+  frozen_with_missing: "Congelada con faltantes",
+  shipped: "Despachada",
+  delivered: "Entregada",
+  returned: "Retirada / devuelta",
 };
 
-function isSurgeryStatus(value: string): value is SurgeryStatus {
-  return SURGERY_STATUSES.includes(value as SurgeryStatus);
+export const CX_INITIAL_STATUS: CxStatus = "pending";
+
+export const CX_TERMINAL_STATUSES = ["finalized", "cancelled"] as const satisfies readonly CxStatus[];
+
+export const CX_STATUS_TRANSITIONS: Partial<Record<CxStatus, readonly CxStatus[]>> = {
+  unauthorized: ["authorized", "pending", "scheduled", "suspended", "cancelled"],
+  authorized: ["pending", "scheduled", "suspended", "cancelled"],
+  pending: ["authorized", "scheduled", "suspended", "cancelled"],
+  scheduled: ["performed", "suspended", "cancelled"],
+  performed: ["finalized", "suspended"],
+  suspended: ["authorized", "pending", "scheduled", "cancelled"],
+};
+
+function isCxStatus(value: string): value is CxStatus {
+  return CX_STATUS.includes(value as CxStatus);
 }
 
-export function validateSurgeryStatus(status: string): SurgeryStatus {
+function isPrepStatus(value: string): value is PrepStatus {
+  return PREP_STATUS.includes(value as PrepStatus);
+}
+
+function isSurgeryPriority(value: string): value is SurgeryPriority {
+  return SURGERY_PRIORITY.includes(value as SurgeryPriority);
+}
+
+export function validateCxStatus(status: string): CxStatus {
   if (typeof status !== "string" || status.trim().length === 0) {
-    throw badRequest("status is required", "missing_status");
+    throw badRequest("cxStatus is required", "missing_cx_status");
   }
 
-  if (!isSurgeryStatus(status)) {
-    throw badRequest(`Invalid surgery status: ${status}`, "invalid_surgery_status");
+  if (!isCxStatus(status)) {
+    throw badRequest(`Invalid surgery cxStatus: ${status}`, "invalid_surgery_cx_status");
   }
 
   return status;
 }
 
-export function validateSurgeryStatusTransition(
+export function validatePrepStatus(status: string): PrepStatus {
+  if (typeof status !== "string" || status.trim().length === 0) {
+    throw badRequest("prepStatus is required", "missing_prep_status");
+  }
+
+  if (!isPrepStatus(status)) {
+    throw badRequest(`Invalid surgery prepStatus: ${status}`, "invalid_surgery_prep_status");
+  }
+
+  return status;
+}
+
+export function validateCxStatusTransition(
   currentStatus: string,
   nextStatus: string
-): SurgeryStatus {
-  const current = validateSurgeryStatus(currentStatus);
-  const next = validateSurgeryStatus(nextStatus);
+): CxStatus {
+  const current = validateCxStatus(currentStatus);
+  const next = validateCxStatus(nextStatus);
 
   if (current === next) {
-    throw badRequest(`Surgery status is already ${next}`, "status_unchanged");
+    throw badRequest(`Surgery cxStatus is already ${next}`, "cx_status_unchanged");
   }
 
-  if (SURGERY_TERMINAL_STATUSES.includes(current as never)) {
-    throw badRequest(`Cannot change terminal surgery status ${current}`, "terminal_status_immutable");
+  if (CX_TERMINAL_STATUSES.includes(current as never)) {
+    throw badRequest(`Cannot change terminal surgery cxStatus ${current}`, "terminal_cx_status_immutable");
   }
 
-  const allowedNextStatuses = SURGERY_STATUS_TRANSITIONS[current];
+  const allowedNextStatuses = CX_STATUS_TRANSITIONS[current];
   if (!allowedNextStatuses?.includes(next)) {
-    throw badRequest(`Invalid surgery status transition: ${current} -> ${next}`, "invalid_status_transition");
+    throw badRequest(
+      `Invalid surgery cxStatus transition: ${current} -> ${next}`,
+      "invalid_cx_status_transition"
+    );
   }
 
   return next;
@@ -145,6 +212,35 @@ function validateOptionalString(
   return value;
 }
 
+function validateOptionalNullableDate(
+  value: unknown,
+  fieldName: string
+): Date | null | undefined {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  if (!isValidDate(value)) {
+    throw badRequest(`${fieldName} must be a valid Date when provided`, "invalid_date_field");
+  }
+
+  return value;
+}
+
+function validateOptionalPriority(
+  value: unknown
+): SurgeryPriority | null | undefined {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  if (typeof value !== "string" || !isSurgeryPriority(value)) {
+    throw badRequest(`Invalid surgery priority: ${String(value)}`, "invalid_surgery_priority");
+  }
+
+  return value;
+}
+
 export function validateCreateSurgeryInput(
   data: CreateSurgeryInput
 ): CreateSurgeryInput {
@@ -152,19 +248,32 @@ export function validateCreateSurgeryInput(
     throw badRequest("patientId is required", "missing_patient_id");
   }
 
-  if (!isValidDate(data.surgeryDate)) {
-    throw badRequest("surgeryDate must be a valid Date", "invalid_surgery_date");
-  }
-
   validateOptionalNullableString(data.branchId, "branchId");
+  validateOptionalNullableString(data.visibleNumber, "visibleNumber");
   validateOptionalNullableString(data.doctorId, "doctorId");
   validateOptionalNullableString(data.institutionId, "institutionId");
-  if (data.status !== undefined) {
-    const status = validateSurgeryStatus(data.status);
-    if (status !== SURGERY_INITIAL_STATUS) {
-      throw badRequest(`Initial surgery status must be ${SURGERY_INITIAL_STATUS}`, "invalid_initial_status");
-    }
+  validateOptionalNullableString(data.payerContactId, "payerContactId");
+  validateOptionalNullableString(data.classification, "classification");
+  validateOptionalNullableString(data.description, "description");
+  validateOptionalNullableString(data.source, "source");
+  validateOptionalPriority(data.priority);
+
+  const cxStatus =
+    data.cxStatus !== undefined ? validateCxStatus(data.cxStatus) : CX_INITIAL_STATUS;
+
+  if (data.cxStatus !== undefined && cxStatus !== CX_INITIAL_STATUS) {
+    throw badRequest(`Initial surgery cxStatus must be ${CX_INITIAL_STATUS}`, "invalid_initial_cx_status");
   }
+
+  if (data.prepStatus !== undefined && data.prepStatus !== null) {
+    validatePrepStatus(data.prepStatus);
+  }
+
+  validateOptionalNullableDate(data.probableDate, "probableDate");
+  validateOptionalNullableDate(data.scheduledDate, "scheduledDate");
+  validateOptionalNullableDate(data.surgeryDate, "surgeryDate");
+  validateOptionalNullableDate(data.performedDate, "performedDate");
+  validateOptionalNullableDate(data.cancelledDate, "cancelledDate");
 
   if (
     data.notes !== undefined &&
@@ -174,23 +283,36 @@ export function validateCreateSurgeryInput(
     throw badRequest("notes must be a string when provided", "invalid_notes");
   }
 
-  return { ...data, status: SURGERY_INITIAL_STATUS };
+  return { ...data, cxStatus };
 }
 
 export function validateUpdateSurgeryInput(
   data: UpdateSurgeryInput
 ): UpdateSurgeryInput {
   validateOptionalNullableString(data.branchId, "branchId");
+  validateOptionalNullableString(data.visibleNumber, "visibleNumber");
   validateOptionalString(data.patientId, "patientId");
   validateOptionalNullableString(data.doctorId, "doctorId");
   validateOptionalNullableString(data.institutionId, "institutionId");
-  if (data.status !== undefined) {
-    validateSurgeryStatus(data.status);
+  validateOptionalNullableString(data.payerContactId, "payerContactId");
+  validateOptionalNullableString(data.classification, "classification");
+  validateOptionalNullableString(data.description, "description");
+  validateOptionalNullableString(data.source, "source");
+  validateOptionalPriority(data.priority);
+
+  if (data.cxStatus !== undefined) {
+    validateCxStatus(data.cxStatus);
   }
 
-  if (data.surgeryDate !== undefined && !isValidDate(data.surgeryDate)) {
-    throw badRequest("surgeryDate must be a valid Date when provided", "invalid_surgery_date");
+  if (data.prepStatus !== undefined && data.prepStatus !== null) {
+    validatePrepStatus(data.prepStatus);
   }
+
+  validateOptionalNullableDate(data.probableDate, "probableDate");
+  validateOptionalNullableDate(data.scheduledDate, "scheduledDate");
+  validateOptionalNullableDate(data.surgeryDate, "surgeryDate");
+  validateOptionalNullableDate(data.performedDate, "performedDate");
+  validateOptionalNullableDate(data.cancelledDate, "cancelledDate");
 
   if (
     data.notes !== undefined &&
@@ -203,8 +325,8 @@ export function validateUpdateSurgeryInput(
   return data;
 }
 
-export function validateUpdateSurgeryStatusInput(
-  data: UpdateSurgeryStatusInput
-): UpdateSurgeryStatusInput {
-  return { status: validateSurgeryStatus(data.status) };
+export function validateUpdateSurgeryCxStatusInput(
+  data: UpdateSurgeryCxStatusInput
+): UpdateSurgeryCxStatusInput {
+  return { cxStatus: validateCxStatus(data.cxStatus) };
 }

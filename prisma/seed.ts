@@ -320,25 +320,66 @@ async function main() {
   // ─── 11. Surgery demo ───────────────────────────────────────────────
   const surgery = await prisma.surgery.upsert({
     where: { id: IDS.surgery },
-    update: {},
+    update: {
+      branchId: branch.id,
+      visibleNumber: "CX-DEV-2026-0001",
+      patientId: patient.id,
+      doctorId: doctor.id,
+      institutionId: institution.id,
+      payerContactId: payer.id,
+      classification: "traumatología general",
+      description: "Cirugía demo DEV — traumatología general",
+      priority: "normal",
+      cxStatus: "pending",
+      surgeryDate: new Date("2026-06-15T10:00:00Z"),
+      source: "seed",
+      notes: "Cirugía demo DEV — traumatología general",
+    },
     create: {
       id: IDS.surgery,
       companyId: company.id,
       branchId: branch.id,
+      visibleNumber: "CX-DEV-2026-0001",
       patientId: patient.id,
       doctorId: doctor.id,
       institutionId: institution.id,
+      payerContactId: payer.id,
+      classification: "traumatología general",
+      description: "Cirugía demo DEV — traumatología general",
+      priority: "normal",
+      cxStatus: "pending",
       surgeryDate: new Date("2026-06-15T10:00:00Z"),
-      status: "pending",
+      source: "seed",
       notes: "Cirugía demo DEV — traumatología general",
     },
   });
-  console.log(`  ✓ Surgery: ${surgery.id.substring(0, 12)}... (status: ${surgery.status})`);
+  console.log(`  ✓ Surgery: ${surgery.id.substring(0, 12)}... (cxStatus: ${surgery.cxStatus})`);
 
   // ─── 12. AuditEvent ─────────────────────────────────────────────────
   const auditEvent = await prisma.auditEvent.upsert({
     where: { id: IDS.auditEvent },
-    update: {},
+    update: {
+      detail: "Cirugía demo creada por seed DEV",
+      newValue: {
+        visibleNumber: "CX-DEV-2026-0001",
+        patientId: patient.id,
+        doctorId: doctor.id,
+        institutionId: institution.id,
+        payerContactId: payer.id,
+        classification: "traumatología general",
+        description: "Cirugía demo DEV — traumatología general",
+        priority: "normal",
+        cxStatus: "pending",
+        prepStatus: null,
+        surgeryDate: "2026-06-15T10:00:00Z",
+        source: "seed",
+      },
+      metadata: {
+        seed: true,
+        environment: "dev",
+        version: "init",
+      },
+    },
     create: {
       id: IDS.auditEvent,
       companyId: company.id,
@@ -348,11 +389,18 @@ async function main() {
       action: "seed.created",
       detail: "Cirugía demo creada por seed DEV",
       newValue: {
+        visibleNumber: "CX-DEV-2026-0001",
         patientId: patient.id,
         doctorId: doctor.id,
         institutionId: institution.id,
+        payerContactId: payer.id,
+        classification: "traumatología general",
+        description: "Cirugía demo DEV — traumatología general",
+        priority: "normal",
+        cxStatus: "pending",
+        prepStatus: null,
         surgeryDate: "2026-06-15T10:00:00Z",
-        status: "pending",
+        source: "seed",
       },
       module: "backend_foundation",
       metadata: {

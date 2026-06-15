@@ -117,6 +117,8 @@ model Contact {
   patientSurgeries     Surgery[]                @relation("PatientSurgeries")
   doctorSurgeries      Surgery[]                @relation("DoctorSurgeries")
   institutionSurgeries Surgery[]                @relation("InstitutionSurgeries")
+  payerSurgeries       Surgery[]                @relation("PayerSurgeries")
+  surgeryAssignments   SurgeryContactAssignment[]
 }
 
 // ─── Vínculo Contacto → Empresa ──────────────────────────────────────
@@ -184,26 +186,59 @@ model ContactAddress {
   contact Contact @relation(fields: [contactId], references: [id])
 }
 
-// ─── Cirugía (mínima V1) ─────────────────────────────────────────────
+// ─── Cirugía (Fase 1 — core expandido) ─────────────────────────────
 
 model Surgery {
-  id            String   @id @default(cuid())
-  companyId     String
-  branchId      String?
-  patientId     String
-  doctorId      String?
-  institutionId String?
-  surgeryDate   DateTime
-  status        String   @default("pending")
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  companyId          String
+  branchId           String?
+  visibleNumber      String?
+  patientId          String
+  doctorId           String?
+  institutionId      String?
+  payerContactId     String?
+  classification     String?
+  description        String?
+  priority           String?
+  cxStatus           String    @default("pending")
+  prepStatus         String?
+  probableDate       DateTime?
+  scheduledDate      DateTime?
+  surgeryDate        DateTime?
+  performedDate      DateTime?
+  cancelledDate      DateTime?
+  source             String?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   company     Company  @relation(fields: [companyId], references: [id])
   branch      Branch?  @relation(fields: [branchId], references: [id])
   patient     Contact  @relation("PatientSurgeries", fields: [patientId], references: [id])
   doctor      Contact? @relation("DoctorSurgeries", fields: [doctorId], references: [id])
   institution Contact? @relation("InstitutionSurgeries", fields: [institutionId], references: [id])
+  payer       Contact? @relation("PayerSurgeries", fields: [payerContactId], references: [id])
+
+  contactAssignments SurgeryContactAssignment[]
+}
+
+// ─── Asignación de Contacto a Cirugía ──────────────────────────────
+
+model SurgeryContactAssignment {
+  id        String   @id @default(cuid())
+  surgeryId String
+  contactId String
+  role      String
+  isPrimary Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+
+  surgery Surgery @relation(fields: [surgeryId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@unique([surgeryId, contactId, role])
+  @@index([surgeryId])
+  @@index([contactId])
 }
 
 // ─── Auditoría ───────────────────────────────────────────────────────

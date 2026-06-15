@@ -10,9 +10,9 @@ import { createAuditEvent } from "../audit";
 import { requireCompanyId } from "../tenant";
 import {
   validateCreateSurgeryInput,
-  validateSurgeryStatusTransition,
+  validateCxStatusTransition,
+  validateUpdateSurgeryCxStatusInput,
   validateUpdateSurgeryInput,
-  validateUpdateSurgeryStatusInput,
   type CreateSurgeryInput,
   type UpdateSurgeryInput,
 } from "../validators/surgery.validator";
@@ -34,6 +34,10 @@ const SURGERY_MUTATION_ROLES = [
 
 type ListSurgeriesOptions = {
   status?: string;
+  cxStatus?: string;
+  prepStatus?: string;
+  payerContactId?: string;
+  priority?: string;
   branchId?: string;
   patientId?: string;
   doctorId?: string;
@@ -46,11 +50,22 @@ const surgeryReadSelect = {
   id: true,
   companyId: true,
   branchId: true,
+  visibleNumber: true,
   patientId: true,
   doctorId: true,
   institutionId: true,
+  payerContactId: true,
+  classification: true,
+  description: true,
+  priority: true,
+  cxStatus: true,
+  prepStatus: true,
+  probableDate: true,
+  scheduledDate: true,
   surgeryDate: true,
-  status: true,
+  performedDate: true,
+  cancelledDate: true,
+  source: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -78,6 +93,14 @@ const surgeryReadSelect = {
       legalName: true,
     },
   },
+  payer: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      legalName: true,
+    },
+  },
 } satisfies Prisma.SurgerySelect;
 
 type SurgeryAuditShape = Pick<
@@ -85,15 +108,30 @@ type SurgeryAuditShape = Pick<
   | "id"
   | "companyId"
   | "branchId"
+  | "visibleNumber"
   | "patientId"
   | "doctorId"
   | "institutionId"
+  | "payerContactId"
+  | "classification"
+  | "description"
+  | "priority"
+  | "cxStatus"
+  | "prepStatus"
+  | "probableDate"
+  | "scheduledDate"
   | "surgeryDate"
-  | "status"
+  | "performedDate"
+  | "cancelledDate"
+  | "source"
   | "notes"
   | "createdAt"
   | "updatedAt"
 >;
+
+function serializeDate(value: Date | null): string | null {
+  return value ? value.toISOString() : null;
+}
 
 async function assertBranchBelongsToCompany(
   prisma: PrismaClient,
@@ -159,11 +197,22 @@ function serializeSurgeryForAudit(surgery: SurgeryAuditShape | null) {
     id: surgery.id,
     companyId: surgery.companyId,
     branchId: surgery.branchId,
+    visibleNumber: surgery.visibleNumber,
     patientId: surgery.patientId,
     doctorId: surgery.doctorId,
     institutionId: surgery.institutionId,
-    surgeryDate: surgery.surgeryDate.toISOString(),
-    status: surgery.status,
+    payerContactId: surgery.payerContactId,
+    classification: surgery.classification,
+    description: surgery.description,
+    priority: surgery.priority,
+    cxStatus: surgery.cxStatus,
+    prepStatus: surgery.prepStatus,
+    probableDate: serializeDate(surgery.probableDate),
+    scheduledDate: serializeDate(surgery.scheduledDate),
+    surgeryDate: serializeDate(surgery.surgeryDate),
+    performedDate: serializeDate(surgery.performedDate),
+    cancelledDate: serializeDate(surgery.cancelledDate),
+    source: surgery.source,
     notes: surgery.notes,
     createdAt: surgery.createdAt.toISOString(),
     updatedAt: surgery.updatedAt.toISOString(),
@@ -183,12 +232,16 @@ async function assertSurgeryReferencesBelongToCompany(
     patientId?: string;
     doctorId?: string | null;
     institutionId?: string | null;
+    payerContactId?: string | null;
     branchId?: string | null;
   }
 ): Promise<void> {
-  const contactIds = [data.patientId, data.doctorId, data.institutionId].filter(
-    (value): value is string => Boolean(value)
-  );
+  const contactIds = [
+    data.patientId,
+    data.doctorId,
+    data.institutionId,
+    data.payerContactId,
+  ].filter((value): value is string => Boolean(value));
 
   await assertContactsBelongToCompany(prisma, companyId, contactIds);
 
@@ -209,13 +262,16 @@ export async function listSurgeriesByCompany(
     select: surgeryReadSelect,
     where: {
       companyId: scopedCompanyId,
-      status: options?.status,
+      cxStatus: options?.cxStatus ?? options?.status,
+      prepStatus: options?.prepStatus,
+      payerContactId: options?.payerContactId,
+      priority: options?.priority,
       branchId: options?.branchId,
       patientId: options?.patientId,
       doctorId: options?.doctorId,
       institutionId: options?.institutionId,
     },
-    orderBy: { surgeryDate: "desc" },
+    orderBy: [{ surgeryDate: "desc" }, { createdAt: "desc" }],
     take: options?.take ?? 50,
     skip: options?.skip,
   });
@@ -252,6 +308,7 @@ export async function createSurgery(
     patientId: validatedData.patientId,
     doctorId: validatedData.doctorId,
     institutionId: validatedData.institutionId,
+    payerContactId: validatedData.payerContactId,
     branchId: validatedData.branchId,
   });
 
@@ -260,11 +317,22 @@ export async function createSurgery(
       data: {
         companyId: scopedCompanyId,
         branchId: validatedData.branchId ?? null,
+        visibleNumber: validatedData.visibleNumber ?? null,
         patientId: validatedData.patientId,
         doctorId: validatedData.doctorId ?? null,
         institutionId: validatedData.institutionId ?? null,
-        surgeryDate: validatedData.surgeryDate,
-        status: validatedData.status,
+        payerContactId: validatedData.payerContactId ?? null,
+        classification: validatedData.classification ?? null,
+        description: validatedData.description ?? null,
+        priority: validatedData.priority ?? null,
+        cxStatus: validatedData.cxStatus,
+        prepStatus: validatedData.prepStatus ?? null,
+        probableDate: validatedData.probableDate ?? null,
+        scheduledDate: validatedData.scheduledDate ?? null,
+        surgeryDate: validatedData.surgeryDate ?? null,
+        performedDate: validatedData.performedDate ?? null,
+        cancelledDate: validatedData.cancelledDate ?? null,
+        source: validatedData.source ?? null,
         notes: validatedData.notes,
       },
     });
@@ -297,19 +365,23 @@ export async function updateSurgery(
   const scopedCompanyId = requireCompanyId(scopedContext.companyId);
   const validatedData = validateUpdateSurgeryInput(data);
 
-  const currentSurgery = await getSurgeryById(prisma, scopedCompanyId, surgeryId);
+  const currentSurgery = await prisma.surgery.findFirst({
+    where: { id: surgeryId, companyId: scopedCompanyId },
+  });
+
   if (!currentSurgery) {
     throw new Error(`Surgery ${surgeryId} not found in company ${scopedCompanyId}`);
   }
 
-  if (validatedData.status !== undefined) {
-    validateSurgeryStatusTransition(currentSurgery.status, validatedData.status);
+  if (validatedData.cxStatus !== undefined) {
+    validateCxStatusTransition(currentSurgery.cxStatus, validatedData.cxStatus);
   }
 
   await assertSurgeryReferencesBelongToCompany(prisma, scopedCompanyId, {
     patientId: validatedData.patientId,
     doctorId: validatedData.doctorId,
     institutionId: validatedData.institutionId,
+    payerContactId: validatedData.payerContactId,
     branchId: validatedData.branchId,
   });
 
@@ -318,11 +390,22 @@ export async function updateSurgery(
       where: { id: surgeryId, companyId: scopedCompanyId },
       data: {
         branchId: validatedData.branchId,
+        visibleNumber: validatedData.visibleNumber,
         patientId: validatedData.patientId,
         doctorId: validatedData.doctorId,
         institutionId: validatedData.institutionId,
+        payerContactId: validatedData.payerContactId,
+        classification: validatedData.classification,
+        description: validatedData.description,
+        priority: validatedData.priority,
+        cxStatus: validatedData.cxStatus,
+        prepStatus: validatedData.prepStatus,
+        probableDate: validatedData.probableDate,
+        scheduledDate: validatedData.scheduledDate,
         surgeryDate: validatedData.surgeryDate,
-        status: validatedData.status,
+        performedDate: validatedData.performedDate,
+        cancelledDate: validatedData.cancelledDate,
+        source: validatedData.source,
         notes: validatedData.notes,
       },
     });
@@ -354,32 +437,36 @@ export async function updateSurgery(
   });
 }
 
-/** Update only the status of a surgery after verifying tenant ownership. */
-export async function updateSurgeryStatus(
+/** Update only the CX status of a surgery after verifying tenant ownership. */
+export async function updateSurgeryCxStatus(
   prisma: PrismaClient,
   context: SurgeryActorContext,
   surgeryId: string,
-  status: string
+  cxStatus: string
 ) {
   const scopedContext = await assertActorCanMutateSurgery(prisma, context);
   const scopedCompanyId = requireCompanyId(scopedContext.companyId);
-  const validatedData = validateUpdateSurgeryStatusInput({ status });
+  const validatedData = validateUpdateSurgeryCxStatusInput({ cxStatus });
 
-  const currentSurgery = await getSurgeryById(prisma, scopedCompanyId, surgeryId);
+  const currentSurgery = await prisma.surgery.findFirst({
+    where: { id: surgeryId, companyId: scopedCompanyId },
+  });
+
   if (!currentSurgery) {
     throw new Error(`Surgery ${surgeryId} not found in company ${scopedCompanyId}`);
   }
-  validateSurgeryStatusTransition(currentSurgery.status, validatedData.status);
+
+  validateCxStatusTransition(currentSurgery.cxStatus, validatedData.cxStatus);
 
   return prisma.$transaction(async (tx) => {
     const result = await tx.surgery.updateMany({
       where: { id: surgeryId, companyId: scopedCompanyId },
-      data: { status: validatedData.status },
+      data: { cxStatus: validatedData.cxStatus },
     });
 
     if (result.count !== 1) {
       throw new Error(
-        `Failed to update surgery status for ${surgeryId} in company ${scopedCompanyId}`
+        `Failed to update surgery cxStatus for ${surgeryId} in company ${scopedCompanyId}`
       );
     }
 
@@ -393,15 +480,25 @@ export async function updateSurgeryStatus(
       userId: scopedContext.actorUserId,
       entityType: "Surgery",
       entityId: surgeryId,
-      action: "surgery.status_changed",
+      action: "surgery.cx_status_changed",
       module: scopedContext.module ?? "surgery",
-      oldValue: { status: currentSurgery.status },
-      newValue: { status: validatedData.status },
+      oldValue: { cxStatus: currentSurgery.cxStatus },
+      newValue: { cxStatus: validatedData.cxStatus },
       metadata: auditMetadata(scopedContext),
     });
 
     return updatedSurgery;
   });
+}
+
+/** Compatibility wrapper for existing PATCH status route. */
+export async function updateSurgeryStatus(
+  prisma: PrismaClient,
+  context: SurgeryActorContext,
+  surgeryId: string,
+  status: string
+) {
+  return updateSurgeryCxStatus(prisma, context, surgeryId, status);
 }
 
 /** Assert that a surgery belongs to a company. */
