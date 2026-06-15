@@ -14,6 +14,8 @@ export type SurgeryApiRow = {
   institutionName: string | null
   payerName: string | null
   clientName: string | null
+  cxStatus: string | null
+  prepStatus: string | null
   status: string | null
   surgeryDate: string | null
   authorizationNumber: string | null
@@ -108,8 +110,10 @@ export function mapApiSurgeryToRow(apiSurgery: RawSurgeryApiRecord): SurgeryApiR
     patientName: pickNestedName(apiSurgery, ["patient", "paciente"], ["patientName", "patient", "paciente"]),
     doctorName: pickNestedName(apiSurgery, ["doctor", "medico"], ["doctorName", "surgeonName", "doctor", "medico"]),
     institutionName: pickNestedName(apiSurgery, ["institution", "institucion"], ["institutionName", "institution", "institucion"]),
-    payerName: pickNestedName(apiSurgery, ["payer", "client", "cliente"], ["payerName", "clientName", "payer", "client", "cliente"]),
+    payerName: pickNestedName(apiSurgery, ["payer"], ["payerName", "payer"]),
     clientName: pickNestedName(apiSurgery, ["payer", "client", "cliente"], ["payerName", "clientName", "payer", "client", "cliente"]),
+    cxStatus: pickString(apiSurgery, ["cxStatus"]),
+    prepStatus: pickString(apiSurgery, ["prepStatus"]),
     status: pickString(apiSurgery, ["cxStatus", "status", "estado"]),
     surgeryDate: pickString(apiSurgery, ["surgeryDate", "fechaCirugia", "date"]),
     authorizationNumber: pickAdministrativeReference(apiSurgery, [

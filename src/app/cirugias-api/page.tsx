@@ -165,8 +165,10 @@ export default function CirugiasApiPage() {
                 <TableHead className="text-[11px]">Médico</TableHead>
                 <TableHead className="text-[11px]">Institución</TableHead>
                 <TableHead className="text-[11px]">Cliente</TableHead>
-                <TableHead className="text-[11px]">Estado API</TableHead>
-                <TableHead className="text-[11px]">Expediente / Autorización</TableHead>
+                <TableHead className="text-[11px]">Pagador</TableHead>
+                <TableHead className="text-[11px]">Estado CX</TableHead>
+                <TableHead className="text-[11px]">Prep.</TableHead>
+                <TableHead className="text-[11px]">Exp. / Autorización</TableHead>
                 <TableHead className="text-[11px]">ID</TableHead>
               </TableRow>
             </TableHeader>
@@ -183,9 +185,15 @@ export default function CirugiasApiPage() {
                   <TableCell className="text-xs">{displayValue(row.doctorName)}</TableCell>
                   <TableCell className="text-xs">{displayValue(row.institutionName)}</TableCell>
                   <TableCell className="text-xs">{displayValue(row.clientName)}</TableCell>
+                  <TableCell className="text-xs">{displayValue(row.payerName)}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-[10px]">
-                      {displayValue(row.status)}
+                      {displayValue(row.cxStatus)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                      {displayValue(row.prepStatus)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">

@@ -19,6 +19,10 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const surgeries = await listSurgeriesByCompany(prisma, ctx.companyId, {
       status: getStringParam(searchParams, "status"),
+      cxStatus: getStringParam(searchParams, "cxStatus"),
+      prepStatus: getStringParam(searchParams, "prepStatus"),
+      payerContactId: getStringParam(searchParams, "payerContactId"),
+      priority: getStringParam(searchParams, "priority"),
       branchId: getStringParam(searchParams, "branchId"),
       patientId: getStringParam(searchParams, "patientId"),
       doctorId: getStringParam(searchParams, "doctorId"),
