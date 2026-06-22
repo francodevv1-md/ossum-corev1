@@ -841,7 +841,7 @@ export interface DatosInstitucion {
  */
 export interface Contacto {
   id: string
-  /** Código numérico único visible (ej: 8527, 8712) */
+  /** Código único visible (ej: C-0001, C-0042 — Phase 1 canonical form) */
   codigoContacto: string
   tipoPersona: TipoPersona
   /** Nombre para persona física o razón social para jurídica */

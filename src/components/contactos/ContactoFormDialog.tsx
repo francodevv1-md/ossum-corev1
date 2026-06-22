@@ -26,11 +26,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Save, UserPlus, Loader2 } from "lucide-react"
+import { Save, UserPlus, Loader2, Pencil } from "lucide-react"
 import { CONTACT_GROUPS, CONTACT_ROLE_LABELS, getGroupsForRole } from "@/lib/contacts.constants"
 import { apiFetch } from "@/lib/api/client"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { mapContactoToApiPayload } from "@/lib/api/contact-adapter"
+import {
+  isValidContactCodeFormat,
+  normalizeContactCode,
+} from "@/lib/contact-code"
 
 // ═══════════════════════════════════════════════════════════════
 // Constants
@@ -63,6 +67,12 @@ interface ContactoFormDialogProps {
   defaultRoles?: ContactRole[]
   /** DC-CT-016: Default groups for alta rápida from context */
   defaultGroups?: string[]
+  /** Valores iniciales para alta rápida contextual */
+  initialValues?: {
+    tipoPersona?: TipoPersona
+    nombre?: string
+    dni?: string
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -76,12 +86,18 @@ function ContactoFormInner({
   onOpenChange,
   defaultRoles,
   defaultGroups,
+  initialValues,
 }: {
   contacto?: Contacto | null
   onSaved?: (contacto: Contacto) => void
   onOpenChange: (open: boolean) => void
   defaultRoles?: ContactRole[]
   defaultGroups?: string[]
+  initialValues?: {
+    tipoPersona?: TipoPersona
+    nombre?: string
+    dni?: string
+  }
 }) {
   const store = useOrtoTrackStore()
   const { activeCompany } = useAuth()
@@ -92,13 +108,18 @@ function ContactoFormInner({
   const [saveError, setSaveError] = useState<string | null>(null)
 
   // ── Form state — initialized from contacto prop ──
-  const [codigoContacto, setCodigoContacto] = useState(contacto?.codigoContacto ?? "")
-  const [tipoPersona, setTipoPersona] = useState<TipoPersona>(contacto?.tipoPersona ?? "fisica")
-  const [nombre, setNombre] = useState(contacto?.nombre ?? "")
+  // CONTACTO-CODIGO-AUTO-P1 / FR-4: in create mode, pre-fill with the next
+  // sequential code from the store (per-company stub). Edit mode keeps the
+  // existing code (immutable).
+  const [codigoContacto, setCodigoContacto] = useState(
+    contacto?.codigoContacto ?? store.getNextContactoCodigo(activeCompany?.id)
+  )
+  const [tipoPersona, setTipoPersona] = useState<TipoPersona>(contacto?.tipoPersona ?? initialValues?.tipoPersona ?? "fisica")
+  const [nombre, setNombre] = useState(contacto?.nombre ?? initialValues?.nombre ?? "")
   const [nombreFantasia, setNombreFantasia] = useState(contacto?.nombreFantasia ?? "")
   const [razonSocial, setRazonSocial] = useState(contacto?.razonSocial ?? "")
   const [cuit, setCuit] = useState(contacto?.cuit ?? "")
-  const [dni, setDni] = useState(contacto?.dni ?? "")
+  const [dni, setDni] = useState(contacto?.dni ?? initialValues?.dni ?? "")
   const [estado, setEstado] = useState<"activo" | "inactivo">(contacto?.estado ?? "activo")
   const [observaciones, setObservaciones] = useState(contacto?.observaciones ?? "")
 
@@ -125,6 +146,9 @@ function ContactoFormInner({
 
   const [codigoError, setCodigoError] = useState("")
   const [nombreError, setNombreError] = useState("")
+  // CONTACTO-CODIGO-AUTO-P1 / FR-8: in create mode the code is read-only by
+  // default with a pencil toggle that enables manual editing.
+  const [codigoEditable, setCodigoEditable] = useState(false)
 
   // ── Toggle role ──
   const toggleRole = (role: ContactRole) => {
@@ -149,6 +173,18 @@ function ContactoFormInner({
   }
 
   // ── Validate ──
+  const handleCodigoBlur = () => {
+    // CONTACTO-CODIGO-AUTO-P1 / FR-3: normalize on blur in create mode only.
+    if (isEditing) return // immutable, nothing to normalize
+    const trimmed = codigoContacto.trim()
+    if (!trimmed) {
+      setCodigoContacto("")
+      return
+    }
+    const normalized = normalizeContactCode(trimmed)
+    setCodigoContacto(normalized ?? trimmed) // keep raw visible if invalid so user sees input
+  }
+
   const validate = (): boolean => {
     let valid = true
 
@@ -159,16 +195,19 @@ function ContactoFormInner({
       setNombreError("")
     }
 
-    if (!codigoContacto.trim()) {
+    // ── Code validation (CONTACTO-CODIGO-AUTO-P1) ──
+    if (isEditing) {
+      // FR-10 / FR-14: immutable in edit mode — field is display-only.
+      setCodigoError("")
+    } else if (!codigoContacto.trim()) {
       setCodigoError("El código es obligatorio")
       valid = false
-    } else if (!isEditing || codigoContacto !== contacto?.codigoContacto) {
-      if (!store.isCodigoContactoDisponible(codigoContacto.trim())) {
-        setCodigoError("El código ya existe")
-        valid = false
-      } else {
-        setCodigoError("")
-      }
+    } else if (!isValidContactCodeFormat(codigoContacto.trim())) {
+      setCodigoError("Formato inválido (usar C-0001)")
+      valid = false
+    } else if (!store.isCodigoContactoDisponible(codigoContacto.trim(), activeCompany?.id)) {
+      setCodigoError("El código ya existe")
+      valid = false
     } else {
       setCodigoError("")
     }
@@ -221,6 +260,9 @@ function ContactoFormInner({
       email: email.trim() || undefined,
       telefonos,
       roles,
+      // CONTACTO-CODIGO-AUTO-P1 / FR-13: send codigo to API on create for
+      // forward-compat P2 persistence. Omitted in edit mode (FR-14 immutability).
+      ...( !isEditing ? { codigoContacto: codigoContacto.trim() } : {} ),
     }
 
     const apiPayload = mapContactoToApiPayload(formData)
@@ -242,8 +284,9 @@ function ContactoFormInner({
         })
 
         // Update Zustand for local fields not persisted by API
+        // FR-14 (immutability): codigoContacto is dropped from edit-branch
+        // updateContacto here and in the catch fallback — do NOT pass it.
         store.updateContacto(contacto.id, {
-          codigoContacto: codigoContacto.trim(),
           tipoPersona,
           nombre: nombre.trim(),
           nombreFantasia: nombreFantasia.trim() || undefined,
@@ -312,8 +355,8 @@ function ContactoFormInner({
 
       // Fallback: save to Zustand only if API fails
       if (isEditing && contacto) {
+        // FR-14 (immutability): codigoContacto dropped on edit fallback too.
         store.updateContacto(contacto.id, {
-          codigoContacto: codigoContacto.trim(),
           tipoPersona,
           nombre: nombre.trim(),
           nombreFantasia: nombreFantasia.trim() || undefined,
@@ -382,13 +425,38 @@ function ContactoFormInner({
           <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">General</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Código *</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Código *</Label>
+                {!isEditing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCodigoEditable((v) => !v)
+                      setCodigoError("")
+                    }}
+                    className="text-muted-foreground hover:text-primary"
+                    aria-label={codigoEditable ? "Bloquear código sugerido" : "Editar código manualmente"}
+                    title={codigoEditable ? "Bloquear" : "Editar manualmente"}
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
+              </div>
               <Input
                 className="h-8 text-sm"
                 value={codigoContacto}
+                readOnly={isEditing || !codigoEditable}
                 onChange={(e) => { setCodigoContacto(e.target.value); setCodigoError("") }}
-                placeholder="Ej: 8527"
+                onBlur={handleCodigoBlur}
+                placeholder="Ej: C-0001"
               />
+              <p className="text-[10px] text-muted-foreground">
+                {isEditing
+                  ? "Inmutable (solo lectura)"
+                  : codigoEditable
+                    ? "Ingresa el código, se normaliza al salir (ej: 42 → C-0042)"
+                    : "Sugerido automáticamente"}
+              </p>
               {codigoError && <p className="text-[10px] text-red-600">{codigoError}</p>}
             </div>
 
@@ -766,6 +834,7 @@ export function ContactoFormDialog({
   onSaved,
   defaultRoles,
   defaultGroups,
+  initialValues,
 }: ContactoFormDialogProps) {
   // Use contacto id (or "new") as key so form remounts with fresh state
   // when switching between create/edit or between different contacts
@@ -781,6 +850,7 @@ export function ContactoFormDialog({
           onOpenChange={onOpenChange}
           defaultRoles={defaultRoles}
           defaultGroups={defaultGroups}
+          initialValues={initialValues}
         />
       </DialogContent>
     </Dialog>

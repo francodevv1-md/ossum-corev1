@@ -45,6 +45,11 @@ import { mockEvaluacionesProveedor } from "@/data/mock-evaluaciones-proveedor"
 import { mockContactos } from "@/data/mock-contactos"
 import { CONTACT_GROUPS } from "@/lib/contacts.constants"
 import { generateId, nowDate, nowTime } from "@/lib/idGenerators"
+import {
+  CONTACT_CODE_REGEX,
+  parseContactCode,
+  formatContactCode,
+} from "@/lib/contact-code"
 import { normalizeAccents } from "@/lib/utils"
 import { formatCurrency } from "@/lib/formatters"
 import { getResumenCobranzaBySurgeryId } from "@/lib/cobros.utils"
@@ -214,7 +219,10 @@ interface OrtoTrackState {
   getContactoByCodigo: (codigoContacto: string) => Contacto | undefined
   getContactosByRole: (role: ContactRole) => Contacto[]
   searchContactos: (query: string, role?: ContactRole, groupIds?: string[]) => Contacto[]
-  isCodigoContactoDisponible: (codigo: string) => boolean
+  // CONTACTO-CODIGO-AUTO-P1: companyId accepted for forward-compat (Phase 2 isolates per-company).
+  isCodigoContactoDisponible: (codigo: string, companyId?: string) => boolean
+  getNextContactoCodigo: (companyId?: string) => string
+  reformatLegacyContactoCodigos: () => void
 
   // ===== REMITO V2 ACTIONS (CHATZAI-022) =====
   createRemito: (data: {
@@ -1180,8 +1188,64 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
         })
       },
 
-      isCodigoContactoDisponible: (codigo) => {
+      isCodigoContactoDisponible: (codigo, _companyId) => {
+        // Phase 1: global over contactos; companyId accepted-and-ignored (forward-compat P2).
+        void _companyId
         return !get().contactos.some((c) => c.codigoContacto === codigo)
+      },
+
+      // CONTACTO-CODIGO-AUTO-P1: next sequential contact code = max(conforming)+1.
+      getNextContactoCodigo: (_companyId) => {
+        // Phase 1: companyId accepted and ignored (no per-company field on Contacto proto).
+        void _companyId
+        const contactos = get().contactos
+        let max = 0
+        for (const c of contactos) {
+          if (typeof c.codigoContacto !== "string") continue
+          if (!CONTACT_CODE_REGEX.test(c.codigoContacto)) continue
+          const n = parseContactCode(c.codigoContacto)
+          if (n !== null && n > max) max = n
+        }
+        return formatContactCode(max + 1)
+      },
+
+      // CONTACTO-CODIGO-AUTO-P1: opt-in one-time reformat of legacy (non-conforming) codes.
+      reformatLegacyContactoCodigos: () => {
+        const contactos = get().contactos
+        // Compute the starting counter = (max existing conforming n) + 1.
+        let nextSeq = 1
+        for (const c of contactos) {
+          if (typeof c.codigoContacto === "string" && CONTACT_CODE_REGEX.test(c.codigoContacto)) {
+            const n = parseContactCode(c.codigoContacto)
+            if (n !== null && n >= nextSeq) nextSeq = n + 1
+          }
+        }
+        // Order legacy (non-conforming) contactos by createdAt asc, falls back to id asc.
+        const legacy = contactos
+          .filter(
+            (c) =>
+              typeof c.codigoContacto !== "string" ||
+              !CONTACT_CODE_REGEX.test(c.codigoContacto)
+          )
+          .sort((a, b) => {
+            const ta = a.createdAt ?? ""
+            const tb = b.createdAt ?? ""
+            if (ta !== tb) return ta < tb ? -1 : 1
+            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+          })
+        if (legacy.length === 0) return // idempotent: no-op
+        // Build a code map (preserve the assignment order across the array).
+        const updates = new Map<string, string>()
+        for (const c of legacy) {
+          updates.set(c.id, formatContactCode(nextSeq++))
+        }
+        set((s) => ({
+          contactos: s.contactos.map((c) =>
+            updates.has(c.id)
+              ? { ...c, codigoContacto: updates.get(c.id)!, updatedAt: nowDate() }
+              : c
+          ),
+        }))
       },
 
       // ===== REMITO V2 ACTIONS (CHATZAI-022) =====

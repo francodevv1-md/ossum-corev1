@@ -15,8 +15,21 @@ import type { Contacto, ContactRole } from "@/types"
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-function buildCodigoContacto(id: string): string {
-  return id.slice(0, 6)
+/**
+ * Resolve a Contacto code from the API response.
+ * Phase 2 will populate api.codigo from the DB-backed SequenceCounter.
+ * Phase 1 fallback: a deterministic transient label that CANNOT collide
+ *   with the canonical C-\d{4,} regex (uses "C-T" prefix), and is
+ *   clearly flagged as transient for migration.
+ */
+function resolveContactoCodigo(api: Record<string, unknown>): string {
+  // TODO(P2): replace fallback with DB-backed api.codigo once Phase 2 lands.
+  const real = typeof api.codigo === "string" ? api.codigo.trim() : ""
+  if (real) return real
+  // Transient fallback: deterministic but obviously non-canonical.
+  const id = (api.id as string) ?? ""
+  const suffix = id.replace(/[^A-Za-z0-9]/g, "").slice(-4) || "0000"
+  return `C-T${suffix}` // intentionally fails ^C-\d{4,}$ — won't pollute counter
 }
 
 function buildNombre(api: Record<string, unknown>): string {
@@ -63,7 +76,7 @@ export function mapApiContactToContacto(
 
   return {
     id,
-    codigoContacto: buildCodigoContacto(id),
+    codigoContacto: resolveContactoCodigo(apiContact),
     tipoPersona: isCompany ? "juridica" : "fisica",
     nombre: buildNombre(apiContact),
     nombreFantasia: undefined,
@@ -100,9 +113,13 @@ export function mapApiContactListToContactos(
  * to Prisma Contact fields (isCompany, legalName, firstName, lastName, etc.).
  *
  * Fields NOT mapped (kept only in Zustand/local):
- *   codigoContacto, nombreFantasia, domicilio, provincia, localidad,
+ *   nombreFantasia, domicilio, provincia, localidad,
  *   codigoPostal, observaciones, datosClientePagador, datosMedico,
  *   datosInstitucion, groups
+ *
+ * NOTE (CONTACTO-CODIGO-AUTO-P1): `codigoContacto` is now mapped OUT to
+ * `payload.codigo` (FR-13, forward-compat P2) and IN from `api.codigo`
+ * (FR-12), with a transient `C-T####` fallback when the API does not provide one.
  */
 export function mapContactoToApiPayload(
   formData: Partial<Contacto>
@@ -153,6 +170,13 @@ export function mapContactoToApiPayload(
   if (firstRole) {
     payload.contactType = firstRole
     payload.role = firstRole
+  }
+
+  // CONTACTO-CODIGO-AUTO-P1 / FR-13: Forward-compat P2 — send the contact code
+  // so the API can persist it. Phase 1 API may ignore it.
+  const codigo = formData.codigoContacto?.trim()
+  if (codigo) {
+    payload.codigo = codigo
   }
 
   return payload
