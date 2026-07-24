@@ -190,4 +190,14 @@ describe("Cirugía creation with new fields", () => {
       surgeries: useOrtoTrackStore.getState().surgeries.slice(0, initialCount),
     })
   })
+
+  it("uses provided id override when syncing a persisted surgery reference", () => {
+    const initialCount = useOrtoTrackStore.getState().surgeries.length
+    const store = useOrtoTrackStore.getState()
+    const surgery = store.createSurgery(makeSurgeryPayload(), { id: "CX-PERSISTED-123" })
+    expect(surgery.id).toBe("CX-PERSISTED-123")
+    useOrtoTrackStore.setState({
+      surgeries: useOrtoTrackStore.getState().surgeries.slice(0, initialCount),
+    })
+  })
 })

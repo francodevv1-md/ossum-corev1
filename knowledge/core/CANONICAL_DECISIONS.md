@@ -1,7 +1,8 @@
 # CANONICAL_DECISIONS.md — OSSUM COR
 
 Estado: vigente  
-Tipo: decisiones cortas para agentes
+Tipo: decisiones cortas para agentes  
+Actualizado: 2026-07-07
 
 ---
 
@@ -27,13 +28,23 @@ Tipo: decisiones cortas para agentes
 
 ---
 
-## Secuencia vigente
+## Secuencia vigente (estado al 2026-07-07)
 
-1. GPT-027F.0A — Knowledge V2 / saneamiento documental.
-2. GPT-027F.0B — Gentle-AI workspace / Engram / SDD / Skill Registry / guardrails.
-3. GPT-027F.5A — Backend Foundation.
+1. GPT-027F.0A — Knowledge V2 / saneamiento documental — **CERRADA**.
+2. GPT-027F.0B — Gentle-AI workspace / Engram / SDD / Skill Registry / guardrails — **CERRADA**.
+3. GPT-027F.5A — Backend Foundation — **EJECUTADA parcialmente**:
+   - Schema phase1 + 21 modelos en Prisma/PostgreSQL/Supabase (multiempresa, contactos, cirugía mínima enriquecida con visibleNumber/estados/fechas/SurgeryContactAssignment, AuditEvent).
+   - Auth Supabase DEV operativo con `getApiAuthContext` + mapeo `supabaseAuthId → User.id` + fallback DEV `x-ossum-actor-user-id` (fuera de producción).
+   - Contactos API (read + mutations con auditoría).
+   - Surgeries API (read + status PATCH, enriquecida con patient/doctor/institution), vista técnica `/cirugias-api`.
+   - Seguimiento (SeguimientoEntry + service + API + adapter + hook + NovedadesTabContent).
+   - Notificaciones internas (InternalNotification + service + API + inbox/dropdown).
+   - Recibos digitales (5 modelos DigitalReceipt + service + R2 storage + firma pública).
+   - Mail stage1 (en FS, Gmail OAuth).
+   - IA autorización (stateless, providers mock/openai/openrouter, integrada en NewSurgeryDialog).
+   - Auditoría en cirugía y contactos; gap en seguimiento/recibos.
 
-Backend está bloqueado hasta cerrar 0A/0B.
+La secuencia 0A/0B como gate bloqueante ya **no aplica**. Las prohibiciones sobre `schema.prisma`, Auth y Cirugías se mantienen como **reglas protectivas basadas en contenido** (ver `AGENTS.md` §11), no como secuencia bloqueante.
 
 ---
 
@@ -49,16 +60,20 @@ Backend está bloqueado hasta cerrar 0A/0B.
 
 ---
 
-## Prohibiciones vigentes
+## Prohibiciones vigentes (reglas protectivas, independientes del cierre de fases)
 
-- No iniciar Backend Foundation antes de 0A/0B.
-- No tocar `prisma/schema.prisma` sin spec y task brief.
-- No refactorizar Cirugías sin scope explícito.
+- No backend foundation nuevo (circuito troncal post-Cirugía) sin Task Brief específico y aprobación de Franco.
+- No migraciones reales sin aprobación de Franco.
+- No cambio de DB provider sin ADR.
+- No Auth productivo sin `ADR-AUTH-FINAL.md` cerrado y aprobado.
+- No refactorizar Cirugías sin scope explícito y Task Brief.
+- No tocar `prisma/schema.prisma` sin Task Brief + aprobación Franco.
+- No instalar dependencias nuevas sin tarea explícita.
+- No integrar TusFacturasAPP productivo.
 - No usar Prisma desde React.
 - No poner lógica crítica en componentes.
 - No usar Supabase RLS como reemplazo de validación backend.
 - No exponer secretos ni credenciales fiscales en frontend.
-- No integrar TusFacturasAPP productivo sin backend y ADR específica.
 
 ---
 

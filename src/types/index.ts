@@ -1,7 +1,7 @@
 // ===== Surgery States =====
 export type SurgeryState =
   | "Sin autorizar" | "Sin fecha" | "Pendiente" | "Autorizada"
-  | "En preparación" | "En tránsito" | "Realizada" | "Finalizada"
+  | "En tránsito" | "Realizada" | "Finalizada"
   | "Suspendida" | "Cancelada" | "Sin consumo"
 
 // ===== Logistics States =====
@@ -12,7 +12,7 @@ export type LogisticsState =
 // ===== Preparation States =====
 export type PreparationState =
   | "Sin preparar" | "Congelado" | "Congelado con faltantes"
-  | "Entregado" | "Retirado"
+  | "En preparación" | "Enviado" | "Entregado" | "Retirado"
 
 // ===== User Roles =====
 export type UserRole =
@@ -89,8 +89,27 @@ export interface PlantillaItem {
 }
 
 // ===== Surgery =====
+export type CoordinatorAssignmentSlaBasis =
+  | { status: "valid"; createdAt: string; epochMs: number }
+  | { status: "missing"; diagnosticCode: "assignment_created_at_missing" }
+  | { status: "invalid"; diagnosticCode: "assignment_created_at_invalid" }
+
+export type SurgeryCoordinatorAssignment = {
+  assignmentId: string
+  contactId: string
+  label: string
+  isPrimary: boolean
+  slaBasis: CoordinatorAssignmentSlaBasis
+}
+
 export interface Surgery {
   id: string
+  /** Backend technical identifier used for API relations/actions when available. */
+  backendId?: string
+  /** Canonical backend CX state; UI labels are derived separately. */
+  backendCxStatus?: string
+  /** Visible operational surgery code, e.g. CX-0001. Do not fall back to technical IDs for display. */
+  visibleNumber?: string
   patient: string
   patientDni: string
   surgeon: string
@@ -143,6 +162,8 @@ export interface Surgery {
   vendedorContactId?: string
   instrumentadorContactId?: string
   coordinadorContactId?: string
+  coordinatorAssignmentState?: "none" | "resolved" | "ambiguous"
+  coordinatorAssignments?: SurgeryCoordinatorAssignment[]
 }
 
 // ===== Stock Item =====

@@ -34,3 +34,9 @@ Si un archivo de `legacy-pre-v2/` contradice documentos activos de `knowledge/`,
 - consultar solo si falta contexto histórico;
 - rescatar reglas útiles de forma explícita y mínima;
 - no reactivar estos documentos como fuente canónica.
+
+---
+
+## Documento legacy explícito
+
+- `PROYECTO_CONTEXTO_MAESTRO_v8.2.md` — fósil del Contexto Maestro v8.2 legacy pre-V2 (2766 líneas, formato roto). **No rige.** Conservado solo para trazabilidad histórica. Migrado desde `docs/ia-autorizaciones/PROYECTO_CONTEXTO_MAESTRO (1).md` el 2026-07-07 (DOC-027F.0C-SANEO). La fuente vigente del proyecto está en `knowledge/core/` y `knowledge/domain/`.

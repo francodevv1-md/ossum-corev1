@@ -3,13 +3,10 @@
 import React from "react"
 import { cn } from "@/lib/utils"
 import { formatDate, formatCurrency } from "@/lib/formatters"
-import { CX_STATE_COLORS, PREP_STATE_COLORS, DOC_STATUS_COLORS, FACTURACION_COLORS, CONSUMO_STATE_COLORS } from "@/lib/cirugias.constants"
-import { getFacturacionBadgeLabel } from "@/lib/cirugias.utils"
 import type { Surgery, Presupuesto, Comprobante, Remito, Consumo, SurgeryNote, Box } from "@/types"
 import type { PendientePrincipal } from "@/lib/cirugias.types"
 import type { ResumenCobranzaSurgery, FacturaCobranzaDetalle } from "@/lib/cobros.utils"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 
 interface ResumenExpedienteProps {
   surgery: Surgery
@@ -25,27 +22,13 @@ interface ResumenExpedienteProps {
   pendiente: PendientePrincipal
 }
 
-function NeutralCard({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
+export function NeutralCard({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("rounded-lg border bg-card p-4", className)}>
       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{title}</h3>
       {children}
     </div>
   )
-}
-
-function FieldRow({ label, value, className }: { label: string; value: React.ReactNode; className?: string }) {
-  return (
-    <div className={cn("flex justify-between items-start py-1.5", className)}>
-      <span className="text-xs text-muted-foreground shrink-0 pr-3">{label}</span>
-      <span className="text-xs font-medium text-right">{value || "—"}</span>
-    </div>
-  )
-}
-
-function StatusBadge({ status, colorMap }: { status: string; colorMap: Record<string, string> }) {
-  const colorClass = colorMap[status] || "bg-gray-400 text-white"
-  return <span className={cn("inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold leading-none", colorClass)}>{status}</span>
 }
 
 /** Badge de estado de cobranza para una FV */
@@ -63,48 +46,23 @@ const ESTADO_COBRANZA_LABELS: Record<string, string> = {
   vencida: "Vencida",
 }
 
-function EstadoCobranzaBadge({ estado }: { estado: string }) {
+export function EstadoCobranzaBadge({ estado }: { estado: string }) {
   const colorClass = ESTADO_COBRANZA_COLORS[estado] || "bg-gray-100 text-gray-800 border-gray-300"
   const label = ESTADO_COBRANZA_LABELS[estado] || estado
   return <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold border", colorClass)}>{label}</span>
 }
 
 export function ResumenExpediente({
-  surgery: s, presupuestos, comprobantes, remitos, consumo, notes,
-  docStatus, facturacionStatus, box, resumenCobranza, pendiente,
+  surgery: s, presupuestos, comprobantes, remitos, notes,
+  resumenCobranza,
 }: ResumenExpedienteProps) {
   const pr = presupuestos[0]
   const remito = remitos[0]
-  const fvComp = comprobantes.find(c => c.type === "FV")
   const peComp = comprobantes.find(c => c.type === "PE")
-  const cobrosTotal = resumenCobranza.totalCobrado
-  const saldoPendiente = resumenCobranza.saldoPendiente
   const lastNotes = notes.slice(-3).reverse()
 
   return (
     <div className="space-y-5">
-      {/* ── A. Datos principales ── */}
-      <NeutralCard title="Datos principales">
-        <div className="grid grid-cols-2 gap-x-8 gap-y-0">
-          <FieldRow label="Paciente" value={s.patient} />
-          <FieldRow label="Médico" value={s.surgeon} />
-          <FieldRow label="DNI" value={s.patientDni} />
-          <FieldRow label="Institución" value={s.institution} />
-          <FieldRow label="Obra social" value={s.obraSocial} />
-          <FieldRow label="Cliente / Financiador" value={s.client || s.financiador} />
-          <FieldRow label="Clasificación" value={s.classification} />
-          <FieldRow label="Provincia" value={s.provincia} />
-          <FieldRow label="Localidad" value={s.localidad} />
-          <FieldRow label="Fecha CX" value={formatDate(s.date)} />
-          <FieldRow label="Hora" value={s.time || "—"} />
-          <FieldRow label="Urgente" value={s.urgente ? <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-4">URGENTE</Badge> : "No"} />
-          <FieldRow label="Vendedor" value={s.vendedor} />
-          <FieldRow label="Coordinador de CX" value={s.coordinadorCx || "Sin asignar"} />
-          <FieldRow label="Instrumentador" value={s.instrumentador} />
-          {s.fechaEnvioMaterial && <FieldRow label="Fecha envío material" value={formatDate(s.fechaEnvioMaterial)} />}
-        </div>
-      </NeutralCard>
-
       {/* ── Leyenda destacada ── */}
       {s.leyendaDestacada && s.leyenda && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3">
@@ -112,56 +70,6 @@ export function ResumenExpediente({
           <p className="text-sm text-amber-900">{s.leyenda}</p>
         </div>
       )}
-
-      {/* ── Referencias administrativas ── */}
-      {s.referenciasAdministrativas && s.referenciasAdministrativas.length > 0 && (
-        <NeutralCard title="Referencias administrativas">
-          <div className="flex flex-wrap gap-2">
-            {s.referenciasAdministrativas.map((ref) => (
-              <div key={ref.id} className="inline-flex flex-col rounded-md border px-2.5 py-1.5 bg-muted/40">
-                <span className="text-[10px] font-semibold text-muted-foreground">
-                  {ref.tipo}
-                  {ref.valor ? <span className="text-foreground ml-1 font-normal">{ref.valor}</span> : ""}
-                </span>
-                {ref.observacion && (
-                  <span className="text-[10px] text-muted-foreground mt-0.5">{ref.observacion}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </NeutralCard>
-      )}
-
-      {/* ── B. Estado operativo ── */}
-      <NeutralCard title="Estado operativo">
-        <div className="grid grid-cols-2 gap-x-8 gap-y-0">
-          <FieldRow label="Estado CX" value={<StatusBadge status={s.state} colorMap={CX_STATE_COLORS} />} />
-          <FieldRow label="Preparación" value={<StatusBadge status={s.preparationState} colorMap={PREP_STATE_COLORS} />} />
-          <FieldRow label="Documentación" value={<StatusBadge status={docStatus} colorMap={DOC_STATUS_COLORS} />} />
-          <FieldRow label="Consumo" value={consumo ? <StatusBadge status={consumo.state} colorMap={CONSUMO_STATE_COLORS} /> : "Sin consumo"} />
-          <FieldRow label="Facturación" value={<StatusBadge status={s.facturado ? "Facturada" : getFacturacionBadgeLabel(facturacionStatus)} colorMap={FACTURACION_COLORS} />} />
-          <FieldRow
-            label="Cobranza"
-            value={
-              cobrosTotal > 0
-                ? <span className="text-emerald-700 font-semibold">{formatCurrency(cobrosTotal)}</span>
-                : "Sin cobros"
-            }
-          />
-          {saldoPendiente > 0 && (
-            <FieldRow
-              label="Saldo pendiente"
-              value={<span className="text-amber-700 font-semibold">{formatCurrency(saldoPendiente)}</span>}
-            />
-          )}
-        </div>
-      </NeutralCard>
-
-      {/* ── C. Pendiente principal ── */}
-      <div className={cn("rounded-lg border px-4 py-3", pendiente.color)}>
-        <p className="text-xs font-semibold uppercase tracking-wider mb-0.5 opacity-70">Pendiente principal</p>
-        <p className="text-sm font-semibold">{pendiente.text}</p>
-      </div>
 
       {/* ── D. Comprobantes principales ── */}
       <NeutralCard title="Comprobantes principales">
@@ -241,7 +149,7 @@ export function ResumenExpediente({
 }
 
 /** Sub-componente: tarjeta de FV con detalle de cobranza */
-function FVCard({ fv }: { fv: FacturaCobranzaDetalle }) {
+export function FVCard({ fv }: { fv: FacturaCobranzaDetalle }) {
   const [expanded, setExpanded] = React.useState(false)
   const hasCobros = fv.cobros.length > 0
 

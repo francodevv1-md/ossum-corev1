@@ -1,6 +1,8 @@
 # BACKEND_FOUNDATION_PLAN.md — GPT-027F.5A
 
-Estado: activo — GPT-027F.0A y 0B cerrados, decisiones de Franco documentadas en VALIDATION.md
+> **Histórico.** Este plan correspondió a GPT-027F.5A (Backend Foundation, primer schema). La fase se ejecutó y supera el alcance aquí descrito (schema real tiene 21 modelos). Para el plan vigente de fase 2 ver `knowledge/architecture/BACKEND_PHASE2_PLAN.md`. Conservado como referencia histórica de decisiones.
+
+Estado: histórico — GPT-027F.0A y 0B cerrados, 5A ejecutado parcialmente; ver addendums en `ADR-027E-BACKEND_DB_ORM_AUTH_STORAGE.md` y `BACKEND_PHASE2_PLAN.md` para el plan vigente.
 
 ---
 

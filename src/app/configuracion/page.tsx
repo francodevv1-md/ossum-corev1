@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState } from "react"
+import { useEffect, useState } from "react"
+import { useTheme } from "next-themes"
 import { useOrtoTrackStore } from "@/lib/store"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -19,12 +20,14 @@ import {
 import { toast } from "sonner"
 import {
   Settings, User, Bell, Palette, Database,
-  Shield, Globe, Save,
+  Globe, Save,
 } from "lucide-react"
 
 export default function ConfiguracionPage() {
   const store = useOrtoTrackStore()
   const currentUser = store.users.find((u) => u.id === store.currentUserId) || store.users[0]
+  const { resolvedTheme, setTheme } = useTheme()
+  const [isThemeReady, setIsThemeReady] = useState(false)
 
   // Local settings state
   const [companyName, setCompanyName] = useState("OrtoTrack")
@@ -35,8 +38,13 @@ export default function ConfiguracionPage() {
   const [notifExpiry, setNotifExpiry] = useState(true)
   const [notifStock, setNotifStock] = useState(true)
   const [notifSurgery, setNotifSurgery] = useState(true)
-  const [darkMode, setDarkMode] = useState(false)
   const [expiryWarningDays, setExpiryWarningDays] = useState("90")
+
+  useEffect(() => {
+    setIsThemeReady(true)
+  }, [])
+
+  const darkMode = isThemeReady && resolvedTheme === "dark"
 
   const handleSave = () => {
     toast.success("Configuración guardada exitosamente")
@@ -187,7 +195,11 @@ export default function ConfiguracionPage() {
               <p className="text-sm font-medium">Modo oscuro</p>
               <p className="text-xs text-muted-foreground">Cambiar a tema oscuro</p>
             </div>
-            <Switch checked={darkMode} onCheckedChange={setDarkMode} />
+            <Switch
+              checked={darkMode}
+              onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+              disabled={!isThemeReady}
+            />
           </label>
         </CardContent>
       </Card>

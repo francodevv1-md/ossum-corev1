@@ -55,6 +55,12 @@ import { formatCurrency } from "@/lib/formatters"
 import { getResumenCobranzaBySurgeryId } from "@/lib/cobros.utils"
 import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
 
+const LEGACY_MOCK_SURGERY_ID_SET = new Set(mockSurgeries.map((surgery) => surgery.id))
+
+export function isLegacyMockSurgeryId(surgeryId: string | null | undefined) {
+  return Boolean(surgeryId && LEGACY_MOCK_SURGERY_ID_SET.has(surgeryId))
+}
+
 // ===== State Interface =====
 interface OrtoTrackState {
   // Entities
@@ -94,7 +100,10 @@ interface OrtoTrackState {
   currentUserId: string
 
   // Surgery Actions
-  createSurgery: (data: Omit<Surgery, "id">) => Surgery
+  createSurgery: (data: Omit<Surgery, "id">, options?: { id?: string }) => Surgery
+  replaceSurgeries: (surgeries: Surgery[]) => void
+  hydrateBackendSurgeries: (surgeries: Surgery[]) => void
+  clearBackendSurgeries: () => void
   updateSurgery: (id: string, data: Partial<Surgery>) => void
   authorizeSurgery: (id: string) => void
   changeSurgeryStatus: (id: string, newState: SurgeryState) => void
@@ -295,10 +304,10 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
       currentUserId: "USR-0001",
 
       // ===== SURGERY ACTIONS =====
-      createSurgery: (data) => {
+      createSurgery: (data, options) => {
         const surgery: Surgery = {
           ...data,
-          id: generateId("CX"),
+          id: options?.id?.trim() || generateId("CX"),
           urgente: data.urgente ?? false,
           leyendaDestacada: data.leyendaDestacada ?? false,
           referenciasAdministrativas: data.referenciasAdministrativas ?? [],
@@ -306,6 +315,18 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
         set((s) => ({ surgeries: [...s.surgeries, surgery] }))
         get().addAuditEvent(surgery.id, "Creación", "Cirugía creada")
         return surgery
+      },
+
+      replaceSurgeries: (surgeries) => {
+        set(() => ({ surgeries }))
+      },
+
+      hydrateBackendSurgeries: (surgeries) => {
+        set(() => ({ surgeries }))
+      },
+
+      clearBackendSurgeries: () => {
+        set(() => ({ surgeries: [] }))
       },
 
       updateSurgery: (id, data) => {

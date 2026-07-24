@@ -1,5 +1,6 @@
 "use client"
 import React from "react"
+import { CELL_BASE, CELL_BASE_COMPACT } from "@/lib/cirugias.constants"
 import { cn } from "@/lib/utils"
 import { formatDate } from "@/lib/formatters"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -8,10 +9,13 @@ import { CirugiaStatusCell } from "./CirugiaStatusCell"
 import { CirugiaPreparationCell } from "./CirugiaPreparationCell"
 import { CirugiaOperationalBadges } from "./CirugiaOperationalBadges"
 import { CirugiaActionsCell } from "./CirugiaActionsCell"
+import { CircuitProgressCell } from "./CircuitProgressCell"
+import { CxAttentionMarker } from "@/components/cx-operations/CxAttentionMarker"
+import { CxOperationsDerivedSummary } from "@/components/cx-operations/CxOperationsDerivedSummary"
+import { deriveCxOperationsDisplay, type CxOperationsClosureSignals } from "@/lib/cx-operations-derived"
+import type { CoordinatorCase } from "@/components/coordinadores/coordinator-queue.helpers"
+import type { CircuitStage } from "@/lib/circuit-progress"
 import type { Surgery, SurgeryState } from "@/types"
-
-// ── Sticky column keys (same order as in CirugiasTable) ──
-const STICKY_LEFT_KEYS = ["id", "prNumber", "expedienteNumber", "state"]
 
 interface StickyOffsets {
   left: Record<string, number>
@@ -20,6 +24,7 @@ interface StickyOffsets {
 
 interface CirugiaRowProps {
   surgery: Surgery
+  shipmentDate?: string
   isSelected: boolean
   visibleCols: Record<string, boolean>
   docStatus: string
@@ -41,32 +46,39 @@ interface CirugiaRowProps {
   onRecover: (s: Surgery) => void
   canFacturar: (s: Surgery) => { allowed: boolean; reason?: string }
   stickyColumns: boolean
+  compactMode: boolean
   stickyOffsets: StickyOffsets
+  pinnedLeftKeys: string[]
   columnOrder: string[]
+  circuitProgress?: CircuitStage[]
+  rowIndex?: number
+  coordinatorCase?: CoordinatorCase | null
+  closureSignals?: CxOperationsClosureSignals
 }
 
 /**
  * Returns the CSS classes for a sticky cell based on position and selection state.
- * - Normal rows: bg-background with group-hover:bg-muted/30
- * - Selected rows: bg-primary/5 with group-hover:bg-primary/8
+ * - Normal rows: bg-white with group-hover:bg-slate-50
+ * - Selected rows: bg-sky-50 with group-hover:bg-sky-100
  */
 function stickyCellClasses(
   isSticky: boolean,
   isSelected: boolean,
   isLastLeft: boolean,
   isRight: boolean,
+  isUrgent = false,
 ): string {
   if (!isSticky) return ""
   return cn(
     "sticky z-10",
     // Background: must be solid to cover scrolled content
-    isSelected ? "bg-primary/5" : "bg-background",
+    isSelected ? "bg-sky-50/90 dark:bg-sky-950/65" : isUrgent ? "bg-red-50/60 dark:bg-red-950/45" : "bg-white dark:bg-slate-950",
     // Hover effect (requires group on <tr>)
-    isSelected ? "group-hover:bg-primary/8" : "group-hover:bg-muted/30",
+    isSelected ? "group-hover:bg-sky-100/90 dark:group-hover:bg-sky-950/80" : isUrgent ? "group-hover:bg-red-50/80 dark:group-hover:bg-red-950/60" : "group-hover:bg-slate-50 dark:group-hover:bg-slate-900/80",
     // Shadow on last left-sticky column
-    isLastLeft && "shadow-[2px_0_4px_rgba(0,0,0,0.06)]",
+    isLastLeft && "shadow-[2px_0_4px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_8px_rgba(2,6,23,0.55)]",
     // Shadow on right-sticky column
-    isRight && "shadow-[-2px_0_4px_rgba(0,0,0,0.06)]",
+    isRight && "shadow-[-2px_0_4px_rgba(0,0,0,0.06)] dark:shadow-[-2px_0_8px_rgba(2,6,23,0.55)]",
   )
 }
 
@@ -84,23 +96,50 @@ function stickyStateCellClasses(
     "sticky z-10",
     // NO background — CX_STATE_CELL_COLORS provides a solid bg
     // Shadow on last left-sticky column
-    isLastLeft && "shadow-[2px_0_4px_rgba(0,0,0,0.06)]",
+    isLastLeft && "shadow-[2px_0_4px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_8px_rgba(2,6,23,0.55)]",
   )
 }
 
 export function CirugiaRow({
-  surgery, isSelected, visibleCols, docStatus, consumoState,
+  surgery, shipmentDate, isSelected, visibleCols, docStatus, consumoState,
   facturacionStatus, prId, onSelect, onOpenExpediente,
   onOpenPresupuestoDialog, onSetExpTab, onSetDialogSurgery,
   onSetNewState, onSetChangeStateDialogOpen, onSetChangeDateDialogOpen,
   onSetSuspendDialogOpen, onSetCancelDialogOpen, onSetNoteDialogOpen,
   onSetFacturarDialogOpen, onRecover, canFacturar,
-  stickyColumns, stickyOffsets, columnOrder,
+  stickyColumns, compactMode, stickyOffsets, pinnedLeftKeys, columnOrder, circuitProgress, coordinatorCase = null, closureSignals = { documentationIncomplete: false, consumptionAbsent: false, invoiceAbsent: false },
 }: CirugiaRowProps) {
   const s = surgery
+  const cellBaseClassName = compactMode ? CELL_BASE_COMPACT : CELL_BASE
+  const displaySurgeryCode = s.visibleNumber?.trim() || (s.id?.trim() ? `CX ${s.id}` : "CX sin número visible")
+  const derivedOperations = deriveCxOperationsDisplay(coordinatorCase, closureSignals)
+
+  const renderSecondaryDate = (
+    cellKey: string,
+    value: string | undefined,
+    fallback: string,
+    className: string,
+    title?: string,
+  ) => (
+      <td
+        key={cellKey}
+        className={cn(
+          cellBaseClassName,
+          "text-[11px] text-slate-700 dark:text-slate-300",
+          stickyCellClasses(isLeftSticky(cellKey), isSelected, isLastLeftSticky(cellKey), false, s.urgente),
+        )}
+      style={isLeftSticky(cellKey) ? { left: stickyOffsets.left[cellKey] } : undefined}
+    >
+      <div className="min-w-[116px] leading-tight">
+        <span className={cn("block font-medium", className)} title={title}>
+          {value ? formatDate(value) : fallback}
+        </span>
+      </div>
+    </td>
+  )
 
   // ── Helpers for sticky columns ──
-  const isLeftSticky = (key: string) => stickyColumns && STICKY_LEFT_KEYS.includes(key)
+  const isLeftSticky = (key: string) => stickyColumns && pinnedLeftKeys.includes(key)
   const isRightSticky = (key: string) => stickyColumns && key === "actions"
   const isLastLeftSticky = (key: string) => stickyColumns && key === stickyOffsets.lastLeftKey
 
@@ -135,26 +174,32 @@ export function CirugiaRow({
       case "id":
         return (
           <td
-            key="id"
-            className={cn(
-              "px-2.5 py-1.5 font-mono text-[11px] font-bold tracking-wide",
-              isSelected ? "text-blue-700" : "text-primary",
-              stickyCellClasses(isLeftSticky("id"), isSelected, isLastLeftSticky("id"), false),
-            )}
+              key="id"
+              className={cn(
+                cellBaseClassName,
+                "font-mono text-[11px] font-bold tracking-wide text-slate-800 dark:text-slate-100",
+                isSelected ? "text-blue-700 dark:text-sky-300" : "text-slate-800 dark:text-slate-100",
+                stickyCellClasses(isLeftSticky("id"), isSelected, isLastLeftSticky("id"), false, s.urgente),
+              )}
             style={isLeftSticky("id") ? { left: stickyOffsets.left["id"] } : undefined}
           >
-            {s.id}
+            <div className="space-y-1">
+              <span>{displaySurgeryCode}</span>
+              <CxAttentionMarker attentionReasons={coordinatorCase ? derivedOperations.attentionReasons : []} className="text-[9px]" />
+              {coordinatorCase ? <CxOperationsDerivedSummary display={derivedOperations} className="text-[9px]" /> : null}
+            </div>
           </td>
         )
 
       case "prNumber":
         return (
           <td
-            key="prNumber"
-            className={cn(
-              "px-2.5 py-1.5 text-[11px] text-muted-foreground",
-              stickyCellClasses(isLeftSticky("prNumber"), isSelected, isLastLeftSticky("prNumber"), false),
-            )}
+              key="prNumber"
+              className={cn(
+                cellBaseClassName,
+                "text-[11px] text-slate-500 dark:text-slate-400",
+                stickyCellClasses(isLeftSticky("prNumber"), isSelected, isLastLeftSticky("prNumber"), false, s.urgente),
+              )}
             style={isLeftSticky("prNumber") ? { left: stickyOffsets.left["prNumber"] } : undefined}
           >
             {s.prNumber || prId || "—"}
@@ -164,11 +209,12 @@ export function CirugiaRow({
       case "expedienteNumber":
         return (
           <td
-            key="expedienteNumber"
-            className={cn(
-              "px-2.5 py-1.5 text-[11px] text-muted-foreground",
-              stickyCellClasses(isLeftSticky("expedienteNumber"), isSelected, isLastLeftSticky("expedienteNumber"), false),
-            )}
+              key="expedienteNumber"
+              className={cn(
+                cellBaseClassName,
+                "text-[11px] text-slate-500 dark:text-slate-400",
+                stickyCellClasses(isLeftSticky("expedienteNumber"), isSelected, isLastLeftSticky("expedienteNumber"), false, s.urgente),
+              )}
             style={isLeftSticky("expedienteNumber") ? { left: stickyOffsets.left["expedienteNumber"] } : undefined}
           >
             {s.expedienteNumber || "—"}
@@ -187,54 +233,115 @@ export function CirugiaRow({
 
       case "date":
         return (
-          <td key="date" className="px-2.5 py-1.5 whitespace-nowrap text-[11px]">
-            {formatDate(s.date)}
+           <td
+             key="date"
+             className={cn(
+                cellBaseClassName,
+               "text-[11px]",
+               stickyCellClasses(isLeftSticky("date"), isSelected, isLastLeftSticky("date"), false, s.urgente),
+             )}
+             style={isLeftSticky("date") ? { left: stickyOffsets.left["date"] } : undefined}
+           >
+                 <div className="min-w-[132px] border-l-2 border-slate-300 pl-2 leading-tight dark:border-slate-700">
+                 <span className="font-semibold text-slate-900 dark:text-slate-100" title={s.date ? formatDate(s.date) : "Sin fecha"}>
+                  {s.date ? formatDate(s.date) : "Sin fecha"}
+                </span>
+             </div>
           </td>
+        )
+
+      case "probableDate":
+        return renderSecondaryDate(
+          "probableDate",
+          s.probableDate,
+          "—",
+           s.probableDate ? "font-normal italic text-slate-500 dark:text-slate-400" : "font-normal text-slate-400 dark:text-slate-500",
+          s.probableDate ? "Estimated date" : undefined,
+        )
+
+      case "fechaLogistica":
+        return renderSecondaryDate(
+          "fechaLogistica",
+          s.fechaEnvioMaterial,
+          "—",
+           s.fechaEnvioMaterial ? "font-normal text-amber-700/80 dark:text-amber-300" : "font-normal text-slate-400 dark:text-slate-500",
+        )
+
+      case "fechaEnvio":
+        return renderSecondaryDate(
+          "fechaEnvio",
+          shipmentDate,
+          "—",
+           shipmentDate ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-slate-500 dark:text-slate-400",
         )
 
       case "patient":
         return (
-          <td key="patient" className="px-2.5 py-1.5">
-            <Tooltip><TooltipTrigger asChild><span className="block max-w-[130px] truncate text-[11px]">{s.patient}</span></TooltipTrigger><TooltipContent>{s.patient}</TooltipContent></Tooltip>
-          </td>
-        )
+           <td
+             key="patient"
+             className={cn(
+                cellBaseClassName,
+                "text-slate-900 dark:text-slate-100",
+               stickyCellClasses(isLeftSticky("patient"), isSelected, isLastLeftSticky("patient"), false, s.urgente),
+             )}
+             style={isLeftSticky("patient") ? { left: stickyOffsets.left["patient"] } : undefined}
+           >
+             <Tooltip><TooltipTrigger asChild><span className="block max-w-[130px] truncate text-[11px] font-semibold">{s.patient}</span></TooltipTrigger><TooltipContent>{s.patient}</TooltipContent></Tooltip>
+           </td>
+         )
 
       case "surgeon":
         return (
-          <td key="surgeon" className="px-2.5 py-1.5">
-            <Tooltip><TooltipTrigger asChild><span className="block max-w-[110px] truncate text-[11px]">{s.surgeon}</span></TooltipTrigger><TooltipContent>{s.surgeon}</TooltipContent></Tooltip>
-          </td>
-        )
+           <td
+             key="surgeon"
+             className={cn(
+                cellBaseClassName,
+                "text-slate-800 dark:text-slate-200",
+               stickyCellClasses(isLeftSticky("surgeon"), isSelected, isLastLeftSticky("surgeon"), false, s.urgente),
+             )}
+             style={isLeftSticky("surgeon") ? { left: stickyOffsets.left["surgeon"] } : undefined}
+           >
+             <Tooltip><TooltipTrigger asChild><span className="block max-w-[110px] truncate text-[11px] font-medium">{s.surgeon}</span></TooltipTrigger><TooltipContent>{s.surgeon}</TooltipContent></Tooltip>
+            </td>
+          )
 
       case "institution":
         return (
-          <td key="institution" className="px-2.5 py-1.5">
-            <Tooltip><TooltipTrigger asChild><span className="block max-w-[120px] truncate text-[11px]">{s.institution}</span></TooltipTrigger><TooltipContent>{s.institution}</TooltipContent></Tooltip>
-          </td>
-        )
+           <td
+             key="institution"
+             className={cn(
+                cellBaseClassName,
+                "text-slate-800 dark:text-slate-200",
+               stickyCellClasses(isLeftSticky("institution"), isSelected, isLastLeftSticky("institution"), false, s.urgente),
+             )}
+             style={isLeftSticky("institution") ? { left: stickyOffsets.left["institution"] } : undefined}
+           >
+             <Tooltip><TooltipTrigger asChild><span className="block max-w-[120px] truncate text-[11px] font-medium">{s.institution}</span></TooltipTrigger><TooltipContent>{s.institution}</TooltipContent></Tooltip>
+            </td>
+          )
 
       case "coordinadorCx":
         return (
-          <td key="coordinadorCx" className="px-2.5 py-1.5">
-            <span className="text-[11px] text-muted-foreground">{s.coordinadorCx || "Sin asignar"}</span>
+          <td key="coordinadorCx" className={cellBaseClassName}>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">{s.coordinadorCx || "Sin asignar"}</span>
           </td>
         )
 
       case "clientOs":
         return (
-          <td key="clientOs" className="px-2.5 py-1.5">
+          <td key="clientOs" className={cn(cellBaseClassName, "text-slate-700 dark:text-slate-300")}>
             <Tooltip><TooltipTrigger asChild><span className="block max-w-[110px] truncate text-[11px]">{s.client}{s.obraSocial ? ` / ${s.obraSocial}` : ""}</span></TooltipTrigger><TooltipContent>{s.client} / {s.obraSocial || "—"}</TooltipContent></Tooltip>
           </td>
         )
 
       case "classification":
         return (
-          <td key="classification" className="px-2.5 py-1.5 text-[11px]">{s.classification}</td>
+          <td key="classification" className={cn(cellBaseClassName, "text-[11px] text-slate-700 dark:text-slate-300")}>{s.classification}</td>
         )
 
       case "urgente":
         return (
-          <td key="urgente" className="px-2.5 py-1.5 text-center">
+          <td key="urgente" className={cn(cellBaseClassName, "text-center")}>
             {s.urgente && (
               <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-4">URGENTE</Badge>
             )}
@@ -243,18 +350,22 @@ export function CirugiaRow({
 
       case "provincia":
         return (
-          <td key="provincia" className="px-2.5 py-1.5 text-[11px] text-muted-foreground">{s.provincia || "—"}</td>
+          <td key="provincia" className={cn(cellBaseClassName, "text-[11px] text-slate-500 dark:text-slate-400")}>{s.provincia || "—"}</td>
         )
 
       case "vendedor":
         return (
-          <td key="vendedor" className="px-2.5 py-1.5 text-[11px] text-muted-foreground">{s.vendedor || "—"}</td>
+          <td key="vendedor" className={cn(cellBaseClassName, "text-[11px] text-slate-500 dark:text-slate-400")}>{s.vendedor || "—"}</td>
         )
 
       case "instrumentador":
         return (
-          <td key="instrumentador" className="px-2.5 py-1.5 text-[11px] text-muted-foreground">{s.instrumentador || "—"}</td>
+          <td key="instrumentador" className={cn(cellBaseClassName, "text-[11px] text-slate-500 dark:text-slate-400")}>{s.instrumentador || "—"}</td>
         )
+
+      case "circuitProgress":
+        if (!circuitProgress) return null
+        return <CircuitProgressCell key="circuitProgress" stages={circuitProgress} />
 
       case "preparationState":
         return <CirugiaPreparationCell key="preparationState" preparationState={s.preparationState} />
@@ -280,7 +391,7 @@ export function CirugiaRow({
             onSetFacturarDialogOpen={onSetFacturarDialogOpen}
             onRecover={onRecover}
             canFacturar={canFacturar}
-            tdClassName={stickyCellClasses(isRightSticky("actions"), isSelected, false, true)}
+            tdClassName={stickyCellClasses(isRightSticky("actions"), isSelected, false, true, s.urgente)}
             tdStyle={isRightSticky("actions") ? { right: 0 } : undefined}
           />
         )
@@ -293,11 +404,10 @@ export function CirugiaRow({
   return (
     <tr
       className={cn(
-        "group border-b last:border-0 transition-colors cursor-pointer",
-        isSelected
-          ? "bg-primary/5 border-l-[3px] border-l-primary"
-          : "hover:bg-muted/30 border-l-[3px] border-l-transparent"
-      )}
+         isSelected && "border-l-[3px] border-l-sky-600 bg-sky-50/80 dark:border-l-sky-400 dark:bg-sky-950/35",
+         s.urgente && !isSelected && "border-l-[3px] border-l-red-500 bg-red-50/50 dark:border-l-red-400 dark:bg-red-950/25",
+         "group cursor-pointer border-b border-border/80 border-l-[3px] border-l-transparent transition-colors hover:bg-slate-50 dark:border-slate-800/80 dark:hover:bg-slate-900/60 last:border-0",
+       )}
       onClick={() => onSelect(s.id)}
       onDoubleClick={() => onOpenExpediente(s.id)}
     >

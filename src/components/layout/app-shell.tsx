@@ -1,38 +1,10 @@
 "use client"
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react"
-import { usePathname } from "next/navigation"
 
 type SidebarState = "expanded" | "compact" | "hidden"
 
-// Routes where sidebar should default to compact (operational / data-intensive pages)
-const COMPACT_ROUTES = [
-  "/cirugias",
-  "/expediente",
-  "/stock",
-  "/cajas",
-  "/logistica",
-  "/remitos",
-  "/consumo",
-  "/material-transito",
-  "/compras/necesidades-compra",
-  "/compras/ordenes-compra",
-  "/compras/forecast",
-  "/compras/movimientos",
-  "/compras/facturas-compra",
-  "/ventas/facturacion",
-  "/ventas/presupuestos",
-  "/ventas/pendientes-facturar",
-  "/ventas/comprobantes",
-]
-
-// Routes where sidebar should default to expanded (overview / management pages)
-const EXPANDED_ROUTES = [
-  "/",
-  "/reportes",
-  "/clasificaciones",
-  "/roles",
-]
+const DEFAULT_DESKTOP_SIDEBAR_STATE: SidebarState = "compact"
 
 interface SidebarContextType {
   sidebarState: SidebarState
@@ -95,8 +67,7 @@ function saveCollapsedGroups(groups: Record<string, boolean>) {
 }
 
 export function AppShellProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const [sidebarState, setSidebarState] = useState<SidebarState>("expanded")
+  const [sidebarState, setSidebarState] = useState<SidebarState>(DEFAULT_DESKTOP_SIDEBAR_STATE)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [expedienteOpen, setExpedienteOpen] = useState(false)
   const [selectedSurgeryId, setSelectedSurgeryId] = useState<string | null>(null)
@@ -107,19 +78,13 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
     setCollapsedGroups(loadCollapsedGroups())
   }, [])
 
-  // Context-aware sidebar default: when navigating to a new page, adjust sidebar state
-  // only on first visit or if user hasn't manually changed it
+  // Stage 1 shell refactor: bias desktop toward compact rail on first load only.
   useEffect(() => {
     if (!initialized) {
-      // First load — determine default state from current route
-      if (COMPACT_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
-        setSidebarState("compact")
-      } else if (EXPANDED_ROUTES.some((r) => pathname === r)) {
-        setSidebarState("expanded")
-      }
+      setSidebarState(DEFAULT_DESKTOP_SIDEBAR_STATE)
       setInitialized(true)
     }
-  }, [pathname, initialized])
+  }, [initialized])
 
   const toggleGroup = useCallback((groupTitle: string) => {
     setCollapsedGroups((prev) => {

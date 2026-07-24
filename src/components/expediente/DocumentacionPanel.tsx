@@ -3,14 +3,12 @@
 import React, { useMemo, useCallback, useState } from "react"
 import {
   BookOpen, Check, Circle, AlertTriangle, Upload, Eye,
-  MoreHorizontal, FileText, Send, MessageSquare, X,
+  MoreHorizontal, Send, X,
 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -18,7 +16,6 @@ import {
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Input } from "@/components/ui/input"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription,
@@ -33,7 +30,6 @@ import { useOrtoTrackStore } from "@/lib/store"
 import { toast } from "sonner"
 import type {
   Surgery, SurgeryDocumentChecklist, DocumentChecklistItem,
-  DocumentChecklistType,
 } from "@/types"
 
 // ═══════════════════════════════════════════════════════════════
@@ -71,9 +67,9 @@ const STATUS_COLOR_MAP: Record<ItemStatus, string> = {
 }
 
 const STATUS_BG_MAP: Record<ItemStatus, string> = {
-  completado: "bg-emerald-50 border-emerald-200",
-  pendiente: "bg-amber-50/50 border-amber-200",
-  observado: "bg-red-50 border-red-200",
+  completado: "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10",
+  pendiente: "border-amber-200 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-500/10",
+  observado: "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10",
 }
 
 const STATUS_LABEL_MAP: Record<ItemStatus, string> = {
@@ -83,9 +79,9 @@ const STATUS_LABEL_MAP: Record<ItemStatus, string> = {
 }
 
 const STATUS_BADGE_MAP: Record<ItemStatus, string> = {
-  completado: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  pendiente: "bg-amber-100 text-amber-800 border-amber-300",
-  observado: "bg-red-100 text-red-800 border-red-300",
+  completado: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200",
+  pendiente: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200",
+  observado: "border-red-300 bg-red-100 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200",
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -194,62 +190,69 @@ export function DocumentacionPanel({
   // ═══════════════════════════════════════════════════════════
 
   return (
-    <div className="space-y-5">
+    <section className="overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-800 dark:bg-slate-900/90">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BookOpen className="size-5 text-muted-foreground" />
-          <h2 className="text-base font-semibold">Documentación</h2>
-          <span
-            className={cn(
-              "inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold leading-none",
-              docStatusColorClass
-            )}
-          >
-            {docStatus}
-          </span>
+      <div className="flex flex-col gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <BookOpen className="size-4 text-slate-700 dark:text-slate-300" />
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-900 dark:text-slate-100">
+              Checklist documental
+            </h2>
+            <span
+              className={cn(
+                "inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold leading-none",
+                docStatusColorClass
+              )}
+            >
+              {docStatus}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Seguimiento compacto del estado de la documentación asociada.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <Badge variant="outline" className="text-[10px]">
             {completedCount}/{items.length} completados
           </Badge>
         </div>
       </div>
 
-      {/* ── Progress section ── */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Progreso de documentación</span>
-          <span className="font-semibold">{progress}%</span>
-        </div>
-        <Progress
-          value={progress}
-          className={cn("h-2", getProgressColor(progress))}
-        />
-        <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <span className="inline-block size-2 rounded-full bg-emerald-500" />
-            {completedCount} completado{completedCount !== 1 ? "s" : ""}
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block size-2 rounded-full bg-amber-400" />
-            {pendingCount} pendiente{pendingCount !== 1 ? "s" : ""}
-          </span>
-          {observedCount > 0 && (
+      <div className="space-y-3 px-3 py-3">
+        {/* ── Progress section ── */}
+        <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-slate-600 dark:text-slate-300">Progreso de documentación</span>
+            <span className="font-semibold text-slate-900 dark:text-slate-100">{progress}%</span>
+          </div>
+          <Progress
+            value={progress}
+            className={cn("h-1.5", getProgressColor(progress))}
+          />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="inline-block size-2 rounded-full bg-red-500" />
-              {observedCount} observado{observedCount !== 1 ? "s" : ""}
+              <span className="inline-block size-2 rounded-full bg-emerald-500" />
+              {completedCount} completado{completedCount !== 1 ? "s" : ""}
             </span>
-          )}
+            <span className="flex items-center gap-1">
+              <span className="inline-block size-2 rounded-full bg-amber-400" />
+              {pendingCount} pendiente{pendingCount !== 1 ? "s" : ""}
+            </span>
+            {observedCount > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="inline-block size-2 rounded-full bg-red-500" />
+                {observedCount} observado{observedCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      <Separator />
+        <Separator />
 
-      {/* ── Checklist ── */}
-      {items.length > 0 ? (
-        <ScrollArea className="max-h-[420px]">
-          <div className="space-y-2 pr-2">
+        {/* ── Checklist ── */}
+        {items.length > 0 ? (
+          <div className="space-y-1.5">
             {items.map((item) => {
               const status = getItemStatus(item)
               const StatusIcon = STATUS_ICON_MAP[status]
@@ -262,7 +265,7 @@ export function DocumentacionPanel({
                 <div
                   key={item.type}
                   className={cn(
-                    "rounded-lg border px-4 py-3 transition-colors",
+                    "rounded-md border px-3 py-2 transition-colors",
                     statusBg
                   )}
                 >
@@ -272,10 +275,10 @@ export function DocumentacionPanel({
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <div
                         className={cn(
-                          "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full",
-                          status === "completado" && "bg-emerald-100",
-                          status === "pendiente" && "bg-amber-100",
-                          status === "observado" && "bg-red-100"
+                          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
+                           status === "completado" && "bg-emerald-100 dark:bg-emerald-500/15",
+                           status === "pendiente" && "bg-amber-100 dark:bg-amber-500/15",
+                           status === "observado" && "bg-red-100 dark:bg-red-500/15"
                         )}
                       >
                         <StatusIcon
@@ -284,7 +287,7 @@ export function DocumentacionPanel({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium leading-tight">
+                          <p className="text-[13px] font-semibold leading-tight text-slate-900 dark:text-slate-100">
                             {item.type}
                           </p>
                           <span
@@ -298,7 +301,7 @@ export function DocumentacionPanel({
                         </div>
 
                         {/* Meta info */}
-                        <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
                           {item.uploadedAt && (
                             <span>
                               Subido: {formatDate(item.uploadedAt)}
@@ -311,8 +314,8 @@ export function DocumentacionPanel({
 
                         {/* Observation text */}
                         {item.observations && (
-                          <div className="mt-1.5 rounded bg-red-50 border border-red-200 px-2 py-1">
-                            <p className="text-[11px] text-red-700 font-medium">
+                          <div className="mt-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1 dark:border-red-500/30 dark:bg-red-500/10">
+                            <p className="text-[10px] font-medium text-red-700 dark:text-red-300">
                               Obs: {item.observations}
                             </p>
                           </div>
@@ -329,9 +332,9 @@ export function DocumentacionPanel({
                             variant="ghost"
                             size="sm"
                             className={cn(
-                              "h-7 w-7 p-0",
+                              "h-7 w-7 rounded-md p-0",
                               status === "completado"
-                                ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                ? "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
                                 : "text-muted-foreground hover:text-foreground"
                             )}
                             onClick={() =>
@@ -354,7 +357,7 @@ export function DocumentacionPanel({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                            className="h-7 w-7 rounded-md p-0 text-muted-foreground hover:text-foreground"
                           >
                             <MoreHorizontal className="size-4" />
                           </Button>
@@ -413,126 +416,126 @@ export function DocumentacionPanel({
               )
             })}
           </div>
-        </ScrollArea>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <BookOpen className="size-10 text-muted-foreground/30 mb-3" />
-          <p className="text-sm font-medium text-muted-foreground">
-            Sin checklist de documentación
-          </p>
-          <p className="text-xs text-muted-foreground">
-            No hay ítems de documentación configurados para esta cirugía
-          </p>
-        </div>
-      )}
-
-      {/* ── Observation dialog ── */}
-      <Dialog open={obsDialogOpen} onOpenChange={setObsDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="size-5 text-red-500" />
-              Observar documentación
-            </DialogTitle>
-            <DialogDescription>
-              Registre una observación para &quot;{obsItemType}&quot;
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div>
-              <Label className="text-xs">Tipo de documento</Label>
-              <p className="text-sm font-medium mt-0.5">{obsItemType}</p>
-            </div>
-            <div>
-              <Label htmlFor="obs-text" className="text-xs">
-                Observación
-              </Label>
-              <Textarea
-                id="obs-text"
-                value={obsText}
-                onChange={(e) => setObsText(e.target.value)}
-                placeholder="Describa la observación o el motivo del rechazo..."
-                rows={3}
-                className="mt-1 text-sm"
-              />
-            </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <BookOpen className="size-10 text-muted-foreground/30 mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Sin checklist de documentación
+            </p>
+            <p className="text-xs text-muted-foreground">
+              No hay ítems de documentación configurados para esta cirugía
+            </p>
           </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setObsDialogOpen(false)}
-            >
-              <X className="size-4 mr-1.5" />
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={handleSubmitObservation}
-              disabled={!obsText.trim()}
-            >
-              <AlertTriangle className="size-4 mr-1.5" />
-              Registrar observación
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        )}
 
-      {/* ── Request documentation dialog ── */}
-      <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Send className="size-5 text-sky-500" />
-              Solicitar documentación
-            </DialogTitle>
-            <DialogDescription>
-              Enviar solicitud de &quot;{requestItemType}&quot; para la cirugía{" "}
-              {surgery.id}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div>
-              <Label className="text-xs">Documento solicitado</Label>
-              <p className="text-sm font-medium mt-0.5">{requestItemType}</p>
+        {/* ── Observation dialog ── */}
+        <Dialog open={obsDialogOpen} onOpenChange={setObsDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="size-5 text-red-500" />
+                Observar documentación
+              </DialogTitle>
+              <DialogDescription>
+                Registre una observación para &quot;{obsItemType}&quot;
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div>
+                <Label className="text-xs">Tipo de documento</Label>
+                <p className="mt-0.5 text-sm font-medium">{obsItemType}</p>
+              </div>
+              <div>
+                <Label htmlFor="obs-text" className="text-xs">
+                  Observación
+                </Label>
+                <Textarea
+                  id="obs-text"
+                  value={obsText}
+                  onChange={(e) => setObsText(e.target.value)}
+                  placeholder="Describa la observación o el motivo del rechazo..."
+                  rows={3}
+                  className="mt-1 text-sm"
+                />
+              </div>
             </div>
-            <div>
-              <Label className="text-xs">Cirugía / Paciente</Label>
-              <p className="text-sm mt-0.5">
-                {surgery.id} — {surgery.patient}
-              </p>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setObsDialogOpen(false)}
+              >
+                <X className="size-4 mr-1.5" />
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleSubmitObservation}
+                disabled={!obsText.trim()}
+              >
+                <AlertTriangle className="size-4 mr-1.5" />
+                Registrar observación
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Request documentation dialog ── */}
+        <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Send className="size-5 text-sky-500" />
+                Solicitar documentación
+              </DialogTitle>
+              <DialogDescription>
+                Enviar solicitud de &quot;{requestItemType}&quot; para la cirugía{" "}
+                {surgery.id}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div>
+                <Label className="text-xs">Documento solicitado</Label>
+                <p className="mt-0.5 text-sm font-medium">{requestItemType}</p>
+              </div>
+              <div>
+                <Label className="text-xs">Cirugía / Paciente</Label>
+                <p className="mt-0.5 text-sm">
+                  {surgery.id} — {surgery.patient}
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="request-note" className="text-xs">
+                  Nota adicional (opcional)
+                </Label>
+                <Textarea
+                  id="request-note"
+                  value={requestNote}
+                  onChange={(e) => setRequestNote(e.target.value)}
+                  placeholder="Información adicional para la solicitud..."
+                  rows={2}
+                  className="mt-1 text-sm"
+                />
+              </div>
             </div>
-            <div>
-              <Label htmlFor="request-note" className="text-xs">
-                Nota adicional (opcional)
-              </Label>
-              <Textarea
-                id="request-note"
-                value={requestNote}
-                onChange={(e) => setRequestNote(e.target.value)}
-                placeholder="Información adicional para la solicitud..."
-                rows={2}
-                className="mt-1 text-sm"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRequestDialogOpen(false)}
-            >
-              <X className="size-4 mr-1.5" />
-              Cancelar
-            </Button>
-            <Button size="sm" onClick={handleSubmitRequest}>
-              <Send className="size-4 mr-1.5" />
-              Enviar solicitud
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRequestDialogOpen(false)}
+              >
+                <X className="size-4 mr-1.5" />
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={handleSubmitRequest}>
+                <Send className="size-4 mr-1.5" />
+                Enviar solicitud
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </section>
   )
 }

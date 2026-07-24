@@ -28,3 +28,16 @@ export function requireCompanyMutationAccess(
     throw forbidden("Company mutation access denied", "company_mutation_access_denied");
   }
 }
+
+/**
+ * Temporary implementation-verification mapping for Seguimiento event mutations.
+ * Replace only this mapping when an approved responsible-ingresos capability exists.
+ */
+export const SEGUIMIENTO_EVENT_MUTATION_ALLOWED_ROLES = ["admin"] as const;
+
+/**
+ * Require company mutation access for Seguimiento event mutations.
+ */
+export function requireSeguimientoEventMutationAccess(ctx: ApiAuthContext): void {
+  requireCompanyMutationAccess(ctx, SEGUIMIENTO_EVENT_MUTATION_ALLOWED_ROLES);
+}

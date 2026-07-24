@@ -1,65 +1,130 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useMemo, useState } from "react"
+import Link from "next/link"
 import { useOrtoTrackStore } from "@/lib/store"
-import { useExpedienteDrawer } from "@/components/layout/app-shell"
-import { StateBadge, SearchInput, FilterSelect, SectionHeader } from "@/components/shared"
-import { Card, CardContent } from "@/components/ui/card"
+import { useCirugiaSelection } from "@/hooks/useCirugiaSelection"
+import { useCirugiaActions } from "@/hooks/useCirugiaActions"
+import { SearchInput, FilterSelect } from "@/components/shared"
+import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { ExpedienteFullView } from "@/components/expediente/ExpedienteFullView"
+import { ChangeStateDialog } from "@/components/cirugias/dialogs/ChangeStateDialog"
+import { ChangeDateDialog } from "@/components/cirugias/dialogs/ChangeDateDialog"
+import { SuspendDialog } from "@/components/cirugias/dialogs/SuspendDialog"
+import { CancelDialog } from "@/components/cirugias/dialogs/CancelDialog"
+import { AddNoteDialog } from "@/components/cirugias/dialogs/AddNoteDialog"
+import { PresupuestoDialog } from "@/components/cirugias/dialogs/PresupuestoDialog"
+import { FacturarDialog as FacturarDialogNuevo } from "@/components/facturacion/FacturarDialog"
+import { CoordinatorManagementDialog } from "@/components/coordinadores/CoordinatorManagementDialog"
+import {
+  AUTHORIZED_SECTION_CONFIG,
+  BUCKET_CONFIG,
+  getAuthorizedSubgroup,
+  getCoordinatorAssignmentBaseDate,
+  getCoordinatorBucket,
+  getCoordinatorLabel,
+  getIncidentReasons,
+  getMaterialAvailability,
+  getSlaBadgeClass,
+  getSlaDisplayLabel,
+  getSlaDotClass,
+  getSlaMeta,
+  hasAssignedCoordinator,
+  hasScheduledDate,
+  isIncidentCase,
+  isTodayDate,
+  sortSurgeriesBySchedule,
+  type CoordinatorBucketKey,
+  type CoordinatorCase,
+} from "@/components/coordinadores/coordinator-queue.helpers"
 import { cn } from "@/lib/utils"
 import { formatDate } from "@/lib/formatters"
-import { SURGERY_STATE_OPTIONS, CLASSIFICATION_OPTIONS } from "@/lib/statusHelpers"
-import { CX_STATE_COLORS, PIPELINE_STATES } from "@/lib/shared-constants"
+import { SURGERY_STATE_OPTIONS } from "@/lib/statusHelpers"
+import { getFacturacionStatus } from "@/lib/cirugias.utils"
+import { deriveCxOperationsDisplay } from "@/lib/cx-operations-derived"
+import type { CxOperationsDerivedDisplay } from "@/lib/cx-operations-derived"
 import {
-  Users,
-  UserCircle,
-  Search,
-  Clock,
+  AlertTriangle,
   CalendarDays,
-  Scissors,
-  ChevronRight,
+  ChevronDown,
   FilterX,
-  LayoutGrid,
-  ArrowRight,
+  MoreHorizontal,
+  ShieldCheck,
+  UserCircle,
 } from "lucide-react"
-import type { Surgery, SurgeryState } from "@/types"
+import { useCoordinationView, type CoordinationViewController } from "@/hooks/useCoordinationView"
+import { CoordinationStateSurface } from "@/components/coordinadores/CoordinationStateSurface"
+import { deriveCoordinationUiState } from "@/components/coordinadores/coordination-ui-state"
+import { CoordinationGlobalAccessBoundary } from "@/components/coordinadores/CoordinationGlobalAccessBoundary"
 
-// ── State pill colors — imported from shared-constants ──
-const STATE_COLORS = CX_STATE_COLORS
+type ManagingCaseState = {
+  entry: CoordinatorCase
+  initialView: "gestion" | "seguimiento"
+}
 
-// ── Pipeline state order — imported from shared-constants ──
+function LocalCxOperationsSummary({ display }: { display: Pick<CxOperationsDerivedDisplay, "nextActionLabel" | "responsibleAreaLabel"> }) {
+  return (
+    <dl className="grid gap-0.5 text-xs">
+      <div className="flex flex-wrap gap-x-1">
+        <dt className="font-medium">Próxima acción:</dt>
+        <dd>Derivada · {display.nextActionLabel}</dd>
+      </div>
+      <div className="flex flex-wrap gap-x-1">
+        <dt className="font-medium">Área sugerida:</dt>
+        <dd>Derivada · {display.responsibleAreaLabel}</dd>
+      </div>
+    </dl>
+  )
+}
 
 export default function CoordinadoresPage() {
-  const store = useOrtoTrackStore()
-  const { openExpediente } = useExpedienteDrawer()
+  return (
+    <CoordinationGlobalAccessBoundary>
+      <GlobalCoordinationPage />
+    </CoordinationGlobalAccessBoundary>
+  )
+}
 
-  // ── Filters ──
+export function GlobalCoordinationPage() {
+  const controller = useCoordinationView({ surface: "global" })
+  return <ProductiveCoordinadoresPage controller={controller} />
+}
+
+function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationViewController }) {
+  const store = useOrtoTrackStore()
+  const selection = useCirugiaSelection()
+  const actions = useCirugiaActions()
+
   const [search, setSearch] = useState("")
   const [stateFilter, setStateFilter] = useState("")
   const [coordFilter, setCoordFilter] = useState("")
+  const [onlyIncidents, setOnlyIncidents] = useState(false)
+  const [managingCase, setManagingCase] = useState<ManagingCaseState | null>(null)
 
-  // ── Unique coordinators ──
   const coordinatorOptions = useMemo(() => {
-    const coords = Array.from(
-      new Set(store.surgeries.map((s) => s.coordinadorCx || "Sin asignar"))
-    ).sort((a, b) => {
-      // "Sin asignar" always last
+    const coords = Array.from(new Set(store.surgeries.map((s) => s.coordinadorCx || "Sin asignar"))).sort((a, b) => {
       if (a === "Sin asignar") return 1
       if (b === "Sin asignar") return -1
       return a.localeCompare(b)
     })
+
     return [
       { value: "", label: "Todos los coordinadores" },
       ...coords.map((c) => ({ value: c, label: c })),
     ]
   }, [store.surgeries])
 
-  // ── Filtered surgeries ──
   const filtered = useMemo(() => {
     let data = store.surgeries.slice()
+
     if (search) {
       const q = search.toLowerCase()
       data = data.filter(
@@ -70,511 +135,598 @@ export default function CoordinadoresPage() {
           s.id.toLowerCase().includes(q)
       )
     }
+
     if (stateFilter) data = data.filter((s) => s.state === stateFilter)
-    if (coordFilter) {
-      data = data.filter((s) => (s.coordinadorCx || "Sin asignar") === coordFilter)
-    }
+    if (coordFilter) data = data.filter((s) => (s.coordinadorCx || "Sin asignar") === coordFilter)
+
     return data
   }, [store.surgeries, search, stateFilter, coordFilter])
 
-  // ── Coordinator summary ──
-  const coordinatorSummary = useMemo(() => {
-    const map: Record<
-      string,
-      { total: number; byState: Record<string, number> }
-    > = {}
-    for (const s of filtered) {
-      const coord = s.coordinadorCx || "Sin asignar"
-      if (!map[coord]) map[coord] = { total: 0, byState: {} }
-      map[coord].total++
-      map[coord].byState[s.state] = (map[coord].byState[s.state] || 0) + 1
+  const selectedFacturacionStatus = selection.selectedSurgery
+    ? getFacturacionStatus(selection.selectedSurgery, store.getDocStatus, selection.selResumenCobranza)
+    : ""
+
+  const coordinatorCases = useMemo<CoordinatorCase[]>(() => {
+    return filtered
+      .map((surgery) => {
+        const logistics = store.getLogisticsBySurgeryId(surgery.id)
+        const history = store.getHistoryBySurgeryId(surgery.id)
+        const box = store.getBoxBySurgeryId(surgery.id)
+        const materialAvailability = getMaterialAvailability(surgery, logistics, box)
+        const bucket = getCoordinatorBucket(surgery, logistics, box)
+        const subgroup = bucket === "autorizado" ? getAuthorizedSubgroup(surgery, logistics, box) : null
+        const sla = getSlaMeta(getCoordinatorAssignmentBaseDate(surgery, history))
+
+        return {
+          surgery,
+          logistics,
+          history,
+          box,
+          bucket,
+          subgroup,
+          materialAvailabilityDate: materialAvailability.date,
+          materialAvailabilityDefined: materialAvailability.defined,
+          materialAvailabilityLabel: materialAvailability.label,
+          sla,
+        }
+      })
+      .sort((a, b) => sortSurgeriesBySchedule(a.surgery, b.surgery))
+  }, [filtered, store])
+
+  const visibleCases = useMemo(() => {
+    const base = coordinatorCases.filter((entry) => entry.bucket !== null)
+    const scoped = onlyIncidents ? base.filter(isIncidentCase) : base
+    return scoped.sort((a, b) => Number(isIncidentCase(b)) - Number(isIncidentCase(a)))
+  }, [coordinatorCases, onlyIncidents])
+
+  const bucketedCases = useMemo(() => {
+    return {
+      autorizado: visibleCases.filter((entry) => entry.bucket === "autorizado"),
+      transito: visibleCases.filter((entry) => entry.bucket === "transito"),
+      finalizado: visibleCases.filter((entry) => entry.bucket === "finalizado"),
     }
+  }, [visibleCases])
+
+  const coordinatorSummary = useMemo(() => {
+    const map: Record<string, { total: number; buckets: Record<CoordinatorBucketKey, number>; overdue: number }> = {}
+
+    for (const entry of visibleCases) {
+      const coord = getCoordinatorLabel(entry.surgery)
+      if (!map[coord]) {
+        map[coord] = {
+          total: 0,
+          buckets: { autorizado: 0, transito: 0, finalizado: 0 },
+          overdue: 0,
+        }
+      }
+
+      map[coord].total += 1
+      if (entry.bucket) map[coord].buckets[entry.bucket] += 1
+      if (entry.bucket === "autorizado" && entry.sla.tone === "overdue") map[coord].overdue += 1
+    }
+
     return Object.entries(map).sort(([a], [b]) => {
       if (a === "Sin asignar") return 1
       if (b === "Sin asignar") return -1
       return a.localeCompare(b)
     })
-  }, [filtered])
+  }, [visibleCases])
 
-  // ── Pipeline: surgeries grouped by state ──
-  const pipelineData = useMemo(() => {
-    const map: Record<string, Surgery[]> = {}
-    for (const state of PIPELINE_STATES) {
-      map[state] = []
-    }
-    for (const s of filtered) {
-      if (map[s.state]) {
-        map[s.state].push(s)
-      }
-    }
-    // Sort within each state by date then time
-    for (const state of PIPELINE_STATES) {
-      map[state].sort(
-        (a, b) =>
-          a.date.localeCompare(b.date) ||
-          (a.time || "").localeCompare(b.time || "")
-      )
-    }
-    return map
-  }, [filtered])
-
-  // ── Active pipeline states (only states that have surgeries) ──
-  const activePipelineStates = useMemo(
-    () => PIPELINE_STATES.filter((s) => pipelineData[s].length > 0),
-    [pipelineData]
-  )
-
-  // ── Totals ──
   const totalSurgeries = filtered.length
+  const hiddenByPhaseCount = totalSurgeries - visibleCases.length
+  const authorizedOverdueCount = bucketedCases.autorizado.filter((entry) => entry.sla.tone === "overdue").length
+  const undefinedAvailabilityCount = bucketedCases.autorizado.filter((entry) => !entry.materialAvailabilityDefined).length
+  const transitCount = bucketedCases.transito.length
+  const finalizedTodayCount = bucketedCases.finalizado.filter((entry) => isTodayDate(entry.surgery.date)).length
+  const unassignedCount = visibleCases.filter((entry) => !hasAssignedCoordinator(entry.surgery)).length
+  const incidentCount = visibleCases.filter(isIncidentCase).length
+  const unfilteredOperationalCount = useMemo(
+    () => store.surgeries.filter((surgery) => getCoordinatorBucket(
+      surgery,
+      store.getLogisticsBySurgeryId(surgery.id),
+      store.getBoxBySurgeryId(surgery.id),
+    ) !== null).length,
+    [store],
+  )
+  const hasActiveFilters = Boolean(search || stateFilter || coordFilter || onlyIncidents)
+  const coordinationState = deriveCoordinationUiState({
+    waitingForAuth: controller.waitingForAuth,
+    loading: controller.loading,
+    error: controller.error,
+    hasSuccessfulData: controller.hasSuccessfulData,
+    unfilteredCount: unfilteredOperationalCount,
+    filteredCount: visibleCases.length,
+    hasActiveFilters,
+  })
+  const clearFilters = () => {
+    setSearch("")
+    setStateFilter("")
+    setCoordFilter("")
+    setOnlyIncidents(false)
+  }
+
+  const openExpedienteTab = (surgeryId: string, tab: string) => {
+    selection.setSelectedSurgeryId(surgeryId)
+    selection.setPanelState("expanded")
+    selection.setExpTab(tab)
+  }
+
+  if (coordinationState.tag === "waiting-auth" || coordinationState.tag === "loading-initial" || coordinationState.tag === "error-initial") {
+    return (
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-3 sm:p-5">
+        <header><h1 className="text-xl font-semibold tracking-tight text-slate-950">Coordinación</h1></header>
+        <CoordinationStateSurface state={coordinationState} surface="global" onRetry={() => void controller.refresh()} />
+      </div>
+    )
+  }
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
-      {/* ── Header ── */}
-      <SectionHeader
-        title="Seguimiento de Coordinadores"
-        description="Herramienta de seguimiento y control de cirugías por coordinador"
-        actions={
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              <Users className="size-3 mr-1" />
-              {coordinatorSummary.length} coordinadores
-            </Badge>
-            <Badge variant="secondary" className="text-xs">
-              {totalSurgeries} cirugías
-            </Badge>
-          </div>
-        }
-      />
-
-      {/* ── Coordinator summary cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {coordinatorSummary.map(([coord, data]) => {
-          const isInProgress = Object.keys(data.byState).some(
-            (s) =>
-              s === "Autorizada" ||
-              s === "En preparación" ||
-              s === "En tránsito" ||
-              s === "Pendiente"
-          )
-          const completed = (data.byState["Realizada"] || 0) + (data.byState["Finalizada"] || 0)
-          const cancelled = (data.byState["Suspendida"] || 0) + (data.byState["Cancelada"] || 0)
-          return (
-            <Card
-              key={coord}
-              className={cn(
-                "cursor-pointer hover:shadow-md transition-all",
-                coordFilter === coord && "ring-2 ring-primary"
-              )}
-              onClick={() =>
-                setCoordFilter(coordFilter === coord ? "" : coord)
-              }
-            >
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={cn(
-                        "flex size-8 items-center justify-center rounded-full",
-                        coord === "Sin asignar"
-                          ? "bg-slate-100 dark:bg-slate-800"
-                          : "bg-primary/10"
-                      )}
-                    >
-                      <UserCircle
-                        className={cn(
-                          "size-4",
-                          coord === "Sin asignar"
-                            ? "text-slate-500"
-                            : "text-primary"
-                        )}
-                      />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">{coord}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        Coordinador CX
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-2xl font-bold">{data.total}</span>
-                </div>
-
-                <Separator />
-
-                {/* State breakdown */}
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(data.byState)
-                    .sort(([, a], [, b]) => b - a)
-                    .slice(0, 5)
-                    .map(([state, count]) => {
-                      const colorClass =
-                        STATE_COLORS[state] || "bg-slate-400 text-white"
-                      return (
-                        <span
-                          key={state}
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
-                            colorClass
-                          )}
-                        >
-                          {count} {state}
-                        </span>
-                      )
-                    })}
-                  {Object.keys(data.byState).length > 5 && (
-                    <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      +{Object.keys(data.byState).length - 5} más
-                    </span>
-                  )}
-                </div>
-
-                {/* Quick stats */}
-                <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1">
-                  <span className="text-emerald-600 font-medium">
-                    {completed} completadas
-                  </span>
-                  {cancelled > 0 && (
-                    <span className="text-red-500 font-medium">
-                      {cancelled} canceladas
-                    </span>
-                  )}
-                  {isInProgress && (
-                    <span className="text-blue-500 font-medium">
-                      En proceso
-                    </span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-
-      {/* ── Filter bar ── */}
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Paciente, médico, institución, ID..."
-          className="w-64"
-        />
-        <FilterSelect
-          value={stateFilter}
-          onChange={setStateFilter}
-          options={SURGERY_STATE_OPTIONS}
-          className="w-44"
-        />
-        <FilterSelect
-          value={coordFilter}
-          onChange={setCoordFilter}
-          options={coordinatorOptions}
-          className="w-52"
-        />
-        {(search || stateFilter || coordFilter) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 text-xs"
-            onClick={() => {
-              setSearch("")
-              setStateFilter("")
-              setCoordFilter("")
-            }}
-          >
-            <FilterX className="size-3 mr-1" />
-            Limpiar filtros
-          </Button>
-        )}
-      </div>
-
-      {/* ── Pipeline view ── */}
-      {activePipelineStates.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Users className="size-10 text-muted-foreground/50 mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">
-              No hay cirugías que coincidan con los filtros
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Ajustá los filtros para ver resultados
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {PIPELINE_STATES.filter(
-            (state) => pipelineData[state].length > 0
-          ).map((state) => {
-            const surgeries = pipelineData[state]
-            const colorClass = STATE_COLORS[state] || "bg-slate-400 text-white"
-            return (
-              <div
-                key={state}
-                className="flex flex-col w-72 shrink-0"
-              >
-                {/* Column header */}
-                <div className="flex items-center gap-2 mb-3 px-1">
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold",
-                      colorClass
-                    )}
-                  >
-                    {state}
-                  </span>
-                  <Badge
-                    variant="secondary"
-                    className="text-[10px] h-5 px-1.5"
-                  >
-                    {surgeries.length}
-                  </Badge>
-                </div>
-
-                {/* Cards */}
-                <div className="flex flex-col gap-2 max-h-[calc(100vh-420px)] overflow-y-auto pr-1">
-                  {surgeries.map((surgery) => {
-                    const sColorClass =
-                      STATE_COLORS[surgery.state] ||
-                      "bg-slate-400 text-white"
-                    const coord =
-                      surgery.coordinadorCx || "Sin asignar"
-                    return (
-                      <Card
-                        key={surgery.id}
-                        className="cursor-pointer hover:shadow-md transition-shadow group"
-                        onClick={() => openExpediente(surgery.id)}
-                      >
-                        <CardContent className="p-3 space-y-2">
-                          {/* Patient + ID */}
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-sm font-semibold truncate leading-tight">
-                              {surgery.patient}
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className="shrink-0 text-[9px] h-5 px-1"
-                            >
-                              {surgery.id}
-                            </Badge>
-                          </div>
-
-                          {/* State badge */}
-                          <span
-                            className={cn(
-                              "inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium",
-                              sColorClass
-                            )}
-                          >
-                            {surgery.state}
-                          </span>
-
-                          {/* Date & time */}
-                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <CalendarDays className="size-3" />
-                              <span>{formatDate(surgery.date)}</span>
-                            </div>
-                            {surgery.time && (
-                              <div className="flex items-center gap-1">
-                                <Clock className="size-3" />
-                                <span>{surgery.time}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Surgeon & institution */}
-                          <div className="text-[11px] text-muted-foreground space-y-0.5">
-                            <p className="truncate">
-                              Dr. {surgery.surgeon}
-                            </p>
-                            <p className="truncate">
-                              {surgery.institution}
-                            </p>
-                          </div>
-
-                          {/* Coordinator */}
-                          <div className="flex items-center gap-1.5 pt-1 border-t">
-                            <UserCircle className="size-3 text-muted-foreground" />
-                            <span
-                              className={cn(
-                                "text-[10px] font-medium truncate",
-                                coord === "Sin asignar"
-                                  ? "text-amber-600"
-                                  : "text-muted-foreground"
-                              )}
-                            >
-                              {coord}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
+    <>
+      {selection.panelState === "expanded" && selection.selectedSurgery ? (
+        <div className="flex min-h-0 flex-1 flex-col bg-slate-100/70">
+          <ExpedienteFullView
+            surgery={selection.selectedSurgery}
+            presupuestos={selection.selPresupuestos}
+            comprobantes={selection.selComprobantes}
+            remitos={selection.selRemitos}
+            consumo={selection.selConsumo}
+            notes={selection.selNotes}
+            history={selection.selHistory}
+            docChecklist={selection.selDocChecklist}
+            logistics={selection.selLogistics}
+            docStatus={selection.selDocStatus}
+            materialTransito={selection.selMaterialTransito}
+            instrumentadorSurgery={selection.selInstrumentadorSurgery}
+            box={selection.selBox}
+            resumenCobranza={selection.selResumenCobranza}
+            facturacionStatus={selectedFacturacionStatus}
+            expTab={selection.expTab}
+            setExpTab={selection.setExpTab}
+            onBack={selection.closeExpediente}
+            onSetDialogSurgery={actions.setDialogSurgery}
+            onSetFacturarDialogOpen={actions.setFacturarDialogOpen}
+            onSetNoteDialogOpen={actions.setNoteDialogOpen}
+            onSetSuspendDialogOpen={actions.setSuspendDialogOpen}
+            onSetCancelDialogOpen={actions.setCancelDialogOpen}
+            onSetChangeStateDialogOpen={actions.setChangeStateDialogOpen}
+            onSetChangeDateDialogOpen={actions.setChangeDateDialogOpen}
+            onSetNewState={actions.setNewState}
+            onRecover={actions.handleRecover}
+            onAutorizar={actions.handleAutorizar}
+            onOpenPresupuestoDialog={actions.openPresupuestoDialog}
+            editingConsumo={actions.editingConsumo}
+            setEditingConsumo={actions.setEditingConsumo}
+          />
         </div>
-      )}
+      ) : (
+        <div className="flex flex-col gap-4 p-3 sm:p-4 md:p-5">
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-slate-950">Coordinación</h1>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild size="sm" variant="outline" className="min-h-11 text-xs">
+                <Link href="/coordinadores/mi-bandeja">
+                  <UserCircle className="mr-1 size-3.5" />
+                  Mi bandeja
+                </Link>
+              </Button>
+              <Badge variant="outline" className="min-h-9 gap-1 text-xs">
+                <ShieldCheck className="size-3.5" />
+                Vista global
+              </Badge>
+            </div>
+          </header>
 
-      {/* ── Detailed table per coordinator ── */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="px-4 py-3 border-b bg-muted/30">
-            <div className="flex items-center gap-2">
-              <LayoutGrid className="size-4 text-primary" />
-              <h3 className="text-sm font-semibold">
-                Detalle por Coordinador
-              </h3>
+          <section aria-labelledby="attention-heading" className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              className={cn("flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", onlyIncidents ? "border-red-300 bg-red-50 text-red-900" : "border-slate-200 bg-white text-slate-900")}
+              onClick={() => setOnlyIncidents((prev) => !prev)}
+              aria-pressed={onlyIncidents}
+            >
+              <span id="attention-heading" className="text-sm font-semibold">Requieren atención</span>
+              <strong className="text-lg font-semibold tabular-nums">{incidentCount}</strong>
+            </button>
+            <button
+              type="button"
+              className={cn("flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", coordFilter === "Sin asignar" ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-900")}
+              onClick={() => setCoordFilter((prev) => (prev === "Sin asignar" ? "" : "Sin asignar"))}
+              aria-pressed={coordFilter === "Sin asignar"}
+            >
+              <span className="text-sm font-semibold">Sin responsable</span>
+              <strong className="text-lg font-semibold tabular-nums">{unassignedCount}</strong>
+            </button>
+          </section>
+
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 sm:px-4">
+            <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
+              <label className="w-full sm:col-span-2 lg:w-72">
+                <span className="sr-only">Buscar casos de coordinación</span>
+                <SearchInput value={search} onChange={setSearch} placeholder="Paciente, médico, institución, ID..." className="min-h-11 w-full" />
+              </label>
+              <label className="w-full lg:w-44">
+                <span className="sr-only">Filtrar por estado</span>
+                <FilterSelect value={stateFilter} onChange={setStateFilter} options={SURGERY_STATE_OPTIONS} className="min-h-11 w-full" />
+              </label>
+              <label className="w-full lg:w-52">
+                <span className="sr-only">Filtrar por responsable</span>
+                <FilterSelect value={coordFilter} onChange={setCoordFilter} options={coordinatorOptions} className="min-h-11 w-full" />
+              </label>
+              <Button
+                variant={onlyIncidents ? "secondary" : "outline"}
+                size="sm"
+                className="min-h-11 w-full text-xs lg:w-auto"
+                onClick={() => setOnlyIncidents((prev) => !prev)}
+                aria-pressed={onlyIncidents}
+              >
+                <AlertTriangle className="mr-1 size-3" />
+                Ver solo incidencias
+              </Button>
+              {(search || stateFilter || coordFilter || onlyIncidents) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-11 w-full text-xs lg:ml-auto lg:w-auto"
+                  onClick={() => {
+                    setSearch("")
+                    setStateFilter("")
+                    setCoordFilter("")
+                    setOnlyIncidents(false)
+                  }}
+                >
+                  <FilterX className="mr-1 size-3" />
+                  Limpiar filtros
+                </Button>
+              )}
             </div>
           </div>
 
-          {coordinatorSummary.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Users className="size-8 text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No hay datos para mostrar
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {coordinatorSummary.map(([coord, data]) => {
-                const coordSurgeries = filtered.filter(
-                  (s) => (s.coordinadorCx || "Sin asignar") === coord
-                )
+          <CoordinationStateSurface state={coordinationState} surface="global" onRetry={() => void controller.refresh()} onClearFilters={clearFilters}>
+            <div className="space-y-4">
+              {(Object.keys(BUCKET_CONFIG) as CoordinatorBucketKey[]).map((bucketKey) => {
+                const entries = bucketedCases[bucketKey]
+                if (entries.length === 0) return null
+
+                const bucketConfig = BUCKET_CONFIG[bucketKey]
+                const BucketIcon = bucketConfig.icon
+
                 return (
-                  <div key={coord} className="px-4 py-3">
-                    {/* Coordinator row header */}
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <UserCircle
-                          className={cn(
-                            "size-4",
-                            coord === "Sin asignar"
-                              ? "text-slate-400"
-                              : "text-primary"
-                          )}
-                        />
-                        <span className="text-sm font-semibold">
-                          {coord}
-                        </span>
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] h-5 px-1.5"
-                        >
-                          {data.total} cirugías
-                        </Badge>
-                      </div>
+                  <section key={bucketKey} className="space-y-2.5">
+                    <details open={bucketKey === "autorizado"} className={cn("rounded-xl border bg-white", bucketKey === "autorizado" && "border-sky-200", bucketKey === "transito" && "border-violet-200", bucketKey === "finalizado" && "border-emerald-200")}>
+                      <summary className={cn("flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5", bucketConfig.tone)}>
+                        <div className="flex items-center gap-2.5">
+                          <div className="rounded-lg bg-white/80 p-1.5 shadow-sm">
+                            <BucketIcon className="size-3.5" />
+                          </div>
+                          <div>
+                            <h2 className="text-sm font-semibold leading-none">{bucketConfig.title}</h2>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-white/80 text-xs">
+                            {entries.length} casos
+                          </Badge>
+                          <ChevronDown className="size-4 text-slate-500" />
+                        </div>
+                      </summary>
 
-                      {/* Mini pipeline indicators */}
-                      <div className="flex items-center gap-1">
-                        {PIPELINE_STATES.filter(
-                          (s) => data.byState[s]
-                        ).map((s) => {
-                          const colorClass =
-                            STATE_COLORS[s] || "bg-slate-400 text-white"
+                      <div className="space-y-2.5 p-2.5">
+                    {bucketKey === "autorizado" ? (
+                      <div className="space-y-2.5">
+                        {AUTHORIZED_SECTION_CONFIG.map((section) => {
+                          const subgroupEntries = entries.filter((entry) => entry.subgroup && section.matches.has(entry.subgroup))
+                          if (subgroupEntries.length === 0) return null
+
                           return (
-                            <TooltipProvider
-                              key={s}
-                              delayDuration={200}
-                            >
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span
-                                    className={cn(
-                                      "inline-flex items-center rounded px-1 py-0 text-[9px] font-medium cursor-default",
-                                      colorClass
-                                    )}
-                                  >
-                                    {data.byState[s]}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="bottom"
-                                  className="text-xs"
-                                >
-                                  {s}: {data.byState[s]}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                            <details key={section.key} open={section.key === "pendiente-coordinar"} className="rounded-lg border border-slate-200 bg-slate-50/60">
+                              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2">
+                                <div>
+                                  <CardTitle className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-700">{section.title}</CardTitle>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary" className="text-xs">
+                                    {subgroupEntries.length}
+                                  </Badge>
+                                  <ChevronDown className="size-3.5 text-slate-500" />
+                                </div>
+                              </summary>
+
+                              <div className="space-y-1 border-t border-slate-200 bg-white p-2">
+                                {subgroupEntries.map((entry) => {
+                                  const surgery = entry.surgery
+                                  const incidentReasons = getIncidentReasons(entry)
+                                  const operationsDisplay = deriveCxOperationsDisplay(entry, {
+                                    documentationIncomplete: store.getDocStatus(surgery.id) === "Incompleta",
+                                    consumptionAbsent: !store.getConsumoBySurgeryId(surgery.id),
+                                    invoiceAbsent: !surgery.facturado && !store.getComprobantesBySurgeryId(surgery.id).find((comprobante) => comprobante.type === "FV"),
+                                  })
+                                  const caseReference = surgery.visibleNumber?.trim() || `CX ${surgery.id}`
+
+                                  return (
+                                    <React.Fragment key={surgery.id}>
+                                    <div
+                                      className={cn(
+                                        "rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm",
+                                        incidentReasons.length > 0 && "border-amber-200"
+                                      )}
+                                    >
+                                      <div className="grid gap-2 xl:grid-cols-[1.2fr,1.25fr,1fr,auto] xl:items-center">
+                                        <div className="min-w-0">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <p className="text-sm font-semibold leading-none text-slate-950">{surgery.patient}</p>
+                                            <span className="text-xs text-muted-foreground">{caseReference}</span>
+                                            {surgery.urgente && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">Urgente</span>}
+                                          </div>
+                                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                            <span>Dr. {surgery.surgeon || "Sin definir"}</span>
+                                            <span>{surgery.institution || "Sin definir"}</span>
+                                            <span>{getCoordinatorLabel(surgery)}</span>
+                                          </div>
+                                        </div>
+
+                                        <div className={cn("rounded-xl border px-2.5 py-2 text-xs", incidentReasons.length > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-sky-200 bg-sky-50/80 text-sky-900")}>
+                                          <LocalCxOperationsSummary display={operationsDisplay} />
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                          <span className="inline-flex items-center gap-1">
+                                            <CalendarDays className="size-3" />
+                                            {hasScheduledDate(surgery) ? formatDate(surgery.date) : "Sin fecha CX"}
+                                            {surgery.time && <> · {surgery.time}</>}
+                                          </span>
+                                          <span>Estado CX: {surgery.state}</span>
+                                          <span>Preparación: {surgery.preparationState}</span>
+                                          <span className={cn("rounded-full px-2 py-0.5 font-medium", entry.materialAvailabilityDefined ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>{entry.materialAvailabilityLabel}</span>
+                                          <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium", getSlaBadgeClass(entry.sla.tone))}>
+                                            <span className={cn("size-1.5 rounded-full", getSlaDotClass(entry.sla.tone))} />
+                                            {getSlaDisplayLabel(entry.sla.tone)}
+                                          </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-[1fr_auto] gap-2 sm:flex sm:flex-wrap sm:items-center xl:justify-end">
+                                          <Button size="sm" className="min-h-11 text-xs" onClick={() => setManagingCase({ entry, initialView: "seguimiento" })}>
+                                            Abrir seguimiento
+                                          </Button>
+                                          <Button size="sm" variant="outline" className="min-h-11 text-xs" onClick={() => setManagingCase({ entry, initialView: "gestion" })}>
+                                            Gestionar
+                                          </Button>
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button size="sm" variant="ghost" className="col-span-2 min-h-11 text-xs" aria-label={`Más acciones para ${surgery.patient}`}>
+                                                <MoreHorizontal className="mr-1 size-4" />
+                                                Más acciones
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                              <DropdownMenuItem onSelect={() => openExpedienteTab(surgery.id, "logistica")}>Logística</DropdownMenuItem>
+                                              <DropdownMenuItem onSelect={() => selection.openExpediente(surgery.id)}>Expediente</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        </div>
+
+                                        {incidentReasons.length > 0 && (
+                                          <p className="mt-2 text-xs font-medium text-amber-700 xl:col-span-4">
+                                            Atención: {incidentReasons.join(" · ")}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    </React.Fragment>
+                                  )
+                                })}
+                              </div>
+                            </details>
                           )
                         })}
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {entries.map((entry) => {
+                          const surgery = entry.surgery
+                          const incidentReasons = getIncidentReasons(entry)
+                          const operationsDisplay = deriveCxOperationsDisplay(entry, {
+                            documentationIncomplete: store.getDocStatus(surgery.id) === "Incompleta",
+                            consumptionAbsent: !store.getConsumoBySurgeryId(surgery.id),
+                            invoiceAbsent: !surgery.facturado && !store.getComprobantesBySurgeryId(surgery.id).find((comprobante) => comprobante.type === "FV"),
+                          })
+                          const caseReference = surgery.visibleNumber?.trim() || `CX ${surgery.id}`
 
-                    {/* Surgery list */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 mt-2">
-                      {coordSurgeries
-                        .sort(
-                          (a, b) =>
-                            a.date.localeCompare(b.date) ||
-                            (a.time || "").localeCompare(
-                              b.time || ""
-                            )
-                        )
-                        .map((surgery) => {
-                          const sColorClass =
-                            STATE_COLORS[surgery.state] ||
-                            "bg-slate-400 text-white"
                           return (
-                            <button
-                              key={surgery.id}
-                              onClick={() =>
-                                openExpediente(surgery.id)
-                              }
-                              className="w-full text-left rounded-md border p-2 hover:bg-muted/50 transition-colors cursor-pointer group"
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-medium truncate">
-                                  {surgery.patient}
-                                </span>
-                                <Badge
-                                  variant="outline"
-                                  className="text-[8px] h-4 px-1 shrink-0 ml-1"
-                                >
-                                  {surgery.id}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <span
-                                  className={cn(
-                                    "inline-flex items-center rounded px-1 py-0 text-[8px] font-medium",
-                                    sColorClass
-                                  )}
-                                >
-                                  {surgery.state}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                <CalendarDays className="size-3" />
-                                <span>
-                                  {formatDate(surgery.date)}
-                                </span>
-                                {surgery.time && (
-                                  <>
-                                    <Clock className="size-3 ml-1" />
-                                    <span>{surgery.time}</span>
-                                  </>
+                            <Card key={surgery.id} className="border-slate-200/80 bg-white shadow-sm">
+                              <CardContent className="px-3 py-2.5">
+                                <div className="grid gap-2 xl:grid-cols-[1.2fr,1.25fr,1fr,auto] xl:items-center">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="text-sm font-semibold leading-none text-slate-950">{surgery.patient}</p>
+                                      <span className="text-xs text-muted-foreground">{caseReference}</span>
+                                      {surgery.urgente && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">Urgente</span>}
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                      <span>Dr. {surgery.surgeon || "Sin definir"}</span>
+                                      <span>{surgery.institution || "Sin definir"}</span>
+                                      <span>{getCoordinatorLabel(surgery)}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className={cn("rounded-xl border px-2.5 py-2 text-xs", incidentReasons.length > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-sky-200 bg-sky-50/80 text-sky-900")}>
+                                    <LocalCxOperationsSummary display={operationsDisplay} />
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                    <span className="inline-flex items-center gap-1">
+                                      <CalendarDays className="size-3" />
+                                      {hasScheduledDate(surgery) ? formatDate(surgery.date) : "Sin fecha CX"}
+                                      {surgery.time && <> · {surgery.time}</>}
+                                    </span>
+                                    <span>Estado CX: {surgery.state}</span>
+                                    <span>Preparación: {surgery.preparationState}</span>
+                                    <span className={cn("rounded-full px-2 py-0.5 font-medium", entry.materialAvailabilityDefined ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>{entry.materialAvailabilityLabel}</span>
+                                    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium", getSlaBadgeClass(entry.sla.tone))}>
+                                      <span className={cn("size-1.5 rounded-full", getSlaDotClass(entry.sla.tone))} />
+                                    {getSlaDisplayLabel(entry.sla.tone)}
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-[1fr_auto] gap-2 sm:flex sm:flex-wrap sm:items-center xl:justify-end">
+                                    <Button size="sm" className="min-h-11 text-xs" onClick={() => setManagingCase({ entry, initialView: "seguimiento" })}>
+                                      Abrir seguimiento
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="min-h-11 text-xs" onClick={() => setManagingCase({ entry, initialView: "gestion" })}>
+                                      Gestionar
+                                    </Button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="sm" variant="ghost" className="col-span-2 min-h-11 text-xs" aria-label={`Más acciones para ${surgery.patient}`}>
+                                          <MoreHorizontal className="mr-1 size-4" />
+                                          Más acciones
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onSelect={() => openExpedienteTab(surgery.id, "logistica")}>Logística</DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={() => selection.openExpediente(surgery.id)}>Expediente</DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </div>
+
+                                {incidentReasons.length > 0 && (
+                                  <p className="mt-2 text-xs font-medium text-amber-700">
+                                    Atención: {incidentReasons.join(" · ")}
+                                  </p>
                                 )}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground truncate mt-0.5">
-                                Dr. {surgery.surgeon} •{" "}
-                                {surgery.institution}
-                              </div>
-                              <div className="flex items-center justify-between mt-1">
-                                <ChevronRight className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </button>
+                              </CardContent>
+                            </Card>
                           )
                         })}
-                    </div>
-                  </div>
+                      </div>
+                    )}
+                      </div>
+                    </details>
+                  </section>
                 )
               })}
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          </CoordinationStateSurface>
+
+          <details className="rounded-xl border border-slate-200 bg-white">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+              <span>Resumen de carga</span>
+              <span className="flex items-center gap-2 text-xs font-normal text-slate-600">
+                {coordinatorSummary.length} responsables
+                <ChevronDown className="size-4" />
+              </span>
+            </summary>
+            <div className="space-y-3 border-t border-slate-200 p-3 sm:p-4">
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge variant="secondary">{bucketedCases.autorizado.length} autorizados</Badge>
+                <Badge variant="outline">{authorizedOverdueCount} fuera de 48 h</Badge>
+                <Badge variant="outline">{undefinedAvailabilityCount} sin disponibilidad</Badge>
+                <Badge variant="outline">{transitCount} en tránsito</Badge>
+                <Badge variant="outline">{finalizedTodayCount} finalizados hoy</Badge>
+                {hiddenByPhaseCount > 0 && <Badge variant="outline">{hiddenByPhaseCount} fuera de esta vista</Badge>}
+              </div>
+              <div className="divide-y divide-slate-100">
+                {coordinatorSummary.map(([coord, data]) => (
+                  <div key={coord} className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                      <UserCircle className={cn("size-4", coord === "Sin asignar" ? "text-slate-500" : "text-primary")} />
+                      <span className="text-sm font-medium">{coord}</span>
+                      <span className="text-xs text-slate-500">{data.total} casos</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                      <span>{data.buckets.autorizado} autorizados</span>
+                      <span>{data.buckets.transito} en tránsito</span>
+                      <span>{data.buckets.finalizado} finalizados</span>
+                      {data.overdue > 0 && <span className="font-medium text-red-700">{data.overdue} fuera de 48 h</span>}
+                      <Button
+                        size="sm"
+                        variant={coordFilter === coord ? "secondary" : "ghost"}
+                        className="min-h-11 text-xs"
+                        onClick={() => setCoordFilter(coordFilter === coord ? "" : coord)}
+                        aria-pressed={coordFilter === coord}
+                      >
+                        Ver casos
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
+        </div>
+      )}
+
+      <ChangeStateDialog
+        open={actions.changeStateDialogOpen}
+        onOpenChange={actions.setChangeStateDialogOpen}
+        dialogSurgery={actions.dialogSurgery}
+        newState={actions.newState}
+        setNewState={actions.setNewState}
+        onConfirm={actions.handleChangeState}
+      />
+      <ChangeDateDialog
+        open={actions.changeDateDialogOpen}
+        onOpenChange={actions.setChangeDateDialogOpen}
+        dialogSurgery={actions.dialogSurgery}
+        newDate={actions.newDate}
+        setNewDate={actions.setNewDate}
+        newTime={actions.newTime}
+        setNewTime={actions.setNewTime}
+        onConfirm={actions.handleChangeDate}
+      />
+      <SuspendDialog
+        open={actions.suspendDialogOpen}
+        onOpenChange={actions.setSuspendDialogOpen}
+        dialogSurgery={actions.dialogSurgery}
+        reason={actions.reason}
+        setReason={actions.setReason}
+        onConfirm={actions.handleSuspend}
+      />
+      <CancelDialog
+        open={actions.cancelDialogOpen}
+        onOpenChange={actions.setCancelDialogOpen}
+        dialogSurgery={actions.dialogSurgery}
+        reason={actions.reason}
+        setReason={actions.setReason}
+        onConfirm={actions.handleCancel}
+      />
+      <AddNoteDialog
+        open={actions.noteDialogOpen}
+        onOpenChange={actions.setNoteDialogOpen}
+        surgeryId={actions.dialogSurgery?.id || selection.selectedSurgeryId || undefined}
+        noteText={actions.noteText}
+        setNoteText={actions.setNoteText}
+        noteType={actions.noteType}
+        setNoteType={actions.setNoteType}
+        notePriority={actions.notePriority}
+        setNotePriority={actions.setNotePriority}
+        onConfirm={() => actions.handleAddNote(selection.selectedSurgery ?? null)}
+      />
+      <FacturarDialogNuevo
+        surgeryId={actions.dialogSurgery?.id || selection.selectedSurgery?.id}
+        open={actions.facturarDialogOpen}
+        onOpenChange={actions.setFacturarDialogOpen}
+        onFacturar={actions.handleFacturarConDatos}
+      />
+      <PresupuestoDialog
+        open={actions.presupuestoDialogOpen}
+        onOpenChange={actions.setPresupuestoDialogOpen}
+        surgery={actions.dialogSurgery}
+        onCreated={() => {
+          actions.setPresupuestoDialogOpen(false)
+        }}
+      />
+      <CoordinatorManagementDialog
+        open={Boolean(managingCase)}
+        onOpenChange={(open) => {
+          if (!open) setManagingCase(null)
+        }}
+        surgery={managingCase?.entry.surgery ?? null}
+        materialAvailabilityDate={managingCase?.entry.materialAvailabilityDate}
+        materialAvailabilityLabel={managingCase?.entry.materialAvailabilityLabel}
+        initialView={managingCase?.initialView ?? "gestion"}
+      />
+    </>
   )
 }

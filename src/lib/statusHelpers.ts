@@ -1,3 +1,5 @@
+import type { PreparationState } from "@/types"
+
 export function getBadgeVariant(
   status: string
 ): "default" | "secondary" | "destructive" | "outline" | "warning" | "success" | "info" {
@@ -10,17 +12,18 @@ export function getBadgeVariant(
     "Sin fecha": "secondary",       // gris (was warning)
     Pendiente: "warning",         // yellow
     Autorizada: "info",           // light blue
-    "En preparación": "info",     // cyan
     "En tránsito": "info",        // blue
     Realizada: "success",         // green
     Finalizada: "info",           // azul oscuro (was success)
     Suspendida: "destructive",    // purple/violet
     Cancelada: "destructive",     // red
     "Sin consumo": "warning",     // brown/terracotta
-    // Preparación states (5 values)
+    // Preparación states
     "Sin preparar": "secondary",
+    "En preparación": "info",
     Congelado: "warning",
     "Congelado con faltantes": "destructive",
+    Enviado: "info",
     Entregado: "info",
     Retirado: "secondary",
     Borrador: "warning",
@@ -83,7 +86,6 @@ export const SURGERY_STATE_OPTIONS = [
   { value: "Sin autorizar", label: "Sin autorizar" },
   { value: "Pendiente", label: "Pendiente" },
   { value: "Autorizada", label: "Autorizada" },
-  { value: "En preparación", label: "En preparación" },
   { value: "En tránsito", label: "En tránsito" },
   { value: "Realizada", label: "Realizada" },
   { value: "Finalizada", label: "Finalizada" },
@@ -113,11 +115,21 @@ export const INSTITUTION_OPTIONS = [
 export const PREPARATION_STATE_OPTIONS = [
   { value: "", label: "Todas" },
   { value: "Sin preparar", label: "Sin preparar" },
+  { value: "En preparación", label: "En preparación" },
   { value: "Congelado", label: "Congelado" },
   { value: "Congelado con faltantes", label: "Congelado con faltantes" },
+  { value: "Enviado", label: "Enviado" },
   { value: "Entregado", label: "Entregado" },
   { value: "Retirado", label: "Retirado" },
-]
+] satisfies Array<{ value: "" | PreparationState; label: string }>
+
+export function isPreparationState(status: string): status is PreparationState {
+  return PREPARATION_STATE_OPTIONS.some((option) => option.value === status && option.value !== "")
+}
+
+export function isPreparing(status: string): boolean {
+  return status === "En preparación"
+}
 
 export const DOCUMENTATION_OPTIONS = [
   { value: "", label: "Toda" },

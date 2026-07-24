@@ -110,7 +110,7 @@ export default function EstadisticasPage() {
   // ── Chart 1: Evolución Mensual (Stacked BarChart) ──
   const monthlyEvolution = useMemo(() => {
     const months: Record<string, Record<string, number>> = {}
-    const states = ["Autorizada", "Realizada", "Finalizada", "Suspendida", "Cancelada", "En preparación", "En tránsito", "Pendiente"]
+    const states = ["Autorizada", "Realizada", "Finalizada", "Suspendida", "Cancelada", "En tránsito", "Pendiente"]
     for (const s of surgeriesInRange) {
       const ym = s.date.slice(0, 7)
       if (!months[ym]) {
@@ -394,7 +394,6 @@ export default function EstadisticasPage() {
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   <Bar dataKey="Pendiente" stackId="a" fill={COLORS[0]} />
                   <Bar dataKey="Autorizada" stackId="a" fill={COLORS[1]} />
-                  <Bar dataKey="En preparación" stackId="a" fill={COLORS[6]} />
                   <Bar dataKey="En tránsito" stackId="a" fill={COLORS[2]} />
                   <Bar dataKey="Realizada" stackId="a" fill={COLORS[4]} />
                   <Bar dataKey="Finalizada" stackId="a" fill="#047857" />

@@ -1,19 +1,23 @@
 "use client"
 
-import React, { useState, useMemo, Suspense } from "react"
+import Link from "next/link"
+import React, { useEffect, useMemo, Suspense, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { NovedadesTabContent } from "@/components/expediente/NovedadesTabContent"
+import { useBackendActiveSurgeries } from "@/hooks/useBackendActiveSurgeries"
 import { useOrtoTrackStore } from "@/lib/store"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/formatters"
 import { getBadgeVariant, comprobanteTypeLabels, CLIENT_OPTIONS, INSTITUTION_OPTIONS, CLASSIFICATION_OPTIONS, SURGERY_STATE_OPTIONS } from "@/lib/statusHelpers"
 import { canAutorizarFV, canRemitirNR, canCargarConsumo, canValidateConsumption } from "@/lib/businessRules"
 import { getSaldoPendienteFactura } from "@/lib/cobros.utils"
+import { getExpedienteEntryParam, resolveExpedienteLandingTab } from "@/lib/expediente-navigation"
 import { StateBadge, StatsCard, SearchInput, FilterSelect } from "@/components/shared"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { LegacyStandaloneNotice } from "@/components/legacy/LegacyStandaloneNotice"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -50,7 +54,7 @@ import {
   ChevronRight, Info,
 } from "lucide-react"
 import type {
-  Surgery, SurgeryState, ComprobanteType, NoteType, NotePriority,
+  Surgery, SurgeryState, ComprobanteType,
   PresupuestoState, SurgeryClassification,
 } from "@/types"
 
@@ -68,6 +72,7 @@ const TABS = [
   { value: "instrumentador", label: "Instrumentador", icon: Stethoscope },
   { value: "ventas", label: "Ventas/FV", icon: CreditCard },
   { value: "compras", label: "Compras", icon: AlertTriangle },
+  { value: "novedades", label: "Seguimiento", icon: StickyNote },
   { value: "notas", label: "Notas", icon: StickyNote },
   { value: "historial", label: "Historial", icon: History },
   { value: "trazabilidad", label: "Trazabilidad", icon: Search },
@@ -86,49 +91,52 @@ export default function ExpedientePage() {
 function ExpedienteContent() {
   const searchParams = useSearchParams()
   const store = useOrtoTrackStore()
+  const backendSurgeries = useBackendActiveSurgeries()
 
   const [selectedId, setSelectedId] = useState<string>("")
   const [activeTab, setActiveTab] = useState<TabValue>("resumen")
   const [surgerySearch, setSurgerySearch] = useState("")
 
   // Dialog states
-  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
-  const [noteText, setNoteText] = useState("")
-  const [noteType, setNoteType] = useState<NoteType>("General")
-  const [notePriority, setNotePriority] = useState<NotePriority>("Media")
   const [facturarDialogOpen, setFacturarDialogOpen] = useState(false)
   const [facturaNumber, setFacturaNumber] = useState("")
   const [compFilter, setCompFilter] = useState<string>("")
+  const [seguimientoAddAction, setSeguimientoAddAction] = useState<"note" | undefined>(undefined)
+  const [seguimientoAddActionKey, setSeguimientoAddActionKey] = useState(0)
 
   // Editing consumo
   const [editingConsumo, setEditingConsumo] = useState<Record<string, { consumed: number; returned: number }>>({})
 
   // Read URL param — derive initial value rather than setting state in effect
-  const urlId = searchParams.get("id")
+  const urlId = searchParams.get("id")?.trim() ?? ""
+  const deepLinkedEntryId = getExpedienteEntryParam(searchParams)
+  const urlTab = resolveExpedienteLandingTab(searchParams)
   const effectiveId = selectedId || urlId || ""
-  // Keep selectedId in sync when user hasn't picked yet and URL provides one
-  if (!selectedId && urlId) {
-    setSelectedId(urlId)
-  }
 
-  const surgery = store.getSurgeryById(selectedId)
-  const presupuestos = store.getPresupuestosBySurgeryId(selectedId)
-  const comprobantes = store.getComprobantesBySurgeryId(selectedId)
-  const remitos = store.getRemitosBySurgeryId(selectedId)
-  const consumo = store.getConsumoBySurgeryId(selectedId)
-  const notes = store.getNotesBySurgeryId(selectedId)
-  const history = store.getHistoryBySurgeryId(selectedId)
-  const docChecklist = store.getDocumentChecklistBySurgeryId(selectedId)
-  const logistics = store.getLogisticsBySurgeryId(selectedId)
-  const materialTransito = store.getMaterialTransitoBySurgeryId(selectedId)
-  const instrumentadorSurgery = store.getInstrumentadorSurgeryBySurgeryId(selectedId)
-  const box = store.getBoxBySurgeryId(selectedId)
-  const facturas = store.getFacturasBySurgeryId(selectedId)
-  const notasCredito = store.getNotasCreditoBySurgeryId(selectedId)
-  const notasDebito = store.getNotasDebitoBySurgeryId(selectedId)
-  const resumenCobranza = store.getResumenCobranzaBySurgeryId(selectedId)
-  const necesidades = store.getNecesidadesCompraBySurgeryId(selectedId)
-  const docStatus = store.getDocStatus(selectedId)
+  useEffect(() => {
+    if (!urlId) return
+    setSelectedId((current) => (current === urlId ? current : urlId))
+    setActiveTab(urlTab ?? "resumen")
+  }, [urlId, urlTab])
+
+  const surgery = store.getSurgeryById(effectiveId)
+  const presupuestos = store.getPresupuestosBySurgeryId(effectiveId)
+  const comprobantes = store.getComprobantesBySurgeryId(effectiveId)
+  const remitos = store.getRemitosBySurgeryId(effectiveId)
+  const consumo = store.getConsumoBySurgeryId(effectiveId)
+  const notes = store.getNotesBySurgeryId(effectiveId)
+  const history = store.getHistoryBySurgeryId(effectiveId)
+  const docChecklist = store.getDocumentChecklistBySurgeryId(effectiveId)
+  const logistics = store.getLogisticsBySurgeryId(effectiveId)
+  const materialTransito = store.getMaterialTransitoBySurgeryId(effectiveId)
+  const instrumentadorSurgery = store.getInstrumentadorSurgeryBySurgeryId(effectiveId)
+  const box = store.getBoxBySurgeryId(effectiveId)
+  const facturas = store.getFacturasBySurgeryId(effectiveId)
+  const notasCredito = store.getNotasCreditoBySurgeryId(effectiveId)
+  const notasDebito = store.getNotasDebitoBySurgeryId(effectiveId)
+  const resumenCobranza = store.getResumenCobranzaBySurgeryId(effectiveId)
+  const necesidades = store.getNecesidadesCompraBySurgeryId(effectiveId)
+  const docStatus = store.getDocStatus(effectiveId)
 
   // Filtered surgeries for selector
   const filteredSurgeries = useMemo(() => {
@@ -170,12 +178,10 @@ function ExpedienteContent() {
     toast.success("Consumo validado")
   }
 
-  const handleAddNote = () => {
-    if (!surgery || !noteText.trim()) return
-    store.addSurgeryNote(surgery.id, noteText, noteType, notePriority, noteType === "Interna")
-    toast.success("Nota agregada")
-    setNoteDialogOpen(false)
-    setNoteText("")
+  const openSeguimientoNoteComposer = () => {
+    setSeguimientoAddAction("note")
+    setSeguimientoAddActionKey((current) => current + 1)
+    setActiveTab("novedades")
   }
 
   const handlePresupuestoAction = (prId: string, action: "enviar" | "aprobar" | "rechazar" | "bloquear") => {
@@ -197,10 +203,23 @@ function ExpedienteContent() {
     store.updateConsumoItem(consumoId, stockItemId, { [field]: value })
   }
 
+  if (!backendSurgeries.ready) {
+    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Cargando cirugías desde backend...</p></div>
+  }
+
+  if (backendSurgeries.error) {
+    return <div className="flex items-center justify-center h-64 px-6 text-center"><p className="text-sm text-red-600">Error al cargar cirugías desde backend: {backendSurgeries.error}</p></div>
+  }
+
   // ── Surgery Selector (no ID selected) ──
   if (!surgery) {
     return (
       <div className="space-y-4">
+        <LegacyStandaloneNotice
+          description="La superficie real del expediente vive en Ficha CX dentro de Cirugías. Esta ruta standalone queda legacy/deprecada para evitar operar fuera del flujo vigente."
+          tabHint="Usá Cirugías para seleccionar una cirugía y abrir su Ficha CX contextual."
+        />
+
         <div>
           <h1 className="text-xl font-bold">Expediente Centro Relacional</h1>
           <p className="text-sm text-muted-foreground">Seleccione una cirugía para ver su expediente completo</p>
@@ -264,6 +283,11 @@ function ExpedienteContent() {
 
   return (
     <div className="space-y-4">
+      <LegacyStandaloneNotice
+        description="La superficie real del expediente vive en Ficha CX dentro de Cirugías. Esta ruta standalone queda legacy/deprecada para evitar operar fuera del flujo vigente."
+        tabHint="Usá Cirugías para seleccionar una cirugía y abrir su Ficha CX contextual."
+      />
+
       {/* ── Header ── */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -392,7 +416,7 @@ function ExpedienteContent() {
                     <Receipt className="size-4" /> Autorizar FV
                   </Button>
                 )}
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setNoteDialogOpen(true)}>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={openSeguimientoNoteComposer}>
                   <StickyNote className="size-4" /> Agregar nota
                 </Button>
               </div>
@@ -996,6 +1020,29 @@ function ExpedienteContent() {
 
         {/* ────── VENTAS / FV ────── */}
         <TabsContent value="ventas" className="space-y-4">
+          <Card>
+            <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold">Recibo digital mock</p>
+                <p className="text-xs text-muted-foreground">
+                  Acceso rápido contextual para esta cirugía desde Ventas/Cobros.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/ventas/recibos?from=expediente&surgeryId=${encodeURIComponent(surgery.id)}`}>
+                    <FileText className="size-4" /> Ver recibos
+                  </Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link href={`/ventas/recibos/nuevo?from=expediente&surgeryId=${encodeURIComponent(surgery.id)}`}>
+                    <Receipt className="size-4" /> Crear recibo mock
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Facturas */}
           <div>
             <h3 className="text-sm font-semibold mb-2">Facturas de Venta</h3>
@@ -1238,12 +1285,25 @@ function ExpedienteContent() {
           </div>
         </TabsContent>
 
+        {/* ────── SEGUIMIENTO ────── */}
+        <TabsContent value="novedades" className="space-y-4">
+          <NovedadesTabContent
+            surgery={surgery}
+            initialFocusEntryId={deepLinkedEntryId}
+            initialAddAction={seguimientoAddAction}
+            initialAddActionKey={seguimientoAddActionKey}
+          />
+        </TabsContent>
+
         {/* ────── NOTAS ────── */}
         <TabsContent value="notas" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Notas ({notes.length})</h3>
-            <Button size="sm" variant="outline" className="gap-1 h-7" onClick={() => setNoteDialogOpen(true)}>
-              <Plus className="size-3" /> Agregar nota
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold">Notas legacy ({notes.length})</h3>
+              <p className="text-xs text-muted-foreground">Histórico en solo lectura. Las nuevas novedades, menciones y notificaciones se cargan desde Seguimiento.</p>
+            </div>
+            <Button size="sm" variant="outline" className="gap-1 h-7" onClick={openSeguimientoNoteComposer}>
+              <StickyNote className="size-3" /> Ir a Seguimiento
             </Button>
           </div>
           {notes.length > 0 ? (
@@ -1275,7 +1335,8 @@ function ExpedienteContent() {
             <Card>
               <CardContent className="flex flex-col items-center py-12">
                 <StickyNote className="size-10 text-muted-foreground mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">Sin notas</p>
+                <p className="text-sm font-medium text-muted-foreground">Sin notas legacy</p>
+                <p className="text-xs text-muted-foreground">Usá Seguimiento para registrar nuevas novedades del caso.</p>
               </CardContent>
             </Card>
           )}
@@ -1373,50 +1434,6 @@ function ExpedienteContent() {
           )}
         </TabsContent>
       </Tabs>
-
-      {/* ── Add Note Dialog ── */}
-      <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Agregar Nota</DialogTitle>
-            <DialogDescription>Cirugía {surgery.id}</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label>Nota *</Label>
-              <Textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Escribir nota..." rows={3} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Select value={noteType} onValueChange={(v) => setNoteType(v as NoteType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(["General", "Urgente", "Logística", "Facturación", "Interna"] as NoteType[]).map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Prioridad</Label>
-                <Select value={notePriority} onValueChange={(v) => setNotePriority(v as NotePriority)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(["Baja", "Media", "Alta"] as NotePriority[]).map((p) => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNoteDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleAddNote} disabled={!noteText.trim()}>Agregar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* ── Facturar Dialog ── */}
       <Dialog open={facturarDialogOpen} onOpenChange={setFacturarDialogOpen}>

@@ -1,9 +1,9 @@
 "use client"
 import React from "react"
-import { Plus, FileText, X, ChevronDown } from "lucide-react"
+import { ChevronDown, FileText, LayoutTemplate, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ColumnVisibilityMenu } from "./ColumnVisibilityMenu"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,9 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { SmartSurgerySearch } from "./SmartSurgerySearch"
-import { ColumnVisibilityMenu } from "./ColumnVisibilityMenu"
 import {
   CX_STATE_COLORS, PREP_STATE_COLORS, DOC_STATUS_COLORS,
   STATE_FILTER_OPTIONS, PREP_FILTER_OPTIONS, DOC_FILTER_OPTIONS, FACT_FILTER_OPTIONS,
@@ -51,8 +50,8 @@ function QuickFilterPopover({
           variant={selected.length > 0 ? "default" : "outline"}
           size="sm"
           className={cn(
-            "h-7 gap-1 text-[11px] px-2.5 shrink-0",
-            selected.length > 0 && "bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+            "h-7 shrink-0 rounded-sm border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
+            selected.length > 0 && "border-blue-700 bg-blue-700 text-white hover:bg-blue-800 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
           )}
         >
           {label}
@@ -63,12 +62,12 @@ function QuickFilterPopover({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto min-w-[180px] max-w-[280px] p-2">
+      <PopoverContent align="start" className="w-auto min-w-[180px] max-w-[280px] rounded-sm border-slate-300 bg-white/95 p-2 shadow-md backdrop-blur-sm dark:border-slate-700 dark:bg-slate-950/95">
         <div className="space-y-0.5">
           {normalized.map(opt => (
             <label
               key={opt.value}
-              className="flex items-center gap-2 cursor-pointer text-xs py-0.5 hover:bg-accent rounded px-1"
+               className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
             >
               <Checkbox
                 checked={selected.includes(opt.value)}
@@ -163,6 +162,7 @@ interface CirugiasToolbarProps {
   columnOrder: string[]
   onReorderColumns: (fromIndex: number, toIndex: number) => void
   onResetToDefault: () => void
+  onOpenViewCustomization: () => void
   // Count
   resultCount: number
   // Actions
@@ -241,20 +241,21 @@ export function CirugiasToolbar(props: CirugiasToolbarProps) {
     props.conFacturaFilter !== null
   )
 
-  // CHATZAI-025: Use centralized filter count from hook
-  const activeFilterCount = props.activeFilterCount
-
   return (
-    <div className="shrink-0 border-b px-3 py-2 space-y-2">
-      {/* ═══ ROW 1: Smart Search (CHATZAI-025) ═══ */}
-      <SmartSurgerySearch
-        chips={props.searchChips}
-        onChipsChange={props.onSearchChipsChange}
-        onSearch={props.onSmartSearch}
-      />
-
-      {/* ═══ ROW 2: Filter Buttons ═══ */}
-      <div className="flex flex-wrap items-center gap-1.5">
+    <div className="shrink-0 border-b border-slate-200/90 px-3 py-1.5 dark:border-slate-800">
+      <div className="flex flex-wrap items-center gap-1.5 bg-slate-50/70 px-0 py-0 dark:bg-transparent">
+        <div className="mr-1 flex items-center gap-2 pr-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Filtros rápidos</span>
+          <span className="hidden h-4 w-px bg-slate-300 dark:bg-slate-700 sm:block" />
+        </div>
+        <span className="inline-flex items-center rounded-sm border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          {props.resultCount} cirugía{props.resultCount !== 1 ? "s" : ""}
+        </span>
+        {props.activeFilterCount > 0 && (
+           <span className="inline-flex items-center rounded-sm border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            {props.activeFilterCount} filtro{props.activeFilterCount !== 1 ? "s" : ""}
+          </span>
+        )}
         <QuickFilterPopover
           label="Estado CX"
           options={STATE_FILTER_OPTIONS}
@@ -355,24 +356,7 @@ export function CirugiasToolbar(props: CirugiasToolbarProps) {
           conFacturaFilter={props.conFacturaFilter}
           setConFacturaFilter={props.setConFacturaFilter}
         />
-      </div>
-
-      {/* ═══ ROW 3: Actions + Counter + Nueva cirugía ═══ */}
-      <div className="flex items-center gap-2">
-        {/* Left side: Actions */}
-        <div className="flex items-center gap-1.5">
-          {/* Informes y documentos */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1.5 text-[11px] px-2.5 shrink-0"
-            onClick={() => props.onReportsDialogOpenChange(true)}
-          >
-            <FileText className="size-3" />
-            Informes y documentos
-          </Button>
-
-          {/* Column visibility */}
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <ColumnVisibilityMenu
             colVisOpen={props.colVisOpen}
             setColVisOpen={props.setColVisOpen}
@@ -384,14 +368,57 @@ export function CirugiasToolbar(props: CirugiasToolbarProps) {
             columnOrder={props.columnOrder}
             onReorderColumns={props.onReorderColumns}
             onResetToDefault={props.onResetToDefault}
+            triggerLabel="Columnas"
+            triggerClassName="h-7 rounded-sm border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
           />
 
-          {/* Clear filters */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 rounded-sm border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            onClick={props.onOpenViewCustomization}
+          >
+            <LayoutTemplate className="size-3.5" />
+            Personalizar vista
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 rounded-sm border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            onClick={() => props.onReportsDialogOpenChange(true)}
+          >
+            <FileText className="size-3.5" />
+            Informes
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="h-7 gap-1.5 rounded-sm px-2 text-[11px] font-semibold shadow-sm">
+                <Plus className="size-3.5" />
+                Nueva cirugía
+                <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 border-slate-200/80 bg-white/95 shadow-xl backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95">
+              <DropdownMenuItem onClick={props.onNewSurgery}>
+                <Plus className="size-4" />
+                <span>Crear nueva cirugía</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled>
+                <FileText className="size-4" />
+                <span>Crear PR para cirugía existente</span>
+                <span className="ml-auto text-[10px] text-muted-foreground">Próximamente</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {props.hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 text-[11px] px-2.5 shrink-0 text-muted-foreground hover:text-foreground"
+              className="h-7 shrink-0 rounded-sm px-2 text-[11px] font-semibold text-slate-600 hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white"
               onClick={props.clearFilters}
             >
               <X className="size-3" />
@@ -399,39 +426,6 @@ export function CirugiasToolbar(props: CirugiasToolbarProps) {
             </Button>
           )}
         </div>
-
-        {/* Center: Counter */}
-        <div className="flex-1 text-center">
-          <span className="text-[11px] text-muted-foreground">
-            {props.resultCount} cirugía{props.resultCount !== 1 ? "s" : ""}
-            {activeFilterCount > 0 && (
-              <> · {activeFilterCount} filtro{activeFilterCount !== 1 ? "s" : ""} activo{activeFilterCount !== 1 ? "s" : ""}</>
-            )}
-          </span>
-        </div>
-
-        {/* Right side: Nueva cirugía dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" className="gap-1.5 shrink-0">
-              <Plus className="size-4" />
-              Nueva cirugía
-              <ChevronDown className="size-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={props.onNewSurgery}>
-              <Plus className="size-4" />
-              <span>Crear nueva cirugía</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>
-              <FileText className="size-4" />
-              <span>Crear PR para cirugía existente</span>
-              <span className="ml-auto text-[10px] text-muted-foreground">Próximamente</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </div>
   )

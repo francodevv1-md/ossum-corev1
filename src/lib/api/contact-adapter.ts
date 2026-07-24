@@ -131,6 +131,8 @@ export function mapContactoToApiPayload(
     payload.isCompany = true
     if (formData.razonSocial?.trim()) {
       payload.legalName = formData.razonSocial.trim()
+    } else if (formData.nombre?.trim()) {
+      payload.legalName = formData.nombre.trim()
     }
   } else {
     payload.isCompany = false

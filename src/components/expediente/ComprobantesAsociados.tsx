@@ -10,12 +10,12 @@ import {
 } from "@/components/ui/table"
 import {
   Link2, MoreHorizontal, Eye, Printer, Download, Edit,
-  XCircle, FileText, Receipt, CreditCard, Search, Filter,
+  XCircle, FileText, CreditCard, Search,
   ChevronDown, ChevronRight,
 } from "lucide-react"
 import { formatDate, formatCurrency } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
-import type { Surgery, Comprobante, Presupuesto, FacturaVentaData } from "@/types"
+import type { Surgery, Comprobante, Presupuesto } from "@/types"
 import type { ResumenCobranzaSurgery, FacturaCobranzaDetalle } from "@/lib/cobros.utils"
 
 interface ComprobantesAsociadosProps {
@@ -28,21 +28,21 @@ interface ComprobantesAsociadosProps {
 type CompFilterType = "all" | "PR" | "PE" | "NR" | "FV" | "CO" | "NC" | "ND"
 
 const COMP_TYPE_BADGES: Record<string, string> = {
-  PR: "bg-blue-100 text-blue-800 border-blue-300",
-  PE: "bg-indigo-100 text-indigo-800 border-indigo-300",
-  NR: "bg-sky-100 text-sky-800 border-sky-300",
-  FV: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  CO: "bg-green-100 text-green-800 border-green-300",
-  NC: "bg-amber-100 text-amber-800 border-amber-300",
-  ND: "bg-orange-100 text-orange-800 border-orange-300",
+  PR: "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200",
+  PE: "border-indigo-300 bg-indigo-100 text-indigo-800 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200",
+  NR: "border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200",
+  FV: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200",
+  CO: "border-green-300 bg-green-100 text-green-800 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-200",
+  NC: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200",
+  ND: "border-orange-300 bg-orange-100 text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-200",
 }
 
 /** Badge de estado de cobranza para una FV */
 const ESTADO_COBRANZA_COLORS: Record<string, string> = {
-  sin_cobrar: "bg-amber-100 text-amber-800 border-amber-300",
-  cobro_parcial: "bg-blue-100 text-blue-800 border-blue-300",
-  cobrada: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  vencida: "bg-red-100 text-red-800 border-red-300",
+  sin_cobrar: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200",
+  cobro_parcial: "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200",
+  cobrada: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200",
+  vencida: "border-red-300 bg-red-100 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200",
 }
 
 const ESTADO_COBRANZA_LABELS: Record<string, string> = {
@@ -53,7 +53,7 @@ const ESTADO_COBRANZA_LABELS: Record<string, string> = {
 }
 
 export function ComprobantesAsociados({
-  surgery, comprobantes, resumenCobranza, presupuestos,
+  surgery: _surgery, comprobantes, resumenCobranza, presupuestos,
 }: ComprobantesAsociadosProps) {
   const [filterType, setFilterType] = useState<CompFilterType>("all")
   const [filterState, setFilterState] = useState<string>("all")
@@ -126,6 +126,18 @@ export function ComprobantesAsociados({
     return Array.from(states).sort()
   }, [allRows])
 
+  const typeCounts = useMemo(() => {
+    return {
+      PR: allRows.filter(r => r.type === "PR").length,
+      PE: allRows.filter(r => r.type === "PE").length,
+      NR: allRows.filter(r => r.type === "NR").length,
+      FV: allRows.filter(r => r.type === "FV").length,
+      CO: allRows.filter(r => r.facturaDetail && r.facturaDetail.cobros.length > 0).length,
+      NC: allRows.filter(r => r.type === "NC").length,
+      ND: allRows.filter(r => r.type === "ND").length,
+    }
+  }, [allRows])
+
   // Summary totals — use resumenCobranza for financial consistency
   const totalAmount = filteredRows.reduce((s, r) => s + r.amount, 0)
   const totalToCollect = resumenCobranza.saldoPendiente
@@ -140,48 +152,51 @@ export function ComprobantesAsociados({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Comprobantes Asociados</h2>
+        <div>
+          <h2 className="text-base font-semibold">Comprobantes Asociados</h2>
+          <p className="text-[11px] text-muted-foreground">Vista compacta de presupuestos, comprobantes y cobranzas vinculadas.</p>
+        </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-[10px]">{filteredRows.length} comprobantes</Badge>
+          <Badge variant="outline" className="h-6 rounded-md px-2 text-[10px] font-medium">
+            {filteredRows.length} visibles
+          </Badge>
         </div>
       </div>
 
       {/* ── Filters bar ── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-950/60">
+        <div className="relative min-w-[200px] flex-1 max-w-sm">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
             placeholder="Buscar comprobante..."
-            className="h-8 pl-8 text-xs"
+            className="h-7 border-slate-200 bg-white pl-8 text-[11px] dark:border-slate-700 dark:bg-slate-900"
           />
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             variant={filterType === "all" ? "default" : "outline"}
-            size="sm" className="h-7 text-[10px] px-2.5"
+            size="sm" className="h-6 rounded-md px-2 text-[10px]"
             onClick={() => setFilterType("all")}
           >
             Todos
           </Button>
           {(["PR", "PE", "NR", "FV", "CO", "NC", "ND"] as const).map(t => {
-            // CO filter now refers to FV rows that have cobros
-            const count = t === "CO"
-              ? allRows.filter(r => r.facturaDetail && r.facturaDetail.cobros.length > 0).length
-              : allRows.filter(r => r.type === t).length
+            const count = typeCounts[t]
             if (count === 0) return null
             return (
               <Button
                 key={t}
                 variant={filterType === t ? "default" : "outline"}
-                size="sm" className="h-7 text-[10px] px-2.5 gap-1"
+                size="sm" className="h-6 gap-1 rounded-md px-2 text-[10px]"
                 onClick={() => setFilterType(t)}
               >
-                {t} <span className="text-[9px] opacity-60">({count})</span>
+                {t}
+                <span className="text-[9px] opacity-60">{count}</span>
               </Button>
             )
           })}
@@ -190,7 +205,7 @@ export function ComprobantesAsociados({
           <select
             value={filterState}
             onChange={e => setFilterState(e.target.value)}
-            className="h-7 rounded-md border border-input bg-transparent px-2 text-[10px] shadow-xs"
+            className="h-6 rounded-md border border-slate-200 bg-white px-2 text-[10px] text-muted-foreground shadow-xs dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="all">Todos los estados</option>
             {uniqueStates.map(st => <option key={st} value={st}>{st}</option>)}
@@ -199,30 +214,39 @@ export function ComprobantesAsociados({
       </div>
 
       {/* ── Summary row ── */}
-      <div className="flex items-center gap-6 rounded-md border bg-muted/30 px-4 py-2">
-        <div className="text-xs"><span className="text-muted-foreground">Total: </span><span className="font-semibold">{formatCurrency(totalAmount)}</span></div>
-        <div className="text-xs"><span className="text-muted-foreground">A cobrar: </span><span className="font-semibold text-amber-700">{formatCurrency(totalToCollect)}</span></div>
+      <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950/60 sm:grid-cols-3">
+        <div className="rounded-md bg-white/80 px-3 py-2 dark:bg-slate-900/80">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Total visible</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(totalAmount)}</p>
+        </div>
+        <div className="rounded-md bg-white/80 px-3 py-2 dark:bg-slate-900/80">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo pendiente</p>
+          <p className="mt-1 text-sm font-semibold text-amber-700">{formatCurrency(totalToCollect)}</p>
+        </div>
         {resumenCobranza.totalCobrado > 0 && (
-          <div className="text-xs"><span className="text-muted-foreground">Cobrado: </span><span className="font-semibold text-emerald-700">{formatCurrency(resumenCobranza.totalCobrado)}</span></div>
+          <div className="rounded-md bg-white/80 px-3 py-2 dark:bg-slate-900/80">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Cobrado</p>
+            <p className="mt-1 text-sm font-semibold text-emerald-700">{formatCurrency(resumenCobranza.totalCobrado)}</p>
+          </div>
         )}
       </div>
 
       {/* ── Grid ── */}
       {filteredRows.length > 0 ? (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="text-[10px] h-8 w-8"></TableHead>
-                <TableHead className="text-[10px] h-8 w-16">Tipo</TableHead>
-                <TableHead className="text-[10px] h-8">Nº Comprobante</TableHead>
-                <TableHead className="text-[10px] h-8">Fecha</TableHead>
-                <TableHead className="text-[10px] h-8">Cliente</TableHead>
-                <TableHead className="text-[10px] h-8">Concepto</TableHead>
-                <TableHead className="text-[10px] h-8 text-right">Importe</TableHead>
-                <TableHead className="text-[10px] h-8 text-right">Saldo</TableHead>
-                <TableHead className="text-[10px] h-8">Estado</TableHead>
-                <TableHead className="text-[10px] h-8 w-12"></TableHead>
+              <TableRow className="bg-slate-50/80 hover:bg-slate-50/80 dark:bg-slate-950/80 dark:hover:bg-slate-950/80">
+                <TableHead className="h-8 w-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500"></TableHead>
+                <TableHead className="h-8 w-16 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Tipo</TableHead>
+                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Comprobante</TableHead>
+                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Fecha</TableHead>
+                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Cliente</TableHead>
+                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Concepto</TableHead>
+                <TableHead className="h-8 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Importe</TableHead>
+                <TableHead className="h-8 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Saldo</TableHead>
+                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Estado</TableHead>
+                <TableHead className="h-8 w-12 text-[10px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -234,41 +258,41 @@ export function ComprobantesAsociados({
 
                 return (
                   <React.Fragment key={row.id}>
-                    <TableRow className="group">
+                    <TableRow className="group border-slate-100 hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-800/40">
                       {/* Expand toggle for FV with cobros */}
-                      <TableCell className="py-2 w-8">
+                      <TableCell className="w-8 py-2.5 align-top">
                         {hasCobros ? (
-                          <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => toggleFVExpanded(row.number)}>
+                          <Button variant="ghost" size="sm" className="h-5 w-5 rounded-sm p-0 text-slate-500" onClick={() => toggleFVExpanded(row.number)}>
                             {isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
                           </Button>
                         ) : null}
                       </TableCell>
-                      <TableCell className="py-2">
-                        <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold border", COMP_TYPE_BADGES[row.type] || "bg-gray-100 text-gray-800 border-gray-300")}>
+                      <TableCell className="py-2.5 align-top">
+                        <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold leading-none", COMP_TYPE_BADGES[row.type] || "bg-gray-100 text-gray-800 border-gray-300")}>
                           {row.type}
                         </span>
                       </TableCell>
-                      <TableCell className="py-2 text-xs font-medium font-mono">{row.number}</TableCell>
-                      <TableCell className="py-2 text-xs text-muted-foreground">{formatDate(row.date)}</TableCell>
-                      <TableCell className="py-2 text-xs">{row.client}</TableCell>
-                      <TableCell className="py-2 text-xs text-muted-foreground max-w-[200px] truncate">{row.concept}</TableCell>
-                      <TableCell className="py-2 text-xs font-medium text-right">{formatCurrency(row.amount)}</TableCell>
-                      <TableCell className={cn("py-2 text-xs font-medium text-right", row.toCollect > 0 ? "text-amber-700" : "text-muted-foreground")}>
+                       <TableCell className="py-2.5 text-xs font-medium font-mono align-top text-slate-900 dark:text-slate-100">{row.number}</TableCell>
+                      <TableCell className="py-2.5 text-xs text-muted-foreground align-top">{formatDate(row.date)}</TableCell>
+                       <TableCell className="py-2.5 text-xs align-top text-slate-900 dark:text-slate-100">{row.client}</TableCell>
+                      <TableCell className="max-w-[220px] py-2.5 text-xs align-top text-muted-foreground truncate">{row.concept}</TableCell>
+                       <TableCell className="py-2.5 text-right text-xs font-medium align-top text-slate-900 dark:text-slate-100">{formatCurrency(row.amount)}</TableCell>
+                      <TableCell className={cn("py-2.5 text-right text-xs font-medium align-top", row.toCollect > 0 ? "text-amber-700" : "text-muted-foreground")}>
                         {row.toCollect > 0 ? formatCurrency(row.toCollect) : "—"}
                       </TableCell>
-                      <TableCell className="py-2 text-xs">
+                      <TableCell className="py-2.5 text-xs align-top">
                         {row.facturaDetail ? (
-                          <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold border", ESTADO_COBRANZA_COLORS[row.facturaDetail.estadoCobranza] || "")}>
+                          <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none", ESTADO_COBRANZA_COLORS[row.facturaDetail.estadoCobranza] || "")}>
                             {ESTADO_COBRANZA_LABELS[row.facturaDetail.estadoCobranza] || row.facturaDetail.estadoCobranza}
                           </span>
                         ) : (
-                          row.state
+                          <span className="text-muted-foreground">{row.state}</span>
                         )}
                       </TableCell>
-                      <TableCell className="py-2">
+                      <TableCell className="py-2.5 align-top">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0 text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
                               <MoreHorizontal className="size-3.5" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -288,9 +312,9 @@ export function ComprobantesAsociados({
                     </TableRow>
                     {/* Extended FV data row (facturaData from CHATZAI-010) */}
                     {facturaData && row.type === "FV" && (
-                      <TableRow className="bg-muted/20">
-                        <TableCell colSpan={10} className="py-1.5 px-4">
-                          <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                       <TableRow className="bg-slate-50/60 dark:bg-slate-950/60">
+                        <TableCell colSpan={10} className="px-4 py-2">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
                             <span>Base: <strong className="text-foreground">{facturaData.baseFacturacion}</strong></span>
                             <span>PR: {facturaData.presupuestoBaseId || "—"}</span>
                             <span>Presup.: {formatCurrency(facturaData.totalPresupuestado)}</span>
@@ -306,10 +330,10 @@ export function ComprobantesAsociados({
                     )}
                     {/* Expanded cobros imputados sub-rows */}
                     {isExpanded && row.facturaDetail && (
-                      <TableRow className="bg-emerald-50/30">
-                        <TableCell colSpan={10} className="py-2 px-8">
+                       <TableRow className="bg-emerald-50/20 dark:bg-emerald-500/5">
+                        <TableCell colSpan={10} className="px-8 py-2.5">
                           <div className="space-y-1">
-                            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Cobros aplicados a {row.number}</p>
+                            <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Cobros aplicados a {row.number}</p>
                             <div className="grid grid-cols-[auto_auto_1fr_auto] gap-x-4 gap-y-1 items-center text-[10px]">
                               {row.facturaDetail.cobros.map(co => (
                                 <React.Fragment key={co.cobroId}>
@@ -320,7 +344,7 @@ export function ComprobantesAsociados({
                                 </React.Fragment>
                               ))}
                             </div>
-                            <div className="flex items-center justify-between text-[10px] pt-1 border-t border-emerald-200/50">
+                            <div className="flex items-center justify-between border-t border-emerald-200/50 pt-1 text-[10px]">
                               <span className="text-muted-foreground">Total cobrado</span>
                               <span className="font-semibold text-emerald-700">{formatCurrency(row.facturaDetail.totalCobrado)}</span>
                             </div>
@@ -341,11 +365,11 @@ export function ComprobantesAsociados({
           </Table>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Link2 className="size-10 text-muted-foreground/30 mb-3" />
-          <p className="text-sm font-medium text-muted-foreground">Sin comprobantes asociados</p>
-          <p className="text-xs text-muted-foreground">Los comprobantes aparecerán aquí a medida que se generen</p>
-        </div>
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center dark:border-slate-800 dark:bg-slate-950/50">
+            <Link2 className="mb-2 size-8 text-muted-foreground/35" />
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Sin comprobantes asociados</p>
+            <p className="text-[11px] text-muted-foreground">Se mostrarán acá cuando el expediente genere movimiento comercial.</p>
+          </div>
       )}
     </div>
   )

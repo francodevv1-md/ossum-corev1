@@ -5,6 +5,192 @@
 
 import type { PrismaClient } from "@prisma/client";
 
+import type { Contacto } from "@/types";
+
+import { badRequest } from "../api/errors";
+
+export type FrontendContactSnapshot = Pick<
+  Contacto,
+  | "id"
+  | "nombre"
+  | "tipoPersona"
+  | "razonSocial"
+  | "cuit"
+  | "dni"
+  | "email"
+  | "telefonos"
+  | "groups"
+>;
+
+type ResolveCompanyContactReferenceInput = {
+  companyId: string;
+  contactId?: string | null;
+  snapshot?: FrontendContactSnapshot | null;
+  role: string;
+  required?: boolean;
+  fieldLabel: string;
+};
+
+function normalizeText(value: string | null | undefined): string {
+  return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+}
+
+function normalizeDigits(value: string | null | undefined): string {
+  return value?.replace(/\D+/g, "") ?? "";
+}
+
+function buildComparableName(contact: {
+  firstName?: string | null;
+  lastName?: string | null;
+  legalName?: string | null;
+}): string {
+  const fullName = `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim();
+  return normalizeText(fullName || contact.legalName);
+}
+
+function isCompanySnapshot(snapshot: FrontendContactSnapshot): boolean {
+  return (
+    snapshot.tipoPersona === "juridica" ||
+    Boolean(snapshot.razonSocial?.trim()) ||
+    snapshot.groups?.includes("instituciones") === true
+  );
+}
+
+function splitPersonName(fullName: string) {
+  const trimmed = fullName.trim().replace(/\s+/g, " ");
+  if (!trimmed) {
+    return { firstName: undefined, lastName: undefined };
+  }
+
+  const [firstName, ...rest] = trimmed.split(" ");
+  return {
+    firstName,
+    lastName: rest.length > 0 ? rest.join(" ") : undefined,
+  };
+}
+
+function buildCreateContactData(snapshot: FrontendContactSnapshot) {
+  const company = isCompanySnapshot(snapshot);
+  const normalizedName = snapshot.nombre?.trim() ?? "";
+  const personName = splitPersonName(normalizedName);
+
+  return {
+    isCompany: company,
+    legalName: company ? snapshot.razonSocial?.trim() || normalizedName || undefined : undefined,
+    firstName: company ? undefined : personName.firstName,
+    lastName: company ? undefined : personName.lastName,
+    email: snapshot.email?.trim() || undefined,
+    phone: snapshot.telefonos?.find((value) => value?.trim())?.trim() || undefined,
+    documentType: snapshot.cuit?.trim() ? "CUIT" : snapshot.dni?.trim() ? "DNI" : undefined,
+    documentNumber: snapshot.cuit?.trim() || snapshot.dni?.trim() || undefined,
+    contactType: undefined,
+  };
+}
+
+function hasUsableSnapshot(snapshot: FrontendContactSnapshot | null | undefined): snapshot is FrontendContactSnapshot {
+  if (!snapshot) return false;
+
+  return Boolean(
+    snapshot.nombre?.trim() ||
+      snapshot.razonSocial?.trim() ||
+      snapshot.email?.trim() ||
+      snapshot.cuit?.trim() ||
+      snapshot.dni?.trim()
+  );
+}
+
+function matchesSnapshot(
+  companyContact: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    legalName?: string | null;
+    email?: string | null;
+    documentNumber?: string | null;
+    isCompany?: boolean | null;
+  },
+  snapshot: FrontendContactSnapshot
+): boolean {
+  const snapshotDocument = normalizeDigits(snapshot.cuit || snapshot.dni);
+  const contactDocument = normalizeDigits(companyContact.documentNumber);
+
+  if (snapshotDocument && contactDocument && snapshotDocument === contactDocument) {
+    return true;
+  }
+
+  const snapshotEmail = normalizeText(snapshot.email);
+  const contactEmail = normalizeText(companyContact.email);
+  if (snapshotEmail && contactEmail && snapshotEmail === contactEmail) {
+    return true;
+  }
+
+  const snapshotName = normalizeText(snapshot.razonSocial || snapshot.nombre);
+  const contactName = buildComparableName(companyContact);
+  if (snapshotName && contactName && snapshotName === contactName) {
+    return true;
+  }
+
+  return false;
+}
+
+export async function resolveCompanyContactReference(
+  prisma: PrismaClient,
+  input: ResolveCompanyContactReferenceInput
+): Promise<string | null> {
+  const contactId = input.contactId?.trim() || input.snapshot?.id?.trim() || "";
+
+  if (contactId) {
+    const existingLink = await getContactCompanyLink(prisma, input.companyId, contactId);
+    if (existingLink?.isActive) {
+      return contactId;
+    }
+  }
+
+  if (!hasUsableSnapshot(input.snapshot)) {
+    if (input.required) {
+      throw badRequest(
+        `${input.fieldLabel} contact could not be resolved from the selected frontend contact`,
+        `surgery_${input.role}_contact_resolution_failed`
+      );
+    }
+
+    if (contactId) {
+      throw badRequest(
+        `${input.fieldLabel} contact is not linked to the active company and no usable snapshot was provided`,
+        `surgery_${input.role}_contact_resolution_failed`
+      );
+    }
+
+    return null;
+  }
+
+  const snapshot = input.snapshot;
+
+  const companyContacts = await listContactsByCompany(prisma, input.companyId, {
+    isActive: true,
+    take: 1000,
+  });
+
+  const matchedContact = companyContacts.find((candidate) =>
+    matchesSnapshot(candidate, snapshot)
+  );
+
+  if (matchedContact) {
+    return matchedContact.id;
+  }
+
+  const createData = buildCreateContactData(snapshot);
+  if (!createData.firstName && !createData.legalName) {
+    throw badRequest(
+      `${input.fieldLabel} contact snapshot is missing a usable name`,
+      `surgery_${input.role}_contact_snapshot_invalid`
+    );
+  }
+
+  const createdContact = await createContact(prisma, input.companyId, createData, input.role);
+  return createdContact.id;
+}
+
 // ─── Contact base ─────────────────────────────────────────────────────
 
 /** List contacts for a company via ContactCompanyLink. */

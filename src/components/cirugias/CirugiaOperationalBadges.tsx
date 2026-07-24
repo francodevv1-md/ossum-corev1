@@ -19,10 +19,10 @@ function NeutralBadge({ status, category }: { status: string; category: "doc" | 
 
   return (
     <span className={cn(
-      "inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-medium leading-none",
+      "inline-flex min-h-6 items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
       isCritical
-        ? "border-muted-foreground/20 text-foreground"
-        : "border-transparent text-muted-foreground"
+        ? "border-slate-300/70 bg-slate-100/80 text-slate-900 dark:border-slate-700/80 dark:bg-slate-900/85 dark:text-slate-100"
+        : "border-slate-200/70 bg-white/85 text-slate-700 dark:border-slate-800/80 dark:bg-slate-950/90 dark:text-slate-300"
     )}>
       <span className={cn("size-1.5 rounded-full shrink-0", dotColor)} />
       {status}
@@ -85,7 +85,7 @@ export function CirugiaOperationalBadges({ docStatus, consumoState, facturacionS
         {consumoState ? (
           <NeutralBadge status={consumoState} category="consumo" />
         ) : (
-          <span className="text-[10px] text-muted-foreground px-2 py-1 inline-block">—</span>
+          <span className="inline-flex min-h-6 items-center rounded-md border border-dashed border-slate-200/80 px-2 py-1 text-[10px] text-slate-400 dark:border-slate-800/80 dark:text-slate-500">—</span>
         )}
       </td>
       <td className="px-2 py-1.5">

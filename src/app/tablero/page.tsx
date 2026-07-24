@@ -24,45 +24,56 @@ interface KanbanColumn {
   id: string
   label: string
   color: string
-  states: SurgeryState[]
+  description: string
+  matches: (surgery: Surgery) => boolean
 }
+
+const isPreparationOperational = (surgery: Surgery) =>
+  surgery.state === "Pendiente" &&
+  ["En preparación", "Enviado", "Entregado"].includes(surgery.preparationState)
 
 const KANBAN_COLUMNS: KanbanColumn[] = [
   {
     id: "ingreso",
     label: "Ingreso",
     color: "border-slate-400",
-    states: ["Sin autorizar", "Sin fecha", "Pendiente"],
+    description: "Sin autorizar · Sin fecha · Pendiente",
+    matches: (surgery) => ["Sin autorizar", "Sin fecha", "Pendiente"].includes(surgery.state),
   },
   {
     id: "autorizada",
     label: "Autorizada",
     color: "border-blue-500",
-    states: ["Autorizada"],
+    description: "Autorizada",
+    matches: (surgery) => surgery.state === "Autorizada",
   },
   {
     id: "preparacion",
-    label: "Preparación",
+    label: "Preparación operativa",
     color: "border-teal-500",
-    states: ["En preparación", "En tránsito"],
+    description: "Pendiente · preparación activa",
+    matches: isPreparationOperational,
   },
   {
     id: "realizada",
     label: "Realizada",
     color: "border-purple-500",
-    states: ["Realizada"],
+    description: "Realizada",
+    matches: (surgery) => surgery.state === "Realizada",
   },
   {
     id: "finalizada",
     label: "Finalizada",
     color: "border-emerald-500",
-    states: ["Finalizada", "Sin consumo"],
+    description: "Finalizada · Sin consumo",
+    matches: (surgery) => ["Finalizada", "Sin consumo"].includes(surgery.state),
   },
   {
     id: "suspendida",
     label: "Suspendida/Cancelada",
     color: "border-red-500",
-    states: ["Suspendida", "Cancelada"],
+    description: "Suspendida · Cancelada",
+    matches: (surgery) => ["Suspendida", "Cancelada"].includes(surgery.state),
   },
 ]
 
@@ -123,7 +134,7 @@ export default function TableroPage() {
   const columnData = useMemo(() => {
     const map: Record<string, Surgery[]> = {}
     for (const col of KANBAN_COLUMNS) {
-      map[col.id] = filtered.filter((s) => col.states.includes(s.state))
+        map[col.id] = filtered.filter(col.matches)
     }
     return map
   }, [filtered])
@@ -133,11 +144,11 @@ export default function TableroPage() {
     const all = store.surgeries
     const activeStates: SurgeryState[] = [
       "Sin autorizar", "Sin fecha", "Pendiente", "Autorizada",
-      "En preparación", "En tránsito", "Realizada", "Sin consumo",
+       "En tránsito", "Realizada", "Sin consumo",
     ]
     const activas = all.filter((s) => activeStates.includes(s.state)).length
     const pendAuth = all.filter((s) => s.state === "Sin autorizar" || s.state === "Pendiente").length
-    const prepTrans = all.filter((s) => s.state === "En preparación" || s.state === "En tránsito").length
+    const prepTrans = all.filter(isPreparationOperational).length
     const factMes = store.comprobantes
       .filter((c) => c.type === "FV" && c.date.startsWith(new Date().toISOString().slice(0, 7)))
       .reduce((acc, c) => acc + c.amount, 0)
@@ -346,7 +357,7 @@ export default function TableroPage() {
                     </Badge>
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-0.5">
-                    {col.states.join(" • ")}
+                     {col.description}
                   </div>
                 </div>
 
@@ -403,7 +414,7 @@ export default function TableroPage() {
 
                           {/* Action button */}
                           <div className="flex items-center gap-1 pt-1">
-                            {(col.id === "ingreso" || col.id === "autorizada" || col.id === "preparacion" || col.id === "realizada") && (
+                             {(col.id === "ingreso" || col.id === "autorizada" || col.id === "realizada") && (
                               <Button
                                 size="sm"
                                 variant="outline"

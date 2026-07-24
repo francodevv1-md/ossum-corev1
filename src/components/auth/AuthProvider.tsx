@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import type { Session, User } from "@supabase/supabase-js"
 import { apiFetch } from "@/lib/api/client"
@@ -29,6 +29,18 @@ type CurrentUserResponse = {
   user: InternalCurrentUser
   access: CurrentUserAccess
   activeCompany: ActiveCompany
+  features?: {
+    availabilityRequests?: boolean
+  }
+}
+
+export type AuthFeatures = {
+  availabilityRequests: boolean
+}
+
+type AvailabilityFeatureState = {
+  requestKey: string
+  enabled: boolean
 }
 
 type AuthContextValue = {
@@ -37,6 +49,7 @@ type AuthContextValue = {
   currentUser: InternalCurrentUser | null
   currentAccess: CurrentUserAccess | null
   activeCompany: ActiveCompany | null
+  features: AuthFeatures
   currentUserLoading: boolean
   isLoading: boolean
   isAuthenticated: boolean
@@ -44,6 +57,12 @@ type AuthContextValue = {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+const INITIAL_SESSION_TIMEOUT_MS = 10_000
+
+function safeNext(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes(":")) return "/"
+  return value
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -53,12 +72,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<InternalCurrentUser | null>(null)
   const [currentAccess, setCurrentAccess] = useState<CurrentUserAccess | null>(null)
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null)
+  const [availabilityFeatureState, setAvailabilityFeatureState] = useState<AvailabilityFeatureState | null>(null)
   const [currentUserLoading, setCurrentUserLoading] = useState(false)
+  const loadedCurrentUserRequestKeyRef = useRef<string | null>(null)
+  const inFlightCurrentUserRequestRef = useRef<{
+    key: string
+    promise: Promise<CurrentUserResponse>
+  } | null>(null)
 
   const clearCurrentUserContext = useCallback(() => {
+    loadedCurrentUserRequestKeyRef.current = null
+    inFlightCurrentUserRequestRef.current = null
     setCurrentUser(null)
     setCurrentAccess(null)
     setActiveCompany(null)
+    setAvailabilityFeatureState(null)
     setCurrentUserLoading(false)
   }, [])
 
@@ -71,20 +99,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true
+    let bootstrapTimeout: number | null = null
 
-    supabaseBrowserClient.auth.getSession().then(({ data }) => {
-      if (!active) return
-      setSession(data.session)
-      setIsLoading(false)
-    })
+    const completeBootstrap = () => {
+      if (bootstrapTimeout !== null) {
+        window.clearTimeout(bootstrapTimeout)
+        bootstrapTimeout = null
+      }
+      if (active) setIsLoading(false)
+    }
+
+    bootstrapTimeout = window.setTimeout(completeBootstrap, INITIAL_SESSION_TIMEOUT_MS)
+
+    void supabaseBrowserClient.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return
+        setSession(data.session)
+      })
+      .catch(() => {
+        // A failed bootstrap has the same protected-route outcome as no session.
+      })
+      .finally(completeBootstrap)
 
     const { data: subscription } = supabaseBrowserClient.auth.onAuthStateChange((_event, nextSession) => {
+      if (!active) return
       setSession(nextSession)
-      setIsLoading(false)
+      completeBootstrap()
     })
 
     return () => {
       active = false
+      if (bootstrapTimeout !== null) window.clearTimeout(bootstrapTimeout)
       subscription.subscription.unsubscribe()
     }
   }, [])
@@ -96,22 +142,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     let active = true
+    const currentUserRequestKey = `${DEFAULT_COMPANY_ID}:${session.access_token}`
+
+    if (loadedCurrentUserRequestKeyRef.current === currentUserRequestKey) {
+      setCurrentUserLoading(false)
+      return
+    }
+
+    let currentUserRequest = inFlightCurrentUserRequestRef.current
+
+    if (!currentUserRequest || currentUserRequest.key !== currentUserRequestKey) {
+      currentUserRequest = {
+        key: currentUserRequestKey,
+        promise: apiFetch<CurrentUserResponse>(`/api/companies/${encodeURIComponent(DEFAULT_COMPANY_ID)}/me`),
+      }
+      inFlightCurrentUserRequestRef.current = currentUserRequest
+    }
+
     setCurrentUserLoading(true)
 
-    apiFetch<CurrentUserResponse>(`/api/companies/${encodeURIComponent(DEFAULT_COMPANY_ID)}/me`)
+    currentUserRequest.promise
       .then((data) => {
         if (!active) return
         setCurrentUser(data.user)
         setCurrentAccess(data.access)
         setActiveCompany(data.activeCompany)
+        setAvailabilityFeatureState({
+          requestKey: currentUserRequestKey,
+          enabled: data.features?.availabilityRequests === true,
+        })
+        loadedCurrentUserRequestKeyRef.current = currentUserRequestKey
       })
       .catch(() => {
         if (!active) return
         setCurrentUser(null)
         setCurrentAccess(null)
         setActiveCompany(null)
+        setAvailabilityFeatureState(null)
+        loadedCurrentUserRequestKeyRef.current = null
       })
       .finally(() => {
+        if (inFlightCurrentUserRequestRef.current === currentUserRequest) {
+          inFlightCurrentUserRequestRef.current = null
+        }
         if (!active) return
         setCurrentUserLoading(false)
       })
@@ -132,7 +205,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (pathname === "/login" && session && !isLoading) {
-      router.replace("/")
+      const params = new URLSearchParams(window.location.search)
+      router.replace(safeNext(params.get("next")))
     }
   }, [isLoading, pathname, router, session])
 
@@ -143,12 +217,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       currentUser,
       currentAccess,
       activeCompany,
+      features: {
+        availabilityRequests:
+          availabilityFeatureState?.requestKey === `${DEFAULT_COMPANY_ID}:${session?.access_token}` &&
+          availabilityFeatureState.enabled,
+      },
       currentUserLoading,
       isLoading,
       isAuthenticated: Boolean(session),
       signOut,
     }),
-    [activeCompany, currentAccess, currentUser, currentUserLoading, isLoading, session, signOut]
+    [activeCompany, availabilityFeatureState, currentAccess, currentUser, currentUserLoading, isLoading, session, signOut]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

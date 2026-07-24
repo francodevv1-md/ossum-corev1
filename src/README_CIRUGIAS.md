@@ -667,9 +667,10 @@ Cuando está desactivado (default):
 - La tabla se comporta como una grilla normal con scroll horizontal
 
 Persistencia:
-- La preferencia se guarda en `localStorage` bajo la clave `ortotrack-sticky-columns`
-- Se carga automáticamente al iniciar la sesión
-- Default: `false` (desactivado)
+- La preferencia activa de vista ahora se resuelve con estrategia **server-first** por usuario + empresa.
+- Se persiste en backend mediante el endpoint `GET/PUT /api/companies/[companyId]/surgeries/view-preferences`.
+- `localStorage` sigue existiendo como fallback temporal y compatibilidad de transición.
+- Si no hay preferencia persistida en backend, la UI puede arrancar desde fallback local/defaults y luego sincronizar.
 
 #### 4. Indicador visual de desplazamiento
 
@@ -744,6 +745,20 @@ Se detecta cuál es la última columna visible del grupo de columnas fijas izqui
 - ✓ No se rompe ninguna acción por fila
 - ✓ El build compila limpio
 
+### Estado actual de persistencia de vista
+
+- La tabla de Cirugías ya persiste en backend:
+  - columnas visibles
+  - orden de columnas
+  - anchos
+  - columnas fijas a la izquierda
+  - encabezados fijos
+  - modo compacto
+  - encabezados agrupados / bloques
+- La fuente principal de verdad para la preferencia activa es server-side por `usuario + empresa`.
+- Existe migración one-shot desde preferencias legacy en `localStorage` hacia backend cuando el server está vacío.
+- Las plantillas guardadas del modal siguen locales por ahora; no forman parte todavía del contrato server.
+
 ### Archivos modificados
 
 | Archivo | Cambio |
@@ -756,3 +771,17 @@ Se detecta cuál es la última columna visible del grupo de columnas fijas izqui
 | `src/components/cirugias/CirugiaStatusCell.tsx` | Agregados props opcionales `tdClassName` y `tdStyle` para recibir estilos sticky sin sobreescribir el fondo de color propio |
 | `src/components/cirugias/CirugiaActionsCell.tsx` | Agregados props opcionales `tdClassName` y `tdStyle`, import `cn` para merge de clases |
 | `src/app/cirugias/page.tsx` | Pasados `stickyColumns` y `toggleStickyColumns` del hook al toolbar y la tabla |
+
+### Persistencia server de preferencias (actualización posterior)
+
+Archivos agregados/ajustados en la migración a backend:
+
+| Archivo | Cambio |
+|---------|--------|
+| `prisma/schema.prisma` | Nuevo modelo `UserModuleViewPreference` para persistencia por usuario + empresa + módulo |
+| `src/app/api/companies/[companyId]/surgeries/view-preferences/route.ts` | Endpoint GET/PUT de preferencias de vista |
+| `src/lib/services/surgery-view-preferences.service.ts` | Persistencia tipada con Prisma (`findUnique` + `upsert`) |
+| `src/lib/validators/surgery-view-preferences.validator.ts` | Normalización/validación server-side del payload |
+| `src/hooks/useColumnVisibility.ts` | Estrategia server-first + fallback local + migración one-shot |
+| `src/components/cirugias/ViewCustomizationDialog.tsx` | Modal controlado por props para mantener apply diferido consistente |
+| `src/components/cirugias/CirugiasTable.tsx` | Consumo de preferencias resueltas desde hook/page |

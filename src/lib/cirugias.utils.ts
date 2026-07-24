@@ -51,9 +51,9 @@ export function getPendientePrincipal(
   if (docStatus === "Incompleta") return { text: "Documentación incompleta", color: "bg-red-50 text-red-700 border-red-200" }
   if (s.state === "Realizada" && !s.facturado && docStatus === "Apta para facturar") return { text: "Apta para facturar", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }
   if (s.state === "Realizada" && !s.facturado) return { text: "No facturada", color: "bg-gray-50 text-gray-700 border-gray-200" }
-  if (s.state === "En preparación" && !box) return { text: "Caja no asignada", color: "bg-sky-50 text-sky-700 border-sky-200" }
+  if (s.preparationState === "En preparación" && !box) return { text: "Caja no asignada", color: "bg-sky-50 text-sky-700 border-sky-200" }
   if (s.state === "En tránsito" && !consumo) return { text: "Consumo pendiente", color: "bg-amber-50 text-amber-700 border-amber-200" }
-  if (s.state === "En preparación") return { text: "En preparación", color: "bg-sky-50 text-sky-700 border-sky-200" }
+  if (s.preparationState === "En preparación") return { text: "En preparación", color: "bg-sky-50 text-sky-700 border-sky-200" }
   if (s.state === "En tránsito") return { text: "Material en tránsito", color: "bg-cyan-50 text-cyan-700 border-cyan-200" }
   if (s.state === "Finalizada") return { text: "Cirugía finalizada", color: "bg-green-50 text-green-700 border-green-200" }
   if (s.state === "Autorizada") return { text: "Autorizada — pendiente preparación", color: "bg-blue-50 text-blue-700 border-blue-200" }
@@ -71,7 +71,7 @@ export function computeKpis(
   const totalActivas = surgeries.filter((s) => ACTIVE_STATES.includes(s.state)).length
   const sinAutorizar = surgeries.filter((s) => s.state === "Sin autorizar").length
   const autorizadas = surgeries.filter((s) => s.state === "Autorizada").length
-  const enPreparacion = surgeries.filter((s) => s.state === "En preparación").length
+  const enPreparacion = surgeries.filter((s) => s.preparationState === "En preparación").length
   const enTransito = surgeries.filter((s) => s.state === "En tránsito").length
   const realizadas = surgeries.filter((s) => s.state === "Realizada").length
   const docIncompleta = surgeries.filter((s) => getDocStatus(s.id) === "Incompleta").length
@@ -113,6 +113,9 @@ export function resolveKpiFilter(
   }
   if (currentKpiFilter === filterKey) {
     return { newKpiFilter: null, newStateFilters: null }
+  }
+  if (filterKey === "En preparación") {
+    return { newKpiFilter: filterKey, newStateFilters: null }
   }
   if (filterKey !== "docIncompleta" && filterKey !== "pendFacturar") {
     return { newKpiFilter: filterKey, newStateFilters: [filterKey] }

@@ -1,231 +1,11 @@
-# WORKLOG.md — OSSUM COR
+﻿# WORKLOG.md — OSSUM COR
 
 Estado: inicial
 
 ---
 
-## 2026-06-12 — GPT-027F.5A-11D Enrich Surgeries API Payload
-
-Done:
-- Se enriqueció la lectura de cirugías en backend con contactos relacionados `patient`, `doctor` e `institution`.
-- Se preservaron todos los campos escalares actuales de `Surgery` en la respuesta read-only.
-- Se reutilizó un `select` compartido en listado por empresa y detalle por ID.
-
-Changed:
-- `src/lib/services/surgery.service.ts` — agregado `surgeryReadSelect` tipado con Prisma para respuestas enriquecidas sin cambiar filtros, scoping ni ordering.
-- `knowledge/worklog/WORKLOG.md` — nueva entrada 11D.
-
-Files:
-- `src/lib/services/surgery.service.ts`
-- `knowledge/worklog/WORKLOG.md`
-
-Validations:
-- `npm run typecheck` OK.
-- `npx tsc --noEmit` OK.
-- `npm run build` OK.
-
-Risks:
-- Si existiera código consumidor acoplado a shape estrictamente escalar, ahora recibirá también relaciones anidadas en GET/list sin romper campos existentes.
-
-Next:
-- Ejecutar validaciones requeridas.
-- Stagear solo archivos permitidos y commit si todo pasa.
-
----
-
-## 2026-06-10 — GPT-027F.5A-10B Contacts Mutations with Audit
-
-Done:
-- Agregado POST handler en `GET /api/companies/[companyId]/contacts` para crear contactos con auditoría.
-- Creada ruta `PATCH /api/companies/[companyId]/contacts/[contactId]` para editar y toggle activo/inactivo con auditoría.
-- Agregado `mapContactoToApiPayload` en `contact-adapter.ts` para mapear formulario Contacto → payload API.
-- Integrado `ContactoFormDialog` con API (POST create, PATCH edit) usando `apiFetch`, con Zustand fallback y loading/error states.
-- Integrada página contactos con PATCH toggle vía API + `refetchContacts()` post-mutación, con Zustand fallback.
-
-Changed:
-- `src/app/api/companies/[companyId]/contacts/route.ts` — POST handler + guards + audit + imports.
-- `src/app/api/companies/[companyId]/contacts/[contactId]/route.ts` — PATCH handler nuevo con update/toggle + audit.
-- `src/lib/api/contact-adapter.ts` — `mapContactoToApiPayload()` function.
-- `src/components/contactos/ContactoFormDialog.tsx` — API integration, `useAuth`, saving/error states, `Loader2`.
-- `src/app/contactos/page.tsx` — `fetchContacts` refactor, API toggle, `handleFormSaved` refetch.
-- `knowledge/worklog/WORKLOG.md` — 10B entry.
-
-Files:
-- `src/app/api/companies/[companyId]/contacts/route.ts`
-- `src/app/api/companies/[companyId]/contacts/[contactId]/route.ts` (new)
-- `src/lib/api/contact-adapter.ts`
-- `src/components/contactos/ContactoFormDialog.tsx`
-- `src/app/contactos/page.tsx`
-- `knowledge/worklog/WORKLOG.md`
-
-Validations:
-- `npx tsc --noEmit` OK.
-- `npm run typecheck` OK (next typegen + tsc).
-- `npm run build` OK (Next.js 16.2.6, 2 new API routes listed).
-- `npm test` OK (28 files, 598 tests passed, 0 failures).
-- Browser QA OK: create/edit/toggle flows and loading/error states reviewed in browser during integration validation.
-
-Risks:
-- API calls depend on `activeCompany.id` del `AuthProvider` — si es null, las URLs serán `/api/companies//contacts` y fallarán con 404/401.
-- `mapContactoToApiPayload` omite campos locales (groups, datosClientePagador, datosMedico, etc.) — estos persisten solo en Zustand.
-- PATCH de toggle y update en una sola call no soportado por el frontend actual; solo hace toggle OR update separados.
-- Sin smoke tests de API real — las rutas compilan pero no se probaron contra DB DEV.
-
-Next:
-- Parent ejecuta smoke tests de POST y PATCH contra DB DEV.
-- Evaluar persistencia de campos locales (groups, datosMedico, etc.) en el backend futuro.
-
----
-
-## 2026-06-10 — GPT-027F.5A-09B Auditoría Page
-
-Done:
-- Se creó página `/auditoria` read-only con `apiFetch` para eventos de auditoría.
-- Se agregó item "Auditoría" en sidebar SISTEMA con ícono Shield.
-
-Changed:
-- Página nueva consume `GET /api/companies/[companyId]/audit-events?take=50` usando empresa activa del AuthProvider.
-- Tabla muestra fecha, módulo, acción, entidad, ID, usuario y detalle.
-- Filtro client-side por módulo.
-- Loading, empty y error states implementados.
-
-Files:
-- `src/app/auditoria/page.tsx`
-- `src/components/layout/sidebar.tsx`
-- `knowledge/worklog/WORKLOG.md`
-
-Validations:
-- `npm run typecheck` OK.
-- `npx tsc --noEmit` OK.
-- `npm run build` OK.
-- Browser QA OK: tabla, filtro por módulo y estados loading/empty/error revisados en navegador.
-
-Risks:
-- Solo 1 evento seed en DB DEV.
-- userId sin userName en respuesta API; se muestra truncado.
-
-Next:
-- Parent ejecuta validaciones y smoke de auditoría.
-
----
-
-## 2026-06-10 — GPT-027F.5A-08B Contactos API Client Adoption
-
-Done:
-- Created `src/lib/api/contact-adapter.ts` with `mapApiContactToContacto` and `mapApiContactListToContactos` mapping Prisma API contacts → frontend Contacto domain type.
-- Integrated API-based contact loading into `src/app/contactos/page.tsx` using `apiFetch` + `useAuth().activeCompany` via `useEffect`.
-- Kept Zustand store as fallback: `contactSource = apiContacts ?? store.contactos`.
-- Added slim loading indicator ("Cargando contactos del servidor…") in toolbar area during API fetch.
-- All Zustand write actions (create/edit/toggle status) preserved unchanged.
-
-Changed:
-- `src/lib/api/contact-adapter.ts` — new file: maps linkRole→ContactRole (cliente/proveedor/interno/others→cliente), builds code from first 6 chars of id, resolves nombre from firstName+lastName/legalName, maps documentType→cuit/dni.
-- `src/app/contactos/page.tsx` — added useEffect API fetch, contactSource derived variable, loading indicator, updated counts/header to use contactSource.
-- `knowledge/worklog/WORKLOG.md` — added 08B entry.
-
-Files:
-- `src/lib/api/contact-adapter.ts` — new file (93 lines).
-- `src/app/contactos/page.tsx` — API loading + fallback + indicator.
-- `knowledge/worklog/WORKLOG.md` — 08B entry.
-
-Validations:
-- `npx tsc --noEmit` OK.
-- `npm run typecheck` OK (next typegen + tsc).
-- `npm run build` OK (Next.js 16.2.6, 41 pages, 0 errors).
-- `npm test` OK (28 files, 598 tests passed, 0 failures).
-- Browser QA OK: carga inicial API, fallback local e indicador de loading revisados en navegador.
-
-Risks:
-- API call uses `?isActive=true&take=100` — will miss inactive contacts. Acceptable for V1 (status filter UI already exists on page).
-- Adapter maps single `linkRole` to `ContactRole[]`. Multi-role support not yet implemented server-side.
-- `codigoContacto` is derived from UUID first 6 chars — not sequential like legacy numeric codes. OK for V1.
-
-Next:
-- Parent validates: npm run typecheck, npx tsc --noEmit, npm run build.
-- Consider adding `?isActive=false` fetch or `status` param for inactive contacts tab.
-
----
-
-## 2026-06-09 — GPT-027F.5A-07C Auth UX Polish / Current User Context
-
-Done:
-- Continuación de auth frontend dentro de scope ya aprobado por Franco para el bloque 5A de autenticación mínima con Supabase.
-- Se agregó endpoint company-scoped `GET /api/companies/[companyId]/me` para resolver usuario interno actual, rol y empresa activa.
-- Se integró `AuthProvider` con `NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID` para cargar contexto interno sin romper la sesión Supabase si falla.
-- Se actualizó `UserMenu` para mostrar nombre interno, rol y empresa cuando están disponibles, con fallback a email Supabase.
-
-Changed:
-- Nuevo endpoint usa `getApiAuthContext(request, companyId)`, `requireCompanyReadAccess(ctx)`, Prisma y respuestas `ok/errorResponse`.
-- El contexto auth expone `currentUser`, `currentAccess`, `activeCompany` y `currentUserLoading`.
-- `.env.example` documenta default company id público como default UX, no como seguridad.
-
-Files:
-- `src/app/api/companies/[companyId]/me/route.ts`
-- `src/components/auth/AuthProvider.tsx`
-- `src/components/layout/UserMenu.tsx`
-- `.env.example`
-- `knowledge/worklog/WORKLOG.md`
-
-Validations:
-- `npm run typecheck` OK (`next typegen && tsc --noEmit`).
-- `npx tsc --noEmit` OK.
-- `npm run build` OK — Next.js 16.2.6, endpoint `/api/companies/[companyId]/me` incluido.
-- Smoke 07C OK: `/me` sin token devuelve `401`; `/me` con Bearer devuelve `200`; header muestra `displayName`/rol/empresa interna; logout OK.
-- API smoke OK: GET contacts con Bearer token sigue devolviendo `200`; no se ejecutó PATCH real.
-
-Risks:
-- Requiere `NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID` configurado con una empresa a la que el usuario tenga acceso.
-- Multiempresa selector y `/api/me` global siguen diferidos.
-
-Next:
-- Parent debe ejecutar validaciones y smoke de login/current-user.
-
----
-
-## 2026-06-09 — GPT-027F.5A-07B Auth frontend mínimo
-
-Done:
-- Implementación auth frontend ejecutada dentro de scope aprobado por Franco para validar login mínimo y consumo Bearer en 5A.
-- Se implementó login frontend mínimo con Supabase Auth client-side para OSSUM COR.
-- Se agregó guard de rutas sin route groups ni cambios backend.
-- Se reemplazó el usuario hardcodeado del header por email real de Supabase y logout.
-- Se validó smoke real con credenciales locales desde `.env.local` sin imprimir secretos.
-
-Changed:
-- Cliente Supabase browser singleton con aliases `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- Helper `apiFetch` que inyecta Bearer token y maneja errores `{ error }` / éxito `{ data }`.
-- Root layout delega shell autenticado a `AuthGuard` y deja `/login` sin app shell.
-
-Files:
-- `src/lib/auth/client.ts`
-- `src/lib/api/client.ts`
-- `src/components/auth/AuthProvider.tsx`
-- `src/components/auth/AuthGuard.tsx`
-- `src/components/auth/LoginForm.tsx`
-- `src/app/login/page.tsx`
-- `src/components/layout/UserMenu.tsx`
-- `src/components/layout/header.tsx`
-- `src/app/layout.tsx`
-- `.env.example`
-- `knowledge/worklog/WORKLOG.md`
-
-Validations:
-- Smoke real OK: `/login` sin shell, login Supabase OK, redirect a `/`, header muestra email, logout vuelve a `/login`, `/cirugias` sin sesión redirige a `/login`.
-- API smoke OK: GET contacts sin token devuelve `401`; GET contacts con Bearer token devuelve `200`.
-- `npm run typecheck` OK.
-- `npx tsc --noEmit` OK.
-- `npm run build` OK — Next.js 16.2.6, `/login` incluido, 41 páginas estáticas.
-
-Risks:
-- Requiere variables públicas Supabase reales en entorno runtime/build.
-- `/api/me` queda diferido a GPT-027F.5A-07C; header muestra solo email Supabase.
-
-Next:
-- Avanzar a GPT-027F.5A-07C — Auth UX polish / API client adoption / endpoint seguro de usuario actual.
-
----
-
 ## 2026-06-03 — GPT-027F.0A inicial
+
 
 Done:
 
@@ -274,6 +54,7 @@ Next:
 ---
 
 ## 2026-06-04 — GPT-027F.0A-02 saneamiento Knowledge V2
+
 
 Done:
 
@@ -327,6 +108,7 @@ Next:
 
 ## 2026-06-04 — GPT-027F.0A-04 cierre formal Knowledge V2
 
+
 Done:
 
 - Se confirmó en `VALIDATION.md` que 0A quedó saneado y cerrado a nivel documental.
@@ -365,6 +147,7 @@ Next:
 ---
 
 ## 2026-06-04 — GPT-027F.0B-02 alineación configuración efectiva OpenCode
+
 
 Done:
 
@@ -409,6 +192,7 @@ Next:
 
 ## 2026-06-04 — GPT-027F.0B-03 validación runtime controlada OpenCode/Gentle-AI
 
+
 Done:
 
 - Se validó en modo read-only la carga efectiva de config desde `.opencode/opencode.json`.
@@ -442,6 +226,7 @@ Next:
 ---
 
 ## 2026-06-04 — GPT-027F.0B-04 corrección mínima OpenCode config
+
 
 Done:
 
@@ -481,6 +266,7 @@ Next:
 
 ## 2026-06-04 — GPT-027F.0B-05 validación runtime final post-restart
 
+
 Done:
 
 - Se validó en modo read-only la configuración efectiva post-restart de OpenCode.
@@ -516,6 +302,7 @@ Next:
 ---
 
 ## 2026-06-04 — GPT-027F.0B-06 skills privadas Caveman y Diagnose
+
 
 Done:
 
@@ -563,6 +350,7 @@ Next:
 
 ## 2026-06-04 — GPT-027F.0B-07A smoke test Caveman
 
+
 Done:
 
 - Se ejecutó smoke test read-only de la skill Caveman para resumir estado actual de 0B.
@@ -594,6 +382,7 @@ Next:
 ---
 
 ## 2026-06-04 — GPT-027F.0B-07C alineación tracking vs evidencia real
+
 
 Done:
 
@@ -632,6 +421,7 @@ Next:
 ---
 
 ## 2026-06-04 — GPT-027F.0B-08 cleanup final y cierre documental 0B
+
 
 Done:
 
@@ -679,6 +469,7 @@ Next:
 
 ## 2026-06-04 — GPT-027F.0B-09 smoke test Diagnose y cierre final 0B
 
+
 Done:
 
 - Se registró el smoke test read-only de `diagnose` contra el bug real `storage.setItem is not a function`.
@@ -715,6 +506,7 @@ Next:
 ---
 
 ## 2026-06-04 — GPT-027F.5A-00B decisiones Backend Foundation (Franco)
+
 
 Done:
 
@@ -753,6 +545,7 @@ Next:
 ---
 
 ## 2026-06-04 — GPT-027F.0C-01 fix mínimo baseline tests: storage.setItem
+
 
 Done:
 
@@ -793,6 +586,7 @@ Next:
 ---
 
 ## 2026-06-05 — GPT-027F.0B-FULL-01C fijar proyecto canónico Engram
+
 
 Done:
 
@@ -836,6 +630,7 @@ Next:
 ---
 
 ## 2026-06-05 — GPT-027F.0B-FULL-01D cierre Engram consolidado
+
 
 Done:
 
@@ -888,6 +683,7 @@ Next:
 
 ## 2026-06-05 — GPT-027F.0B-FULL-03B Context7 portable en proyecto
 
+
 Done:
 
 - Se agregó Context7 como MCP remoto portable en `.opencode/opencode.json` dentro del bloque `mcp`.
@@ -926,6 +722,7 @@ Next:
 ---
 
 ## 2026-06-05 — GPT-027F.0B-FULL-04B Git + GGA config local
+
 
 Done:
 
@@ -981,6 +778,7 @@ Next:
 
 ## 2026-06-05 — GPT-027F.5A-00C Prisma 7 config para Supabase
 
+
 Done:
 
 - Cambio en archivo crítico `prisma/schema.prisma` realizado por necesidad de pasar Prisma 7 de `sqlite` a `postgresql` para habilitar Supabase en 5A.
@@ -1035,6 +833,7 @@ Next:
 ---
 
 ## 2026-06-05 — GPT-027F.5A-01 Schema inicial Prisma OSSUM COR
+
 
 Done:
 
@@ -1092,6 +891,7 @@ Next:
 
 ## 2026-06-06 — GPT-027F.5A-01R Schema review + ajustes + validación no destructiva
 
+
 Done:
 
 - GPT-027F.5A-01R-A: Read-only Backend/DB review del schema inicial; encontró 3 issues críticos (User lacks Supabase Auth link, Contact can't model non-person entities, Surgery allows cross-company contact references).
@@ -1139,6 +939,7 @@ Next:
 ---
 
 ## 2026-06-06 — GPT-027F.5A-03 Primera migración DEV contra Supabase
+
 
 Done:
 
@@ -1200,7 +1001,8 @@ Next:
 
 ---
 
-## 2026-06-07/08 — GPT-027F.5A-06B API routes y smoke tests
+## 2026-06-07 — GPT-027F.5A-06B API routes y smoke tests
+
 
 Done:
 
@@ -1271,6 +1073,7 @@ Next:
 
 ## 2026-06-08 — GPT-027F.5A-GGA-FIX Fix hook GGA en Windows
 
+
 Done:
 
 - Diagnosticada la causa raíz del error `Argument list too long` del hook GGA.
@@ -1312,6 +1115,7 @@ Next:
 ---
 
 ## 2026-06-08 — GPT-027F.5A-06C Supabase Auth server-side
+
 
 Done:
 
@@ -1373,7 +1177,235 @@ Next:
 
 ---
 
+## 2026-06-09 — GPT-027F.5A-07C Auth UX Polish / Current User Context
+
+
+Done:
+- Continuación de auth frontend dentro de scope ya aprobado por Franco para el bloque 5A de autenticación mínima con Supabase.
+- Se agregó endpoint company-scoped `GET /api/companies/[companyId]/me` para resolver usuario interno actual, rol y empresa activa.
+- Se integró `AuthProvider` con `NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID` para cargar contexto interno sin romper la sesión Supabase si falla.
+- Se actualizó `UserMenu` para mostrar nombre interno, rol y empresa cuando están disponibles, con fallback a email Supabase.
+
+Changed:
+- Nuevo endpoint usa `getApiAuthContext(request, companyId)`, `requireCompanyReadAccess(ctx)`, Prisma y respuestas `ok/errorResponse`.
+- El contexto auth expone `currentUser`, `currentAccess`, `activeCompany` y `currentUserLoading`.
+- `.env.example` documenta default company id público como default UX, no como seguridad.
+
+Files:
+- `src/app/api/companies/[companyId]/me/route.ts`
+- `src/components/auth/AuthProvider.tsx`
+- `src/components/layout/UserMenu.tsx`
+- `.env.example`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npm run typecheck` OK (`next typegen && tsc --noEmit`).
+- `npx tsc --noEmit` OK.
+- `npm run build` OK — Next.js 16.2.6, endpoint `/api/companies/[companyId]/me` incluido.
+- Smoke 07C OK: `/me` sin token devuelve `401`; `/me` con Bearer devuelve `200`; header muestra `displayName`/rol/empresa interna; logout OK.
+- API smoke OK: GET contacts con Bearer token sigue devolviendo `200`; no se ejecutó PATCH real.
+
+Risks:
+- Requiere `NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID` configurado con una empresa a la que el usuario tenga acceso.
+- Multiempresa selector y `/api/me` global siguen diferidos.
+
+Next:
+- Parent debe ejecutar validaciones y smoke de login/current-user.
+
+---
+
+## 2026-06-09 — GPT-027F.5A-07B Auth frontend mínimo
+
+
+Done:
+- Implementación auth frontend ejecutada dentro de scope aprobado por Franco para validar login mínimo y consumo Bearer en 5A.
+- Se implementó login frontend mínimo con Supabase Auth client-side para OSSUM COR.
+- Se agregó guard de rutas sin route groups ni cambios backend.
+- Se reemplazó el usuario hardcodeado del header por email real de Supabase y logout.
+- Se validó smoke real con credenciales locales desde `.env.local` sin imprimir secretos.
+
+Changed:
+- Cliente Supabase browser singleton con aliases `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- Helper `apiFetch` que inyecta Bearer token y maneja errores `{ error }` / éxito `{ data }`.
+- Root layout delega shell autenticado a `AuthGuard` y deja `/login` sin app shell.
+
+Files:
+- `src/lib/auth/client.ts`
+- `src/lib/api/client.ts`
+- `src/components/auth/AuthProvider.tsx`
+- `src/components/auth/AuthGuard.tsx`
+- `src/components/auth/LoginForm.tsx`
+- `src/app/login/page.tsx`
+- `src/components/layout/UserMenu.tsx`
+- `src/components/layout/header.tsx`
+- `src/app/layout.tsx`
+- `.env.example`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- Smoke real OK: `/login` sin shell, login Supabase OK, redirect a `/`, header muestra email, logout vuelve a `/login`, `/cirugias` sin sesión redirige a `/login`.
+- API smoke OK: GET contacts sin token devuelve `401`; GET contacts con Bearer token devuelve `200`.
+- `npm run typecheck` OK.
+- `npx tsc --noEmit` OK.
+- `npm run build` OK — Next.js 16.2.6, `/login` incluido, 41 páginas estáticas.
+
+Risks:
+- Requiere variables públicas Supabase reales en entorno runtime/build.
+- `/api/me` queda diferido a GPT-027F.5A-07C; header muestra solo email Supabase.
+
+Next:
+- Avanzar a GPT-027F.5A-07C — Auth UX polish / API client adoption / endpoint seguro de usuario actual.
+
+---
+
+## 2026-06-10 — GPT-027F.5A-10B Contacts Mutations with Audit
+
+
+Done:
+- Agregado POST handler en `GET /api/companies/[companyId]/contacts` para crear contactos con auditoría.
+- Creada ruta `PATCH /api/companies/[companyId]/contacts/[contactId]` para editar y toggle activo/inactivo con auditoría.
+- Agregado `mapContactoToApiPayload` en `contact-adapter.ts` para mapear formulario Contacto → payload API.
+- Integrado `ContactoFormDialog` con API (POST create, PATCH edit) usando `apiFetch`, con Zustand fallback y loading/error states.
+- Integrada página contactos con PATCH toggle vía API + `refetchContacts()` post-mutación, con Zustand fallback.
+
+Changed:
+- `src/app/api/companies/[companyId]/contacts/route.ts` — POST handler + guards + audit + imports.
+- `src/app/api/companies/[companyId]/contacts/[contactId]/route.ts` — PATCH handler nuevo con update/toggle + audit.
+- `src/lib/api/contact-adapter.ts` — `mapContactoToApiPayload()` function.
+- `src/components/contactos/ContactoFormDialog.tsx` — API integration, `useAuth`, saving/error states, `Loader2`.
+- `src/app/contactos/page.tsx` — `fetchContacts` refactor, API toggle, `handleFormSaved` refetch.
+- `knowledge/worklog/WORKLOG.md` — 10B entry.
+
+Files:
+- `src/app/api/companies/[companyId]/contacts/route.ts`
+- `src/app/api/companies/[companyId]/contacts/[contactId]/route.ts` (new)
+- `src/lib/api/contact-adapter.ts`
+- `src/components/contactos/ContactoFormDialog.tsx`
+- `src/app/contactos/page.tsx`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npx tsc --noEmit` OK.
+- `npm run typecheck` OK (next typegen + tsc).
+- `npm run build` OK (Next.js 16.2.6, 2 new API routes listed).
+- `npm test` OK (28 files, 598 tests passed, 0 failures).
+- Browser QA OK: create/edit/toggle flows and loading/error states reviewed in browser during integration validation.
+
+Risks:
+- API calls depend on `activeCompany.id` del `AuthProvider` — si es null, las URLs serán `/api/companies//contacts` y fallarán con 404/401.
+- `mapContactoToApiPayload` omite campos locales (groups, datosClientePagador, datosMedico, etc.) — estos persisten solo en Zustand.
+- PATCH de toggle y update en una sola call no soportado por el frontend actual; solo hace toggle OR update separados.
+- Sin smoke tests de API real — las rutas compilan pero no se probaron contra DB DEV.
+
+Next:
+- Parent ejecuta smoke tests de POST y PATCH contra DB DEV.
+- Evaluar persistencia de campos locales (groups, datosMedico, etc.) en el backend futuro.
+
+---
+
+## 2026-06-10 — GPT-027F.5A-09B Auditoría Page
+
+
+Done:
+- Se creó página `/auditoria` read-only con `apiFetch` para eventos de auditoría.
+- Se agregó item "Auditoría" en sidebar SISTEMA con ícono Shield.
+
+Changed:
+- Página nueva consume `GET /api/companies/[companyId]/audit-events?take=50` usando empresa activa del AuthProvider.
+- Tabla muestra fecha, módulo, acción, entidad, ID, usuario y detalle.
+- Filtro client-side por módulo.
+- Loading, empty y error states implementados.
+
+Files:
+- `src/app/auditoria/page.tsx`
+- `src/components/layout/sidebar.tsx`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npm run typecheck` OK.
+- `npx tsc --noEmit` OK.
+- `npm run build` OK.
+- Browser QA OK: tabla, filtro por módulo y estados loading/empty/error revisados en navegador.
+
+Risks:
+- Solo 1 evento seed en DB DEV.
+- userId sin userName en respuesta API; se muestra truncado.
+
+Next:
+- Parent ejecuta validaciones y smoke de auditoría.
+
+---
+
+## 2026-06-10 — GPT-027F.5A-08B Contactos API Client Adoption
+
+
+Done:
+- Created `src/lib/api/contact-adapter.ts` with `mapApiContactToContacto` and `mapApiContactListToContactos` mapping Prisma API contacts → frontend Contacto domain type.
+- Integrated API-based contact loading into `src/app/contactos/page.tsx` using `apiFetch` + `useAuth().activeCompany` via `useEffect`.
+- Kept Zustand store as fallback: `contactSource = apiContacts ?? store.contactos`.
+- Added slim loading indicator ("Cargando contactos del servidor…") in toolbar area during API fetch.
+- All Zustand write actions (create/edit/toggle status) preserved unchanged.
+
+Changed:
+- `src/lib/api/contact-adapter.ts` — new file: maps linkRole→ContactRole (cliente/proveedor/interno/others→cliente), builds code from first 6 chars of id, resolves nombre from firstName+lastName/legalName, maps documentType→cuit/dni.
+- `src/app/contactos/page.tsx` — added useEffect API fetch, contactSource derived variable, loading indicator, updated counts/header to use contactSource.
+- `knowledge/worklog/WORKLOG.md` — added 08B entry.
+
+Files:
+- `src/lib/api/contact-adapter.ts` — new file (93 lines).
+- `src/app/contactos/page.tsx` — API loading + fallback + indicator.
+- `knowledge/worklog/WORKLOG.md` — 08B entry.
+
+Validations:
+- `npx tsc --noEmit` OK.
+- `npm run typecheck` OK (next typegen + tsc).
+- `npm run build` OK (Next.js 16.2.6, 41 pages, 0 errors).
+- `npm test` OK (28 files, 598 tests passed, 0 failures).
+- Browser QA OK: carga inicial API, fallback local e indicador de loading revisados en navegador.
+
+Risks:
+- API call uses `?isActive=true&take=100` — will miss inactive contacts. Acceptable for V1 (status filter UI already exists on page).
+- Adapter maps single `linkRole` to `ContactRole[]`. Multi-role support not yet implemented server-side.
+- `codigoContacto` is derived from UUID first 6 chars — not sequential like legacy numeric codes. OK for V1.
+
+Next:
+- Parent validates: npm run typecheck, npx tsc --noEmit, npm run build.
+- Consider adding `?isActive=false` fetch or `status` param for inactive contacts tab.
+
+---
+
+## 2026-06-12 — GPT-027F.5A-11D Enrich Surgeries API Payload
+
+
+Done:
+- Se enriqueció la lectura de cirugías en backend con contactos relacionados `patient`, `doctor` e `institution`.
+- Se preservaron todos los campos escalares actuales de `Surgery` en la respuesta read-only.
+- Se reutilizó un `select` compartido en listado por empresa y detalle por ID.
+
+Changed:
+- `src/lib/services/surgery.service.ts` — agregado `surgeryReadSelect` tipado con Prisma para respuestas enriquecidas sin cambiar filtros, scoping ni ordering.
+- `knowledge/worklog/WORKLOG.md` — nueva entrada 11D.
+
+Files:
+- `src/lib/services/surgery.service.ts`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npm run typecheck` OK.
+- `npx tsc --noEmit` OK.
+- `npm run build` OK.
+
+Risks:
+- Si existiera código consumidor acoplado a shape estrictamente escalar, ahora recibirá también relaciones anidadas en GET/list sin romper campos existentes.
+
+Next:
+- Ejecutar validaciones requeridas.
+- Stagear solo archivos permitidos y commit si todo pasa.
+
+---
+
 ## 2026-06-12 — GPT-027F.5A-11B /cirugias-api read-only
+
 
 Done:
 
@@ -1410,3 +1442,426 @@ Next:
 
 - Revisar backend enrichment de relaciones si se quiere mostrar nombres reales en lugar de placeholders.
 - Evaluar link de navegación cuando Franco habilite exposición visible de la vista técnica.
+
+---
+
+## 2026-06-25 — CIRUGIAS DATATABLE VISUAL P1 closeout
+
+
+Done:
+- Documented the implemented Cirugías table redesign outcomes so the on-disk worklog matches the current UI progress.
+- Recorded the 4 separate date columns now present in the table: `Fecha CX`, `Fecha probable`, `Fecha logística`, `Fecha envío`.
+- Recorded that `Fecha CX` remains explicit/dominant and that relative text was removed from the primary date presentation.
+- Recorded the canonical date sources settled in implementation: logística from `surgery.fechaEnvioMaterial`, envío from `logistics.fechaEnvioMateriales`.
+- Recorded the operational column order now used: `Estado` → dates → clinical identity → references → readiness → secondary metadata → actions.
+- Recorded that browser QA feedback drove the latest header/date hierarchy refinements.
+
+Changed:
+- Updated the local crash handoff so it no longer implies `CIRUGIAS-DATATABLE-VISUAL-P1` is still unstarted.
+- Added a minimal status note to `knowledge/specs/CIRUGIAS-DATATABLE-VISUAL-P1/TASKS.md` clarifying that the file remains as the execution plan while the visual outcomes are already implemented.
+
+Files:
+- `knowledge/worklog/WORKLOG.md`
+- `knowledge/worklog/OPENCODE_CRASH_HANDOFF_2026-06-25.md`
+- `knowledge/specs/CIRUGIAS-DATATABLE-VISUAL-P1/TASKS.md`
+
+Validations:
+- Content limited to Cirugías redesign docs/worklog scope only.
+- Facts kept aligned with the implemented outcomes provided in the task brief.
+- No source-code, backend, auth, schema, or unrelated knowledge files touched.
+
+Risks:
+- This closeout documents the implemented state, but it does not independently re-verify the UI in browser or code.
+- Older historical entries remain intentionally unchanged; they reflect what was believed at that time.
+
+Next:
+- Use this entry as the canonical local closeout reference for the Cirugías datatable redesign progress.
+- If more Cirugías table polish lands later, append a new worklog entry instead of rewriting this one.
+
+---
+
+## 2026-06-25 — OpenCode crash fallback / reconstrucción de estado
+
+
+Done:
+- Reconstruido manualmente el punto de reanudación del workspace ante fallos de Engram/OpenCode.
+- Verificado que el último cierre formal sigue siendo `CIRUGIAS REDESIGN Paso 2 — Refinar P2 Lateral`.
+- Verificado que `CIRUGIAS-DATATABLE-VISUAL-P1` tiene `TASKS.md` listo pero sin evidencia de implementación en el diff actual.
+- Verificado que el frente activo sin cierre formal es `MAIL-V1-ETAPA1-IMPLEMENTACION` / Gmail real / tab `Correo`.
+- Detectada evidencia de crash/problema en logs externos de OpenCode.
+- Saneado `opencode.db` con fix mínimo: agregado `permission.data` faltante tras backup completo del archivo SQLite.
+- Saneado `C:\Users\franc\.config\opencode\plugins\engram.ts` para compatibilidad Node/Electron sin dependencia directa de Bun.
+
+Changed:
+- Nuevo respaldo local en `knowledge/worklog/OPENCODE_CRASH_HANDOFF_2026-06-25.md`.
+
+Files:
+- `knowledge/worklog/OPENCODE_CRASH_HANDOFF_2026-06-25.md`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `git status --short` revisado.
+- `git log --oneline -10` revisado.
+- `knowledge/worklog/WORKLOG.md` revisado.
+- `knowledge/specs/CIRUGIAS-DATATABLE-VISUAL-P1/TASKS.md` revisado.
+- `knowledge/specs/MAIL-V1-ETAPA1-IMPLEMENTACION/TASKS.md` revisado.
+- `src/components/expediente/ExpedienteFullView.tsx` y `src/components/expediente/correo/ExpedienteCorreoTab.tsx` revisados.
+- Logs externos revisados: `C:\Users\franc\.local\share\opencode\log\2026-06-25T110258.log` y `opencode.log`.
+- Backup SQLite generado antes del fix.
+- `PRAGMA integrity_check` de `opencode.db` => `ok`.
+- `SELECT id, data FROM permission LIMIT 1` => OK.
+- `engram.ts` transpila OK con TypeScript (`DIAGNOSTICS 0`).
+
+Risks:
+- `engram.ts` falla con `Bun is not defined`.
+- El error SQLite `no such column: "data"` quedó mitigado en DB, y el plugin fue parchado, pero falta confirmar el reinicio de OpenCode.
+- Mucho trabajo sigue sin commit; la memoria conversacional no es suficiente como fuente de verdad.
+
+Next:
+- Usar `knowledge/worklog/OPENCODE_CRASH_HANDOFF_2026-06-25.md` como punto de reentrada si OpenCode vuelve a caerse.
+- Reiniciar OpenCode y verificar que ya no reaparezca el error de `permission.data`.
+- Confirmar tras reinicio que ya no aparezca `Bun is not defined` desde `engram.ts`.
+- Priorizar cierre local de Mail Stage 1 antes de abrir otro frente.
+- Si se retoma Cirugías datatable, arrancar desde `knowledge/specs/CIRUGIAS-DATATABLE-VISUAL-P1/TASKS.md`.
+
+---
+
+## 2026-06-25 — CIRUGIAS REDESIGN Paso 2 — Refinar P2 Lateral (proposiciones IA)
+
+
+Done:
+- Refinada la sección de proposiciones por campo del panel lateral IA en Nueva Cirugía según feedback de Franco ("tokens que al usuario no le interesan, listado más breve, menos botones").
+- Eliminado el badge `score {n}` (info interna de scoring irrelevante para el operador).
+- Eliminados los textos `reason` de matching (internos) en mejor candidato y alternativas.
+- Eliminado el header redundante "Mejor candidato" (el acento esmeralda ya lo señala).
+- Consolidados 3 botones por fila en 1 primary "Vincular" + overflow "Más" (DropdownMenu) con "Mantener texto" / "Crear contacto".
+- Acciones secundarias a `variant="ghost"` para reducir peso visual (menos "cargas").
+- Espaciados tight (`space-y-1.5`), listado más breve.
+
+Changed:
+- `src/components/cirugias/dialogs/NewSurgeryDialog.tsx` — imports (DropdownMenu + MoreHorizontal) + 3 bloques de proposiciones (mejor candidato / sin coincidencia / alternativas).
+
+Files:
+- `src/components/cirugias/dialogs/NewSurgeryDialog.tsx`
+
+Validations:
+- `npx tsc --noEmit` — exit 0.
+- `npm test` — 38 archivos, 825 pasados, 0 fallos (cero regresiones vs baseline pre-edit).
+- Lock L1 sobre `NewSurgeryDialog.tsx` — status `released`.
+- Sin nuevas dependencias (DropdownMenu ya existía en `src/components/ui/dropdown-menu.tsx`).
+- Sin tocar `src/lib/**`, `src/app/api/**`, `prisma/**`, `src/types/index.ts`.
+
+Risks:
+- DropdownMenu trigger con `MoreHorizontal` + `sr-only` — accesibilidad OK pero conviene browser QA visual.
+- `bestCandidate.score` y `.reason` ya no se renderizan pero siguen disponibles en el objeto (ranking interno intacto).
+- Pendiente de commit junto con el resto del rediseño (revisión de Franco).
+
+Next:
+- Paso 3: Track 1 — `CIRUGIAS-DATATABLE-VISUAL-P1` (tabla de cirugías): generar TASKS.md → apply → verify.
+
+---
+
+## 2026-06-25 — CIRUGIAS REDESIGN (Track 2 Phase A + P2 Lateral) — validación de trabajo en curso
+
+
+Done:
+- Validado (read-only) el rediseño del apartado de Cirugías aplicado en sesiones previas sin cierre formal.
+- Track 2 — `NUEVA-CIRUGIA-IA-UX-P1` (Phase A, panel IA): aplicado. Barra de campos faltantes (`MissingFieldsBar`), contador en footer (`MissingCountText`), material autorizado colapsable (`MaterialAutorizadoDetails`), confidence pill en `AiResultsPanel`, wrappers `data-step0-field` para focus sin tocar `ContactLookupField`/`ClasificacionSelectorModal`.
+- Track 2b — `NUEVA-CIRUGIA-IA-UX-P2-LATERAL` (panel lateral IA): aplicado dentro de `NewSurgeryDialog.tsx`. "Resumen IA" compacto, proposiciones por campo (Vincular / Mantener texto / Crear contacto), mejor candidato con acento esmeralda, alternativas colapsadas en `<details>`.
+- Cierre formal: handoff Caveman + entrada WORKLOG + Engram session summary.
+
+Changed:
+- `src/components/cirugias/dialogs/NewSurgeryDialog.tsx` — +1055 líneas (panel lateral P2 + montajes Phase A).
+- `src/components/cirugias/AiResultsPanel.tsx` — confidence pill + `MaterialAutorizadoDetails` (nuevo archivo).
+- `src/components/cirugias/MissingFieldsBar.tsx` — nuevo sub-componente presentacional (Phase A, AC-01).
+- `src/components/cirugias/MissingCountText.tsx` — nuevo sub-componente presentacional (Phase A, AC-04).
+- `src/components/cirugias/MaterialAutorizadoDetails.tsx` — nuevo sub-componente presentacional (Phase A, AC-03).
+- `src/lib/cirugias.constants.ts` — +2 líneas (soporte de columnas).
+- 6 archivos de test nuevos: `MissingFieldsBar`, `MissingCountText`, `MaterialAutorizadoDetails`, `AiResultsPanel`, `AiUploadZone`, `NewSurgeryDialog`.
+
+Files:
+- `src/components/cirugias/dialogs/NewSurgeryDialog.tsx`
+- `src/components/cirugias/AiResultsPanel.tsx`
+- `src/components/cirugias/MissingFieldsBar.tsx`
+- `src/components/cirugias/MissingCountText.tsx`
+- `src/components/cirugias/MaterialAutorizadoDetails.tsx`
+- `src/components/cirugias/AiUploadZone.tsx`
+- `src/lib/cirugias.constants.ts`
+- `src/__tests__/components/MissingFieldsBar.test.tsx`
+- `src/__tests__/components/MissingCountText.test.tsx`
+- `src/__tests__/components/MaterialAutorizadoDetails.test.tsx`
+- `src/__tests__/components/AiResultsPanel.test.tsx`
+- `src/__tests__/components/AiUploadZone.test.tsx`
+- `src/__tests__/components/NewSurgeryDialog.test.tsx`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npx tsc --noEmit` — exit 0 (limpio).
+- `npm test` — 38 archivos, 825 tests pasados, 10 skipped, 0 fallos (incluye los 6 tests nuevos del Track 2).
+- Diff scope confirmado: ningún archivo bajo `src/lib/**`, `src/app/api/**`, `prisma/**`, `src/types/index.ts` fue modificado por el rediseño (AC-05/AC-07 respetado).
+- Sin nuevas dependencias en `package.json` por el rediseño (AC-06).
+
+Risks:
+- Trabajo sin commitear: +1055 líneas en `NewSurgeryDialog.tsx` + 5 componentes nuevos + 6 tests siguen en working tree. Pendiente de commit con revisión de Franco.
+- `NUEVA-CIRUGIA-IA-UX-P2-LATERAL` se implementó con SOLO SPEC.md — saltó PROPOSAL → DESIGN → TASKS (desviación de proceso SDD, dirigida interactivamente). Conviene retrodocumentar o aceptar como excepción.
+- Badge `score {bestCandidate.score}` en `NewSurgeryDialog.tsx` L1017 sigue mostrando info interna de scoring — coincide con el feedback de Franco ("tokens que al usuario final no le interesa"). Pendiente de refinar en el Paso 2.
+- Árbol `src/lib/services/ai/**` + `src/lib/validators/autorizacion-ai.ts` + `src/hooks/useAiExtraction.ts` también están sin commitear (backend IA autorizaciones) — fuera del scope de este cierre, flagged como trabajo separado pendiente.
+
+Next:
+- Paso 2: refinar P2 Lateral (quitar `score` badge, consolidar botones por fila, confirmar listado breve) — lock L1 sobre `NewSurgeryDialog.tsx`.
+- Paso 3: Track 1 — `CIRUGIAS-DATATABLE-VISUAL-P1` (tabla de cirugías): generar `TASKS.md` desde DESIGN.md existente → apply → verify. Es el gap más grande del apartado.
+
+---
+
+## 2026-06-29 — SEGUIMIENTO-B2-REAL Implementación feed persistente
+
+
+Done:
+- Agregado modelo `SeguimientoEntry` en Prisma (19 líneas, 4 entry types: note, authorization_evidence, file_photo_evidence, mail_evidence).
+- Corrida migración aditiva `20260629110404_add_seguimiento_entry` contra Supabase sin afectar modelos existentes.
+- Creado `src/lib/services/seguimiento.service.ts` con `listSeguimientoEntries` y `createSeguimientoEntry`.
+- Creado validador `src/lib/validators/seguimiento.validator.ts` para POST body.
+- Creadas rutas API `GET` y `POST` en `/api/companies/[companyId]/surgeries/[surgeryId]/seguimiento` reutilizando auth context y guards existentes.
+- Creado adapter frontend `src/lib/api/seguimiento-adapter.ts` con tipos UI y mapping.
+- Creado hook `src/hooks/useSeguimientoFeed.ts` con estados loading/error/refetch/addNote.
+- Refactorizado `NovedadesTabContent.tsx` (569→332 líneas): removida dependencia de Zustand (`notes`, `history`, `onAddNote`), integrado `useSeguimientoFeed`, agregado compositor inline de notas con Textarea y feedback toast.
+- Actualizado `ExpedienteFullView.tsx`: NovedadesTabContent ahora recibe solo `surgery`.
+- Actualizado `TASKS.md` con todos los slices marcados completos.
+
+Changed:
+- `prisma/schema.prisma` — +1 modelo, +3 relaciones (Company, User, Surgery).
+- `prisma/migrations/20260629110404_add_seguimiento_entry/migration.sql` — migración generada.
+- `src/lib/services/seguimiento.service.ts` — nuevo (109 líneas).
+- `src/lib/validators/seguimiento.validator.ts` — nuevo (82 líneas).
+- `src/app/api/companies/[companyId]/surgeries/[surgeryId]/seguimiento/route.ts` — nuevo (79 líneas).
+- `src/lib/api/seguimiento-adapter.ts` — nuevo.
+- `src/hooks/useSeguimientoFeed.ts` — nuevo.
+- `src/components/expediente/NovedadesTabContent.tsx` — reescritura completa.
+- `src/components/expediente/ExpedienteFullView.tsx` — 1 línea modificada (mount de NovedadesTabContent).
+- `knowledge/specs/SEGUIMIENTO-B2-REAL/TASKS.md` — status: implemented.
+- `knowledge/worklog/WORKLOG.md` — esta entrada.
+
+Files:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260629110404_add_seguimiento_entry/migration.sql`
+- `src/lib/services/seguimiento.service.ts`
+- `src/lib/validators/seguimiento.validator.ts`
+- `src/app/api/companies/[companyId]/surgeries/[surgeryId]/seguimiento/route.ts`
+- `src/lib/api/seguimiento-adapter.ts`
+- `src/hooks/useSeguimientoFeed.ts`
+- `src/components/expediente/NovedadesTabContent.tsx`
+- `src/components/expediente/ExpedienteFullView.tsx`
+- `knowledge/specs/SEGUIMIENTO-B2-REAL/TASKS.md`
+- `knowledge/worklog/WORKLOG.md`
+
+Validations:
+- `npx prisma validate` ✅
+- `npx prisma generate` ✅
+- `npm run typecheck` ✅
+- `npx tsc --noEmit` ✅
+- `npm run build` ✅ (Next.js 16.2.6)
+- `npm test` ✅ (44 files, 849 passed, 0 failures)
+
+Risks:
+- Sin seed data de SeguimientoEntry — la BD está vacía para este modelo hasta que un operador cree notas reales.
+- El endpoint POST requiere token Supabase Auth real para crear entradas (no usa header DEV).
+- Correo y autorización como entry types están definidos en schema y UI pero no tienen ruta de creación desde sus módulos respectivos (solo `note` está completamente implementado).
+- `ExpedienteFullView.tsx` ya estaba modificado en working tree con el rediseño previo; el diff incluye cambios acumulados no commiteados.
+
+Next:
+- Crear seed de ejemplo con algunas entradas de SeguimientoEntry.
+- Conectar Correo → promoción de mail evidence a Seguimiento.
+- Conectar Autorización → promoción de authorization evidence a Seguimiento.
+- Browser QA del flujo completo: abrir expediente → tab Novedades → crear nota → ver en feed.
+- Commit de todos los cambios.
+
+---
+
+## 2026-07-03 — Persistencia server de vistas de Cirugías + rollout controlado
+
+
+Done:
+
+- Se rediseñó el modal `Personalización de vista` de Cirugías y se simplificó su UX para operación real.
+- Se volvió real el soporte de grouped headers / bloques de columnas en la tabla de Cirugías.
+- Se implementó persistencia server-first para la preferencia activa de vista de Cirugías por `usuario + empresa`.
+- Se creó el modelo Prisma `UserModuleViewPreference` y luego se materializó la tabla en Supabase/Postgres.
+- Se implementó endpoint company-scoped `GET/PUT /api/companies/[companyId]/surgeries/view-preferences` con servicio y validador dedicados.
+- Se integró frontend/hook/page/modal/tabla al contrato server manteniendo apply diferido del modal.
+- Se implementó migración one-shot desde `localStorage` a backend para preferencia activa.
+- Se validó el flujo end-to-end: Prisma, DB remota, endpoint GET/PUT, QA manual básica y rollout controlado.
+- Se formalizó la migration faltante en `prisma/migrations` y luego se alineó `_prisma_migrations` remoto con `prisma migrate resolve --applied`.
+- Se reemplazó el SQL raw temporal del servicio por Prisma Client tipado (`findUnique` + `upsert`).
+- El avance sobre DB/schema y la persistencia real de preferencias se ejecutó con aprobación explícita del usuario para el brief, Fase 1, Fase 2, rollout controlado y cleanup posterior.
+- Scope sensible coordinado sin solapamiento: ownership efectivo sobre `prisma/schema.prisma`, `src/app/cirugias/page.tsx`, `src/components/cirugias/CirugiasTable.tsx`, `src/components/cirugias/ViewCustomizationDialog.tsx`, `src/hooks/useColumnVisibility.ts`, y cadena API/service/validator de `view-preferences`.
+
+Changed:
+
+- `prisma/schema.prisma`
+- `prisma/migrations/20260703113000_add_user_module_view_preference_history/migration.sql`
+- `src/app/api/companies/[companyId]/surgeries/view-preferences/route.ts`
+- `src/lib/services/surgery-view-preferences.service.ts`
+- `src/lib/validators/surgery-view-preferences.validator.ts`
+- `src/hooks/useColumnVisibility.ts`
+- `src/app/cirugias/page.tsx`
+- `src/components/cirugias/ViewCustomizationDialog.tsx`
+- `src/components/cirugias/CirugiasTable.tsx`
+- `knowledge/core/CURRENT_STATE.md`
+- `src/README_CIRUGIAS.md`
+- `knowledge/worklog/WORKLOG.md`
+
+Files:
+
+- `prisma/schema.prisma` — modelo `UserModuleViewPreference` por company/user/module.
+- `prisma/migrations/20260703113000_add_user_module_view_preference_history/migration.sql` — formalización idempotente de historia post-`db push`.
+- `src/app/api/companies/[companyId]/surgeries/view-preferences/route.ts` — contrato server mínimo GET/PUT.
+- `src/lib/services/surgery-view-preferences.service.ts` — persistencia tipada con Prisma.
+- `src/lib/validators/surgery-view-preferences.validator.ts` — saneamiento/validación de payload.
+- `src/hooks/useColumnVisibility.ts` — server-first, fallback local y migración one-shot.
+- `src/components/cirugias/ViewCustomizationDialog.tsx` — modal compatible con apply diferido y grouped headers.
+- `src/components/cirugias/CirugiasTable.tsx` — consumo real de grouped headers/fixed columns resueltos.
+
+Validations:
+
+- `npx prisma validate` — OK.
+- `npx prisma generate` — OK.
+- `npx prisma migrate status` — OK.
+- `npx supabase link --project-ref yywqcdromnmmelijvspi` — OK.
+- Verificación remota de tablas: `public.UserModuleViewPreference` existe.
+- Smoke técnico del endpoint GET/PUT — OK.
+- QA manual básica del flujo de guardar/aplicar/recargar en Cirugías — OK.
+
+Risks:
+
+- Las plantillas guardadas del modal siguen en `localStorage`; sólo migró la preferencia activa.
+- Multiempresa real todavía no se validó con un segundo tenant operativo.
+- Queda observar uso real post-rollout para detectar edge cases de hidratación o fallback local.
+
+Next:
+
+- Validar multiempresa real cuando exista un segundo entorno/tenant operativo.
+- Evaluar si las plantillas guardadas del modal también deben moverse a DB.
+- Cuando el rollout ya esté estabilizado, considerar retiro progresivo del fallback legacy de preferencia activa en `localStorage`.
+
+---
+
+## 2026-07-08 — OPS-FICHA-CX-HANDOFF-001 cierre documental cadena operativa Ficha CX
+
+Done:
+
+- Documentado el cierre operativo actual de la cadena Ficha CX backend-backed V0: Remitos, Consumos, Devoluciones, Trazabilidad y avisos legacy standalone.
+- Creado handoff específico para futuros agentes y Franco con estado hecho, riesgos, gaps, próximos pasos y archivos relevantes.
+- Registrado que QA técnico previo pasó: typecheck, unit trazabilidad, unit remito/consumo/devolución, **59/59** tests relevantes.
+
+Changed:
+
+- `knowledge/worklog/HANDOFF_OPERATIVE_CHAIN_FICHA_CX_2026-07-08.md` — nuevo handoff operativo.
+- `knowledge/core/CURRENT_STATE.md` — snapshot mínimo de cadena operativa Ficha CX backend-backed V0.
+- `knowledge/worklog/WORKLOG.md` — entrada de cierre documental.
+
+Files:
+
+- `knowledge/worklog/HANDOFF_OPERATIVE_CHAIN_FICHA_CX_2026-07-08.md`.
+- `knowledge/core/CURRENT_STATE.md`.
+- `knowledge/worklog/WORKLOG.md`.
+
+Validations:
+
+- `git status --short` revisado; se confirma dirty tree amplio preexistente.
+- Revisados `CURRENT_STATE.md`, `REPO_MAP.md`, specs de Remito Unificado y contrato de Trazabilidad Derivada.
+- Grep/glob read-only sobre archivos relevantes de Remito/Consumo/Devolución/Trazabilidad y avisos legacy.
+- No se ejecutaron tests ni comandos npm/prisma por scope documental.
+
+Risks:
+
+- Browser QA sigue pendiente para Ficha CX completa.
+- Creación/edición/emisión de Consumo y creación de Devolución desde Ficha CX siguen como gaps V0.
+- Semántica final `DevolucionItem.returnedQuantity` vs `RemitoItem.returnedQuantity` requiere decisión/implementación futura.
+- `StockMovement`, lote/serie/vencimiento y caja física quedan fuera de V0.
+- Rutas standalone legacy siguen accesibles; sólo tienen avisos.
+- Dirty tree amplio puede dificultar revisión/commit de este cierre si no se aísla el diff documental.
+
+Next:
+
+- Ejecutar Browser QA de Ficha CX ops.
+- Completar Consumo V0 creation/edit/emit.
+- Completar Devolución V0 creation y resolver semántica de cantidades devueltas.
+- Diseñar stock/trazabilidad fina sólo con task y aprobación explícita de Franco.
+
+---
+
+## 2026-07-23 — COORDINATION-AVAILABILITY-REQUEST-001 DEV source-only closure
+
+Done:
+- Documented the final DEV source-only closure for FT1, FT2, FT4, and FT5; FT3 remains deferred and unapplied.
+
+Changed:
+- Added the final handoff with focused PASS evidence, separately identified repository-wide failures, disabled-state constraints, and future approval gates.
+
+Files:
+- `knowledge/worklog/HANDOFF_COORDINATION_AVAILABILITY_REQUEST_DEV_SOURCE_2026-07-23.md` — final DEV source-only handoff.
+- `knowledge/worklog/WORKLOG.md` — this entry.
+
+Validations:
+- Documentation evidence reconciled with `knowledge/specs/COORDINATION-AVAILABILITY-REQUEST-001/TASKS.md` and FT5 report topic `#3738`.
+- No tests, DB operations, or Git commands run; docs-only closure.
+
+Risks:
+- DEV DB baseline, global lint, browser/mobile/accessibility QA, races, and production approval remain outside this closure.
+
+Next:
+- Continue only through the three separate packages defined in the handoff; production requires separate approval.
+
+---
+
+## 2026-07-23 — COORDINATION-AVAILABILITY-REQUEST-001 DEV DB-aligned closure
+
+Done:
+- Documented the DEV source and database alignment closure with FT0–FT5 checked and FT3 closed by `#3775`.
+
+Changed:
+- Added the current DB-aligned handoff, which supersedes the prior source-only handoff while retaining it as historical evidence.
+
+Files:
+- `knowledge/worklog/HANDOFF_COORDINATION_AVAILABILITY_REQUEST_DEV_DB_ALIGNED_2026-07-23.md` — current DEV DB-aligned handoff.
+- `knowledge/worklog/WORKLOG.md` — this single appended entry.
+
+Validations:
+- Reconciled the handoff against `knowledge/specs/COORDINATION-AVAILABILITY-REQUEST-001/TASKS.md` and the supplied `#3757/#3767/#3770/#3774/#3775` evidence.
+- Verified the documented 16-migration status, three applied DEV migrations, 10 CHECK constraints, 23 foreign keys, focused 5/5-file and 6/6-test PASS, and 25/25 zero cleanup result.
+- No code, DB, Git, or test commands run; docs-only closure.
+
+Risks:
+- Full-suite rerun, global lint remediation, Availability-specific runtime fixture, browser/mobile/accessibility QA, real PÍVOT/grants, DEV enablement, and production approval remain open.
+
+Next:
+1. Obtain human approval for the real per-company PÍVOT designation.
+2. Obtain human approval for explicit capability grants and provider enablement.
+3. Run an Availability-specific DEV runtime fixture and browser, mobile, and accessibility QA.
+4. Only then enable the feature in DEV. Production requires fresh approval and evidence.
+
+---
+
+## 2026-07-23 — Repository preservation checkpoint requested
+
+Done:
+- Recorded Franco's explicit request to commit the full meaningful current repository state as a preservation checkpoint.
+- Defined the purpose as preserving accumulated implementation, documentation, migrations, and tests while establishing a stable baseline for correct future work.
+
+Changed:
+- Documented repository-state checkpoint scope only; this does not claim that every runtime path has passed QA.
+
+Files:
+- `knowledge/worklog/WORKLOG.md` — preservation checkpoint entry.
+
+Validations:
+- Availability Requests DEV migration, bootstrap, and runtime activation are included in the checkpoint; runtime, browser, and API QA for that feature was explicitly skipped and remains unverified.
+- No Git staging, commit, push, or worktree deletion was performed in this docs task.
+
+Risks:
+- Secrets, local environment values, transient logs, and browser artifacts must not be committed.
+- Unverified Availability Requests runtime paths remain an explicit QA gap.
+- This preservation checkpoint does not retroactively approve pending product, schema, migration, or production work; existing SDD approval gates remain authoritative.
+
+Next:
+- Create the preservation commit from the full meaningful repository state, excluding secrets and transient artifacts; do not delete the worktree.

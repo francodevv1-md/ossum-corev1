@@ -150,7 +150,7 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
           size="sm"
           className={cn(
             "h-7 gap-1 text-[11px] px-2.5 shrink-0",
-            hasActiveFilters && "bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+            hasActiveFilters && "border-blue-600 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
           )}
         >
           <Calendar className="size-3" />
@@ -162,10 +162,10 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[340px] p-0">
+      <PopoverContent align="start" className="w-[340px] border-slate-300 bg-white/95 p-0 shadow-xl backdrop-blur-sm dark:border-slate-700 dark:bg-slate-950/95">
         {/* Header */}
-        <div className="p-2.5 border-b">
-          <p className="text-xs font-semibold">Filtro de fechas</p>
+        <div className="border-b p-2.5 dark:border-slate-800">
+          <p className="text-xs font-semibold dark:text-slate-100">Filtro de fechas</p>
         </div>
 
         {/* Active date filter chips */}
@@ -175,12 +175,12 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
               {dateFilters.map(filter => (
                 <span
                   key={filter.id}
-                  className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] text-blue-700"
+                   className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
                 >
                   {filter.label}
                   <button
                     onClick={() => handleRemoveFilter(filter.id)}
-                    className="hover:text-blue-900"
+                    className="hover:text-blue-900 dark:hover:text-blue-200"
                   >
                     <X className="size-3" />
                   </button>
@@ -188,7 +188,7 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
               ))}
               <button
                 onClick={handleClearAll}
-                className="text-[10px] text-blue-600 hover:underline px-1"
+                className="px-1 text-[10px] text-blue-600 hover:underline dark:text-blue-300"
               >
                 Limpiar
               </button>
@@ -197,12 +197,12 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
         )}
 
         {/* Filter builder */}
-        <div className="p-2.5 space-y-2.5">
+        <div className="space-y-2.5 p-2.5 dark:text-slate-200">
           {/* Date type selector */}
           <div className="space-y-1">
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase">Tipo de fecha</Label>
+            <Label className="text-[10px] font-semibold uppercase text-muted-foreground dark:text-slate-400">Tipo de fecha</Label>
             <select
-              className="h-7 w-full rounded-md border text-xs px-2 bg-background"
+              className="h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               value={selectedType}
               onChange={e => {
                 setSelectedType(e.target.value as DateFilterType)
@@ -224,7 +224,7 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
               ))}
             </select>
             {existingFilterForType && (
-              <p className="text-[9px] text-amber-600">
+              <p className="text-[9px] text-amber-600 dark:text-amber-400">
                 Ya existe un filtro para este tipo. Se reemplazará al aplicar.
               </p>
             )}
@@ -233,33 +233,33 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
           {/* Desde / Hasta */}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">Desde</Label>
+              <Label className="text-[10px] text-muted-foreground dark:text-slate-400">Desde</Label>
               <Input
                 type="date"
                 value={tempFrom}
                 onChange={e => setTempFrom(e.target.value)}
-                className="h-7 text-xs"
+                className="h-7 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">Hasta</Label>
+              <Label className="text-[10px] text-muted-foreground dark:text-slate-400">Hasta</Label>
               <Input
                 type="date"
                 value={tempTo}
                 onChange={e => setTempTo(e.target.value)}
-                className="h-7 text-xs"
+                className="h-7 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
           </div>
 
           {/* Shortcuts */}
           <div className="space-y-1">
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase">Atajos</Label>
+            <Label className="text-[10px] font-semibold uppercase text-muted-foreground dark:text-slate-400">Atajos</Label>
             <div className="flex flex-wrap gap-1">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2"
+                className="h-6 border-slate-300 bg-white px-2 text-[10px] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 onClick={() => applyShortcut(toISODate(today), toISODate(today))}
               >
                 Hoy
@@ -267,7 +267,7 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2"
+                className="h-6 border-slate-300 bg-white px-2 text-[10px] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 onClick={() => {
                   const tomorrow = new Date(today)
                   tomorrow.setDate(today.getDate() + 1)
@@ -279,7 +279,7 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2"
+                className="h-6 border-slate-300 bg-white px-2 text-[10px] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 onClick={() => {
                   applyShortcut(toISODate(getStartOfWeek(today)), toISODate(getEndOfWeek(today)))
                 }}
@@ -289,7 +289,7 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2"
+                className="h-6 border-slate-300 bg-white px-2 text-[10px] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 onClick={() => {
                   const in7 = new Date(today)
                   in7.setDate(today.getDate() + 7)
@@ -301,7 +301,7 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2"
+                className="h-6 border-slate-300 bg-white px-2 text-[10px] text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 onClick={() => {
                   applyShortcut(toISODate(getStartOfMonth(today)), toISODate(getEndOfMonth(today)))
                 }}
@@ -313,7 +313,7 @@ export function DateFiltersPopover({ dateFilters, onDateFiltersChange }: DateFil
         </div>
 
         {/* Footer: Apply button */}
-        <div className="p-2.5 border-t flex justify-end">
+        <div className="flex justify-end border-t p-2.5 dark:border-slate-800">
           <Button
             size="sm"
             className="h-7 text-[11px] px-4"

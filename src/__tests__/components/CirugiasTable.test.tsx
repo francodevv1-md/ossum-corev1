@@ -17,6 +17,13 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, act } from "@testing-library/react"
 import React from "react"
+
+const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }))
+
+vi.mock("@/components/auth/AuthProvider", () => ({
+  useAuth: useAuthMock,
+}))
+
 import { CirugiasTable } from "@/components/cirugias/CirugiasTable"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { DEFAULT_VISIBLE_COLS, CIRUGIAS_COLUMNS } from "@/lib/cirugias.constants"
@@ -100,6 +107,8 @@ function wrapWithProviders(ui: React.ReactElement) {
 }
 
 describe("CirugiasTable", () => {
+  useAuthMock.mockReturnValue({ activeCompany: { id: "company-1" } })
+
   // ═══════════════════════════════════════════════════════════════
   // REGRESSION: Maximum update depth exceeded (CHATZAI-014B + 014C)
   // ═══════════════════════════════════════════════════════════════
@@ -202,15 +211,31 @@ describe("CirugiasTable", () => {
       expect(screen.getByText("Estado CX")).toBeInTheDocument()
     })
 
-    it("renders surgery ID in the row", async () => {
+    it("uses the legacy CX fallback only when no visible number is available", async () => {
       const props = createTableProps()
 
       await act(async () => {
         render(wrapWithProviders(<CirugiasTable {...props} />))
       })
 
-      expect(screen.getByText("1")).toBeInTheDocument()
-      expect(screen.getByText("2")).toBeInTheDocument()
+      expect(screen.getByText("CX 1")).toBeInTheDocument()
+      expect(screen.getByText("CX 2")).toBeInTheDocument()
+    })
+
+    it("prioritizes visibleNumber and uses the explicit unavailable fallback", async () => {
+      const props = createTableProps({
+        data: [
+          { ...mockSurgery, visibleNumber: "CX-0042" },
+          { ...mockSurgery2, id: "" } as Surgery,
+        ],
+      })
+
+      await act(async () => {
+        render(wrapWithProviders(<CirugiasTable {...props} />))
+      })
+
+      expect(screen.getByText("CX-0042")).toBeInTheDocument()
+      expect(screen.getByText("CX sin número visible")).toBeInTheDocument()
     })
 
     it("renders selected row with different styling", async () => {
@@ -221,8 +246,8 @@ describe("CirugiasTable", () => {
       })
 
       // The row for surgery 1 should have a selected class
-      const cell = screen.getByText("1")
-      expect(cell.closest("tr")).toHaveClass("bg-primary/5")
+      const cell = screen.getByText("CX 1")
+      expect(cell.closest("tr")).toHaveClass("bg-sky-50/80")
     })
   })
 })

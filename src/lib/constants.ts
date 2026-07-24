@@ -19,7 +19,6 @@ export const PIPELINE_STATES: SurgeryState[] = [
   "Sin autorizar",
   "Pendiente",
   "Autorizada",
-  "En preparación",
   "En tránsito",
   "Realizada",
   "Finalizada",
@@ -57,14 +56,6 @@ export const PIPELINE_COLUMNS: PipelineColumn[] = [
     bgColor: "bg-blue-50 dark:bg-blue-900/20",
     headerBg: "bg-blue-200 dark:bg-blue-800",
     states: ["Autorizada"],
-  },
-  {
-    id: "preparacion",
-    label: "Preparación",
-    color: "border-teal-500",
-    bgColor: "bg-teal-50 dark:bg-teal-900/20",
-    headerBg: "bg-teal-200 dark:bg-teal-800",
-    states: ["En preparación", "En tránsito"],
   },
   {
     id: "realizada",
@@ -136,7 +127,6 @@ export const CLASSIFICATION_COLORS: Record<string, string> = {
 export const STATE_BAR_COLORS: Record<string, string> = {
   "Autorizada": "bg-blue-500",
   "Pendiente": "bg-blue-400",
-  "En preparación": "bg-sky-500",
   "En tránsito": "bg-teal-500",
   "Realizada": "bg-emerald-500",
   "Finalizada": "bg-green-700",

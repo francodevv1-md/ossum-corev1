@@ -65,11 +65,11 @@ interface SurgerySuggestion {
 }
 
 const FIELD_BADGE_COLORS: Record<SearchChipField, string> = {
-  medico: "bg-violet-50 border-violet-200 text-violet-700",
-  paciente: "bg-emerald-50 border-emerald-200 text-emerald-700",
-  cliente: "bg-amber-50 border-amber-200 text-amber-700",
-  institucion: "bg-sky-50 border-sky-200 text-sky-700",
-  general: "bg-gray-50 border-gray-200 text-gray-700",
+  medico: "bg-violet-50 border-violet-200 text-violet-700 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300",
+  paciente: "bg-emerald-50 border-emerald-200 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300",
+  cliente: "bg-amber-50 border-amber-200 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300",
+  institucion: "bg-sky-50 border-sky-200 text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300",
+  general: "bg-gray-50 border-gray-200 text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
 }
 
 /** Max results per group — balanced so one category doesn't dominate */
@@ -358,17 +358,19 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
   )
 
   return (
-    <div className="flex items-center gap-2 w-full">
+    <div className="flex w-full items-center gap-1.5">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div
             className={cn(
-              "flex flex-wrap items-center gap-1 flex-1 min-h-9 px-2 py-1",
-              "border rounded-md bg-background cursor-text",
-              "focus-within:ring-1 focus-within:ring-ring focus-within:border-ring",
-              "hover:border-ring"
-            )}
+               "flex min-h-9 flex-1 flex-wrap items-center gap-1 rounded-sm border border-slate-300 bg-white px-2 py-1 shadow-sm dark:border-slate-700 dark:bg-slate-900",
+                "cursor-text",
+                "focus-within:border-slate-400 focus-within:ring-1 focus-within:ring-slate-300 dark:focus-within:border-slate-500 dark:focus-within:ring-slate-600",
+                "hover:border-slate-400 dark:hover:border-slate-500"
+              )}
             onClick={() => inputRef.current?.focus()}
+            role="search"
+            aria-label="Buscar cirugías"
           >
             {/* Existing chips */}
             {chips.map((chip) => (
@@ -376,9 +378,9 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
                 key={chip.id}
                 variant="outline"
                 className={cn(
-                  "h-6 gap-0.5 px-1.5 text-[10px] font-medium border shrink-0",
-                  FIELD_BADGE_COLORS[chip.field]
-                )}
+                   "h-5 shrink-0 gap-0.5 border px-1.5 text-[10px] font-semibold shadow-sm",
+                   FIELD_BADGE_COLORS[chip.field]
+                  )}
               >
                 {chip.label}
                 <button
@@ -394,8 +396,8 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
             ))}
 
             {/* Search input */}
-            <div className="relative flex-1 min-w-[120px]">
-              <Search className="absolute left-1 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <div className="relative min-w-[120px] flex-1">
+                <Search className="absolute left-0.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <Input
                 ref={inputRef}
                 value={query}
@@ -414,7 +416,7 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
                     ? "Agregar filtro..."
                     : "Buscar paciente, médico, cliente o institución..."
                 }
-                className="w-full h-7 bg-transparent text-sm outline-none pl-5 border-0 shadow-none focus-visible:ring-0 px-0 placeholder:text-muted-foreground"
+                className="h-7 w-full border-0 bg-transparent px-0 pl-5 text-[13px] shadow-none outline-none placeholder:text-slate-400 focus-visible:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
           </div>
@@ -422,7 +424,7 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
 
         <PopoverContent
           align="start"
-          className="w-[var(--radix-popover-trigger-width)] p-0"
+          className="w-[var(--radix-popover-trigger-width)] border-slate-300 p-0 shadow-md dark:border-slate-700 dark:bg-slate-950"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Command shouldFilter={false}>
@@ -510,20 +512,20 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
         </PopoverContent>
       </Popover>
 
-      {/* Explicit Buscar button */}
       <Button
         size="sm"
         variant="outline"
-        className="shrink-0 h-9 gap-1.5 text-xs"
+        className="h-9 shrink-0 rounded-sm border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:px-2.5"
         onClick={() => {
           if (query.trim()) {
             handleAddGeneralChip()
           }
           onSearch()
         }}
+        aria-label="Ejecutar búsqueda"
       >
         <Search className="size-3.5" />
-        Buscar
+        <span className="hidden sm:inline">Buscar</span>
       </Button>
     </div>
   )

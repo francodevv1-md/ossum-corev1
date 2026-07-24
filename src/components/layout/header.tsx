@@ -1,22 +1,14 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React from "react"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "./app-shell"
+import { NotificationMenu } from "./ShellUtilityMenus"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { UserMenu } from "./UserMenu"
 import {
-  Bell,
   Menu,
   PanelLeftOpen,
   PanelLeftClose,
@@ -57,42 +49,11 @@ const ROUTE_LABELS: Record<string, string> = {
   "/configuracion": "Configuración",
 }
 
-const MOCK_NOTIFICATIONS = [
-  { id: "1", title: "Cirugía programada", description: "Nueva cirugía asignada para mañana 08:00", time: "Hace 5 min", read: false },
-  { id: "2", title: "Stock bajo", description: "Implante CF-200 por debajo del stock mínimo", time: "Hace 30 min", read: false },
-  { id: "3", title: "Factura vencida", description: "Factura FV-2024-0134 vencida hace 3 días", time: "Hace 1 hora", read: true },
-  { id: "4", title: "Remito devuelto", description: "Remito RM-0087 devuelto sin control", time: "Hace 2 horas", read: true },
-]
-
 export function Header() {
   const pathname = usePathname()
   const { sidebarState, setSidebarState } = useSidebar()
-  const [dateTime, setDateTime] = useState<string>("")
-
-  useEffect(() => {
-    const update = () => {
-      setDateTime(
-        new Date().toLocaleDateString("es-AR", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }) +
-          " — " +
-          new Date().toLocaleTimeString("es-AR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-      )
-    }
-    update()
-    const interval = setInterval(update, 30_000)
-    return () => clearInterval(interval)
-  }, [])
-
   const pageTitle = ROUTE_LABELS[pathname] || "OSSUM COR"
-
-  const unreadCount = MOCK_NOTIFICATIONS.filter((n) => !n.read).length
+  const isCirugiasRoute = pathname.startsWith("/cirugias")
 
   // When sidebar is hidden, show a compact menu toggle in the header
   // Clicking it restores to compact (not expanded) for operational efficiency
@@ -109,11 +70,14 @@ export function Header() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 flex h-11 items-center gap-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 lg:px-5"
+        "sticky z-30 flex items-center gap-2.5",
+        isCirugiasRoute
+          ? "top-0 min-h-0 px-0 py-0"
+          : "h-11 rounded-2xl border border-border/60 bg-background/90 px-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-3.5"
       )}
     >
       {/* Sidebar toggle in header */}
-      {sidebarState === "hidden" ? (
+      {!isCirugiasRoute && sidebarState === "hidden" ? (
         <Button
           variant="ghost"
           size="icon"
@@ -123,7 +87,7 @@ export function Header() {
         >
           <Menu className="size-4" />
         </Button>
-      ) : (
+      ) : !isCirugiasRoute ? (
         <Button
           variant="ghost"
           size="icon"
@@ -137,63 +101,34 @@ export function Header() {
             <PanelLeftOpen className="size-4" />
           )}
         </Button>
+      ) : null}
+
+      {isCirugiasRoute && (
+        <div className="sr-only" aria-live="polite">
+          Cirugías
+        </div>
       )}
 
-      {/* Mobile-only spacer when sidebar is not hidden */}
-      {sidebarState !== "hidden" && <div className="w-8 lg:hidden" />}
+      {!isCirugiasRoute && (
+        <>
+          {/* Mobile-only spacer when sidebar is not hidden */}
+          {sidebarState !== "hidden" && <div className="w-8 lg:hidden" />}
 
-      {/* Page title */}
-      <div className="flex flex-col min-w-0">
-        <h1 className="text-[13px] font-semibold truncate leading-tight">{pageTitle}</h1>
-        {dateTime && (
-          <span className="text-[10px] text-muted-foreground truncate capitalize leading-tight">
-            {dateTime}
-          </span>
-        )}
-      </div>
+          {/* Page title */}
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+              Área activa
+            </span>
+            <h1 className="truncate text-[12px] font-semibold leading-none text-foreground/85">{pageTitle}</h1>
+          </div>
 
-      <div className="ml-auto flex items-center gap-2">
-        {/* Notifications dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative size-8" aria-label="Notificaciones">
-              <Bell className="size-3.5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white">
-                  {unreadCount}
-                </span>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel className="flex items-center justify-between">
-              <span>Notificaciones</span>
-              <span className="text-xs font-normal text-muted-foreground">
-                {unreadCount} sin leer
-              </span>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {MOCK_NOTIFICATIONS.map((n) => (
-              <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-0.5 py-2">
-                <div className="flex items-center gap-2">
-                  {!n.read && <span className="size-2 rounded-full bg-primary" />}
-                  <span className="text-sm font-medium">{n.title}</span>
-                </div>
-                <span className="text-xs text-muted-foreground pl-4">{n.description}</span>
-                <span className="text-[10px] text-muted-foreground pl-4">{n.time}</span>
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-center justify-center text-xs text-primary cursor-pointer">
-              Ver todas las notificaciones
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <Separator orientation="vertical" className="h-5" />
-
-        <UserMenu />
-      </div>
+          <div className="ml-auto flex items-center gap-1 rounded-xl border border-border/50 bg-muted/40 px-1 py-1">
+            <NotificationMenu buttonClassName="relative size-7.5 rounded-lg" />
+            <Separator orientation="vertical" className="h-4 bg-border/60" />
+            <UserMenu />
+          </div>
+        </>
+      )}
     </header>
   )
 }

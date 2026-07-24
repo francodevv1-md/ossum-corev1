@@ -54,6 +54,28 @@ const CONDICION_IVA_OPTIONS: { value: CondicionIvaCliente; label: string }[] = [
   { value: "No Responsable", label: "No Responsable" },
 ]
 
+export function sanitizeContactoSaveError(error: unknown): string {
+  const rawMessage = error instanceof Error ? error.message : String(error || "")
+  const message = rawMessage.trim()
+
+  if (!message) return "No se pudo guardar el contacto. Revisá los datos e intentá nuevamente."
+
+  const normalized = message.toLowerCase()
+  const isIdentifiableFieldError =
+    normalized.includes("at least one identifiable field is required") ||
+    (normalized.includes("firstName") && normalized.includes("lastName") && normalized.includes("documentNumber"))
+
+  if (isIdentifiableFieldError) {
+    return "Para guardar el contacto, completá al menos un dato identificable: nombre, email, teléfono, DNI o CUIT."
+  }
+
+  if (normalized.includes("failed to fetch") || normalized.includes("networkerror")) {
+    return "No se pudo conectar con el servidor. El contacto se guardará localmente si corresponde."
+  }
+
+  return message
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Props
 // ═══════════════════════════════════════════════════════════════
@@ -348,8 +370,7 @@ function ContactoFormInner({
         onOpenChange(false)
       }
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Error al guardar contacto"
+      const msg = sanitizeContactoSaveError(err)
       setSaveError(msg)
       toast.error(msg)
 

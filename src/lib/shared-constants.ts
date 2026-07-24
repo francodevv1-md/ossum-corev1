@@ -10,7 +10,7 @@
  * CHATZAI-001: Extracción de Constantes Compartidas (2026-05-13)
  */
 
-import type { SurgeryState, SurgeryClassification, LogisticsState, TipoReferencia } from "@/types"
+import type { SurgeryState, SurgeryClassification, LogisticsState, PreparationState, TipoReferencia } from "@/types"
 
 // ═══════════════════════════════════════════════════════════════
 // SURGERY STATE COLORS — Badge pill style (bg + text)
@@ -22,7 +22,6 @@ export const CX_STATE_COLORS: Record<string, string> = {
   "Sin fecha": "bg-slate-400 text-white",            // gris más claro
   "Pendiente": "bg-yellow-500 text-white",           // amarillo
   "Autorizada": "bg-sky-500 text-white",             // azul claro
-  "En preparación": "bg-cyan-500 text-white",        // cyan
   "En tránsito": "bg-blue-500 text-white",           // azul
   "Realizada": "bg-emerald-500 text-white",          // verde
   "Finalizada": "bg-blue-800 text-white",            // azul oscuro (was teal-700)
@@ -44,10 +43,12 @@ export const CX_STATE_BAR_COLORS: Record<string, string> = Object.fromEntries(
 // ═══════════════════════════════════════════════════════════════
 
 /** Badge pill style (solid bg + white text) — matches cirugias.constants PREP_STATE_COLORS */
-export const PREP_STATE_COLORS: Record<string, string> = {
+export const PREP_STATE_COLORS: Record<PreparationState, string> = {
   "Sin preparar": "bg-gray-400 text-white",
+  "En preparación": "bg-cyan-500 text-white",
   "Congelado": "bg-amber-500 text-white",
   "Congelado con faltantes": "bg-orange-600 text-white",
+  "Enviado": "bg-blue-500 text-white",
   "Entregado": "bg-teal-500 text-white",
   "Retirado": "bg-slate-500 text-white",
 }
@@ -70,7 +71,7 @@ export const LOGISTICS_STATE_OUTLINED_COLORS: Record<string, string> = {
 
 export const ACTIVE_STATES: SurgeryState[] = [
   "Sin autorizar", "Sin fecha", "Pendiente", "Autorizada",
-  "En preparación", "En tránsito", "Realizada", "Sin consumo",
+  "En tránsito", "Realizada", "Sin consumo",
 ]
 
 // ═══════════════════════════════════════════════════════════════
@@ -105,14 +106,6 @@ export const PIPELINE_COLUMNS: PipelineColumn[] = [
     states: ["Autorizada"],
   },
   {
-    id: "preparacion",
-    label: "Preparación",
-    color: "border-teal-500",
-    bgColor: "bg-teal-50 dark:bg-teal-900/20",
-    headerBg: "bg-teal-200 dark:bg-teal-800",
-    states: ["En preparación", "En tránsito"],
-  },
-  {
     id: "realizada",
     label: "Realizada",
     color: "border-purple-500",
@@ -144,7 +137,7 @@ export const PIPELINE_COLUMNS: PipelineColumn[] = [
  */
 export const PIPELINE_STATES: SurgeryState[] = [
   "Sin autorizar", "Pendiente", "Autorizada",
-  "En preparación", "En tránsito", "Realizada",
+  "En tránsito", "Realizada",
   "Finalizada", "Suspendida", "Cancelada",
 ]
 

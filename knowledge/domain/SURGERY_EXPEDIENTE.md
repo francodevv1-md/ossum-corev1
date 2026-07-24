@@ -91,7 +91,6 @@ Estados de cirugía:
 - Sin autorizar.
 - Autorizada.
 - Pendiente.
-- En preparación.
 - En tránsito.
 - Realizada.
 - Sin consumo.
@@ -108,6 +107,7 @@ El estado CX es la dimensión principal del caso quirúrgico.
 Subestados operativos:
 
 - Sin preparar.
+- En preparación.
 - Congelado.
 - Congelado con faltantes.
 - Enviado.
@@ -115,6 +115,8 @@ Subestados operativos:
 - Retirado.
 
 Estado CX y preparación/material no deben mezclarse. Son dimensiones distintas.
+
+`En preparación` es exclusivamente el subestado de preparación/material correspondiente a una preparación activa. No es un estado CX, no transiciona el estado CX y no puede reemplazarlo en su presentación. Una representación genérica heredada de `En preparación` se normaliza como Estado CX `Pendiente`; el subestado de preparación solo se muestra cuando existe explícitamente.
 
 ---
 
@@ -152,4 +154,3 @@ Evitar:
 - KPIs superiores que reduzcan operación;
 - badges excesivos;
 - filtros operativos escondidos.
-

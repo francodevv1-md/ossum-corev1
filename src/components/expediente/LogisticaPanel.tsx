@@ -1,73 +1,106 @@
 "use client"
 
-import React, { useMemo } from "react"
-import type { Surgery, LogisticsDetail, Box, BoxContent, LogisticsState } from "@/types"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import React, { useMemo, useState } from "react"
+import type { Surgery, LogisticsDetail, Box, LogisticsState, PreparationState, Remito } from "@/types"
+import { useOrtoTrackStore } from "@/lib/store"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { updateSurgeryPreparation } from "@/lib/api/surgery-preparation-client"
+import type { PrepStatus } from "@/lib/validators/surgery.validator"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { formatDate, formatCurrency } from "@/lib/formatters"
 import { PREP_STATE_COLORS, LOGISTICS_STATE_OUTLINED_COLORS } from "@/lib/shared-constants"
 import { cn } from "@/lib/utils"
-import {
-  MapPin,
-  Package,
-  ArrowRight,
-  ArrowLeftRight,
-  Clock,
-  CheckCircle2,
-  Truck,
-  RotateCcw,
-  CalendarClock,
-  AlertTriangle,
-  FileText,
-  Eye,
-  PlusCircle,
-  CornerDownLeft,
-  BoxIcon,
-} from "lucide-react"
-
-// ─── Props ────────────────────────────────────────────────────────
+import { toast } from "sonner"
+import { AlertTriangle, BoxIcon, CheckCircle2, MapPin, RotateCcw, Truck } from "lucide-react"
 
 interface LogisticaPanelProps {
   surgery: Surgery
   logistics?: LogisticsDetail
   box?: Box
+  remitos: Remito[]
 }
 
-// ─── Logistics state color map — imported from shared-constants ───
-const LOGISTICS_STATE_COLORS = LOGISTICS_STATE_OUTLINED_COLORS
-const LOGISTICS_STATE_BADGE_COLORS = PREP_STATE_COLORS
-
-// ─── Progress steps for Ida/Vuelta ────────────────────────────────
-
-const IDA_STEPS: LogisticsState[] = [
-  "Sin preparar", "Congelado", "Congelado con faltantes", "Preparado", "Enviado",
+const PREPARATION_OPTIONS: PreparationState[] = [
+  "En preparación",
+  "Congelado",
+  "Congelado con faltantes",
+  "Enviado",
+  "Entregado",
+  "Retirado",
 ]
 
-const VUELTA_STEPS: LogisticsState[] = [
-  "Sin preparar", "Retirado", "Devuelto", "Controlado",
-]
-
-function getStepIndex(steps: LogisticsState[], state: LogisticsState): number {
-  const idx = steps.indexOf(state)
-  // "Congelado con faltantes" shares progress with "Congelado" in ida
-  if (idx === -1 && state === "Congelado con faltantes") {
-    return steps.indexOf("Congelado con faltantes") !== -1
-      ? steps.indexOf("Congelado con faltantes")
-      : steps.indexOf("Congelado")
-  }
-  return idx
+const PREP_STATUS_BY_PREPARATION_STATE: Partial<Record<PreparationState, PrepStatus>> = {
+  "En preparación": "preparing",
+  "Congelado": "frozen",
+  "Congelado con faltantes": "frozen_with_missing",
+  "Enviado": "shipped",
+  "Entregado": "delivered",
+  "Retirado": "returned",
 }
 
-// ─── Sub-components ───────────────────────────────────────────────
+const SUBSECTION_TITLE_CLS = "text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300"
+const LABEL_CLS = "text-[8px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400"
+const VALUE_CLS = "text-[13px] font-semibold leading-5 text-slate-950 dark:text-slate-100"
+const EMPTY_CLS = "italic text-slate-500 dark:text-slate-400"
 
-function StateBadge({ state }: { state: LogisticsState }) {
+function daysSince(dateStr: string): number {
+  const then = new Date(`${dateStr}T00:00:00`)
+  const now = new Date()
+  return Math.max(0, Math.floor((now.getTime() - then.getTime()) / (1000 * 60 * 60 * 24)))
+}
+
+function InfoNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+      {children}
+    </div>
+  )
+}
+
+function CompactGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <p className={SUBSECTION_TITLE_CLS}>{title}</p>
+      <div className="rounded-md border border-slate-200 bg-white/70 px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900/70">{children}</div>
+    </div>
+  )
+}
+
+function CompactListRow({
+  label,
+  value,
+  emptyText = "—",
+  valueClassName = VALUE_CLS,
+}: {
+  label: string
+  value?: React.ReactNode
+  emptyText?: string
+  valueClassName?: string
+}) {
+  const isEmpty = value === null || value === undefined || value === "" || (typeof value === "string" && value.trim() === "")
+
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-1.5 last:border-b-0 dark:border-slate-800">
+      <span className="min-w-0 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">{label}</span>
+      <span className={cn("min-w-0 text-right", isEmpty ? EMPTY_CLS : valueClassName)}>{isEmpty ? emptyText : value}</span>
+    </div>
+  )
+}
+
+function StateBadge({ state }: { state?: LogisticsState }) {
+  if (!state) return null
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold",
-        LOGISTICS_STATE_COLORS[state] ?? "bg-gray-100 text-gray-700 border-gray-300"
+        LOGISTICS_STATE_OUTLINED_COLORS[state] ?? "bg-gray-100 text-gray-700 border-gray-300"
       )}
     >
       {state}
@@ -75,473 +108,262 @@ function StateBadge({ state }: { state: LogisticsState }) {
   )
 }
 
-function StatePill({ state }: { state: LogisticsState }) {
+function StatePill({ state }: { state?: LogisticsState }) {
+  if (!state) return null
   return (
-    <Badge
-      className={cn(
-        "text-[10px] px-1.5 py-0 border-0",
-        LOGISTICS_STATE_BADGE_COLORS[state] ?? "bg-gray-400 text-white"
-      )}
-    >
+    <Badge className={cn("border-0 px-1.5 py-0 text-[10px]", PREP_STATE_COLORS[state] ?? "bg-gray-400 text-white")}>
       {state}
     </Badge>
   )
 }
 
-/** Horizontal progress bar for Ida or Vuelta */
-function ProgressSteps({
-  steps,
-  currentState,
-  label,
-}: {
-  steps: LogisticsState[]
-  currentState: LogisticsState
-  label: string
-}) {
-  const activeIdx = getStepIndex(steps, currentState)
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-foreground">{label}</span>
-        <StatePill state={currentState} />
-      </div>
-      <div className="flex items-center gap-1">
-        {steps.map((step, idx) => {
-          const isActive = idx === activeIdx
-          const isDone = idx < activeIdx
-          const isFuture = idx > activeIdx
-          // Skip "Congelado con faltantes" in the visual timeline to avoid clutter
-          if (step === "Congelado con faltantes" && steps === IDA_STEPS) return null
-
-          return (
-            <React.Fragment key={step}>
-              <div className="flex flex-col items-center gap-1 min-w-[56px]">
-                <div
-                  className={cn(
-                    "size-5 rounded-full flex items-center justify-center text-[9px] font-bold border transition-colors",
-                    isDone
-                      ? "bg-emerald-600 text-white border-emerald-600"
-                      : isActive
-                        ? "bg-amber-500 text-white border-amber-500"
-                        : "bg-muted text-muted-foreground border-muted-foreground/20"
-                  )}
-                >
-                  {isDone ? <CheckCircle2 className="size-3" /> : idx + 1}
-                </div>
-                <span
-                  className={cn(
-                    "text-[9px] leading-tight text-center",
-                    isDone || isActive ? "text-foreground font-medium" : "text-muted-foreground"
-                  )}
-                >
-                  {step}
-                </span>
-              </div>
-              {idx < steps.length - 1 && step !== "Congelado con faltantes" && (
-                <div
-                  className={cn(
-                    "h-px flex-1 min-w-[12px] mt-[-12px]",
-                    isDone ? "bg-emerald-400" : "bg-border"
-                  )}
-                />
-              )}
-            </React.Fragment>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-/** Info row for a single field */
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-  valueClass,
-}: {
-  icon: React.ElementType
-  label: string
-  value: string
-  valueClass?: string
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Icon className="size-3.5 text-muted-foreground shrink-0" />
-      <span className="text-[10px] text-muted-foreground min-w-[90px]">{label}</span>
-      <span className={cn("text-xs font-medium", valueClass)}>{value}</span>
-    </div>
-  )
-}
-
-/** Days since a given date string */
-function daysSince(dateStr: string): number {
-  const then = new Date(dateStr + "T00:00:00")
-  const now = new Date()
-  const diff = now.getTime() - then.getTime()
-  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)))
-}
-
-// ─── Empty State ──────────────────────────────────────────────────
-
 function EmptyState() {
   return (
-    <Card>
-      <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
-        <div className="rounded-full bg-muted p-4">
-          <MapPin className="size-8 text-muted-foreground" />
+      <div className="rounded-md border border-dashed border-slate-300 px-4 py-8 dark:border-slate-700">
+      <div className="flex flex-col items-center justify-center gap-3 text-center">
+        <div className="rounded-full bg-slate-100 p-3 dark:bg-slate-800">
+          <MapPin className="size-6 text-slate-500 dark:text-slate-400" />
         </div>
-        <div className="text-center space-y-1">
-          <p className="text-sm font-medium text-foreground">Sin datos de logística</p>
-          <p className="text-xs text-muted-foreground max-w-[280px]">
-            No hay información logística registrada para esta cirugía. Los datos de envío,
-            retiro y devolución aparecerán aquí cuando se inicie el proceso de preparación.
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Sin datos logísticos visibles</p>
+          <p className="max-w-[320px] text-xs text-slate-500 dark:text-slate-400">
+            Cuando existan remitos, señales de preparación o registros de retorno se consolidarán acá.
           </p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────
+export function LogisticaPanel({ surgery, logistics, box, remitos }: LogisticaPanelProps) {
+  const { activeCompany } = useAuth()
+  const changePreparationState = useOrtoTrackStore((state) => state.changePreparationState)
+  const [isUpdatingPreparation, setIsUpdatingPreparation] = useState(false)
 
-export function LogisticaPanel({ surgery, logistics, box }: LogisticaPanelProps) {
-  // ── Summary computations ──
-  const summaryStats = useMemo(() => {
-    if (!logistics) return null
+  const updatePreparation = async (value: PreparationState) => {
+    const prepStatus = PREP_STATUS_BY_PREPARATION_STATE[value]
+    if (!prepStatus) {
+      toast.error("Seleccioná un subestado de preparación válido.")
+      return
+    }
 
-    // Count distinct events based on available registros
-    let eventsCount = 0
-    if (logistics.registroSalida) eventsCount++
-    if (logistics.fechaEnvioMateriales) eventsCount++
-    if (logistics.registroRetiro) eventsCount++
-    if (logistics.registroDevolucion) eventsCount++
+    if (!surgery.backendId || !activeCompany?.id) {
+      toast.error("La preparación requiere una cirugía y empresa sincronizadas con el servidor.")
+      return
+    }
 
-    const daysSinceSent = logistics.fechaEnvioMateriales
-      ? daysSince(logistics.fechaEnvioMateriales)
-      : null
+    setIsUpdatingPreparation(true)
+    try {
+      await updateSurgeryPreparation(activeCompany.id, surgery.backendId, {
+        prepStatus,
+        source: "expediente-logistics-panel",
+      })
+      changePreparationState(surgery.id, value)
+      toast.success(`Preparación actualizada a ${value}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar la preparación.")
+    } finally {
+      setIsUpdatingPreparation(false)
+    }
+  }
 
-    // Pending return: ida is "Enviado" or beyond but vuelta is still "Sin preparar" or early
-    const idaAdvanced = ["Enviado", "Retirado"].includes(logistics.ida)
-    const vueltaPending = ["Sin preparar", "Congelado", "Congelado con faltantes"].includes(logistics.vuelta)
-    const pendingReturn = idaAdvanced && vueltaPending
+  const latestRemito = useMemo(
+    () => remitos.slice().sort((a, b) => b.date.localeCompare(a.date))[0],
+    [remitos]
+  )
 
-    return { eventsCount, daysSinceSent, pendingReturn }
-  }, [logistics])
+  const summary = useMemo(() => {
+    const remitoOpenUnits = remitos.reduce(
+      (sum, remito) => sum + remito.items.reduce((itemSum, item) => itemSum + Math.max(0, item.sentQuantity - item.returnedQuantity - item.consumedQuantity), 0),
+      0
+    )
+    const sentDate = latestRemito?.date ?? logistics?.fechaEnvioMateriales ?? box?.sentAt ?? surgery.fechaEnvioMaterial
+    const sentSource = latestRemito
+      ? `Remito ${latestRemito.id}`
+      : logistics?.fechaEnvioMateriales
+        ? "Logística"
+        : box?.sentAt
+          ? "Caja"
+          : surgery.fechaEnvioMaterial
+            ? "Ficha CX"
+            : null
 
-  // ── Empty state ──
-  if (!logistics) {
+    const hasRetiro = Boolean(logistics?.registroRetiro)
+    const hasDevolucion = Boolean(logistics?.registroDevolucion)
+    const hasBoxReturn = Boolean(box?.returnedAt)
+    const prepReturned = surgery.preparationState === "Retirado"
+    const wasSent = Boolean(latestRemito || logistics?.registroSalida || logistics?.fechaEnvioMateriales || box?.sentAt)
+    const returnResolved = remitoOpenUnits === 0 || hasDevolucion || hasBoxReturn || prepReturned || logistics?.vuelta === "Controlado"
+    const pendingReturn = wasSent && !returnResolved
+
+    let returnLabel = "Sin señales"
+    let returnTone = "text-slate-700"
+    if (remitoOpenUnits === 0 && remitos.length > 0) {
+      returnLabel = "Remitos cerrados"
+      returnTone = "text-emerald-700"
+    } else if (hasDevolucion || hasBoxReturn) {
+      returnLabel = "Retorno registrado"
+      returnTone = "text-emerald-700"
+    } else if (prepReturned) {
+      returnLabel = "Retorno reflejado en preparación"
+      returnTone = "text-emerald-700"
+    } else if (hasRetiro || logistics?.vuelta === "Retirado") {
+      returnLabel = "Retiro registrado"
+      returnTone = "text-amber-700"
+    } else if (pendingReturn) {
+      returnLabel = "Pendiente de registro"
+      returnTone = "text-amber-700"
+    }
+
+    return {
+      remitoOpenUnits,
+      sentDate,
+      sentSource,
+      daysSinceSent: sentDate ? daysSince(sentDate) : null,
+      pendingReturn,
+      returnResolved,
+      returnLabel,
+      returnTone,
+      eventsCount: [logistics?.registroSalida, logistics?.fechaEnvioMateriales, logistics?.registroRetiro, logistics?.registroDevolucion, box?.preparedAt, box?.sentAt, box?.returnedAt, latestRemito?.id].filter(Boolean).length,
+    }
+  }, [box?.preparedAt, box?.returnedAt, box?.sentAt, latestRemito, logistics?.fechaEnvioMateriales, logistics?.registroDevolucion, logistics?.registroRetiro, logistics?.registroSalida, logistics?.vuelta, remitos, surgery.fechaEnvioMaterial, surgery.preparationState])
+
+  if (!logistics && remitos.length === 0 && !box) {
     return <EmptyState />
   }
 
   return (
-    <div className="space-y-4">
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-muted p-2">
-            <MapPin className="size-5 text-muted-foreground" />
+    <div className="space-y-2.5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-semibold text-slate-950 dark:text-slate-100">Resumen operativo</span>
+            <StatePill state={logistics?.ida ?? latestRemito?.state} />
+            <StateBadge state={logistics?.vuelta} />
           </div>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">Logística</span>
-              <StatePill state={logistics.ida} />
-              <ArrowRight className="size-3 text-muted-foreground" />
-              <StatePill state={logistics.vuelta} />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              CX {surgery.id} &middot; {surgery.institution}
-            </p>
-          </div>
-        </div>
-
-        {logistics.amount > 0 && (
-          <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Valor materiales</p>
-            <p className="text-sm font-semibold text-foreground">
-              {formatCurrency(logistics.amount)}
-            </p>
-          </div>
-        )}
-      </div>
-
-      <Separator />
-
-      {/* ── Ida (Outbound) Section ── */}
-      <Card>
-        <CardHeader className="px-4 pt-4 pb-2">
-          <CardTitle className="text-xs font-semibold flex items-center gap-2">
-            <Truck className="size-3.5" />
-            Ida (Envío)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 pt-0 space-y-4">
-          {/* Progress steps */}
-          <ProgressSteps steps={IDA_STEPS} currentState={logistics.ida} label="Ida" />
-
-          <Separator />
-
-          {/* Detail rows */}
-          <div className="space-y-2">
-            <InfoRow
-              icon={MapPin}
-              label="Estado ida"
-              value={logistics.ida}
-            />
-            {logistics.fechaEnvioMateriales && (
-              <InfoRow
-                icon={CalendarClock}
-                label="Fecha envío"
-                value={formatDate(logistics.fechaEnvioMateriales)}
-              />
-            )}
-            <InfoRow
-              icon={Package}
-              label="Preparación"
-              value={logistics.preparation}
-            />
-            {logistics.registroSalida && (
-              <InfoRow
-                icon={Clock}
-                label="Registro salida"
-                value={logistics.registroSalida}
-              />
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Vuelta (Return) Section ── */}
-      <Card>
-        <CardHeader className="px-4 pt-4 pb-2">
-          <CardTitle className="text-xs font-semibold flex items-center gap-2">
-            <RotateCcw className="size-3.5" />
-            Vuelta (Retorno)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 pt-0 space-y-4">
-          {/* Progress steps */}
-          <ProgressSteps steps={VUELTA_STEPS} currentState={logistics.vuelta} label="Vuelta" />
-
-          <Separator />
-
-          {/* Detail rows */}
-          <div className="space-y-2">
-            <InfoRow
-              icon={ArrowLeftRight}
-              label="Estado vuelta"
-              value={logistics.vuelta}
-            />
-            {logistics.registroRetiro && (
-              <InfoRow
-                icon={Clock}
-                label="Registro retiro"
-                value={logistics.registroRetiro}
-              />
-            )}
-            {logistics.registroDevolucion && (
-              <InfoRow
-                icon={CornerDownLeft}
-                label="Registro devolución"
-                value={logistics.registroDevolucion}
-              />
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Box Info Section ── */}
-      {box && (
-        <Card>
-          <CardHeader className="px-4 pt-4 pb-2">
-            <CardTitle className="text-xs font-semibold flex items-center gap-2">
-              <BoxIcon className="size-3.5" />
-              Caja / Material
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0 space-y-3">
-            {/* Box details grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-md border bg-muted/20 p-3">
-              <div>
-                <p className="text-[10px] text-muted-foreground mb-0.5">Caja</p>
-                <p className="text-xs font-medium truncate" title={box.name}>
-                  {box.name}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground mb-0.5">Tipo</p>
-                <p className="text-xs">{box.type}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground mb-0.5">Estado caja</p>
-                <StateBadge state={box.state} />
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground mb-0.5">Contenidos</p>
-                <p className="text-xs">{box.contents.length} ítem{box.contents.length !== 1 ? "s" : ""}</p>
-              </div>
-            </div>
-
-            {/* Timestamps row */}
-            <div className="flex flex-wrap items-center gap-4 text-[10px] text-muted-foreground">
-              {box.preparedAt && (
-                <div className="flex items-center gap-1">
-                  <CheckCircle2 className="size-3" />
-                  <span>Preparado: {formatDate(box.preparedAt)}</span>
-                </div>
-              )}
-              {box.sentAt && (
-                <div className="flex items-center gap-1">
-                  <Truck className="size-3" />
-                  <span>Enviado: {formatDate(box.sentAt)}</span>
-                </div>
-              )}
-              {box.returnedAt && (
-                <div className="flex items-center gap-1">
-                  <RotateCcw className="size-3" />
-                  <span>Devuelto: {formatDate(box.returnedAt)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Box contents list */}
-            {box.contents.length > 0 && (
-              <div className="rounded-md border">
-                <div className="px-3 py-2 bg-muted/50 border-b">
-                  <span className="text-[10px] font-semibold text-muted-foreground">
-                    Contenido de la caja
-                  </span>
-                </div>
-                <div className="max-h-40 overflow-y-auto">
-                  {box.contents.map((item: BoxContent) => (
-                    <div
-                      key={item.stockItemId}
-                      className="flex items-center justify-between px-3 py-1.5 border-b last:border-b-0 hover:bg-muted/20 transition-colors"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium truncate" title={item.name}>
-                          {item.name}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground font-mono">{item.code}</p>
-                      </div>
-                      <div className="flex items-center gap-3 text-[10px] ml-3">
-                        <span className="text-muted-foreground">
-                          Cant: <strong className="text-foreground">{item.quantity}</strong>
-                        </span>
-                        {item.consumed > 0 && (
-                          <span className="text-emerald-700">
-                            Cons: {item.consumed}
-                          </span>
-                        )}
-                        {item.returned > 0 && (
-                          <span className="text-orange-700">
-                            Dev: {item.returned}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Summary Stats ── */}
-      {summaryStats && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-lg border bg-muted/30 p-3 text-center">
-            <p className="text-lg font-bold text-foreground">{summaryStats.eventsCount}</p>
-            <p className="text-[10px] text-muted-foreground">Eventos registrados</p>
-          </div>
-          <div className="rounded-lg border bg-muted/30 p-3 text-center">
-            <p className="text-lg font-bold text-foreground">
-              {summaryStats.daysSinceSent !== null ? summaryStats.daysSinceSent : "—"}
-            </p>
-            <p className="text-[10px] text-muted-foreground">Días desde envío</p>
-          </div>
-          <div className="rounded-lg border bg-muted/30 p-3 text-center">
-            {summaryStats.pendingReturn ? (
-              <>
-                <div className="flex items-center justify-center gap-1">
-                  <AlertTriangle className="size-4 text-amber-600" />
-                  <p className="text-lg font-bold text-amber-600">Sí</p>
-                </div>
-                <p className="text-[10px] text-amber-700 font-medium">Retorno pendiente</p>
-              </>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">CX {surgery.id} · {surgery.institution}</p>
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">Preparación CX: {surgery.preparationState}</span>
+            {summary.returnResolved ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">Retorno resuelto</span>
+            ) : summary.pendingReturn ? (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">Retorno pendiente</span>
             ) : (
-              <>
-                <CheckCircle2 className="size-4 text-emerald-600 mx-auto" />
-                <p className="text-[10px] text-muted-foreground">Retorno OK</p>
-              </>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">Sin cierre de retorno</span>
+            )}
+            {summary.sentSource && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">Salida base: {summary.sentSource}</span>
             )}
           </div>
         </div>
-      )}
 
-      {/* ── Pending return alert ── */}
-      {summaryStats?.pendingReturn && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle className="size-4 text-amber-600" />
-            <span className="text-xs font-semibold text-amber-800">Retorno pendiente</span>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-950/60">
+            <p className={LABEL_CLS}>Preparación CX</p>
+            <Select
+              value={surgery.preparationState}
+              onValueChange={(value) => {
+                if (value === surgery.preparationState) return
+                void updatePreparation(value as PreparationState)
+              }}
+              disabled={isUpdatingPreparation}
+            >
+               <SelectTrigger className="mt-1 h-7.5 text-[11px]">
+                <SelectValue placeholder="Seleccionar estado" />
+              </SelectTrigger>
+              <SelectContent>
+                {PREPARATION_OPTIONS.map((state) => (
+                  <SelectItem key={state} value={state} className="text-[11px]">
+                    {state}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <p className="text-[10px] text-amber-700">
-            Los materiales fueron enviados pero aún no se ha registrado el retorno. 
-            {summaryStats.daysSinceSent !== null && summaryStats.daysSinceSent > 2 && (
-              <span className="font-semibold">
-                {" "}Han pasado {summaryStats.daysSinceSent} días desde el envío.
-              </span>
-            )}
-          </p>
-        </div>
-      )}
 
-      {/* ── Preparation state alert (if con faltantes) ── */}
-      {logistics.preparation === "Congelado con faltantes" && (
-        <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle className="size-4 text-orange-600" />
-            <span className="text-xs font-semibold text-orange-800">Preparación con faltantes</span>
-          </div>
-          <p className="text-[10px] text-orange-700">
-            La preparación está congelada con faltantes de materiales. Verificar los artículos 
-            pendientes antes de proceder con el envío.
-          </p>
+          {logistics?.amount ? (
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-right dark:border-slate-800 dark:bg-slate-950/60">
+              <p className={LABEL_CLS}>Valor materiales</p>
+              <p className="text-[13px] font-semibold text-slate-950 dark:text-slate-100">{formatCurrency(logistics.amount)}</p>
+            </div>
+          ) : null}
         </div>
-      )}
-
-      {/* ── Action Buttons ── */}
-      <div className="flex flex-wrap items-center gap-2 pt-1">
-        <Button size="sm" variant="outline">
-          <MapPin className="size-3.5" />
-          Ver mapa
-        </Button>
-        <Button size="sm" variant="outline">
-          <FileText className="size-3.5" />
-          Registrar evento
-        </Button>
-        {summaryStats?.pendingReturn && (
-          <Button size="sm" variant="outline">
-            <AlertTriangle className="size-3.5" />
-            Reclamar retorno
-          </Button>
-        )}
-        {logistics.vuelta === "Retirado" && (
-          <Button size="sm" variant="outline">
-            <CornerDownLeft className="size-3.5" />
-            Registrar devolución
-          </Button>
-        )}
-        {box && (
-          <Button size="sm" variant="secondary">
-            <Eye className="size-3.5" />
-            Ver caja
-          </Button>
-        )}
       </div>
+
+      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-3">
+        <CompactGroup title="Preparación">
+          <CompactListRow label="Estado logística" value={logistics?.preparation} />
+          <CompactListRow label="Preparación CX" value={surgery.preparationState} />
+          <CompactListRow label="Registro salida" value={logistics?.registroSalida} />
+          <CompactListRow label="Caja preparada" value={box?.preparedAt ? formatDate(box.preparedAt) : ""} />
+        </CompactGroup>
+
+        <CompactGroup title="Envío">
+          <CompactListRow label="Estado" value={logistics?.ida ?? latestRemito?.state} />
+          <CompactListRow label="Fecha salida" value={summary.sentDate ? formatDate(summary.sentDate) : ""} />
+          <CompactListRow label="Fuente" value={summary.sentSource ?? ""} valueClassName="text-[11px] font-medium text-slate-700" />
+          <CompactListRow label="Días desde salida" value={summary.daysSinceSent !== null ? String(summary.daysSinceSent) : ""} />
+        </CompactGroup>
+
+        <CompactGroup title="Retorno">
+          <CompactListRow label="Resumen" value={summary.returnLabel} valueClassName={cn("text-[13px] font-semibold", summary.returnTone)} />
+          <CompactListRow label="Registro retiro" value={logistics?.registroRetiro} />
+          <CompactListRow label="Registro devolución" value={logistics?.registroDevolucion} />
+          <CompactListRow label="Caja devuelta" value={box?.returnedAt ? formatDate(box.returnedAt) : ""} />
+        </CompactGroup>
+      </div>
+
+      <InfoNote>
+        Días desde salida prioriza <strong>fecha de remito</strong>. Solo cae a logística, caja o ficha si no hay remito visible.
+      </InfoNote>
+
+      {box && (
+        <div className="rounded-md border border-slate-200 bg-white/70 px-2.5 py-2.5 dark:border-slate-800 dark:bg-slate-900/70">
+          <div className="mb-1.5 flex items-center gap-2">
+            <BoxIcon className="size-3.5 text-slate-700 dark:text-slate-300" />
+            <p className={SUBSECTION_TITLE_CLS}>Caja / material</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 rounded-md border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-950/60 sm:grid-cols-4">
+            <div>
+              <p className="mb-0.5 text-[10px] text-slate-500 dark:text-slate-400">Caja</p>
+              <p className="truncate text-xs font-medium" title={box.name}>{box.name}</p>
+            </div>
+            <div>
+              <p className="mb-0.5 text-[10px] text-slate-500 dark:text-slate-400">Tipo</p>
+              <p className="text-xs">{box.type}</p>
+            </div>
+            <div>
+              <p className="mb-0.5 text-[10px] text-slate-500 dark:text-slate-400">Estado caja</p>
+              <StateBadge state={box.state} />
+            </div>
+            <div>
+              <p className="mb-0.5 text-[10px] text-slate-500 dark:text-slate-400">Contenidos</p>
+              <p className="text-xs">{box.contents.length} ítem{box.contents.length !== 1 ? "s" : ""}</p>
+            </div>
+          </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-3 text-[10px] text-slate-500 dark:text-slate-400">
+            {box.preparedAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="size-3" />Preparado: {formatDate(box.preparedAt)}</span>}
+            {box.sentAt && <span className="inline-flex items-center gap-1"><Truck className="size-3" />Enviado: {formatDate(box.sentAt)}</span>}
+            {box.returnedAt && <span className="inline-flex items-center gap-1"><RotateCcw className="size-3" />Devuelto: {formatDate(box.returnedAt)}</span>}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-center dark:border-slate-800 dark:bg-slate-950/60">
+          <p className="text-base font-bold text-slate-900 dark:text-slate-100">{summary.eventsCount}</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">Registros</p>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-center dark:border-slate-800 dark:bg-slate-950/60">
+          <p className="text-base font-bold text-slate-900 dark:text-slate-100">{summary.daysSinceSent ?? "—"}</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">Días desde salida</p>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-center dark:border-slate-800 dark:bg-slate-950/60">
+          <p className={cn("text-base font-bold", summary.remitoOpenUnits > 0 ? "text-amber-600" : "text-emerald-600")}>{summary.remitoOpenUnits}</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">Unidades abiertas por remito</p>
+        </div>
+      </div>
+
     </div>
   )
 }

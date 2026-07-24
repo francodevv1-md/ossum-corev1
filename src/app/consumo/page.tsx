@@ -10,6 +10,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { LegacyStandaloneNotice } from "@/components/legacy/LegacyStandaloneNotice"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,6 +113,11 @@ export default function ConsumoPage() {
 
   return (
     <div className="space-y-4">
+      <LegacyStandaloneNotice
+        description="La operación real de consumo vive en Ficha CX. Esta pantalla standalone queda como vista legacy de consulta transitoria."
+        tabHint="Seleccioná una cirugía en Cirugías y abrí la pestaña Consumo de la Ficha CX."
+      />
+
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>

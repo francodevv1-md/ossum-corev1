@@ -20,9 +20,9 @@ interface ExpedientePreviewProps {
   onSetFacturarDialogOpen: (open: boolean) => void; onSetDialogSurgery: (s: Surgery) => void; onSetNoteDialogOpen: (open: boolean) => void
 }
 
-function MiniBadge({ status, colorMap }: { status: string; colorMap: Record<string, string> }) {
+function MiniBadge({ label, status, colorMap }: { label: string; status: string; colorMap: Record<string, string> }) {
   const colorClass = colorMap[status] || "bg-gray-400 text-white"
-  return <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold leading-none", colorClass)}>{status}</span>
+  return <span className={cn("inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold leading-none", colorClass)}><span className="uppercase opacity-75">{label}</span>{status}</span>
 }
 
 export function ExpedientePreview({
@@ -69,11 +69,11 @@ export function ExpedientePreview({
       {/* ── Status chips ── */}
       <div className="px-3 py-1.5 border-b">
         <div className="flex flex-wrap gap-1">
-          {s.urgente && <MiniBadge status="Urgente" colorMap={{ "Urgente": "bg-red-600 text-white" }} />}
-          <MiniBadge status={s.state} colorMap={CX_STATE_COLORS} />
-          <MiniBadge status={s.preparationState} colorMap={PREP_STATE_COLORS} />
-          <MiniBadge status={docStatus} colorMap={DOC_STATUS_COLORS} />
-          <MiniBadge status={s.facturado ? "Facturada" : getFacturacionBadgeLabel(facturacionStatus)} colorMap={FACTURACION_COLORS} />
+          {s.urgente && <MiniBadge label="Alerta" status="Urgente" colorMap={{ "Urgente": "bg-red-600 text-white" }} />}
+          <MiniBadge label="Estado CX" status={s.state} colorMap={CX_STATE_COLORS} />
+          <MiniBadge label="Preparación" status={s.preparationState} colorMap={PREP_STATE_COLORS} />
+          <MiniBadge label="Documentación" status={docStatus} colorMap={DOC_STATUS_COLORS} />
+          <MiniBadge label="Facturación" status={s.facturado ? "Facturada" : getFacturacionBadgeLabel(facturacionStatus)} colorMap={FACTURACION_COLORS} />
         </div>
       </div>
 

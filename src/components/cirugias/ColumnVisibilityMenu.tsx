@@ -18,6 +18,8 @@ interface ColumnVisibilityMenuProps {
   columnOrder: string[]
   onReorderColumns: (fromIndex: number, toIndex: number) => void
   onResetToDefault: () => void
+  triggerLabel?: string
+  triggerClassName?: string
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -116,6 +118,8 @@ export function ColumnVisibilityMenu({
   colVisOpen, setColVisOpen, columns, visibleCols, toggleColumn,
   stickyColumns, onToggleStickyColumns,
   columnOrder, onReorderColumns, onResetToDefault,
+  triggerLabel,
+  triggerClassName,
 }: ColumnVisibilityMenuProps) {
   // Build ordered column list from columnOrder
   const columnsMap = new Map(columns.map((c) => [c.key, c]))
@@ -131,8 +135,9 @@ export function ColumnVisibilityMenu({
   return (
     <Popover open={colVisOpen} onOpenChange={setColVisOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 gap-1 shrink-0">
+        <Button variant="outline" size="sm" className={cn("h-9 gap-1 shrink-0", triggerClassName)}>
           <Columns3 className="size-3.5" />
+          {triggerLabel && <span className="text-xs">{triggerLabel}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-56 p-3 space-y-2">

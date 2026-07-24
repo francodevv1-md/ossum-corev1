@@ -48,14 +48,14 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md border-slate-200/80 bg-white/92 shadow-xl shadow-slate-900/8 backdrop-blur">
+    <Card className="w-full max-w-md border-border/70 bg-card/90 shadow-xl shadow-black/10 backdrop-blur dark:shadow-black/30">
       <CardHeader className="space-y-3 text-center">
-        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-950 text-sm font-semibold tracking-tight text-white shadow-sm">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-border bg-primary text-sm font-semibold tracking-tight text-primary-foreground shadow-sm">
           OC
         </div>
         <div className="space-y-1">
-          <CardTitle className="text-2xl tracking-tight text-slate-950">OSSUM COR</CardTitle>
-          <CardDescription className="text-slate-600">ERP quirúrgico</CardDescription>
+          <CardTitle className="text-2xl tracking-tight text-card-foreground">OSSUM COR</CardTitle>
+          <CardDescription className="text-muted-foreground">ERP quirúrgico</CardDescription>
         </div>
       </CardHeader>
       <CardContent>

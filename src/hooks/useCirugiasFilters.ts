@@ -6,11 +6,11 @@
  * CHATZAI-025-4C: Enhanced date filters + new advanced filter fields.
  */
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, type Dispatch, type SetStateAction } from "react"
 import { useOrtoTrackStore } from "@/lib/store"
 import type { Surgery } from "@/types"
 import type { FilterChip, SearchChip, DateFilter } from "@/lib/cirugias.types"
-import { FACTURACION_OPTIONS } from "@/lib/cirugias.constants"
+import { ALL_STATES, FACTURACION_OPTIONS } from "@/lib/cirugias.constants"
 import { getFacturacionStatus } from "@/lib/cirugias.utils"
 import { normalizeAccents } from "@/lib/utils"
 
@@ -19,7 +19,7 @@ export function useCirugiasFilters() {
 
   // ── Filter state ──
   const [search, setSearch] = useState("")
-  const [stateFilters, setStateFilters] = useState<string[]>([])
+  const [rawStateFilters, setRawStateFilters] = useState<string[]>([])
   const [classFilters, setClassFilters] = useState<string[]>([])
   const [clientFilters, setClientFilters] = useState<string[]>([])
   const [institutionFilters, setInstitutionFilters] = useState<string[]>([])
@@ -67,6 +67,23 @@ export function useCirugiasFilters() {
   const [conPrFilter, setConPrFilter] = useState<"con" | "sin" | null>(null)
   const [conConsumoFilter, setConConsumoFilter] = useState<"con" | "sin" | null>(null)
   const [conFacturaFilter, setConFacturaFilter] = useState<"con" | "sin" | null>(null)
+  // CX-OPERATIONS-UI-SAFE-P1: transient list-preset state only.
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
+  const [needsAttention, setNeedsAttention] = useState(false)
+
+  // Estado CX accepts only its own vocabulary. Preserve valid selections when
+  // clearing a deprecated/misrouted preparation value instead of resetting the
+  // entire filter family.
+  const stateFilters = useMemo(
+    () => rawStateFilters.filter((value) => ALL_STATES.includes(value as typeof ALL_STATES[number])),
+    [rawStateFilters],
+  )
+  const setStateFilters = useCallback<Dispatch<SetStateAction<string[]>>>((next) => {
+    setRawStateFilters((current) => {
+      const resolved = typeof next === "function" ? next(current) : next
+      return resolved.filter((value) => ALL_STATES.includes(value as typeof ALL_STATES[number]))
+    })
+  }, [])
 
   // ── Computed: facturacion status helper ──
   const facturacionStatus = useCallback((s: Surgery): string => {
@@ -150,7 +167,7 @@ export function useCirugiasFilters() {
 
     return data.filter((surgery) => {
       // AND logic: all field groups must match
-      for (const [_field, fieldChips] of chipsByField) {
+      for (const fieldChips of chipsByField.values()) {
         // OR logic within same field: any chip in this group must match
         const anyMatch = fieldChips.some((chip) => matchesSearchChip(surgery, chip))
         if (!anyMatch) return false
@@ -212,6 +229,8 @@ export function useCirugiasFilters() {
         filtered = filtered.filter((s) => store.getDocStatus(s.id) === "Incompleta")
       } else if (kpiFilter === "pendFacturar") {
         filtered = filtered.filter((s) => !s.facturado && s.state === "Realizada")
+      } else if (kpiFilter === "En preparación") {
+        filtered = filtered.filter((s) => s.preparationState === "En preparación")
       } else {
         filtered = filtered.filter((s) => s.state === kpiFilter)
       }
@@ -353,7 +372,7 @@ export function useCirugiasFilters() {
   const activeFilterChips = useMemo((): FilterChip[] => {
     const chips: FilterChip[] = []
     if (search) chips.push({ key: "search", label: `Paciente: "${search}"`, onClear: () => setSearch("") })
-    if (kpiFilter) chips.push({ key: "kpi", label: `KPI: ${kpiFilter === "docIncompleta" ? "Doc. incompleta" : kpiFilter === "pendFacturar" ? "Pend. facturar" : kpiFilter}`, onClear: () => setKpiFilter(null) })
+    if (kpiFilter) chips.push({ key: "kpi", label: kpiFilter === "En preparación" ? "KPI Preparación: En preparación" : `KPI: ${kpiFilter === "docIncompleta" ? "Doc. incompleta" : kpiFilter === "pendFacturar" ? "Pend. facturar" : kpiFilter}`, onClear: () => setKpiFilter(null) })
     stateFilters.forEach(f => chips.push({ key: `state-${f}`, label: `Estado: ${f}`, onClear: () => setStateFilters(prev => prev.filter(x => x !== f)) }))
     prepFilters.forEach(f => chips.push({ key: `prep-${f}`, label: `Prep: ${f}`, onClear: () => setPrepFilters(prev => prev.filter(x => x !== f)) }))
     docFilters.forEach(f => chips.push({ key: `doc-${f}`, label: `Doc: ${f}`, onClear: () => setDocFilters(prev => prev.filter(x => x !== f)) }))
@@ -394,7 +413,7 @@ export function useCirugiasFilters() {
     if (conFacturaFilter === "sin") chips.push({ key: "sinFactura", label: "Sin factura", onClear: () => setConFacturaFilter(null) })
 
     return chips
-  }, [search, kpiFilter, stateFilters, prepFilters, docFilters, factFilters, clientFilters, classFilters, institutionFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter])
+  }, [search, kpiFilter, stateFilters, prepFilters, docFilters, factFilters, clientFilters, classFilters, institutionFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter, setStateFilters])
 
   // ── Has active filters ──
   const hasActiveFilters = !!(
@@ -428,7 +447,9 @@ export function useCirugiasFilters() {
     sinFechaCx ||
     conPrFilter !== null ||
     conConsumoFilter !== null ||
-    conFacturaFilter !== null
+    conFacturaFilter !== null ||
+    selectedPreset !== null ||
+    needsAttention
   )
 
   const hasExtendedSearch = !!(searchInMedico || searchInInstitucion || searchInCliente || searchInPR || searchInExpediente || searchInNR || searchInFV)
@@ -465,14 +486,15 @@ export function useCirugiasFilters() {
     if (conPrFilter !== null) count += 1
     if (conConsumoFilter !== null) count += 1
     if (conFacturaFilter !== null) count += 1
+    if (selectedPreset !== null) count += 1
     return count
-  }, [search, searchChips, kpiFilter, stateFilters, prepFilters, docFilters, factFilters, clientFilters, classFilters, institutionFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, hasExtendedSearch, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter])
+  }, [search, searchChips, kpiFilter, stateFilters, prepFilters, docFilters, factFilters, clientFilters, classFilters, institutionFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, hasExtendedSearch, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter, selectedPreset])
 
   // ── Clear all filters (including search chips) ──
   const clearFilters = useCallback(() => {
     setSearch("")
     setSearchChips([])
-    setStateFilters([])
+    setRawStateFilters([])
     setClassFilters([])
     setClientFilters([])
     setInstitutionFilters([])
@@ -510,6 +532,8 @@ export function useCirugiasFilters() {
     setConPrFilter(null)
     setConConsumoFilter(null)
     setConFacturaFilter(null)
+    setSelectedPreset(null)
+    setNeedsAttention(false)
   }, [])
 
   const clearExtendedSearch = useCallback(() => {
@@ -566,6 +590,8 @@ export function useCirugiasFilters() {
     conPrFilter, setConPrFilter,
     conConsumoFilter, setConConsumoFilter,
     conFacturaFilter, setConFacturaFilter,
+    selectedPreset, setSelectedPreset,
+    needsAttention, setNeedsAttention,
     // Computed
     activeFilterChips,
     hasActiveFilters,

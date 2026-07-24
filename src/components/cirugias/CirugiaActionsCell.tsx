@@ -3,6 +3,15 @@ import React from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -14,7 +23,7 @@ import {
 } from "@/components/ui/tooltip"
 import {
   Eye, Receipt, Truck, Activity, MoreHorizontal,
-  StickyNote, ArrowUpDown, CalendarDays, Ban, XCircle, RotateCcw,
+  StickyNote, ArrowUpDown, CalendarDays, Ban, XCircle, RotateCcw, Trash2, PlayCircle, Loader2,
 } from "lucide-react"
 import {
   canRemitirNR,
@@ -22,6 +31,8 @@ import {
 } from "@/lib/businessRules"
 import type { Surgery, SurgeryState } from "@/types"
 import type { CSSProperties } from "react"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { apiFetch } from "@/lib/api/client"
 
 // ═══════════════════════════════════════════════════════════════
 // Types
@@ -124,13 +135,13 @@ function ActionMenuItem({ icon: Icon, label, disabled, reason, onClick, variant 
               >
                 <Icon className="size-4" />
                 <span>{label}</span>
-                <span className="ml-auto text-[9px] text-muted-foreground">No disponible</span>
+                <span className="ml-auto text-[9px] text-muted-foreground dark:text-slate-500">No disponible</span>
               </DropdownMenuItem>
             </span>
           </TooltipTrigger>
-          <TooltipContent side="left" className="max-w-[280px]">
+          <TooltipContent side="left" className="max-w-[280px] border-slate-200/80 bg-white/95 text-slate-900 shadow-xl dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-100">
             <p className="text-xs font-medium">{label} — No disponible</p>
-            <p className="text-[10px] text-muted-foreground mt-1">{reason}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground dark:text-slate-400">{reason}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -159,6 +170,10 @@ export function CirugiaActionsCell({
   tdClassName, tdStyle,
 }: CirugiaActionsCellProps) {
   const s = surgery
+  const { activeCompany } = useAuth()
+  const [executeDialogOpen, setExecuteDialogOpen] = React.useState(false)
+  const [isExecuting, setIsExecuting] = React.useState(false)
+  const [executeError, setExecuteError] = React.useState<string | null>(null)
 
   // Compute business rule results
   const canFacturarResult = canFacturar(s)
@@ -179,33 +194,62 @@ export function CirugiaActionsCell({
   const canSuspend = s.state !== "Suspendida" && s.state !== "Cancelada"
   const canCancel = s.state !== "Cancelada" && s.state !== "Suspendida"
   const canRecover = s.state === "Suspendida" || s.state === "Cancelada"
+  const canExecute = s.backendCxStatus === "scheduled" && Boolean(s.backendId) && Boolean(activeCompany?.id)
+  const executeReason = s.backendCxStatus !== "scheduled"
+    ? "Solo una cirugía programada puede ejecutarse."
+    : !s.backendId || !activeCompany?.id
+      ? "La cirugía no tiene contexto server-side disponible."
+      : undefined
+  const primaryButtonClassName = "h-7 shrink-0 gap-1 border-slate-300/80 bg-white/90 text-[10px] text-slate-700 shadow-sm hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-white"
+  const openDeletePreview = () => {
+    onSetDialogSurgery(s)
+    window.dispatchEvent(new CustomEvent("ossum:open-delete-surgery-dialog", { detail: { surgery: s } }))
+  }
+  const executeSurgery = async () => {
+    if (!canExecute || !s.backendId || !activeCompany?.id) return
+    setIsExecuting(true)
+    setExecuteError(null)
+
+    try {
+      await apiFetch(
+        `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(s.backendId)}/execute`,
+        { method: "POST" }
+      )
+      setExecuteDialogOpen(false)
+      window.dispatchEvent(new CustomEvent("ossum:surgeries-refresh"))
+    } catch (error) {
+      setExecuteError(error instanceof Error ? error.message : "No se pudo ejecutar la cirugía.")
+    } finally {
+      setIsExecuting(false)
+    }
+  }
 
   return (
     <td className={cn("px-2 py-1.5", tdClassName)} style={tdStyle} onClick={(e) => e.stopPropagation()}>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 rounded-md border border-transparent pr-0.5 dark:border-slate-800/60 dark:bg-slate-950/55">
         {/* ── Contextual primary action ── */}
         {primaryAction === "crear_pr" && (
-          <Button variant="outline" size="sm" className="h-7 gap-1 text-[10px] shrink-0" onClick={() => onOpenPresupuestoDialog(s)}>
+          <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => onOpenPresupuestoDialog(s)}>
             <Receipt className="size-3" /> Crear PR
           </Button>
         )}
         {primaryAction === "remitir_nr" && (
-          <Button variant="outline" size="sm" className="h-7 gap-1 text-[10px] shrink-0" onClick={() => { onOpenExpediente(s.id); onSetExpTab("remitos") }}>
+          <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => { onOpenExpediente(s.id); onSetExpTab("remitos") }}>
             <Truck className="size-3" /> Remitir NR
           </Button>
         )}
         {primaryAction === "cargar_consumo" && (
-          <Button variant="outline" size="sm" className="h-7 gap-1 text-[10px] shrink-0" onClick={() => { onOpenExpediente(s.id); onSetExpTab("consumo") }}>
+          <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => { onOpenExpediente(s.id); onSetExpTab("consumo") }}>
             <Activity className="size-3" /> Cargar consumo
           </Button>
         )}
         {primaryAction === "facturar" && (
-          <Button variant="outline" size="sm" className="h-7 gap-1 text-[10px] shrink-0" onClick={() => { onSetDialogSurgery(s); onSetFacturarDialogOpen(true) }}>
+          <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => { onSetDialogSurgery(s); onSetFacturarDialogOpen(true) }}>
             <Receipt className="size-3" /> Facturar
           </Button>
         )}
         {primaryAction === "ver_expediente" && (
-          <Button variant="outline" size="sm" className="h-7 gap-1 text-[10px] shrink-0" onClick={() => onOpenExpediente(s.id)}>
+          <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => onOpenExpediente(s.id)}>
             <Eye className="size-3" /> Ver expediente
           </Button>
         )}
@@ -213,11 +257,11 @@ export function CirugiaActionsCell({
         {/* ── More actions dropdown ── */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-              <MoreHorizontal className="size-3.5 text-muted-foreground" />
+            <Button variant="ghost" size="sm" className="h-7 w-7 border border-slate-200/80 bg-white/80 p-0 text-slate-600 shadow-sm hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
+              <MoreHorizontal className="size-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuContent align="end" className="w-60 border-slate-200/80 bg-white/95 shadow-xl backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95">
             <DropdownMenuLabel className="text-xs">Más acciones</DropdownMenuLabel>
             <DropdownMenuSeparator />
 
@@ -259,6 +303,14 @@ export function CirugiaActionsCell({
               disabled={!canConsumoResult.allowed}
               reason={consumoReason}
               onClick={canConsumoResult.allowed ? () => { onOpenExpediente(s.id); onSetExpTab("consumo") } : undefined}
+            />
+
+            <ActionMenuItem
+              icon={PlayCircle}
+              label="Ejecutar cirugía"
+              disabled={!canExecute}
+              reason={executeReason}
+              onClick={canExecute ? () => { setExecuteError(null); setExecuteDialogOpen(true) } : undefined}
             />
 
             {/* Facturar / Autorizar FV */}
@@ -322,9 +374,39 @@ export function CirugiaActionsCell({
                 onClick={() => onRecover(s)}
               />
             )}
+
+            <DropdownMenuSeparator />
+
+            <ActionMenuItem
+              icon={Trash2}
+              label="Eliminar cirugía"
+              variant="destructive"
+              onClick={openDeletePreview}
+            />
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-    </td>
+        </div>
+        <AlertDialog open={executeDialogOpen} onOpenChange={(open) => {
+          if (!isExecuting) setExecuteDialogOpen(open)
+          if (!open) setExecuteError(null)
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Ejecutar cirugía?</AlertDialogTitle>
+              <AlertDialogDescription>
+                La cirugía pasará a Realizada con la fecha y hora actual. Esta acción requiere un Remito entregado.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {executeError ? <p className="text-sm text-destructive" role="alert">{executeError}</p> : null}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isExecuting}>Cancelar</AlertDialogCancel>
+              <Button type="button" onClick={() => void executeSurgery()} disabled={isExecuting} autoFocus>
+                {isExecuting ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
+                {isExecuting ? "Ejecutando…" : "Confirmar ejecución"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </td>
   )
 }

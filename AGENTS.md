@@ -67,15 +67,13 @@ OSSUM COR no es:
 
 ## 5. Secuencia vigente
 
-No iniciar backend directo.
+Secuencia histórica de preparación (referencia):
 
-Secuencia obligatoria:
+1. **GPT-027F.0A — Knowledge V2 / saneamiento documental.** — **CERRADA**.
+2. **GPT-027F.0B — Gentle-AI workspace / Engram / SDD / Skill Registry / guardrails.** — **CERRADA**.
+3. **GPT-027F.5A — Backend Foundation.** — **EJECUTADA parcialmente** (schema phase1, auth Supabase DEV, contactos API, surgeries API, seguimiento, notificaciones, recibos digitales, mail stage1 en FS, IA autorización stateless; ver `knowledge/architecture/ADR-027E-...` addendums y `knowledge/architecture/BACKEND_PHASE2_PLAN.md`).
 
-1. **GPT-027F.0A — Knowledge V2 / saneamiento documental.**
-2. **GPT-027F.0B — Gentle-AI workspace / Engram / SDD / Skill Registry / guardrails.**
-3. **GPT-027F.5A — Backend Foundation.**
-
-Hasta cerrar 0A/0B, no tocar `schema.prisma`, no crear migraciones reales, no cambiar Auth, no migrar Zustand y no refactorizar Cirugías.
+La prohibición "hasta cerrar 0A/0B no tocar schema/auth/Cirugías" queda **resuelta como regla protectiva basada en contenido**, no como secuencia bloqueante. Las reglas protectivas siguen vigentes y se detallan en §11. Requieren Task Brief específico y aprobación de Franco para `schema.prisma`, Auth y refactor de Cirugías.
 
 ---
 
@@ -337,17 +335,17 @@ Antes de tocar un archivo crítico:
 
 ## 11. Prohibiciones inmediatas
 
-Mientras no esté cerrado GPT-027F.0A/0B:
+Reglas protectivas permanentes (independientes del cierre de fases):
 
-- No backend foundation.
-- No migraciones reales.
-- No cambio de DB provider.
-- No cambios de Auth.
-- No refactor de Cirugías.
-- No tocar `schema.prisma`.
+- No backend foundation (circuito troncal post-Cirugía) sin Task Brief específico y aprobación de Franco.
+- No migraciones reales sin aprobación de Franco.
+- No cambio de DB provider sin ADR.
+- No Auth productivo sin `ADR-AUTH-FINAL.md` cerrado y aprobado.
+- No refactor de Cirugías (`/cirugias` page, expediente, hooks, store) sin Task Brief y scope explícito.
+- No tocar `prisma/schema.prisma` sin Task Brief + aprobación Franco.
 - No instalar dependencias nuevas sin tarea explícita.
-- No integrar TusFacturasAPP productivo.
-- No mover grandes carpetas de código.
+- No integrar TusFacturasAPP productivo sin backend y ADR específica.
+- No mover grandes carpetas de código sin task plan.
 
 ---
 

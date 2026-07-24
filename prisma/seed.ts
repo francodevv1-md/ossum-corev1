@@ -40,7 +40,19 @@ const IDS = {
   patientAddress: cuid("ad", "patient1"),
   surgery: cuid("sg", "surgery1"),
   auditEvent: cuid("ae", "seed1"),
+  // Mock-prototype matching surgeries (visibleNumber = CX-0001..CX-0008)
+  // These bridge the mock frontend IDs to real DB surgeries so features like
+  // seguimiento can work while the frontend still uses Zustand mock data.
+  mockSurgeries: Array.from({ length: 8 }, (_, i) =>
+    cuid("sg", `mockcx${i + 1}`)
+  ),
 } as const;
+
+// Mock-prototype visibleNumbers that match src/data/mock-surgeries.ts IDs
+const MOCK_VISIBLE_NUMBERS = [
+  "CX-0001", "CX-0002", "CX-0003", "CX-0004",
+  "CX-0005", "CX-0006", "CX-0007", "CX-0008",
+] as const;
 
 async function main() {
   console.log("🌱 Starting OSSUM COR DEV seed...");
@@ -414,13 +426,63 @@ async function main() {
   });
   console.log(`  ✓ AuditEvent: ${auditEvent.action} (${auditEvent.module})`);
 
+  // ─── 13. Mock-prototype matching surgeries ─────────────────────────
+  // Creates surgeries with visibleNumber = CX-0001..CX-0008 so the mock
+  // frontend (Zustand) can interact with real backend features like
+  // seguimiento. Reuses existing patient/doctor/institution/payer contacts.
+  console.log("  Seeding mock-prototype surgeries (CX-0001..CX-0008)...");
+  for (let i = 0; i < IDS.mockSurgeries.length; i++) {
+    const surgeryId = IDS.mockSurgeries[i];
+    const visibleNumber = MOCK_VISIBLE_NUMBERS[i];
+    const surgeryDate = new Date("2026-05-12T10:00:00Z");
+    surgeryDate.setDate(surgeryDate.getDate() + i * 3); // stagger dates
+
+    await prisma.surgery.upsert({
+      where: { id: surgeryId },
+      update: {
+        companyId: company.id,
+        branchId: branch.id,
+        visibleNumber,
+        patientId: patient.id,
+        doctorId: doctor.id,
+        institutionId: institution.id,
+        payerContactId: payer.id,
+        classification: "traumatología general",
+        description: `Cirugía mock ${visibleNumber} — puente mock frontend → backend`,
+        priority: "normal",
+        cxStatus: i % 3 === 0 ? "pending" : "scheduled",
+        surgeryDate,
+        source: "seed-mock",
+        notes: `Cirugía mock ${visibleNumber} para compatibilidad con prototipo frontend`,
+      },
+      create: {
+        id: surgeryId,
+        companyId: company.id,
+        branchId: branch.id,
+        visibleNumber,
+        patientId: patient.id,
+        doctorId: doctor.id,
+        institutionId: institution.id,
+        payerContactId: payer.id,
+        classification: "traumatología general",
+        description: `Cirugía mock ${visibleNumber} — puente mock frontend → backend`,
+        priority: "normal",
+        cxStatus: i % 3 === 0 ? "pending" : "scheduled",
+        surgeryDate,
+        source: "seed-mock",
+        notes: `Cirugía mock ${visibleNumber} para compatibilidad con prototipo frontend`,
+      },
+    });
+  }
+  console.log(`  ✓ Mock surgeries: 8 (CX-0001..CX-0008)`);
+
   console.log("\n✅ DEV seed completed successfully!");
   console.log(`   Organization: ${org.name} (${org.slug})`);
   console.log(`   Company: ${company.name}`);
   console.log(`   Branch: ${branch.name}`);
   console.log(`   User: ${user.email} (role: admin)`);
   console.log(`   Contacts: 4 (patient, doctor, institution, payer)`);
-  console.log(`   Surgery: 1 (pending)`);
+  console.log(`   Surgery: 9 (1 demo + 8 mock-prototype, pending/scheduled)`);
   console.log(`   AuditEvent: 1`);
 }
 

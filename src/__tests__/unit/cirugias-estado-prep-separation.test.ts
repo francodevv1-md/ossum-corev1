@@ -20,7 +20,15 @@ import {
   STATE_FILTER_OPTIONS,
   PREP_FILTER_OPTIONS,
 } from "@/lib/cirugias.constants"
+import { mapApiSurgeryListToSurgeries } from "@/lib/api/surgery-adapter"
 import { PREP_STATE_COLORS } from "@/lib/shared-constants"
+import {
+  validateCxStatus,
+  validatePrepStatus,
+} from "@/lib/validators/surgery.validator"
+import { mockSurgeries } from "@/data/mock-surgeries"
+import { computeKpis } from "@/lib/cirugias.utils"
+import { useOrtoTrackStore } from "@/lib/store"
 
 // ═══════════════════════════════════════════════════════════════
 // 1. ESTADO CX vs PREPARACIÓN SEPARATION
@@ -30,14 +38,14 @@ describe("Estado CX vs Preparación separation", () => {
   // Canonical CX states (from the user spec)
   const CX_STATES = [
     "Sin autorizar", "Sin fecha", "Pendiente", "Autorizada",
-    "En preparación", "En tránsito", "Realizada", "Finalizada",
+    "En tránsito", "Realizada", "Finalizada",
     "Suspendida", "Cancelada", "Sin consumo",
   ]
 
   // Canonical Preparation states (from the user spec)
   const PREP_STATES = [
-    "Sin preparar", "Congelado", "Congelado con faltantes",
-    "Entregado", "Retirado",
+    "Sin preparar", "En preparación", "Congelado", "Congelado con faltantes",
+    "Enviado", "Entregado", "Retirado",
   ]
 
   it("STATE_FILTER_OPTIONS contains only CX states", () => {
@@ -46,8 +54,8 @@ describe("Estado CX vs Preparación separation", () => {
     }
   })
 
-  it("STATE_FILTER_OPTIONS includes all 11 CX states", () => {
-    expect(STATE_FILTER_OPTIONS).toHaveLength(11)
+  it("STATE_FILTER_OPTIONS includes all general CX states", () => {
+    expect(STATE_FILTER_OPTIONS).toHaveLength(10)
     for (const state of CX_STATES) {
       expect(STATE_FILTER_OPTIONS).toContain(state)
     }
@@ -59,8 +67,8 @@ describe("Estado CX vs Preparación separation", () => {
     }
   })
 
-  it("PREP_FILTER_OPTIONS has exactly 5 states", () => {
-    expect(PREP_FILTER_OPTIONS).toHaveLength(5)
+  it("PREP_FILTER_OPTIONS has exactly 7 states", () => {
+    expect(PREP_FILTER_OPTIONS).toHaveLength(7)
   })
 
   it("STATE_FILTER_OPTIONS does NOT contain any preparation state", () => {
@@ -77,9 +85,14 @@ describe("Estado CX vs Preparación separation", () => {
 
   it("CX and Prep filter options have no overlap", () => {
     const cxSet = new Set(STATE_FILTER_OPTIONS)
-    const prepSet = new Set(PREP_FILTER_OPTIONS)
+    const prepSet = new Set<string>(PREP_FILTER_OPTIONS)
     const overlap = [...cxSet].filter((s) => prepSet.has(s))
     expect(overlap).toHaveLength(0)
+  })
+
+  it("keeps En preparación exclusively in preparation options", () => {
+    expect(STATE_FILTER_OPTIONS).not.toContain("En preparación")
+    expect(PREP_FILTER_OPTIONS).toContain("En preparación")
   })
 })
 
@@ -126,17 +139,18 @@ describe("Color palette for Estado CX and Preparación", () => {
     expect(CX_STATE_COLORS["Sin consumo"]).toContain("bg-amber")
   })
 
-  it("PREP_STATE_COLORS has exactly 5 states", () => {
-    expect(Object.keys(PREP_STATE_COLORS)).toHaveLength(5)
+  it("PREP_STATE_COLORS has exactly 7 states", () => {
+    expect(Object.keys(PREP_STATE_COLORS)).toHaveLength(7)
   })
 
-  it("PREP_STATE_COLORS includes Entregado and Retirado", () => {
+  it("PREP_STATE_COLORS includes En preparación, Enviado, Entregado and Retirado", () => {
+    expect(PREP_STATE_COLORS).toHaveProperty("En preparación")
+    expect(PREP_STATE_COLORS).toHaveProperty("Enviado")
     expect(PREP_STATE_COLORS).toHaveProperty("Entregado")
     expect(PREP_STATE_COLORS).toHaveProperty("Retirado")
   })
 
-  it("PREP_STATE_COLORS does NOT include Enviado or Controlado", () => {
-    expect(PREP_STATE_COLORS).not.toHaveProperty("Enviado")
+  it("PREP_STATE_COLORS does NOT include logistics-only states", () => {
     expect(PREP_STATE_COLORS).not.toHaveProperty("Controlado")
     expect(PREP_STATE_COLORS).not.toHaveProperty("Preparado")
     expect(PREP_STATE_COLORS).not.toHaveProperty("Devuelto")
@@ -168,6 +182,40 @@ describe("Color palette for Estado CX and Preparación", () => {
     expect(CX_STATE_CELL_COLORS["En tránsito"]).toContain("bg-blue")
     // They must be different
     expect(CX_STATE_CELL_COLORS["Finalizada"]).not.toBe(CX_STATE_CELL_COLORS["En tránsito"])
+  })
+
+  it("does not expose En preparación as a general CX color", () => {
+    expect(CX_STATE_COLORS).not.toHaveProperty("En preparación")
+    expect(CX_STATE_CELL_COLORS).not.toHaveProperty("En preparación")
+  })
+})
+
+describe("local prototype preparation boundary", () => {
+  it("normalizes the legacy mock general state while retaining its explicit preparation state", () => {
+    const mock = mockSurgeries.find((surgery) => surgery.id === "CX-0002")
+
+    expect(mock).toMatchObject({ state: "Pendiente", preparationState: "Entregado" })
+  })
+
+  it("counts En preparación from preparationState, not general state", () => {
+    const [surgery] = mockSurgeries
+    const kpis = computeKpis([
+      { ...surgery, state: "Pendiente", preparationState: "En preparación" },
+    ], () => "Completa")
+
+    expect(kpis.enPreparacion).toBe(1)
+  })
+
+  it("changes only preparation state in the local store", () => {
+    const surgeryId = "CX-0002"
+    const before = useOrtoTrackStore.getState().getSurgeryById(surgeryId)
+
+    useOrtoTrackStore.getState().changePreparationState(surgeryId, "En preparación")
+
+    expect(useOrtoTrackStore.getState().getSurgeryById(surgeryId)).toMatchObject({
+      state: before?.state,
+      preparationState: "En preparación",
+    })
   })
 })
 
@@ -252,5 +300,39 @@ describe("SmartSurgerySearch multi-category suggestions", () => {
     const medicoMatches = results.filter((r) => r.field === "medico")
     // Should not suggest the surgeon since it's already in contactos
     expect(medicoMatches).toHaveLength(0)
+  })
+})
+
+describe("CX contract read-boundary normalization", () => {
+  it.each([
+    [{ cxStatus: "scheduled", prepStatus: null }, "scheduled"],
+    [{ cxStatus: "preparing", prepStatus: null }, "preparing"],
+    [{ status: "En preparación", prepStatus: null }, "En preparación"],
+  ])("normalizes legacy general %s to Pendiente without inferring preparation", (record, backendCxStatus) => {
+    const [surgery] = mapApiSurgeryListToSurgeries([{ id: "surgery-1", ...record }])
+
+    expect(surgery).toMatchObject({
+      state: "Pendiente",
+      preparationState: "Sin preparar",
+      backendCxStatus,
+    })
+  })
+
+  it("maps preparation independently from the general CX state", () => {
+    const [surgery] = mapApiSurgeryListToSurgeries([
+      { id: "surgery-2", cxStatus: "scheduled", prepStatus: "preparing" },
+    ])
+
+    expect(surgery).toMatchObject({
+      state: "Pendiente",
+      preparationState: "En preparación",
+      backendCxStatus: "scheduled",
+    })
+  })
+
+  it("keeps preparing exclusively on the preparation validator path", () => {
+    expect(() => validateCxStatus("preparing")).toThrow()
+    expect(validateCxStatus("scheduled")).toBe("scheduled")
+    expect(validatePrepStatus("preparing")).toBe("preparing")
   })
 })

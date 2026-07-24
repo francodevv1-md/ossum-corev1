@@ -5,7 +5,6 @@ import type { Surgery, SurgeryNote, NoteType, NotePriority } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -67,8 +66,8 @@ const ALL_PRIORITIES: NotePriority[] = ["Baja", "Media", "Alta"]
 
 function EmptyState({ onAddNote }: { onAddNote: () => void }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+    <Card className="rounded-xl border border-dashed border-slate-300 shadow-none">
+      <CardContent className="flex flex-col items-center justify-center gap-3 py-12">
         <div className="rounded-full bg-muted p-4">
           <StickyNote className="size-8 text-muted-foreground" />
         </div>
@@ -94,8 +93,8 @@ function NoteCard({ note }: { note: SurgeryNote }) {
   const typeIcon = TYPE_ICONS[note.type]
 
   return (
-    <Card className="py-0 transition-colors hover:bg-muted/30">
-      <CardContent className="px-4 py-3 space-y-2.5">
+    <Card className="rounded-xl border-slate-200 py-0 transition-colors hover:bg-muted/30">
+      <CardContent className="space-y-2 px-3.5 py-3">
         {/* ── Top row: badges + internal indicator ── */}
         <div className="flex flex-wrap items-center gap-1.5">
           {/* Type badge */}
@@ -251,7 +250,7 @@ export function NotasPanel({ surgery, notes, onAddNote }: NotasPanelProps) {
   ).length
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       {/* ── Header row ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -297,8 +296,7 @@ export function NotasPanel({ surgery, notes, onAddNote }: NotasPanelProps) {
       />
 
       {/* ── Notes list ── */}
-      <ScrollArea className="max-h-[520px]">
-        <div className="space-y-2 pr-1">
+      <div className="space-y-2">
           {filteredNotes.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-10 gap-2">
@@ -309,12 +307,11 @@ export function NotasPanel({ surgery, notes, onAddNote }: NotasPanelProps) {
               </CardContent>
             </Card>
           ) : (
-            filteredNotes.map((note) => (
+            filteredNotes.filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i).map((note) => (
               <NoteCard key={note.id} note={note} />
             ))
           )}
         </div>
-      </ScrollArea>
     </div>
   )
 }

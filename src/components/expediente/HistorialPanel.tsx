@@ -5,7 +5,6 @@ import type { Surgery, HistoryEntry } from "@/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { formatDate, formatDateTime } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
@@ -91,8 +90,8 @@ function getActionIcon(action: string) {
 // ─── Empty State ──────────────────────────────────────────────────
 function EmptyState() {
   return (
-    <Card>
-      <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+    <Card className="rounded-xl border border-dashed border-slate-300 shadow-none">
+      <CardContent className="flex flex-col items-center justify-center gap-3 py-12">
         <div className="rounded-full bg-muted p-4">
           <History className="size-8 text-muted-foreground" />
         </div>
@@ -207,7 +206,7 @@ export function HistorialPanel({ surgery, history }: HistorialPanelProps) {
   const uniqueActionTypes = Object.keys(actionCounts)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -245,9 +244,8 @@ export function HistorialPanel({ surgery, history }: HistorialPanelProps) {
       <Separator />
 
       {/* ── Timeline ── */}
-      <Card className="py-0">
-        <CardContent className="p-4 sm:p-6">
-          <ScrollArea className="max-h-[520px] pr-2">
+      <Card className="rounded-xl border-slate-200 py-0 shadow-none">
+        <CardContent className="p-4 sm:p-5">
             <div className="space-y-0">
               {sorted.map((entry, idx) => (
                 <TimelineEntry
@@ -257,7 +255,6 @@ export function HistorialPanel({ surgery, history }: HistorialPanelProps) {
                 />
               ))}
             </div>
-          </ScrollArea>
         </CardContent>
       </Card>
 

@@ -6,7 +6,7 @@
  * - expanded: vista completa del expediente
  */
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { useOrtoTrackStore } from "@/lib/store"
 import type { PanelState } from "@/lib/cirugias.constants"
 import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
@@ -16,7 +16,7 @@ export function useCirugiaSelection() {
 
   const [panelState, setPanelState] = useState<PanelState>("list")
   const [selectedSurgeryId, setSelectedSurgeryId] = useState<string | null>(null)
-  const [expTab, setExpTab] = useState("resumen")
+  const [expTab, setExpTab] = useState("ficha")
 
   // ── Derived data ──
   const selectedSurgery = selectedSurgeryId ? store.getSurgeryById(selectedSurgeryId) : null
@@ -39,6 +39,14 @@ export function useCirugiaSelection() {
     [selectedSurgeryId, store]
   )
 
+  useEffect(() => {
+    if (!selectedSurgeryId) return
+    if (store.getSurgeryById(selectedSurgeryId)) return
+
+    setSelectedSurgeryId(null)
+    setPanelState("list")
+  }, [selectedSurgeryId, store, store.surgeries])
+
   // ── Click on row: just select (visual highlight), no panel ──
   const selectSurgery = useCallback((id: string) => {
     setSelectedSurgeryId(id)
@@ -53,7 +61,7 @@ export function useCirugiaSelection() {
   const openExpediente = useCallback((id: string) => {
     setSelectedSurgeryId(id)
     setPanelState("expanded")
-    setExpTab("resumen")
+    setExpTab("ficha")
   }, [])
 
   // ── Close expediente, back to table ──

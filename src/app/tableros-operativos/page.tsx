@@ -128,12 +128,12 @@ export default function TablerosOperativosPage() {
         !["Realizada", "Finalizada", "Suspendida", "Cancelada", "Sin consumo"].includes(s.state)
     )
 
-    // "En preparación" for more than 2 days (mock — we check date < 2 days ago)
+    // Preparation active for more than 2 days (mock — we check date < 2 days ago)
     const twoDaysAgo = new Date(today)
     twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
     const twoDaysAgoStr = `${twoDaysAgo.getFullYear()}-${String(twoDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(twoDaysAgo.getDate()).padStart(2, "0")}`
     const prepTooLong = all.filter(
-      (s) => s.state === "En preparación" && s.date && s.date <= twoDaysAgoStr
+      (s) => s.preparationState === "En preparación" && s.date && s.date <= twoDaysAgoStr
     )
 
     // Low stock alerts
@@ -560,7 +560,7 @@ export default function TablerosOperativosPage() {
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-lg font-bold text-amber-600">
-                    {store.surgeries.filter((s) => s.state === "En preparación" || s.state === "En tránsito").length}
+                    {store.surgeries.filter((s) => s.preparationState === "En preparación" || s.preparationState === "Enviado" || s.preparationState === "Entregado").length}
                   </p>
                   <p className="text-[10px] text-muted-foreground">Preparación/Tránsito</p>
                 </div>

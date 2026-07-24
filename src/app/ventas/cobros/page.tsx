@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import React, { useState, useMemo } from "react"
 import { useOrtoTrackStore } from "@/lib/store"
 import { formatCurrency, formatDate } from "@/lib/formatters"
@@ -206,12 +207,19 @@ export default function CobrosPage() {
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="text-xs">Acciones</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {f.comprobante.surgeryId && (
                 <DropdownMenuItem onClick={() => openExpediente(f.comprobante.surgeryId)}>
                   <FolderOpen className="size-4" /> Ver cirugía
+                </DropdownMenuItem>
+              )}
+              {f.comprobante.surgeryId && (
+                <DropdownMenuItem asChild>
+                  <Link href={`/ventas/recibos?from=cobros&surgeryId=${encodeURIComponent(f.comprobante.surgeryId)}&invoice=${encodeURIComponent(f.comprobante.number)}`}>
+                    <FileText className="size-4" /> Ver recibo digital mock
+                  </Link>
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={() => toast.info(`Detalle FV ${f.comprobante.number}`)}>
@@ -307,15 +315,22 @@ export default function CobrosPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Cobros</h1>
-          <p className="text-sm text-muted-foreground">Registro, imputación y seguimiento de cobros</p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold">Cobros</h1>
+            <p className="text-sm text-muted-foreground">Registro, imputación y seguimiento de cobros</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5 shrink-0" asChild>
+              <Link href="/ventas/recibos?from=cobros">
+                <FileText className="size-4" /> Ver recibos digitales
+              </Link>
+            </Button>
+            <Button size="sm" className="gap-1.5 shrink-0" onClick={handleNewCobro}>
+              <Plus className="size-4" /> Nuevo Cobro
+            </Button>
+          </div>
         </div>
-        <Button size="sm" className="gap-1.5 shrink-0" onClick={handleNewCobro}>
-          <Plus className="size-4" /> Nuevo Cobro
-        </Button>
-      </div>
 
       {/* Stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

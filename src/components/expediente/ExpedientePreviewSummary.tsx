@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils"
 import { formatDate, formatCurrency } from "@/lib/formatters"
 import { CX_STATE_COLORS, PREP_STATE_COLORS } from "@/lib/cirugias.constants"
 
-function ColoredBadge({ status, colorMap, className }: { status: string; colorMap: Record<string, string>; className?: string }) {
+function ColoredBadge({ label, status, colorMap, className }: { label: string; status: string; colorMap: Record<string, string>; className?: string }) {
   const colorClass = colorMap[status] || "bg-gray-400 text-white"
-  return <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium leading-none", colorClass, className)}>{status}</span>
+  return <span className={cn("inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none", colorClass, className)}><span className="uppercase opacity-75">{label}</span>{status}</span>
 }
 
 interface ExpedientePreviewSummaryProps {
@@ -34,10 +34,10 @@ export function ExpedientePreviewSummary({ surgery: s, presupuestoId, remitoId, 
         <p className="text-[10px]">FV: <span className="font-medium">{s.facturaNumber || fvNumber || "—"}</span></p>
       </div>
       <div className="rounded-md border p-2 space-y-0.5">
-        <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Estado Operativo</p>
+        <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Estados</p>
         <div className="flex flex-wrap gap-0.5">
-          <ColoredBadge status={s.state} colorMap={CX_STATE_COLORS} className="text-[8px] px-1" />
-          <ColoredBadge status={s.preparationState} colorMap={PREP_STATE_COLORS} className="text-[8px] px-1" />
+          <ColoredBadge label="Estado CX" status={s.state} colorMap={CX_STATE_COLORS} className="text-[8px] px-1" />
+          <ColoredBadge label="Preparación" status={s.preparationState} colorMap={PREP_STATE_COLORS} className="text-[8px] px-1" />
         </div>
         {consumoState && <p className="text-[10px] mt-0.5">Consumo: <span className="font-medium">{consumoState}</span></p>}
         {cobrosTotal !== undefined && cobrosTotal > 0 && <p className="text-[10px] mt-0.5">Cobro: <span className="font-medium text-emerald-600">{formatCurrency(cobrosTotal)}</span></p>}

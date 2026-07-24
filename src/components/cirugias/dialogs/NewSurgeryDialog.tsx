@@ -19,7 +19,15 @@ import { PROVINCIAS_ARGENTINA, LOCALIDADES_POR_PROVINCIA } from "@/data/argentin
 import { WIZARD_SEARCH_CONTEXTS } from "@/lib/contacts.constants"
 import { getClienteByName, suggestIvaKey } from "@/data/mock-clientes"
 import { ContactLookupField } from "@/components/contactos/ContactLookupField"
+import { ContactoFormDialog } from "@/components/contactos/ContactoFormDialog"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { useOrtoTrackStore } from "@/lib/store"
+import { AiResultsPanel } from "@/components/cirugias/AiResultsPanel"
+import { AiUploadZone } from "@/components/cirugias/AiUploadZone"
+// NUEVA-CIRUGIA-IA-UX-P1 (Phase A): presentational sub-components.
+// Pure, stateless, consume existing state via props — no behavior change.
+import { MissingFieldsBar, type MissingFieldTarget } from "@/components/cirugias/MissingFieldsBar"
+import { MissingCountText } from "@/components/cirugias/MissingCountText"
 import { ReferenciasAdministrativasEditor } from "@/components/cirugias/ReferenciasAdministrativasEditor"
 import { CondicionesSection } from "@/components/presupuestos/CondicionesSection"
 import { PresupuestoItemsTable } from "@/components/presupuestos/PresupuestoItemsTable"
@@ -29,14 +37,300 @@ import { ImportSubmodal } from "@/components/presupuestos/ImportSubmodal"
 import { PostCreationPanel } from "@/components/cirugias/PostCreationPanel"
 import { LeyendaPresupuestoSection } from "@/components/presupuestos/LeyendaPresupuestoSection"
 import { ClasificacionSelectorModal } from "@/components/presupuestos/ClasificacionSelectorModal"
-import { Plus, Settings2, FileText, Info } from "lucide-react"
+import { Plus, Settings2, FileText, Info, Sparkles } from "lucide-react"
+import { useAiExtraction } from "@/hooks/useAiExtraction"
 import type { NewSurgeryForm } from "@/lib/cirugias.types"
 import { EMPTY_NEW_FORM } from "@/lib/cirugias.types"
-import type { SurgeryClassification, ReferenciaAdministrativa, PlantillaPresupuesto } from "@/types"
+import type { Contacto, SurgeryClassification, ReferenciaAdministrativa, PlantillaPresupuesto } from "@/types"
+import type { ContactRole, TipoPersona } from "@/types"
 import type { PresupuestoFormData, PresupuestoFormErrors, FormItem } from "@/hooks/usePresupuestoForm"
+import { mapAiToWizardForm } from "@/lib/validators/autorizacion-ai"
+import { aiConfig } from "@/lib/services/ai/config"
 
 // ─── Step labels (3 steps) ───
 const STEP_LABELS = ["Datos del caso", "Presupuesto", "Confirmación"] as const
+
+type ContactSuggestionField = "patient" | "surgeon" | "institution" | "client"
+
+type ContactCandidate = {
+  contacto: Contacto
+  score: number
+  compatibilityScore: number
+  reason: string
+}
+
+type ContactSuggestionGroup = {
+  field: ContactSuggestionField
+  label: string
+  detectedText: string
+  detectedDni?: string
+  candidates: ContactCandidate[]
+}
+
+type PendingContactCreation = {
+  field: ContactSuggestionField
+  detectedText: string
+  detectedDni?: string
+  defaultRoles: ContactRole[]
+  defaultGroups: string[]
+  tipoPersona: TipoPersona
+}
+
+type InlineAiValueField = "date" | "probableDate" | "provincia"
+
+type ContactSelectionOverrides = Partial<Record<ContactSuggestionField, Contacto | null>>
+type TextOnlyContactFields = Partial<Record<ContactSuggestionField, boolean>>
+
+const QUICK_CREATE_LABELS: Record<ContactSuggestionField, string> = {
+  patient: "Crear paciente",
+  surgeon: "Crear médico",
+  institution: "Crear institución",
+  client: "Crear pagador",
+}
+
+const CONTACT_PREFIXES_TO_REMOVE = [
+  "dr",
+  "dra",
+  "doctor",
+  "doctora",
+  "sanatorio",
+  "hospital",
+  "clinica",
+  "clínica",
+  "instituto",
+  "institucion",
+  "institución",
+  "centro",
+  "medico",
+  "médico",
+  "lic",
+]
+
+const GROUP_COMPATIBILITY = {
+  patient: {
+    preferredGroups: ["pacientes"],
+    incompatibleGroups: ["medicos", "instituciones", "obras_sociales", "prepagas", "prov_implantes"],
+  },
+  surgeon: {
+    preferredGroups: ["medicos"],
+    incompatibleGroups: ["pacientes", "instituciones", "obras_sociales", "prepagas", "prov_implantes"],
+  },
+  institution: {
+    preferredGroups: ["instituciones"],
+    incompatibleGroups: ["pacientes", "medicos"],
+  },
+  client: {
+    preferredGroups: ["obras_sociales", "prepagas", "particulares"],
+    incompatibleGroups: ["pacientes", "medicos", "coordinadores", "vendedores", "instrumentadores"],
+  },
+} as const
+
+function hasAnyGroup(contacto: Contacto, groups: readonly string[]): boolean {
+  return groups.some((group) => contacto.groups.includes(group))
+}
+
+function getCompatibilityAdjustments(contacto: Contacto, field: ContactSuggestionField): {
+  score: number
+  reasons: string[]
+} {
+  const adjustments = { score: 0, reasons: [] as string[] }
+  const rules = GROUP_COMPATIBILITY[field]
+
+  if (hasAnyGroup(contacto, rules.preferredGroups)) {
+    adjustments.score += 40
+    adjustments.reasons.push(`grupo ${rules.preferredGroups.join("/")}`)
+  }
+
+  if (hasAnyGroup(contacto, rules.incompatibleGroups)) {
+    adjustments.score -= 30
+    adjustments.reasons.push("grupo incompatible")
+  }
+
+  if (field === "patient") {
+    if (contacto.tipoPersona === "fisica") {
+      adjustments.score += 5
+      adjustments.reasons.push("persona física")
+    }
+  }
+
+  if (field === "surgeon") {
+    if (contacto.datosMedico) {
+      adjustments.score += 15
+      adjustments.reasons.push("perfil médico")
+    }
+    if (contacto.tipoPersona === "juridica") {
+      adjustments.score -= 15
+      adjustments.reasons.push("persona jurídica")
+    }
+  }
+
+  if (field === "institution") {
+    if (contacto.datosInstitucion) {
+      adjustments.score += 15
+      adjustments.reasons.push("perfil institución")
+    }
+    if (contacto.tipoPersona === "juridica") {
+      adjustments.score += 10
+      adjustments.reasons.push("persona jurídica")
+    }
+  }
+
+  if (field === "client") {
+    if (contacto.datosClientePagador) {
+      adjustments.score += 15
+      adjustments.reasons.push("perfil pagador")
+      if (contacto.datosClientePagador.esPagador) {
+        adjustments.score += 10
+        adjustments.reasons.push("pagador")
+      }
+    }
+  }
+
+  return adjustments
+}
+
+function normalizeContactName(value: string): string {
+  if (!value) return ""
+
+  const withoutAccents = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+
+  const cleaned = withoutAccents
+    .replace(/[.,;:/\\()\[\]{}\-_'"`]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((token) => !CONTACT_PREFIXES_TO_REMOVE.includes(token))
+
+  return cleaned.join(" ").trim()
+}
+
+function buildSortedTokenKey(value: string): string {
+  return normalizeContactName(value)
+    .split(" ")
+    .filter(Boolean)
+    .sort()
+    .join(" ")
+}
+
+function getContactIdentityMeta(contacto: Contacto): string[] {
+  return [contacto.codigoContacto, contacto.dni, contacto.cuit].filter(
+    (value): value is string => Boolean(value?.trim())
+  )
+}
+
+export function scoreContactMatch(params: {
+  contacto: Contacto
+  detectedName: string
+  detectedDni?: string
+  field: ContactSuggestionField
+}): ContactCandidate | null {
+  const { contacto, detectedName, detectedDni, field } = params
+  const normalizedDetected = normalizeContactName(detectedName)
+  const normalizedContact = normalizeContactName(contacto.nombre)
+  const normalizedDetectedDni = detectedDni ? detectedDni.replace(/\D/g, "") : ""
+  const normalizedContactDni = contacto.dni ? contacto.dni.replace(/\D/g, "") : ""
+
+  if (!normalizedDetected && !normalizedDetectedDni) {
+    return null
+  }
+
+  let score = 0
+  let compatibilityScore = 0
+  const reasons: string[] = []
+
+  if (normalizedDetectedDni && normalizedContactDni && normalizedDetectedDni === normalizedContactDni) {
+    score += 70
+    reasons.push("DNI coincide")
+  }
+
+  if (normalizedDetected && normalizedContact) {
+    if (normalizedDetected === normalizedContact) {
+      score += 45
+      reasons.push("nombre exacto")
+    }
+
+    const detectedTokenKey = buildSortedTokenKey(detectedName)
+    const contactTokenKey = buildSortedTokenKey(contacto.nombre)
+    if (detectedTokenKey && detectedTokenKey === contactTokenKey) {
+      score += 30
+      reasons.push("mismos tokens")
+    }
+
+    const detectedTokens = new Set(normalizedDetected.split(" ").filter(Boolean))
+    const contactTokens = new Set(normalizedContact.split(" ").filter(Boolean))
+    const overlap = Array.from(detectedTokens).filter((token) => contactTokens.has(token)).length
+    const union = new Set([...detectedTokens, ...contactTokens]).size || 1
+    const overlapRatio = overlap / union
+
+    if (overlap > 0) {
+      score += Math.round(overlapRatio * 25)
+      reasons.push(`tokens en común (${overlap})`)
+    }
+
+    if (
+      normalizedContact.includes(normalizedDetected) ||
+      normalizedDetected.includes(normalizedContact)
+    ) {
+      score += 15
+      reasons.push("nombre parcial")
+    }
+  }
+
+  if (contacto.estado !== "activo") {
+    score -= 20
+    reasons.push("contacto inactivo")
+  }
+
+  const compatibility = getCompatibilityAdjustments(contacto, field)
+  compatibilityScore = compatibility.score
+  score += compatibility.score
+  reasons.push(...compatibility.reasons)
+
+  if (score < 25) {
+    return null
+  }
+
+  return {
+    contacto,
+    score,
+    compatibilityScore,
+    reason: reasons.join(" · "),
+  }
+}
+
+export function findContactCandidates(params: {
+  contactos: Contacto[]
+  field: ContactSuggestionField
+  detectedName: string
+  detectedDni?: string
+  limit?: number
+}): ContactCandidate[] {
+  const { contactos, field, detectedName, detectedDni, limit = 2 } = params
+
+  const rankedCandidates = contactos
+    .map((contacto) =>
+      scoreContactMatch({
+        contacto,
+        field,
+        detectedName,
+        detectedDni,
+      })
+    )
+    .filter((candidate): candidate is ContactCandidate => candidate !== null)
+    .sort(
+      (a, b) =>
+        b.compatibilityScore - a.compatibilityScore ||
+        b.score - a.score ||
+        a.contacto.nombre.localeCompare(b.contacto.nombre)
+    )
+
+  const compatibleCandidates = rankedCandidates.filter((candidate) => candidate.compatibilityScore > 0)
+  const visibleCandidates = compatibleCandidates.length > 0 ? compatibleCandidates : rankedCandidates
+
+  return visibleCandidates.slice(0, limit)
+}
 
 // ─── CHATZAI-017H: Definitive wizard sizes (hoisted as module constant) ───
 // Paso 1 & 2 (Datos + Presupuesto): 88vw × 85vh — wide workspace (~10% reduction from 98×95)
@@ -84,19 +378,35 @@ interface NewSurgeryDialogProps {
     loadTemplate: (template: PlantillaPresupuesto) => void
     addItems: (items: FormItem[]) => void
   }
-  onConfirm: () => boolean
+  onConfirm: () => boolean | Promise<boolean>
   /** CHATZAI-017E: ID of the just-created surgery (for post-creation actions) */
   createdSurgeryId?: string
   instrumentadores: string[]
+  onOpenCreatedSurgery?: (surgeryId: string) => void
 }
 
 // ─── Step 0 validation fields ───
-interface Step0Errors {
+// NUEVA-CIRUGIA-IA-UX-P1 (Phase A): exported for reuse by MissingFieldsBar
+// (type-only import — no runtime coupling). Additive export, no behavior change.
+export interface Step0Errors {
   patient?: string
   surgeon?: string
   institution?: string
   client?: string
   classification?: string
+}
+export type Step0ErrorKey = keyof Step0Errors
+
+// NUEVA-CIRUGIA-IA-UX-P1 (Phase A, DESIGN §5): step0Errors key → chip label → focus target.
+// Drives MissingFieldsBar. The focus selector targets the `data-step0-field="<key>"`
+// wrapper attributes added around each Paso 1 field block (DESIGN §6.5).
+// Visual chip order is controlled by MissingFieldsBar: Cliente → Paciente → Médico → Institución → Clasificación.
+const STEP0_FIELD_MAP: Record<Step0ErrorKey, MissingFieldTarget> = {
+  patient: { label: "Paciente", focusSelector: '[data-step0-field="patient"]' },
+  surgeon: { label: "Médico", focusSelector: '[data-step0-field="surgeon"]' },
+  institution: { label: "Institución", focusSelector: '[data-step0-field="institution"]' },
+  client: { label: "Cliente / Pagador", focusSelector: '[data-step0-field="client"]' },
+  classification: { label: "Clasificación", focusSelector: '[data-step0-field="classification"]' },
 }
 
 // ─── Step 1 (Presupuesto) validation uses same type as PR form ───
@@ -107,15 +417,23 @@ export function NewSurgeryDialog({
   newForm, setNewForm,
   createPRNow, setCreatePRNow,
   prForm,
-  onConfirm, createdSurgeryId, instrumentadores,
+  onConfirm, createdSurgeryId, instrumentadores, onOpenCreatedSurgery,
 }: NewSurgeryDialogProps) {
   // ─── CHATZAI-020: Store access for Contacto lookups ───
   const store = useOrtoTrackStore()
+  const { activeCompany } = useAuth()
 
   // ─── Step validation errors ───
   const [step0Errors, setStep0Errors] = useState<Step0Errors>({})
   const [step1Errors, setStep1Errors] = useState<Step1Errors>({})
   const [creationDone, setCreationDone] = useState(false)
+  const [showAiSection, setShowAiSection] = useState(false)
+  const [contactCreateOpen, setContactCreateOpen] = useState(false)
+  const [contactFormKey, setContactFormKey] = useState(0)
+  const [pendingContactCreation, setPendingContactCreation] = useState<PendingContactCreation | null>(null)
+  const [contactLookupRenderVersion, setContactLookupRenderVersion] = useState(0)
+  const [contactSelectionOverrides, setContactSelectionOverrides] = useState<ContactSelectionOverrides>({})
+  const [textOnlyContactFields, setTextOnlyContactFields] = useState<TextOnlyContactFields>({})
 
   // ─── CHATZAI-025: Cancel confirmation state ───
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
@@ -123,6 +441,13 @@ export function NewSurgeryDialog({
   // ─── CHATZAI-025: Track auto-filled provincia/localidad ───
   const [autoFilledProvincia, setAutoFilledProvincia] = useState(false)
   const [autoFilledLocalidad, setAutoFilledLocalidad] = useState(false)
+
+  const companyId = activeCompany?.id || process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID || ""
+
+  const aiExtraction = useAiExtraction({
+    companyId,
+    mode: "openai",
+  })
 
   // ─── Scroll container refs for scroll-to-error ───
   const step0Ref = useRef<HTMLDivElement>(null)
@@ -271,8 +596,8 @@ export function NewSurgeryDialog({
   }, [newForm])
 
   // ─── Handle confirm ───
-  const handleConfirm = useCallback(() => {
-    const success = onConfirm()
+  const handleConfirm = useCallback(async () => {
+    const success = await onConfirm()
     if (success) {
       setCreationDone(true)
     }
@@ -283,11 +608,16 @@ export function NewSurgeryDialog({
     onOpenChange(false)
     setWizardStep(0)
     setCreationDone(false)
+    setShowAiSection(false)
+    setContactCreateOpen(false)
+    setPendingContactCreation(null)
+    setTextOnlyContactFields({})
     setStep0Errors({})
     setStep1Errors({})
     setCancelConfirmOpen(false)
     setAutoFilledProvincia(false)
     setAutoFilledLocalidad(false)
+    aiExtraction.reset()
   }, [onOpenChange, setWizardStep])
 
   // ─── CHATZAI-025: Handle close with dirty check ───
@@ -300,6 +630,424 @@ export function NewSurgeryDialog({
   }, [isFormDirty, creationDone, handleClose])
 
   const dialogClass = DIALOG_SIZES[wizardStep] ?? DIALOG_SIZES[0]
+
+  const handleAiFileSelected = useCallback(async (file: File) => {
+    if (!companyId) {
+      throw new Error("No hay empresa activa disponible para procesar la autorización")
+    }
+
+    await aiExtraction.extract(file)
+  }, [aiExtraction, companyId])
+
+  const handleApplyAiResult = useCallback(() => {
+    if (!aiExtraction.result) return
+
+    const extracted = aiExtraction.result.extracted
+    const { formFields } = mapAiToWizardForm(extracted)
+    const hasSuggestedProvincia = Boolean(extracted.provincia_sugerida.trim())
+    const hasSuggestedLocalidad = Boolean(extracted.localidad_sugerida.trim())
+
+    setNewForm((prev) => {
+      const next: NewSurgeryForm = { ...prev }
+
+      if (!prev.patient.trim() && formFields.patient) next.patient = formFields.patient
+      if (!prev.surgeon.trim() && formFields.surgeon) next.surgeon = formFields.surgeon
+      if (!prev.institution.trim() && formFields.institution) next.institution = formFields.institution
+      if (!prev.client.trim() && formFields.client) next.client = formFields.client
+      if (!prev.date.trim() && formFields.date) next.date = formFields.date
+      if (!prev.probableDate.trim() && formFields.probableDate) next.probableDate = formFields.probableDate
+      if (!prev.provincia.trim() && extracted.provincia_sugerida.trim()) {
+        next.provincia = extracted.provincia_sugerida.trim()
+      }
+      if (!prev.localidad.trim() && extracted.localidad_sugerida.trim()) {
+        next.localidad = extracted.localidad_sugerida.trim()
+      }
+
+      if (formFields.notes?.trim()) {
+        const aiNotes = formFields.notes.trim()
+        if (!prev.notes.trim()) {
+          next.notes = aiNotes
+        } else if (!prev.notes.includes(aiNotes)) {
+          next.notes = `${prev.notes.trim()}\n\n— IA —\n${aiNotes}`
+        }
+      }
+
+      if (formFields.referenciasAdministrativas?.length) {
+        const existing = prev.referenciasAdministrativas
+        const additions = formFields.referenciasAdministrativas.filter((candidate) => {
+          const candidateObs = candidate.observacion?.trim() || ""
+          return !existing.some((current) => {
+            const currentObs = current.observacion?.trim() || ""
+            return (
+              current.tipo === candidate.tipo &&
+              current.valor.trim() === candidate.valor.trim() &&
+              currentObs === candidateObs
+            )
+          })
+        })
+
+        if (additions.length > 0) {
+          next.referenciasAdministrativas = [...existing, ...additions]
+        }
+      }
+
+      return next
+    })
+
+    if (hasSuggestedProvincia) setAutoFilledProvincia(true)
+    if (hasSuggestedLocalidad) setAutoFilledLocalidad(true)
+  }, [aiExtraction.result, setNewForm])
+
+  const contactSuggestionGroups = useMemo<ContactSuggestionGroup[]>(() => {
+    if (!aiExtraction.result) return []
+
+    const { extracted } = aiExtraction.result
+
+    const groups: ContactSuggestionGroup[] = []
+
+    if (extracted.paciente.trim()) {
+      groups.push({
+        field: "patient",
+        label: "Paciente detectado",
+        detectedText: extracted.paciente.trim(),
+        detectedDni: extracted.dni.trim() || undefined,
+        candidates: findContactCandidates({
+          contactos: store.contactos,
+          field: "patient",
+          detectedName: extracted.paciente,
+          detectedDni: extracted.dni,
+        }),
+      })
+    }
+
+    if (extracted.medico.trim()) {
+      groups.push({
+        field: "surgeon",
+        label: "Médico detectado",
+        detectedText: extracted.medico.trim(),
+        candidates: findContactCandidates({
+          contactos: store.contactos,
+          field: "surgeon",
+          detectedName: extracted.medico,
+        }),
+      })
+    }
+
+    if (extracted.institucion.trim()) {
+      groups.push({
+        field: "institution",
+        label: "Institución detectada",
+        detectedText: extracted.institucion.trim(),
+        candidates: findContactCandidates({
+          contactos: store.contactos,
+          field: "institution",
+          detectedName: extracted.institucion,
+        }),
+      })
+    }
+
+    if (extracted.obra_social.trim()) {
+      groups.push({
+        field: "client",
+        label: "Pagador / obra social detectada",
+        detectedText: extracted.obra_social.trim(),
+        candidates: findContactCandidates({
+          contactos: store.contactos,
+          field: "client",
+          detectedName: extracted.obra_social,
+        }),
+      })
+    }
+
+    return groups
+  }, [aiExtraction.result, store.contactos])
+
+  const applySuggestedContact = useCallback((field: ContactSuggestionField, contacto: Contacto) => {
+    setContactSelectionOverrides((prev) => ({ ...prev, [field]: contacto }))
+    setTextOnlyContactFields((prev) => ({ ...prev, [field]: false }))
+
+    setNewForm((prev) => {
+      switch (field) {
+        case "patient":
+          return { ...prev, patient: contacto.nombre, patientContactId: contacto.id }
+        case "surgeon":
+          return { ...prev, surgeon: contacto.nombre, surgeonContactId: contacto.id }
+        case "institution":
+          return { ...prev, institution: contacto.nombre, institutionContactId: contacto.id }
+        case "client":
+          return { ...prev, client: contacto.nombre, clientContactId: contacto.id }
+        default:
+          return prev
+      }
+    })
+
+    setContactLookupRenderVersion((prev) => prev + 1)
+
+    setStep0Errors((prev) => {
+      switch (field) {
+        case "patient":
+          return { ...prev, patient: undefined }
+        case "surgeon":
+          return { ...prev, surgeon: undefined }
+        case "institution":
+          return { ...prev, institution: undefined }
+        case "client":
+          return { ...prev, client: undefined }
+        default:
+          return prev
+      }
+    })
+  }, [setNewForm])
+
+  const applyDetectedTextOnly = useCallback((field: ContactSuggestionField, detectedText: string) => {
+    const safeText = detectedText.trim()
+    if (!safeText) return
+
+    setContactSelectionOverrides((prev) => ({ ...prev, [field]: null }))
+    setTextOnlyContactFields((prev) => ({ ...prev, [field]: true }))
+
+    setNewForm((prev) => {
+      switch (field) {
+        case "patient":
+          return { ...prev, patient: safeText, patientContactId: undefined }
+        case "surgeon":
+          return { ...prev, surgeon: safeText, surgeonContactId: undefined }
+        case "institution":
+          return { ...prev, institution: safeText, institutionContactId: undefined }
+        case "client":
+          return { ...prev, client: safeText, clientContactId: undefined }
+        default:
+          return prev
+      }
+    })
+
+    setContactLookupRenderVersion((prev) => prev + 1)
+
+    setStep0Errors((prev) => {
+      switch (field) {
+        case "patient":
+          return { ...prev, patient: undefined }
+        case "surgeon":
+          return { ...prev, surgeon: undefined }
+        case "institution":
+          return { ...prev, institution: undefined }
+        case "client":
+          return { ...prev, client: undefined }
+        default:
+          return prev
+      }
+    })
+  }, [setNewForm])
+
+  const openCreateContactForField = useCallback((group: ContactSuggestionGroup) => {
+    const defaultsByField: Record<ContactSuggestionField, Omit<PendingContactCreation, "field" | "detectedText" | "detectedDni">> = {
+      patient: {
+        defaultRoles: ["cliente"],
+        defaultGroups: ["pacientes"],
+        tipoPersona: "fisica",
+      },
+      surgeon: {
+        defaultRoles: ["cliente"],
+        defaultGroups: ["medicos"],
+        tipoPersona: "fisica",
+      },
+      institution: {
+        defaultRoles: ["cliente"],
+        defaultGroups: ["instituciones"],
+        tipoPersona: "juridica",
+      },
+      client: {
+        defaultRoles: ["cliente"],
+        defaultGroups: ["obras_sociales"],
+        tipoPersona: "juridica",
+      },
+    }
+
+    const defaults = defaultsByField[group.field]
+
+    setPendingContactCreation({
+      field: group.field,
+      detectedText: group.detectedText,
+      detectedDni: group.detectedDni,
+      defaultRoles: defaults.defaultRoles,
+      defaultGroups: defaults.defaultGroups,
+      tipoPersona: defaults.tipoPersona,
+    })
+    setContactFormKey((prev) => prev + 1)
+    setContactCreateOpen(true)
+  }, [])
+
+  const handleCreatedContactFromIa = useCallback((contacto: Contacto) => {
+    if (!pendingContactCreation) return
+
+    applySuggestedContact(pendingContactCreation.field, contacto)
+    setContactCreateOpen(false)
+    setPendingContactCreation(null)
+  }, [applySuggestedContact, pendingContactCreation])
+
+  const applyInlineAiValue = useCallback((field: InlineAiValueField) => {
+    if (!aiExtraction.result) return
+
+    const { extracted } = aiExtraction.result
+    const { formFields } = mapAiToWizardForm(extracted)
+
+    setNewForm((prev) => {
+      switch (field) {
+        case "date":
+          return formFields.date ? { ...prev, date: formFields.date } : prev
+        case "probableDate":
+          return formFields.probableDate ? { ...prev, probableDate: formFields.probableDate } : prev
+        case "provincia": {
+          const updates: Partial<NewSurgeryForm> = {}
+          if (extracted.provincia_sugerida.trim()) updates.provincia = extracted.provincia_sugerida.trim()
+          if (extracted.localidad_sugerida.trim() && !prev.localidad.trim()) updates.localidad = extracted.localidad_sugerida.trim()
+          return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev
+        }
+        default:
+          return prev
+      }
+    })
+
+    if (field === "provincia") {
+      if (extracted.provincia_sugerida.trim()) setAutoFilledProvincia(true)
+      if (extracted.localidad_sugerida.trim()) setAutoFilledLocalidad(true)
+    }
+  }, [aiExtraction.result, setNewForm])
+
+  const renderInlineContactSuggestion = (field: ContactSuggestionField) => {
+    const group = contactSuggestionGroups.find((candidate) => candidate.field === field)
+    if (!group) return null
+
+    const [bestCandidate, ...alternativeCandidates] = group.candidates
+    const bestCandidateMeta = bestCandidate ? getContactIdentityMeta(bestCandidate.contacto) : []
+    const quickCreateLabel = QUICK_CREATE_LABELS[group.field]
+
+    return (
+      <div className="mt-2 rounded-md border border-border/70 bg-muted/20 px-2.5 py-2 text-[11px] dark:bg-muted/10">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-0.5">
+            <p className="break-words leading-snug text-muted-foreground">
+              <span className="font-medium text-foreground">Detectado por IA:</span>{" "}
+              <span className="text-foreground">{group.detectedText}</span>
+              {group.detectedDni ? <span className="text-muted-foreground"> · DNI {group.detectedDni}</span> : null}
+            </p>
+            {bestCandidate ? (
+              <p className="break-words leading-snug text-muted-foreground">
+                <span className="font-medium text-foreground">Coincidencia:</span>{" "}
+                <span className="text-foreground">{bestCandidate.contacto.nombre}</span>
+                {bestCandidateMeta.length > 0 ? <span> · {bestCandidateMeta.join(" · ")}</span> : null}
+              </p>
+            ) : (
+              <p className="leading-snug text-muted-foreground">Sin coincidencia clara en contactos existentes.</p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 flex-wrap gap-1.5 sm:justify-end">
+            {bestCandidate ? (
+              <Button type="button" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => applySuggestedContact(group.field, bestCandidate.contacto)}>
+                Usar
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => openCreateContactForField(group)}>
+              {quickCreateLabel}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => applyDetectedTextOnly(group.field, group.detectedText)}>
+              Mantener texto
+            </Button>
+          </div>
+        </div>
+
+        {alternativeCandidates.length > 0 && (
+          <details className="mt-1.5 border-t border-border/50 pt-1.5">
+            <summary className="cursor-pointer list-none text-[11px] font-medium text-muted-foreground hover:text-foreground">
+              Ver alternativas ({alternativeCandidates.length})
+            </summary>
+            <div className="mt-1.5 space-y-1">
+              {alternativeCandidates.map((candidate, index) => {
+                const candidateMeta = getContactIdentityMeta(candidate.contacto)
+
+                return (
+                  <div key={`${group.field}-${candidate.contacto.id}-${index}`} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-muted/40">
+                    <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+                      <span className="font-medium text-foreground">{candidate.contacto.nombre}</span>
+                      {candidateMeta.length > 0 ? <span> · {candidateMeta.join(" · ")}</span> : null}
+                    </p>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => applySuggestedContact(group.field, candidate.contacto)}>
+                      Usar
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          </details>
+        )}
+      </div>
+    )
+  }
+
+  const renderInlineAiValueSuggestion = (params: {
+    field: InlineAiValueField
+    eyebrow: string
+    value?: string
+    secondaryValue?: string
+    hidden?: boolean
+    applyLabel?: string
+  }) => {
+    const { field, eyebrow, value, secondaryValue, hidden, applyLabel = "Aplicar" } = params
+
+    if (hidden || !value?.trim()) return null
+
+    return (
+      <div className="mt-2 rounded-md border border-emerald-200/80 bg-emerald-50/50 px-2.5 py-2 text-[11px] text-foreground dark:border-emerald-900 dark:bg-emerald-950/20">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              {eyebrow}
+            </p>
+            <p className="font-medium break-words">{value}</p>
+            {secondaryValue ? <p className="text-muted-foreground mt-0.5">{secondaryValue}</p> : null}
+          </div>
+          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => applyInlineAiValue(field)}>
+            {applyLabel}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const getResolvedContactValue = useCallback((field: ContactSuggestionField, contactId?: string) => {
+    const override = contactSelectionOverrides[field]
+    if (override && contactId && override.id === contactId) {
+      return override
+    }
+    return store.getContactoById(contactId || "")
+  }, [contactSelectionOverrides, store])
+
+  const hasTextOnlyContactField = useCallback((field: ContactSuggestionField) => {
+    switch (field) {
+      case "patient":
+        return Boolean(textOnlyContactFields.patient && newForm.patient.trim() && !newForm.patientContactId)
+      case "surgeon":
+        return Boolean(textOnlyContactFields.surgeon && newForm.surgeon.trim() && !newForm.surgeonContactId)
+      case "institution":
+        return Boolean(textOnlyContactFields.institution && newForm.institution.trim() && !newForm.institutionContactId)
+      case "client":
+        return Boolean(textOnlyContactFields.client && newForm.client.trim() && !newForm.clientContactId)
+      default:
+        return false
+    }
+  }, [newForm, textOnlyContactFields])
+
+  const renderTextOnlyContactIndicator = (field: ContactSuggestionField) => {
+    if (!hasTextOnlyContactField(field)) return null
+
+    return (
+      <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
+        <span className="font-semibold">Texto sin contacto vinculado.</span>{" "}
+        <span className="text-amber-700/90 dark:text-amber-300/80">Se usará el texto detectado; no queda asociado a una ficha de contacto.</span>
+      </div>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { handleRequestClose() } else { onOpenChange(true) } }}>
@@ -325,20 +1073,40 @@ export function NewSurgeryDialog({
             </div>
             {/* Wizard progress — compact inline */}
             {!creationDone && (
-              <div className="flex items-center gap-1">
-                {STEP_LABELS.map((step, i) => (
-                  <React.Fragment key={i}>
-                    <div className={cn(
-                      "flex items-center justify-center size-5 rounded-full text-[9px] font-semibold shrink-0",
-                      i <= wizardStep ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"
-                    )}>
-                      {i + 1}
-                    </div>
-                    {i < 2 && (
-                      <div className={cn("w-4 h-0.5", i < wizardStep ? "bg-emerald-600" : "bg-muted")} />
-                    )}
-                  </React.Fragment>
-                ))}
+              <div className="flex items-center gap-2" aria-label="Wizard steps">
+                {STEP_LABELS.map((step, i) => {
+                  const isCurrent = i === wizardStep
+                  const isCompleted = i < wizardStep
+
+                  return (
+                    <React.Fragment key={i}>
+                      <div
+                        aria-current={isCurrent ? "step" : undefined}
+                        className={cn(
+                          "flex items-center gap-2 rounded-full border px-2 py-1 shrink-0 transition-colors",
+                          isCurrent && "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200",
+                          isCompleted && "border-emerald-200 bg-emerald-600 text-white dark:border-emerald-700",
+                          !isCurrent && !isCompleted && "border-border bg-background text-muted-foreground"
+                        )}
+                      >
+                        <span className={cn(
+                          "flex items-center justify-center size-5 rounded-full text-[10px] font-semibold",
+                          isCompleted && "bg-white/20 text-white",
+                          isCurrent && "bg-emerald-600 text-white",
+                          !isCurrent && !isCompleted && "bg-muted text-muted-foreground"
+                        )}>
+                          {i + 1}
+                        </span>
+                        <span className="hidden sm:inline text-[10px] font-medium whitespace-nowrap">
+                          {step}
+                        </span>
+                      </div>
+                      {i < STEP_LABELS.length - 1 && (
+                        <div className={cn("hidden sm:block w-5 h-px", i < wizardStep ? "bg-emerald-500" : "bg-border")} />
+                      )}
+                    </React.Fragment>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -346,7 +1114,114 @@ export function NewSurgeryDialog({
 
         {/* ═══════════ Paso 0 — Datos del caso ═══════════ */}
         {wizardStep === 0 && !creationDone && (
-          <div ref={step0Ref} className="space-y-1 overflow-y-auto flex-1 px-4 py-3">
+          <div ref={step0Ref} className="space-y-3 overflow-y-auto flex-1 px-4 py-3 xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-4 xl:items-start">
+
+            {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A, AC-01): Critical Missing Bar.
+                Pure presentational — only READS step0Errors; no new validation pass.
+                Hidden when step0Errors is empty. Renders above the IA panel. */}
+            {Object.keys(step0Errors).length > 0 && (
+              <div className="xl:col-span-2">
+                <MissingFieldsBar errors={step0Errors} fields={STEP0_FIELD_MAP} />
+              </div>
+            )}
+
+            <aside className="border-l border-border/70 bg-muted/10 pl-3 pr-1 py-1 space-y-3 xl:col-start-2 xl:row-start-2 xl:sticky xl:top-0 xl:max-h-[calc(85vh-8rem)] xl:overflow-y-auto">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="size-3.5" />
+                    IA de autorización
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Extraé datos y aplicá sugerencias sin salir del formulario.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {companyId ? (
+                    <Badge variant="outline" className="text-[10px]">Empresa activa</Badge>
+                  ) : (
+                    <Badge variant="destructive" className="text-[10px]">Sin companyId</Badge>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAiSection((prev) => !prev)}
+                  >
+                    {showAiSection ? "Ocultar" : "Mostrar"}
+                  </Button>
+                </div>
+              </div>
+
+              {showAiSection && (
+                <div className="space-y-3">
+                  {!companyId && (
+                    <p className="text-[11px] text-destructive">
+                      No se detectó empresa activa. Iniciá sesión o verificá el contexto actual antes de usar IA.
+                    </p>
+                  )}
+
+                  {!aiExtraction.result ? (
+                    <AiUploadZone
+                      isProcessing={aiExtraction.isProcessing}
+                      error={aiExtraction.error}
+                      onFileSelected={handleAiFileSelected}
+                    />
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="rounded-md border border-border/60 bg-background/70 p-3 space-y-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Resumen IA
+                              </p>
+                              <p className="text-[11px] text-muted-foreground mt-1">
+                                Resolvé contactos y fechas desde las sugerencias del formulario.
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={aiExtraction.result.confidence < aiConfig.confidenceThreshold ? "warning" : "outline"} className="text-[10px]">
+                                Confianza {Math.round(aiExtraction.result.confidence * 100)}%
+                              </Badge>
+                              <Button type="button" variant="outline" size="sm" onClick={handleApplyAiResult}>
+                                Aplicar vacíos
+                              </Button>
+                            </div>
+                          </div>
+
+                            <div className="border-t border-border/60 pt-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                Contactos detectados
+                              </p>
+                              <Badge variant="outline" className="text-[10px]">{contactSuggestionGroups.length} campos</Badge>
+                            </div>
+                              <p className="text-[11px] text-muted-foreground mt-1">
+                                Las sugerencias aparecen junto al campo correspondiente.
+                              </p>
+                            </div>
+
+                          <details className="border-t border-border/60 pt-2">
+                            <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Ver detalle IA
+                            </summary>
+                            <div className="mt-3 space-y-3">
+                              <AiResultsPanel
+                                result={aiExtraction.result}
+                                onApply={handleApplyAiResult}
+                                onReset={aiExtraction.reset}
+                              />
+                            </div>
+                          </details>
+                        </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+            </aside>
+
+            <div className="min-w-0 space-y-1 xl:col-start-1 xl:row-start-2">
 
             {/* ── Section 1: Datos principales ── */}
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-2 mb-2">
@@ -366,90 +1241,125 @@ export function NewSurgeryDialog({
               </div>
 
               {/* Cliente / Pagador — CHATZAI-025: Moved to FIRST field after Urgente */}
-              <ContactLookupField
-                label="Cliente / Pagador *"
-                context={WIZARD_SEARCH_CONTEXTS.client}
-                value={store.getContactoById(newForm.clientContactId || "")}
-                onChange={(contacto) => {
-                  if (contacto) {
-                    setNewForm({ ...newForm, client: contacto.nombre, clientContactId: contacto.id })
-                  } else {
-                    setNewForm({ ...newForm, client: "", clientContactId: undefined })
-                  }
-                  if (step0Errors.client) setStep0Errors({ ...step0Errors, client: undefined })
-                }}
-                placeholder="Buscar cliente/pagador..."
-                error={step0Errors.client}
-              />
+              {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A): data-step0-field wrapper for MissingFieldsBar focus. */}
+              <div data-step0-field="client">
+                <ContactLookupField
+                  key={`client-${contactLookupRenderVersion}-${newForm.clientContactId || "none"}`}
+                  label="Cliente / Pagador *"
+                  context={WIZARD_SEARCH_CONTEXTS.client}
+                  value={getResolvedContactValue("client", newForm.clientContactId)}
+                  onChange={(contacto) => {
+                    setContactSelectionOverrides((prev) => ({ ...prev, client: contacto }))
+                    setTextOnlyContactFields((prev) => ({ ...prev, client: false }))
+                    if (contacto) {
+                      setNewForm((prev) => ({ ...prev, client: contacto.nombre, clientContactId: contacto.id }))
+                    } else {
+                      setNewForm((prev) => ({ ...prev, client: "", clientContactId: undefined }))
+                    }
+                    if (step0Errors.client) setStep0Errors({ ...step0Errors, client: undefined })
+                  }}
+                  placeholder="Buscar cliente/pagador..."
+                  error={step0Errors.client}
+                />
+                {renderTextOnlyContactIndicator("client")}
+                {renderInlineContactSuggestion("client")}
+              </div>
 
               {/* Paciente — CHATZAI-020: ContactLookupField replaces free-text Input */}
-              <ContactLookupField
-                label="Paciente *"
-                context={WIZARD_SEARCH_CONTEXTS.patient}
-                value={store.getContactoById(newForm.patientContactId || "")}
-                onChange={(contacto) => {
-                  if (contacto) {
-                    setNewForm({ ...newForm, patient: contacto.nombre, patientContactId: contacto.id })
-                  } else {
-                    setNewForm({ ...newForm, patient: "", patientContactId: undefined })
-                  }
-                  if (step0Errors.patient) setStep0Errors({ ...step0Errors, patient: undefined })
-                }}
-                placeholder="Buscar paciente..."
-                error={step0Errors.patient}
-              />
+              {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A): data-step0-field wrapper for MissingFieldsBar focus. */}
+              <div data-step0-field="patient">
+                <ContactLookupField
+                  key={`patient-${contactLookupRenderVersion}-${newForm.patientContactId || "none"}`}
+                  label="Paciente *"
+                  context={WIZARD_SEARCH_CONTEXTS.patient}
+                  value={getResolvedContactValue("patient", newForm.patientContactId)}
+                  onChange={(contacto) => {
+                    setContactSelectionOverrides((prev) => ({ ...prev, patient: contacto }))
+                    setTextOnlyContactFields((prev) => ({ ...prev, patient: false }))
+                    if (contacto) {
+                      setNewForm((prev) => ({ ...prev, patient: contacto.nombre, patientContactId: contacto.id }))
+                    } else {
+                      setNewForm((prev) => ({ ...prev, patient: "", patientContactId: undefined }))
+                    }
+                    if (step0Errors.patient) setStep0Errors({ ...step0Errors, patient: undefined })
+                  }}
+                  placeholder="Buscar paciente..."
+                  error={step0Errors.patient}
+                />
+                {renderTextOnlyContactIndicator("patient")}
+                {renderInlineContactSuggestion("patient")}
+              </div>
 
               {/* Médico — CHATZAI-020: ContactLookupField replaces free-text Input */}
-              <ContactLookupField
-                label="Médico *"
-                context={WIZARD_SEARCH_CONTEXTS.surgeon}
-                value={store.getContactoById(newForm.surgeonContactId || "")}
-                onChange={(contacto) => {
-                  if (contacto) {
-                    setNewForm({ ...newForm, surgeon: contacto.nombre, surgeonContactId: contacto.id })
-                  } else {
-                    setNewForm({ ...newForm, surgeon: "", surgeonContactId: undefined })
-                  }
-                  if (step0Errors.surgeon) setStep0Errors({ ...step0Errors, surgeon: undefined })
-                }}
-                placeholder="Buscar médico..."
-                error={step0Errors.surgeon}
-              />
+              {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A): data-step0-field wrapper for MissingFieldsBar focus. */}
+              <div data-step0-field="surgeon">
+                <ContactLookupField
+                  key={`surgeon-${contactLookupRenderVersion}-${newForm.surgeonContactId || "none"}`}
+                  label="Médico *"
+                  context={WIZARD_SEARCH_CONTEXTS.surgeon}
+                  value={getResolvedContactValue("surgeon", newForm.surgeonContactId)}
+                  onChange={(contacto) => {
+                    setContactSelectionOverrides((prev) => ({ ...prev, surgeon: contacto }))
+                    setTextOnlyContactFields((prev) => ({ ...prev, surgeon: false }))
+                    if (contacto) {
+                      setNewForm((prev) => ({ ...prev, surgeon: contacto.nombre, surgeonContactId: contacto.id }))
+                    } else {
+                      setNewForm((prev) => ({ ...prev, surgeon: "", surgeonContactId: undefined }))
+                    }
+                    if (step0Errors.surgeon) setStep0Errors({ ...step0Errors, surgeon: undefined })
+                  }}
+                  placeholder="Buscar médico..."
+                  error={step0Errors.surgeon}
+                />
+                {renderTextOnlyContactIndicator("surgeon")}
+                {renderInlineContactSuggestion("surgeon")}
+              </div>
 
               {/* Institución — CHATZAI-025: Auto-fills provincia/localidad + allowCreate */}
-              <ContactLookupField
-                label="Institución *"
-                context={WIZARD_SEARCH_CONTEXTS.institution}
-                value={store.getContactoById(newForm.institutionContactId || "")}
-                onChange={(contacto) => {
-                  if (contacto) {
-                    const updates: Partial<NewSurgeryForm> = {
-                      institution: contacto.nombre,
-                      institutionContactId: contacto.id,
+              {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A): data-step0-field wrapper for MissingFieldsBar focus. */}
+              <div data-step0-field="institution">
+                <ContactLookupField
+                  key={`institution-${contactLookupRenderVersion}-${newForm.institutionContactId || "none"}`}
+                  label="Institución *"
+                  context={WIZARD_SEARCH_CONTEXTS.institution}
+                  value={getResolvedContactValue("institution", newForm.institutionContactId)}
+                  onChange={(contacto) => {
+                    setContactSelectionOverrides((prev) => ({ ...prev, institution: contacto }))
+                    setTextOnlyContactFields((prev) => ({ ...prev, institution: false }))
+                    if (contacto) {
+                      setNewForm((prev) => {
+                        const updates: Partial<NewSurgeryForm> = {
+                          institution: contacto.nombre,
+                          institutionContactId: contacto.id,
+                        }
+                        // CHATZAI-025: Auto-fill provincia/localidad from institution if available and form fields are empty
+                        if (contacto.provincia && !prev.provincia) {
+                          updates.provincia = contacto.provincia
+                          setAutoFilledProvincia(true)
+                        }
+                        if (contacto.localidad && !prev.localidad) {
+                          updates.localidad = contacto.localidad
+                          setAutoFilledLocalidad(true)
+                        }
+                        return { ...prev, ...updates }
+                      })
+                    } else {
+                      setNewForm((prev) => ({ ...prev, institution: "", institutionContactId: undefined }))
+                      setAutoFilledProvincia(false)
+                      setAutoFilledLocalidad(false)
                     }
-                    // CHATZAI-025: Auto-fill provincia/localidad from institution if available and form fields are empty
-                    if (contacto.provincia && !newForm.provincia) {
-                      updates.provincia = contacto.provincia
-                      setAutoFilledProvincia(true)
-                    }
-                    if (contacto.localidad && !newForm.localidad) {
-                      updates.localidad = contacto.localidad
-                      setAutoFilledLocalidad(true)
-                    }
-                    setNewForm({ ...newForm, ...updates })
-                  } else {
-                    setNewForm({ ...newForm, institution: "", institutionContactId: undefined })
-                    setAutoFilledProvincia(false)
-                    setAutoFilledLocalidad(false)
-                  }
-                  if (step0Errors.institution) setStep0Errors({ ...step0Errors, institution: undefined })
-                }}
-                placeholder="Buscar institución..."
-                error={step0Errors.institution}
-              />
+                    if (step0Errors.institution) setStep0Errors({ ...step0Errors, institution: undefined })
+                  }}
+                  placeholder="Buscar institución..."
+                  error={step0Errors.institution}
+                />
+                {renderTextOnlyContactIndicator("institution")}
+                {renderInlineContactSuggestion("institution")}
+              </div>
 
               {/* Clasificación — CHATZAI-025A.3: Independent modal selector */}
-              <div className="space-y-1">
+              {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A): data-step0-field on existing wrapper for MissingFieldsBar focus. */}
+              <div className="space-y-1" data-step0-field="classification">
                 <Label className="text-xs">Clasificación *</Label>
                 <ClasificacionSelectorModal
                   value={newForm.classification}
@@ -481,6 +1391,13 @@ export function NewSurgeryDialog({
               <div className="space-y-1">
                 <Label className="text-xs">Fecha CX</Label>
                 <Input type="date" value={newForm.date} onChange={(e) => setNewForm({ ...newForm, date: e.target.value })} className="h-8 text-sm" />
+                {renderInlineAiValueSuggestion({
+                  field: "date",
+                  eyebrow: "IA detectó fecha de cirugía",
+                  value: aiExtraction.result?.extracted.fecha_cirugia,
+                  hidden: Boolean(newForm.date.trim()),
+                  applyLabel: "Pasar al campo",
+                })}
               </div>
 
               {/* Hora */}
@@ -493,6 +1410,13 @@ export function NewSurgeryDialog({
               <div className="space-y-1">
                 <Label className="text-xs">Fecha probable</Label>
                 <Input type="date" value={newForm.probableDate} onChange={(e) => setNewForm({ ...newForm, probableDate: e.target.value })} className="h-8 text-sm" />
+                {renderInlineAiValueSuggestion({
+                  field: "probableDate",
+                  eyebrow: "IA detectó fecha probable",
+                  value: aiExtraction.result?.extracted.fecha_probable,
+                  hidden: Boolean(newForm.probableDate.trim()),
+                  applyLabel: "Pasar al campo",
+                })}
               </div>
 
               {/* Fecha envío material */}
@@ -517,7 +1441,7 @@ export function NewSurgeryDialog({
                     </span>
                   )}
                 </div>
-                <Select value={newForm.provincia || undefined} onValueChange={(v) => {
+                <Select value={newForm.provincia} onValueChange={(v) => {
                   setNewForm({ ...newForm, provincia: v, localidad: "" })
                   setAutoFilledProvincia(false)
                   setAutoFilledLocalidad(false)
@@ -527,6 +1451,16 @@ export function NewSurgeryDialog({
                     {PROVINCIAS_ARGENTINA.map((p) => (<SelectItem key={p} value={p}>{p}</SelectItem>))}
                   </SelectContent>
                 </Select>
+                {renderInlineAiValueSuggestion({
+                  field: "provincia",
+                  eyebrow: "IA detectó ubicación",
+                  value: aiExtraction.result?.extracted.provincia_sugerida,
+                  secondaryValue: aiExtraction.result?.extracted.localidad_sugerida
+                    ? `Localidad sugerida: ${aiExtraction.result.extracted.localidad_sugerida}`
+                    : undefined,
+                  hidden: Boolean(newForm.provincia.trim()),
+                  applyLabel: "Pasar al campo",
+                })}
               </div>
 
               {/* Localidad — CHATZAI-025: Shows auto indicator when auto-filled */}
@@ -539,7 +1473,7 @@ export function NewSurgeryDialog({
                     </span>
                   )}
                 </div>
-                <Select value={newForm.localidad || undefined} onValueChange={(v) => {
+                <Select value={newForm.localidad} onValueChange={(v) => {
                   setNewForm({ ...newForm, localidad: v })
                   setAutoFilledLocalidad(false)
                 }} disabled={!newForm.provincia || localidades.length === 0}>
@@ -557,9 +1491,9 @@ export function NewSurgeryDialog({
                 value={store.getContactoById(newForm.coordinadorContactId || "")}
                 onChange={(contacto) => {
                   if (contacto) {
-                    setNewForm({ ...newForm, coordinadorCx: contacto.nombre, coordinadorContactId: contacto.id })
+                    setNewForm((prev) => ({ ...prev, coordinadorCx: contacto.nombre, coordinadorContactId: contacto.id }))
                   } else {
-                    setNewForm({ ...newForm, coordinadorCx: "Sin asignar", coordinadorContactId: undefined })
+                    setNewForm((prev) => ({ ...prev, coordinadorCx: "Sin asignar", coordinadorContactId: undefined }))
                   }
                 }}
                 placeholder="Buscar coordinador..."
@@ -572,9 +1506,9 @@ export function NewSurgeryDialog({
                 value={store.getContactoById(newForm.vendedorContactId || "")}
                 onChange={(contacto) => {
                   if (contacto) {
-                    setNewForm({ ...newForm, vendedor: contacto.nombre, vendedorContactId: contacto.id })
+                    setNewForm((prev) => ({ ...prev, vendedor: contacto.nombre, vendedorContactId: contacto.id }))
                   } else {
-                    setNewForm({ ...newForm, vendedor: "Sin asignar", vendedorContactId: undefined })
+                    setNewForm((prev) => ({ ...prev, vendedor: "Sin asignar", vendedorContactId: undefined }))
                   }
                 }}
                 placeholder="Buscar vendedor..."
@@ -587,9 +1521,9 @@ export function NewSurgeryDialog({
                 value={store.getContactoById(newForm.instrumentadorContactId || "")}
                 onChange={(contacto) => {
                   if (contacto) {
-                    setNewForm({ ...newForm, instrumentador: contacto.nombre, instrumentadorContactId: contacto.id })
+                    setNewForm((prev) => ({ ...prev, instrumentador: contacto.nombre, instrumentadorContactId: contacto.id }))
                   } else {
-                    setNewForm({ ...newForm, instrumentador: "Sin asignar", instrumentadorContactId: undefined })
+                    setNewForm((prev) => ({ ...prev, instrumentador: "Sin asignar", instrumentadorContactId: undefined }))
                   }
                 }}
                 placeholder="Buscar instrumentador..."
@@ -629,6 +1563,7 @@ export function NewSurgeryDialog({
                 <Label className="text-xs">Notas internas</Label>
                 <Textarea value={newForm.notes} onChange={(e) => setNewForm({ ...newForm, notes: e.target.value })} placeholder="Notas internas..." rows={2} className="text-sm" />
               </div>
+            </div>
             </div>
           </div>
         )}
@@ -851,34 +1786,45 @@ export function NewSurgeryDialog({
         {/* ═══════════ Paso 2 — Confirmación y acciones ═══════════ */}
         {wizardStep === 2 && !creationDone && (
           <div className="space-y-3 overflow-y-auto flex-1 px-4 py-3">
-            <p className="text-xs font-semibold">Resumen de la Cirugía</p>
-
-            {/* Main data */}
-            <div className="grid gap-1.5 sm:grid-cols-2 text-xs">
-              <div><span className="text-muted-foreground">Paciente:</span> <span className="font-medium">{newForm.patient || "—"}</span></div>
-              <div><span className="text-muted-foreground">Médico:</span> <span className="font-medium">{newForm.surgeon || "—"}</span></div>
-              <div><span className="text-muted-foreground">Institución:</span> <span className="font-medium">{newForm.institution || "—"}</span></div>
-              <div><span className="text-muted-foreground">Clasificación:</span> <span className="font-medium">{newForm.classification}</span></div>
-              <div><span className="text-muted-foreground">Cliente / Pagador:</span> <span className="font-medium">{newForm.client || "—"}</span></div>
-              {newForm.urgente && <div><Badge variant="destructive" className="text-[10px]">URGENTE</Badge></div>}
-            </div>
-
-            {/* Location & management */}
-            <div className="grid gap-1.5 sm:grid-cols-2 text-xs">
-              <div><span className="text-muted-foreground">Provincia:</span> <span className="font-medium">{newForm.provincia || "—"}</span></div>
-              <div><span className="text-muted-foreground">Localidad:</span> <span className="font-medium">{newForm.localidad || "—"}</span></div>
-              <div><span className="text-muted-foreground">Coordinador CX:</span> <span className="font-medium">{newForm.coordinadorCx || "Sin asignar"}</span></div>
-              <div><span className="text-muted-foreground">Vendedor:</span> <span className="font-medium">{newForm.vendedor || "Sin asignar"}</span></div>
-              <div><span className="text-muted-foreground">Instrumentador:</span> <span className="font-medium">{newForm.instrumentador || "Sin asignar"}</span></div>
-            </div>
-
-            {/* Dates */}
-            {(newForm.date || newForm.probableDate || newForm.fechaEnvioMaterial) && (
-              <div className="grid gap-1.5 sm:grid-cols-3 text-xs">
-                {newForm.date && <div><span className="text-muted-foreground">Fecha CX:</span> <span className="font-medium">{formatDate(newForm.date)}</span></div>}
-                {newForm.probableDate && <div><span className="text-muted-foreground">Fecha probable:</span> <span className="font-medium">{formatDate(newForm.probableDate)}</span></div>}
-                {newForm.fechaEnvioMaterial && <div><span className="text-muted-foreground">Fecha envío material:</span> <span className="font-medium">{formatDate(newForm.fechaEnvioMaterial)}</span></div>}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+              <div>
+                <p className="text-xs font-semibold">Resumen de la cirugía</p>
+                <p className="text-[11px] text-muted-foreground">Lectura final antes de crear el expediente.</p>
               </div>
+              {newForm.urgente && <Badge variant="destructive" className="text-[10px]">URGENTE</Badge>}
+            </div>
+
+            <section className="rounded-md border border-border/70 bg-background/80 p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Datos principales</p>
+              <div className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2 text-xs">
+                <div><span className="text-muted-foreground">Cliente / Pagador:</span> <span className="font-medium">{newForm.client || "—"}</span></div>
+                <div><span className="text-muted-foreground">Paciente:</span> <span className="font-medium">{newForm.patient || "—"}</span></div>
+                <div><span className="text-muted-foreground">Médico:</span> <span className="font-medium">{newForm.surgeon || "—"}</span></div>
+                <div><span className="text-muted-foreground">Institución:</span> <span className="font-medium">{newForm.institution || "—"}</span></div>
+                <div><span className="text-muted-foreground">Clasificación:</span> <span className="font-medium">{newForm.classification || "—"}</span></div>
+              </div>
+            </section>
+
+            <section className="rounded-md border border-border/70 bg-muted/10 p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Ubicación y gestión</p>
+              <div className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2 text-xs">
+                <div><span className="text-muted-foreground">Provincia:</span> <span className="font-medium">{newForm.provincia || "—"}</span></div>
+                <div><span className="text-muted-foreground">Localidad:</span> <span className="font-medium">{newForm.localidad || "—"}</span></div>
+                <div><span className="text-muted-foreground">Coordinador CX:</span> <span className="font-medium">{newForm.coordinadorCx || "Sin asignar"}</span></div>
+                <div><span className="text-muted-foreground">Vendedor:</span> <span className="font-medium">{newForm.vendedor || "Sin asignar"}</span></div>
+                <div><span className="text-muted-foreground">Instrumentador:</span> <span className="font-medium">{newForm.instrumentador || "Sin asignar"}</span></div>
+              </div>
+            </section>
+
+            {(newForm.date || newForm.probableDate || newForm.fechaEnvioMaterial) && (
+              <section className="rounded-md border border-border/70 bg-background/80 p-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Fechas</p>
+                <div className="mt-2 grid gap-1.5 sm:grid-cols-3 text-xs">
+                  {newForm.date && <div><span className="text-muted-foreground">Fecha CX:</span> <span className="font-medium">{formatDate(newForm.date)}</span></div>}
+                  {newForm.probableDate && <div><span className="text-muted-foreground">Fecha probable:</span> <span className="font-medium">{formatDate(newForm.probableDate)}</span></div>}
+                  {newForm.fechaEnvioMaterial && <div><span className="text-muted-foreground">Fecha envío material:</span> <span className="font-medium">{formatDate(newForm.fechaEnvioMaterial)}</span></div>}
+                </div>
+              </section>
             )}
 
             {/* Referencias administrativas */}
@@ -989,7 +1935,10 @@ export function NewSurgeryDialog({
               patientName={newForm.patient}
               classification={newForm.classification}
               onGoToExpediente={() => {
-                if (createdSurgeryId) {
+                if (createdSurgeryId && onOpenCreatedSurgery) {
+                  onOpenCreatedSurgery(createdSurgeryId)
+                  handleClose()
+                } else if (createdSurgeryId) {
                   handleClose()
                 }
               }}
@@ -1005,6 +1954,12 @@ export function NewSurgeryDialog({
           "shrink-0 border-t px-4 py-2",
           wizardStep === 1 && "bg-muted/20"
         )}>
+          {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A, AC-04): read-only missing count.
+              Informational only — does NOT disable Siguiente. Uses mr-auto so the
+              existing right-aligned buttons (Anterior/Siguiente/Cancelar) keep position. */}
+          {!creationDone && wizardStep === 0 && (
+            <MissingCountText count={Object.keys(step0Errors).length} />
+          )}
           {!creationDone && wizardStep > 0 && (
             <Button variant="outline" size="sm" onClick={() => setWizardStep(wizardStep - 1)}>
               Anterior
@@ -1016,7 +1971,7 @@ export function NewSurgeryDialog({
             </Button>
           )}
           {!creationDone && wizardStep === 2 && (
-            <Button size="sm" onClick={handleConfirm} className="bg-emerald-600 hover:bg-emerald-700" data-testid="wizard-confirm-btn">
+            <Button size="sm" onClick={() => { void handleConfirm() }} className="bg-emerald-600 hover:bg-emerald-700" data-testid="wizard-confirm-btn">
               {createPRNow && prForm.items.length > 0 ? "Crear cirugía + Generar PR" : "Crear cirugía"}
             </Button>
           )}
@@ -1032,7 +1987,7 @@ export function NewSurgeryDialog({
       </DialogContent>
 
       {/* CHATZAI-025: Cancel confirmation dialog */}
-      <AlertDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
+        <AlertDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Descartar la nueva cirugía?</AlertDialogTitle>
@@ -1047,7 +2002,26 @@ export function NewSurgeryDialog({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
-    </Dialog>
+        </AlertDialog>
+
+        <ContactoFormDialog
+          key={contactFormKey}
+          open={contactCreateOpen}
+          onOpenChange={(isOpen) => {
+            setContactCreateOpen(isOpen)
+            if (!isOpen) {
+              setPendingContactCreation(null)
+            }
+          }}
+          onSaved={handleCreatedContactFromIa}
+          defaultRoles={pendingContactCreation?.defaultRoles}
+          defaultGroups={pendingContactCreation?.defaultGroups}
+          initialValues={pendingContactCreation ? {
+            tipoPersona: pendingContactCreation.tipoPersona,
+            nombre: pendingContactCreation.detectedText,
+            dni: pendingContactCreation.field === "patient" ? pendingContactCreation.detectedDni : undefined,
+          } : undefined}
+        />
+      </Dialog>
   )
 }
