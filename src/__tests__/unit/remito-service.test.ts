@@ -342,19 +342,88 @@ describe("emitirRemito", () => {
 
 // â”€â”€â”€ updateRemitoDraft â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 describe("updateRemitoDraft", () => {
+  it("allows only one of two same-baseline competing updates to commit", async () => {
+    const baseline = new Date("2026-07-07T10:00:00.000Z");
+    let stored = buildRemito({ state: "Borrador", updatedAt: baseline });
+    let initialReads = 0;
+    let releaseInitialReads!: () => void;
+    const bothInitialReadsStarted = new Promise<void>((resolve) => {
+      releaseInitialReads = resolve;
+    });
+
+    const tx = {
+      remito: {
+        findFirst: vi.fn().mockImplementation(async () => {
+          initialReads += 1;
+          if (initialReads <= 2) {
+            if (initialReads === 2) releaseInitialReads();
+            await bothInitialReadsStarted;
+            return buildRemito({ ...stored, updatedAt: baseline });
+          }
+          return stored;
+        }),
+        updateMany: vi.fn().mockImplementation(async ({ where, data }) => {
+          if (where.updatedAt && stored.updatedAt.getTime() !== where.updatedAt.getTime()) {
+            return { count: 0 };
+          }
+          stored = buildRemito({
+            ...stored,
+            ...data,
+            updatedAt: new Date(stored.updatedAt.getTime() + 1),
+          });
+          return { count: 1 };
+        }),
+      },
+      remitoItem: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
+    };
+    const prismaMock = { $transaction: vi.fn(async (cb: any) => cb(tx)) } as any;
+
+    const results = await Promise.allSettled([
+      updateRemitoDraft({
+        companyId: "company-1",
+        remitoId: "remito-1",
+        expectedUpdatedAt: baseline,
+        metadata: { writer: "first" },
+        items: [{ description: "First item", quantity: 1 }],
+        prisma: prismaMock,
+      }),
+      updateRemitoDraft({
+        companyId: "company-1",
+        remitoId: "remito-1",
+        expectedUpdatedAt: baseline,
+        metadata: { writer: "second" },
+        items: [{ description: "Second item", quantity: 1 }],
+        prisma: prismaMock,
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")).toMatchObject({
+      reason: { code: "remito_update_conflict", status: 409 },
+    });
+    expect(tx.remitoItem.deleteMany).toHaveBeenCalledTimes(1);
+    expect(tx.remitoItem.createMany).toHaveBeenCalledTimes(1);
+  });
+
   it("updates mutable draft fields and replaces items", async () => {
     const current = buildRemito({ state: "Borrador" });
     const tx = {
       remito: {
-        findFirst: vi.fn().mockResolvedValue(current),
-        update: vi.fn().mockImplementation(async ({ data }) =>
-          buildRemito({
+        findFirst: vi
+          .fn()
+          .mockResolvedValueOnce(current)
+          .mockResolvedValueOnce(buildRemito({
             ...current,
-            surgeryId: data.surgeryId,
-            metadata: data.metadata,
+            surgeryId: null,
+            metadata: { note: "draft" },
             items: [{ id: "new-item-1", description: "Nuevo", quantity: new Prisma.Decimal(1) }],
-          })
-        ),
+          })),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       remitoItem: {
         deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
@@ -377,7 +446,9 @@ describe("updateRemitoDraft", () => {
       prisma: prismaMock,
     });
 
-    expect(tx.remitoItem.deleteMany).toHaveBeenCalledWith({ where: { remitoId: "remito-1" } });
+    expect(tx.remitoItem.deleteMany).toHaveBeenCalledWith({
+      where: { companyId: "company-1", remitoId: "remito-1" },
+    });
     expect(tx.remitoItem.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: [
@@ -386,9 +457,9 @@ describe("updateRemitoDraft", () => {
         ],
       })
     );
-    expect(tx.remito.update).toHaveBeenCalledWith(
+    expect(tx.remito.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "remito-1" },
+        where: expect.objectContaining({ id: "remito-1", companyId: "company-1", state: "Borrador" }),
         data: expect.objectContaining({ surgeryId: null, updatedById: "user-1" }),
       })
     );
@@ -404,7 +475,7 @@ describe("updateRemitoDraft", () => {
     const tx = {
       remito: {
         findFirst: vi.fn().mockResolvedValue(current),
-        update: vi.fn(),
+        updateMany: vi.fn(),
       },
       remitoItem: {
         deleteMany: vi.fn(),
@@ -426,13 +497,13 @@ describe("updateRemitoDraft", () => {
     ).rejects.toMatchObject({ code: "remito_update_conflict", status: 409 });
     expect(tx.remitoItem.deleteMany).not.toHaveBeenCalled();
     expect(tx.remitoItem.createMany).not.toHaveBeenCalled();
-    expect(tx.remito.update).not.toHaveBeenCalled();
+    expect(tx.remito.updateMany).not.toHaveBeenCalled();
     expect(createAuditEvent).not.toHaveBeenCalled();
   });
 
   it("rejects updates outside Borrador", async () => {
     const tx = {
-      remito: { findFirst: vi.fn().mockResolvedValue(buildRemito({ state: "Emitido" })), update: vi.fn() },
+      remito: { findFirst: vi.fn().mockResolvedValue(buildRemito({ state: "Emitido" })), updateMany: vi.fn() },
       remitoItem: { deleteMany: vi.fn(), createMany: vi.fn() },
     };
     const prismaMock = { $transaction: vi.fn(async (cb: any) => cb(tx)) } as any;
@@ -446,7 +517,7 @@ describe("updateRemitoDraft", () => {
         prisma: prismaMock,
       })
     ).rejects.toMatchObject({ code: "remito_not_borrador", status: 409 });
-    expect(tx.remito.update).not.toHaveBeenCalled();
+    expect(tx.remito.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects surgeryId from another company before updating draft", async () => {

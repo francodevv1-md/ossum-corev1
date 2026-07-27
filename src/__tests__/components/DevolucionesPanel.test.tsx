@@ -130,4 +130,78 @@ describe("DevolucionesPanel", () => {
     })
     expect(onConfirmed).not.toHaveBeenCalled()
   })
+
+  it("creates a draft from the selected remito and optional consumo payload", async () => {
+    const createDraft = vi.fn().mockResolvedValue(draft)
+    setHook({ devoluciones: [], createDraft })
+    const selectedRemito = {
+      id: "remito-2",
+      visibleNumber: 22,
+      items: [{
+        id: "remito-item-2",
+        itemId: "stock-item-2",
+        sku: "SKU-2",
+        description: "Placa",
+        quantity: 3,
+        unit: "u",
+        lotNumber: "LOT-R",
+        serialNumber: null,
+        expirationDate: null,
+        metadata: null,
+      }],
+    }
+    const selectedConsumo = {
+      id: "consumo-2",
+      visibleNumber: 12,
+      items: [{
+        id: "consumo-item-2",
+        remitoItemId: "remito-item-2",
+        sku: "SKU-2",
+        description: "Placa consumida",
+        requestedQuantity: 3,
+        consumedQuantity: 2,
+        unit: "u",
+        lotNumber: "LOT-C",
+        serialNumber: "SER-2",
+        expirationDate: "2027-01-01T00:00:00.000Z",
+        metadata: null,
+      }],
+    }
+
+    render(
+      <DevolucionesPanel
+        surgeryId="surgery-1"
+        selectedRemito={selectedRemito as any}
+        selectedConsumo={selectedConsumo as any}
+      />
+    )
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "2" } })
+    fireEvent.change(screen.getByPlaceholderText("Opcional"), { target: { value: " Material sin usar " } })
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }))
+
+    await waitFor(() => {
+      expect(createDraft).toHaveBeenCalledWith({
+        surgeryId: "surgery-1",
+        remitoId: "remito-2",
+        consumoId: "consumo-2",
+        reason: "Material sin usar",
+        items: [{
+          remitoItemId: "remito-item-2",
+          consumoItemId: "consumo-item-2",
+          sku: "SKU-2",
+          description: "Placa consumida",
+          returnedQuantity: 2,
+          unit: "u",
+          lotNumber: "LOT-C",
+          serialNumber: "SER-2",
+          expirationDate: "2027-01-01T00:00:00.000Z",
+        }],
+        metadata: {
+          source: "ficha_cx",
+          remitoVisibleNumber: "R-0022",
+          consumoVisibleNumber: "C-0012",
+        },
+      })
+    })
+  })
 })

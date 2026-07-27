@@ -732,27 +732,6 @@ export async function updateRemitoDraft(input: UpdateRemitoDraftInput) {
       );
     }
 
-    if (normalizedItems) {
-      await tx.remitoItem.deleteMany({ where: { remitoId: input.remitoId } });
-      await tx.remitoItem.createMany({
-        data: normalizedItems.map((item) => ({
-          companyId,
-          remitoId: input.remitoId,
-          itemId: item.itemId,
-          sku: item.sku,
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          boxId: item.boxId,
-          presupuestoItemId: item.presupuestoItemId,
-          lotNumber: item.lotNumber,
-          serialNumber: item.serialNumber,
-          expirationDate: item.expirationDate,
-          metadata: item.metadata,
-        })),
-      });
-    }
-
     const data = {
       updatedById,
       ...(nextBranchId !== undefined ? { branchId: nextBranchId } : {}),
@@ -776,11 +755,52 @@ export async function updateRemitoDraft(input: UpdateRemitoDraftInput) {
       ...(input.metadata !== undefined ? { metadata: (input.metadata ?? null) as Prisma.InputJsonValue | undefined } : {}),
     };
 
-    const result = await tx.remito.update({
-      where: { id: input.remitoId },
+    const updated = await tx.remito.updateMany({
+      where: {
+        id: input.remitoId,
+        companyId,
+        state: "Borrador",
+        ...(expectedUpdatedAt ? { updatedAt: new Date(expectedUpdatedAt) } : {}),
+      },
       data,
+    });
+
+    if (updated.count === 0) {
+      throw new RemitoError(
+        "remito_update_conflict",
+        "El remito fue actualizado por otro usuario. Actualizá la vista antes de guardar para no perder cambios.",
+        409
+      );
+    }
+
+    if (normalizedItems) {
+      await tx.remitoItem.deleteMany({
+        where: { companyId, remitoId: input.remitoId },
+      });
+      await tx.remitoItem.createMany({
+        data: normalizedItems.map((item) => ({
+          companyId,
+          remitoId: input.remitoId,
+          itemId: item.itemId,
+          sku: item.sku,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          boxId: item.boxId,
+          presupuestoItemId: item.presupuestoItemId,
+          lotNumber: item.lotNumber,
+          serialNumber: item.serialNumber,
+          expirationDate: item.expirationDate,
+          metadata: item.metadata,
+        })),
+      });
+    }
+
+    const result = await tx.remito.findFirst({
+      where: { id: input.remitoId, companyId },
       select: remitoReadSelect,
     });
+    requireCompanyMatch(result, companyId, input.remitoId);
 
     if (updatedById) {
       await createAuditEvent({
