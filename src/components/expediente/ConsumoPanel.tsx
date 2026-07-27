@@ -38,6 +38,7 @@ import { getConsumoVisibleNumber, type ConsumoApiItem, type ConsumoApiRow, type 
 import { getRemitoVisibleNumber, type RemitoApiRow } from "@/lib/api/remitos"
 import type { TraceItemRow } from "@/lib/api/trazabilidad"
 import { DevolucionesPanel } from "@/components/expediente/DevolucionesPanel"
+import { ComparativaOperativaV0 } from "@/components/comparativa/ComparativaOperativaV0"
 
 interface ConsumoPanelProps {
   surgery: Surgery
@@ -792,7 +793,17 @@ export function ConsumoPanel({
     removeDraft,
   } = useConsumos(consumoFilters)
   const { remitos: backendRemitos, loading: remitosLoading, refresh: refreshRemitos } = useRemitos(remitoFilters)
-  const { trace, refresh: refreshTrace } = useTrazabilidad(surgeryBackendId)
+  const remitoLabels = useMemo(
+    () => Object.fromEntries(backendRemitos.map((remito) => [remito.id, getRemitoVisibleNumber(remito)])),
+    [backendRemitos]
+  )
+  const {
+    trace,
+    loading: traceLoading,
+    ready: traceReady,
+    error: traceError,
+    refresh: refreshTrace,
+  } = useTrazabilidad(surgeryBackendId)
 
   useEffect(() => {
     if (!hasObservedFreshnessKey.current) {
@@ -900,6 +911,13 @@ export function ConsumoPanel({
           </CardContent>
         </Card>
         <EmptyState />
+        <ComparativaOperativaV0
+          rows={trace?.items ?? []}
+          summary={trace?.summary ?? null}
+          loading={!traceReady || traceLoading}
+          error={traceError}
+          remitoLabels={remitoLabels}
+        />
         <DevolucionesPanel surgeryId={surgeryBackendId} selectedRemito={selectedRemito} selectedConsumo={null} onConfirmed={onDevolucionConfirmed} />
       </div>
     )
@@ -1014,6 +1032,14 @@ export function ConsumoPanel({
           <ConsumoSummaryCards consumo={panelConsumo} items={items} sentMap={sentMap} faltantes={faltantes} />
         </CardContent>
       </Card>
+
+      <ComparativaOperativaV0
+        rows={trace?.items ?? []}
+        summary={trace?.summary ?? null}
+        loading={!traceReady || traceLoading}
+        error={traceError}
+        remitoLabels={remitoLabels}
+      />
 
       <ConsumoActionBar
         state={state}

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ConsumoPanel } from "@/components/expediente/ConsumoPanel"
 import type { Surgery } from "@/types"
 
-const { createDraftMock, emitMock, useConsumosMock, useRemitosMock, useTrazabilidadMock, devolucionesPanelMock } = vi.hoisted(() => ({
+const { comparativaMock, createDraftMock, emitMock, useConsumosMock, useRemitosMock, useTrazabilidadMock, devolucionesPanelMock } = vi.hoisted(() => ({
+  comparativaMock: vi.fn(),
   createDraftMock: vi.fn(),
   emitMock: vi.fn(),
   useConsumosMock: vi.fn(),
@@ -16,6 +17,12 @@ const { createDraftMock, emitMock, useConsumosMock, useRemitosMock, useTrazabili
 vi.mock("@/hooks/useConsumos", () => ({ useConsumos: useConsumosMock }))
 vi.mock("@/hooks/useRemitos", () => ({ useRemitos: useRemitosMock }))
 vi.mock("@/hooks/useTrazabilidad", () => ({ useTrazabilidad: useTrazabilidadMock }))
+vi.mock("@/components/comparativa/ComparativaOperativaV0", () => ({
+  ComparativaOperativaV0: (props: unknown) => {
+    comparativaMock(props)
+    return <div data-testid="comparativa-operativa" />
+  },
+}))
 vi.mock("@/components/expediente/DevolucionesPanel", () => ({
   DevolucionesPanel: (props: { surgeryId: string; selectedRemito?: { id: string } | null; selectedConsumo?: { id: string } | null }) => {
     devolucionesPanelMock(props)
@@ -188,5 +195,25 @@ describe("ConsumoPanel backend surgery ID", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Emitir consumo" }))
     await waitFor(() => expect(emitMock).toHaveBeenCalledWith("consumo-2"))
+  })
+
+  it("keeps every surgery trace row when the selected remito changes", () => {
+    const secondRemito = { ...deliveredRemito, id: "remito-2", visibleNumber: 2 }
+    const traceRows = [
+      { id: "trace-1", remitoId: "remito-1", remitoItemId: "item-1", consumoItemIds: [] },
+      { id: "trace-2", remitoId: "remito-2", remitoItemId: "item-2", consumoItemIds: [] },
+    ]
+    useRemitosMock.mockReturnValue({ remitos: [deliveredRemito, secondRemito], loading: false, refresh: vi.fn() })
+    useTrazabilidadMock.mockReturnValue({
+      trace: { items: traceRows, summary: null }, loading: false, ready: true, error: null, refresh: vi.fn(),
+    })
+
+    render(<ConsumoPanel surgery={surgery} remitos={[]} editingConsumo={{}} setEditingConsumo={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText("Remito base"), { target: { value: "remito-2" } })
+
+    expect(comparativaMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      rows: traceRows,
+      remitoLabels: { "remito-1": "R-0001", "remito-2": "R-0002" },
+    }))
   })
 })

@@ -184,6 +184,37 @@ describe("getSurgeryTrace", () => {
     expect(trace.gaps.some((gap) => gap.code === "UNMATCHED_CONSUMO_ITEM")).toBe(true);
   });
 
+  it("accumulates multiple consumos for one remito item", async () => {
+    const second = consumo({
+      id: "consumo-2",
+      items: [{ ...consumo().items[0], id: "consumo-item-2", consumedQuantity: new Prisma.Decimal(1) }],
+    });
+    const prisma = prismaMock({ consumo: { findMany: vi.fn().mockResolvedValue([consumo(), second]) } });
+
+    const trace = await getSurgeryTrace({ companyId: COMPANY_ID, surgeryId: SURGERY_ID, prisma });
+
+    expect(trace.items[0]).toMatchObject({
+      consumoItemIds: ["consumo-item-1", "consumo-item-2"],
+      consumedQuantity: 4,
+    });
+  });
+
+  it("prefers confirmed devolucion quantity and exposes a conflict with the remito accumulator", async () => {
+    const conflicting = devolucion({
+      items: [{ ...devolucion().items[0], returnedQuantity: new Prisma.Decimal(1) }],
+    });
+    const prisma = prismaMock({ devolucion: { findMany: vi.fn().mockResolvedValue([conflicting]) } });
+
+    const trace = await getSurgeryTrace({ companyId: COMPANY_ID, surgeryId: SURGERY_ID, prisma });
+
+    expect(trace.items[0]).toMatchObject({
+      returnedQuantity: 1,
+      pendingQuantity: 1,
+      warnings: expect.arrayContaining(["RETURNED_QUANTITY_SOURCE_CONFLICT"]),
+    });
+    expect(trace.gaps).toContainEqual(expect.objectContaining({ code: "RETURNED_QUANTITY_SOURCE_CONFLICT" }));
+  });
+
   it("uses normalized devolucion trace fields for unmatched devolucion items", async () => {
     const prisma = prismaMock({
       remito: { findMany: vi.fn().mockResolvedValue([remito({ items: [] })]) },
