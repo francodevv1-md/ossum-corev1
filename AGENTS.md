@@ -162,6 +162,19 @@ Worklog, ADRs, Knowledge, handoff, checklist y resúmenes.
 
 Revisa diff, duplicación, coherencia con arquitectura, riesgos y reglas canónicas. No implementa features durante revisión.
 
+### 8.1 Enrutamiento autoritativo por nivel de riesgo
+
+Antes de actuar, el agente debe clasificar la tarea y usar el flujo más liviano que conserve las protecciones de este documento:
+
+- **T0 — consulta o lectura:** explicación, búsqueda, inspección o análisis sin escritura. Se ejecuta inline, sin SDD, delegación ni lista de tareas salvo que aporten valor real.
+- **T1 — cambio bajo y reversible:** hasta 3 archivos no sensibles y sin cambios de arquitectura, schema, autenticación, seguridad, multiempresa, reglas de negocio, contrato API, dependencias o persistencia. Se implementa inline, con validación enfocada y un único cierre Caveman.
+- **T2 — cambio normal relacionado:** feature o cambio coherente de varios archivos fuera de límites críticos. Requiere brief compacto o Change Pack y delegación dirigida o fases SDD únicamente donde aporten control.
+- **T3 — cambio crítico:** cualquier límite de aprobación humana de §9.5 o regla protectiva de §11. Requiere aprobación explícita de Franco y `gentle-orchestrator` o las salvaguardas completas aplicables antes de implementar.
+
+SDD es condicional: no es obligatorio para T0/T1. Ante alcance o riesgo ambiguo, se clasifica hacia arriba. Ningún nivel reduce las aprobaciones humanas, locks, archivos sensibles, reglas Diagnose ni quality gates vigentes.
+
+Para T0/T1 alcanza un único handoff Caveman. Engram se usa solo ante sus triggers obligatorios y para el resumen de sesión; el worklog se actualiza únicamente en hitos o cambios críticos.
+
 ---
 
 ## 9. Multiagent Operating Policy
@@ -176,7 +189,7 @@ Revisa diff, duplicación, coherencia con arquitectura, riesgos y reglas canóni
 
 ### 9.2 Required task declaration
 
-Toda tarea multiagente debe declarar, como mínimo:
+La declaración completa es obligatoria cuando exista escritura multiagente o intervengan archivos críticos/compartidos. Una tarea T0/T1 con un único agente no requiere esta ceremonia. Cuando corresponda, debe declarar como mínimo:
 
 - Task ID / Name
 - Agent Role
@@ -358,7 +371,7 @@ Antes de cerrar cualquier tarea técnica:
 - Tests relevantes si existen.
 - Prisma format/generate si se tocó Prisma.
 - Browser QA si toca UI.
-- Worklog actualizado.
+- Worklog actualizado en hitos o cambios críticos; no es obligatorio para T0/T1 rutinario.
 - Handoff generado.
 - Riesgos abiertos declarados.
 - Engram session_summary si corresponde.
