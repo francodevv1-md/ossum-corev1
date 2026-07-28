@@ -90,6 +90,8 @@ model Company {
   cajasCommandEffects              CajasCommandEffect[]                     @relation("CajasCompanyCommandEffects")
   cajasCommandAttempts             CajasCommandAttempt[]                    @relation("CajasCompanyCommandAttempts")
   cajasProjectionReconciliations   CajasProjectionReconciliation[]          @relation("CajasCompanyProjectionReconciliations")
+  surgeryDocumentChecklists        SurgeryDocumentChecklist[]               @relation("CompanyDocumentChecklists")
+  surgeryDocumentItems             SurgeryDocumentItem[]                    @relation("CompanyDocumentItems")
 }
 
 // ─── Sucursal ────────────────────────────────────────────────────────
@@ -206,6 +208,10 @@ model UserCompanyAccess {
   operationalAssignees         CompanyOperationalAssignee[]             @relation("CompanyOperationalAssigneeUserAccess")
   availabilityRecipientReasons AvailabilityRequestRecipientAssignment[] @relation("AvailabilityAssignmentUserAccess")
   availabilityCapabilityGrants AvailabilityCapabilityGrant[]            @relation("AvailabilityCapabilityUserAccess")
+  createdDocumentChecklists    SurgeryDocumentChecklist[]               @relation("SurgeryDocumentChecklistCreatedByAccess")
+  updatedDocumentChecklists    SurgeryDocumentChecklist[]               @relation("SurgeryDocumentChecklistUpdatedByAccess")
+  createdDocumentItems         SurgeryDocumentItem[]                    @relation("SurgeryDocumentItemCreatedByAccess")
+  updatedDocumentItems         SurgeryDocumentItem[]                    @relation("SurgeryDocumentItemUpdatedByAccess")
 
   @@unique([userId, companyId])
 }
@@ -355,11 +361,58 @@ model Surgery {
   invoices              Invoice[]
   payments              Payment[]
   cajasAssignments      CajasAssignment[]          @relation("CajasSurgeryAssignments")
+  documentChecklist     SurgeryDocumentChecklist?  @relation("SurgeryDocumentChecklistSurgery")
 
   @@unique([companyId, id], map: "uq_surgery_company_id")
   @@index([companyId, archivedAt])
   @@index([companyId, materialAvailabilityDate], map: "ix_surgery_company_material_availability")
   @@index([companyId, createdById], map: "ix_surgery_company_created_by")
+}
+
+model SurgeryDocumentChecklist {
+  id              String   @id @default(cuid())
+  companyId       String
+  surgeryId       String
+  templateVersion String   @default("documentation-v0.1")
+  createdById     String
+  updatedById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         Company               @relation("CompanyDocumentChecklists", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdc_company")
+  surgery         Surgery               @relation("SurgeryDocumentChecklistSurgery", fields: [companyId, surgeryId], references: [companyId, id], onDelete: Cascade, onUpdate: Cascade, map: "fk_sdc_surgery_tenant")
+  createdByAccess UserCompanyAccess     @relation("SurgeryDocumentChecklistCreatedByAccess", fields: [createdById, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdc_created_by_access")
+  updatedByAccess UserCompanyAccess     @relation("SurgeryDocumentChecklistUpdatedByAccess", fields: [updatedById, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdc_updated_by_access")
+  items           SurgeryDocumentItem[] @relation("SurgeryDocumentChecklistItems")
+
+  @@unique([companyId, surgeryId], map: "uq_sdc_company_surgery")
+  @@unique([companyId, id], map: "uq_sdc_company_id")
+  @@index([companyId, updatedAt], map: "ix_sdc_company_updated_at")
+}
+
+model SurgeryDocumentItem {
+  id          String   @id @default(cuid())
+  companyId   String
+  checklistId String
+  type        String
+  label       String
+  required    Boolean
+  sortOrder   Int
+  state       String   @default("pending")
+  observation String?  @db.Text
+  createdById String
+  updatedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company         Company                  @relation("CompanyDocumentItems", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdi_company")
+  checklist       SurgeryDocumentChecklist @relation("SurgeryDocumentChecklistItems", fields: [companyId, checklistId], references: [companyId, id], onDelete: Cascade, onUpdate: Cascade, map: "fk_sdi_checklist_tenant")
+  createdByAccess UserCompanyAccess        @relation("SurgeryDocumentItemCreatedByAccess", fields: [createdById, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdi_created_by_access")
+  updatedByAccess UserCompanyAccess        @relation("SurgeryDocumentItemUpdatedByAccess", fields: [updatedById, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdi_updated_by_access")
+
+  @@unique([checklistId, type], map: "uq_sdi_checklist_type")
+  @@unique([companyId, id], map: "uq_sdi_company_id")
+  @@index([companyId, checklistId, sortOrder], map: "ix_sdi_company_checklist_order")
 }
 
 // ─── Presupuesto versionable (Fase 1C) ─────────────────────────────────────

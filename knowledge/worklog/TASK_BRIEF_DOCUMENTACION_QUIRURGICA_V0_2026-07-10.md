@@ -37,14 +37,32 @@ Permitido tocar sólo si la otra sesión no tiene lock sobre Ficha CX completa:
 - Nuevo modelo persistente para documentos.
 - Auditoría documental.
 
-Esta fase no está aprobada por este brief.
+Esta fase no está aprobada de forma general por este brief, excepto por el slice
+aditivo de persistencia autorizado expresamente en la sección siguiente.
+
+### Addendum de autorización — 2026-07-28
+
+Franco aprueba el slice `OPS-DOCUMENTACION-V0-SCHEMA-001` con este alcance
+cerrado:
+
+- modificar `prisma/schema.prisma` para agregar los modelos normalizados
+  `SurgeryDocumentChecklist` y `SurgeryDocumentItem`;
+- agregar la migración SQL aditiva
+  `prisma/migrations/20260727200000_add_surgery_documentation_v0/migration.sql`;
+- preservar aislamiento multiempresa mediante relaciones compuestas de actores
+  contra `UserCompanyAccess(userId, companyId)`;
+- crear un commit local que incluya este Task Brief, el schema y la migración.
+
+Esta autorización no permite aplicar la migración a ninguna base de datos ni
+incluye seed, API, services, validators, UI, storage, adjuntos, facturación,
+cambios de proveedor o archivos PDF no relacionados.
 
 ## Fuera de alcance
 
 No tocar en esta tarea:
 
-- `prisma/schema.prisma`
-- `prisma/migrations/*`
+- `prisma/schema.prisma`, excepto el slice aditivo autorizado en el addendum.
+- `prisma/migrations/*`, excepto la migración aditiva autorizada en el addendum.
 - Auth, permisos, storage provider o dependencias.
 - `src/components/expediente/*Remito*`
 - `src/components/expediente/*Consumo*`
