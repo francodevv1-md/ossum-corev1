@@ -4,9 +4,13 @@ import type { PrismaClient } from "@prisma/client";
 import { conflict, forbidden, notFound } from "../api/errors";
 import { canMutateDocumentation } from "../permissions/documentation";
 import {
+  DOCUMENTATION_STATES,
   DOCUMENTATION_TEMPLATE,
   DOCUMENTATION_TEMPLATE_VERSION,
   deriveDocumentationAggregate,
+  isDocumentationTransitionAllowed,
+  type DocumentationState,
+  type DocumentationStatePatch,
 } from "../validators/documentation.validator";
 
 const MAX_INITIALIZE_ATTEMPTS = 3;
@@ -78,6 +82,7 @@ function normalizeContext(context: SurgeryDocumentationContext): SurgeryDocument
   if (!companyId || !actorUserId) throw notFound("Documentation not found", "documentation_not_found");
   return { companyId, actorUserId };
 }
+
 async function requireActiveMembership(
   tx: Prisma.TransactionClient,
   context: SurgeryDocumentationContext,
@@ -267,4 +272,76 @@ export async function initializeSurgeryDocumentation(
     }
   }
   return writeConflict();
+}
+
+export type TransitionDocumentationItemCommand = DocumentationStatePatch & { surgeryId: string; itemId: string };
+
+export async function transitionSurgeryDocumentationItem(
+  dependencies: SurgeryDocumentationServiceDependencies,
+  context: SurgeryDocumentationContext,
+  command: TransitionDocumentationItemCommand
+): Promise<{ documentation: SurgeryDocumentationView }> {
+  const scoped = normalizeContext(context);
+  try {
+    return await dependencies.prisma.$transaction(async (tx) => {
+      await requireActiveMembership(tx, scoped, true);
+      const current = await tx.surgeryDocumentItem.findFirst({
+        where: {
+          companyId: scoped.companyId,
+          id: command.itemId,
+          checklist: { companyId: scoped.companyId, surgeryId: command.surgeryId },
+        },
+        include: { checklist: { select: { surgeryId: true, templateVersion: true } } },
+      });
+      if (!current || !DOCUMENTATION_STATES.includes(current.state as DocumentationState)) {
+        throw notFound("Documentation not found", "documentation_not_found");
+      }
+      const oldState = current.state as DocumentationState;
+      if (!isDocumentationTransitionAllowed(oldState, command.state)) {
+        throw conflict("Documentation state transition is forbidden", "documentation_transition_forbidden");
+      }
+      const observation = command.state === "observed" ? command.observation! : null;
+      const expectedUpdatedAt = new Date(command.expectedUpdatedAt);
+      const updated = await tx.surgeryDocumentItem.updateMany({
+        where: {
+          companyId: scoped.companyId,
+          id: current.id,
+          state: oldState,
+          updatedAt: expectedUpdatedAt,
+        },
+        data: { state: command.state, observation, updatedById: scoped.actorUserId },
+      });
+      if (updated.count !== 1) writeConflict();
+
+      const checklistUpdate = await tx.surgeryDocumentChecklist.updateMany({
+        where: { id: current.checklistId, companyId: scoped.companyId },
+        data: { updatedById: scoped.actorUserId },
+      });
+      if (checklistUpdate.count !== 1) writeConflict();
+      await dependencies.effects.writeAudit({
+        tx,
+        companyId: scoped.companyId,
+        actorUserId: scoped.actorUserId,
+        entityType: "SurgeryDocumentItem",
+        entityId: current.id,
+        action: "documentation.item_state_changed",
+        oldValue: { state: oldState, observation: current.observation },
+        newValue: { state: command.state, observation },
+        metadata: {
+          companyId: scoped.companyId,
+          surgeryId: command.surgeryId,
+          checklistId: current.checklistId,
+          itemId: current.id,
+          type: current.type,
+          templateVersion: current.checklist.templateVersion,
+        },
+      });
+      const checklist = await findChecklist(tx, scoped.companyId, command.surgeryId);
+      if (!checklist) throw notFound("Documentation not found", "documentation_not_found");
+      return { documentation: toDocumentation(checklist) };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (error) {
+    if (isKnownError(error, "P2034") || isKnownError(error, "P2002")) writeConflict();
+    throw error;
+  }
 }
