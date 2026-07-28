@@ -1,4 +1,5 @@
-import { Prisma } from "@prisma/client";
+// Error constructor only: no PrismaClient, repository singleton, environment loading, or DB connection.
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getSurgeryDocumentation,
@@ -182,6 +183,51 @@ describe("surgery documentation service", () => {
     expect(foreignPatch.effects.writeAudit).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "uq_sdc_company_surgery",
+    "uq_sdi_checklist_type",
+    ["companyId", "surgeryId"],
+    ["checklistId", "type"],
+  ])("retries approved initialization conflict target %j three times before 409", async (target) => {
+    const h = harness();
+    h.prisma.$transaction.mockRejectedValue(new PrismaClientKnownRequestError("race", {
+      code: "P2002", clientVersion: "test", meta: { target },
+    }));
+    await expect(initializeSurgeryDocumentation(h.dependencies, context, "surgery-1")).rejects.toMatchObject({
+      status: 409, code: "documentation_write_conflict",
+    });
+    expect(h.prisma.$transaction).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    { code: "P2034", target: undefined },
+    { code: "P2002", target: ["companyId", "surgeryId"] },
+  ])("retries $code and succeeds on the next attempt", async ({ code, target }) => {
+    const h = harness();
+    const expected = { documentation: { checklist: null }, createdChecklist: false, insertedTypes: [] };
+    h.prisma.$transaction
+      .mockRejectedValueOnce(new PrismaClientKnownRequestError("race", {
+        code, clientVersion: "test", meta: target ? { target } : undefined,
+      }))
+      .mockResolvedValueOnce(expected);
+    await expect(initializeSurgeryDocumentation(h.dependencies, context, "surgery-1")).resolves.toBe(expected);
+    expect(h.prisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    "other_unique",
+    ["companyId", "id"],
+    ["surgeryId", "companyId"],
+    ["companyId", "surgeryId", "type"],
+  ])("does not retry unrelated P2002 target %j", async (target) => {
+    const h = harness();
+    h.prisma.$transaction.mockRejectedValue(new PrismaClientKnownRequestError("other", {
+      code: "P2002", clientVersion: "test", meta: { target },
+    }));
+    await expect(initializeSurgeryDocumentation(h.dependencies, context, "surgery-1")).rejects.toMatchObject({ code: "P2002" });
+    expect(h.prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
   it("performs one company/state/timestamp CAS and clears observation when leaving observed", async () => {
     const h = harness();
     h.tx.userCompanyAccess.findFirst.mockResolvedValue(access());
@@ -249,7 +295,7 @@ describe("surgery documentation service", () => {
 
     for (const code of ["P2034", "P2002"]) {
       const race = harness();
-      race.prisma.$transaction.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("race", {
+      race.prisma.$transaction.mockRejectedValue(new PrismaClientKnownRequestError("race", {
         code, clientVersion: "test",
       }));
       await expect(transitionSurgeryDocumentationItem(race.dependencies, context, {
