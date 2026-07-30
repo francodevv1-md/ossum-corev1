@@ -166,6 +166,24 @@ describe("ConsumoPanel backend surgery ID", () => {
     expect(serverValues).not.toContain("CX-0006")
   })
 
+  it("blocks every server-backed path instead of substituting the visible ID when backendId is missing", () => {
+    render(
+      <ConsumoPanel
+        surgery={{ ...surgery, backendId: "   " }}
+        remitos={[]}
+        editingConsumo={{}}
+        setEditingConsumo={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText("Consumo no disponible")).toBeInTheDocument()
+    expect(useConsumosMock).not.toHaveBeenCalled()
+    expect(useRemitosMock).not.toHaveBeenCalled()
+    expect(useTrazabilidadMock).not.toHaveBeenCalled()
+    expect(devolucionesPanelMock).not.toHaveBeenCalled()
+    expect(createDraftMock).not.toHaveBeenCalled()
+  })
+
   it("selects the remito and consumo used by Ficha CX and emits the selected consumo", async () => {
     const secondRemito = {
       ...deliveredRemito,
@@ -215,5 +233,26 @@ describe("ConsumoPanel backend surgery ID", () => {
       rows: traceRows,
       remitoLabels: { "remito-1": "R-0001", "remito-2": "R-0002" },
     }))
+  })
+
+  it.each([
+    ["desktop-like", 1280, 800],
+    ["mobile", 412, 915],
+  ])("never feeds legacy local remito quantities into Comparativa at %s viewport", (_name, width, height) => {
+    Object.defineProperties(window, {
+      innerWidth: { configurable: true, value: width },
+      innerHeight: { configurable: true, value: height },
+    })
+    window.dispatchEvent(new Event("resize"))
+    const legacyRemito = {
+      id: "R-LOCAL-1", surgeryId: surgery.id, boxId: "box-local", destination: "Institución",
+      date: "2026-07-16", state: "Enviado",
+      items: [{ stockItemId: "local-1", name: "Artículo local", code: "LOCAL", sentQuantity: 99, consumedQuantity: 3, returnedQuantity: 1 }],
+    }
+
+    render(<ConsumoPanel surgery={surgery} remitos={[legacyRemito as never]} editingConsumo={{}} setEditingConsumo={vi.fn()} />)
+
+    expect(comparativaMock).toHaveBeenLastCalledWith(expect.objectContaining({ rows: [], summary: null }))
+    expect(comparativaMock.mock.calls.at(-1)?.[0]).not.toEqual(expect.objectContaining({ rows: legacyRemito.items }))
   })
 })

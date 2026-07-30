@@ -1078,7 +1078,7 @@ export function TrazabilidadPanel({
 }: TrazabilidadPanelProps) {
   const hasObservedFreshnessKey = useRef(false)
   const [viewMode, setViewMode] = useState<TraceViewMode>("all")
-  const { trace, loading: traceLoading, ready: traceReady, error: traceError, refresh } = useTrazabilidad(surgery.id)
+  const { trace, loading: traceLoading, ready: traceReady, error: traceError, refresh } = useTrazabilidad(surgery.backendId)
 
   useEffect(() => {
     if (!hasObservedFreshnessKey.current) {
@@ -1157,11 +1157,17 @@ export function TrazabilidadPanel({
               <Badge variant="outline" className="text-[10px]">
                 {surgery.expedienteNumber ?? surgery.id}
               </Badge>
+              <Badge variant="outline" className="text-[10px]">
+                Histórico local · no autoritativo
+              </Badge>
               {consumo && <ConsumoStateIndicator state={consumo.state} />}
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Consolidado visible de envío, consumo y retorno registrado.
-            </p>
+            <p className="text-[11px] text-muted-foreground">Consolidado histórico local para consulta visual.</p>
+            {traceError ? (
+              <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => void refresh()}>
+                Reintentar trazabilidad
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1183,7 +1189,7 @@ export function TrazabilidadPanel({
         )}
 
         <InfoNote>
-          Esta vista consolida registros visibles del circuito para auditar <strong>envío</strong>, <strong>consumo</strong> y <strong>retorno</strong> sin asumir estados no registrados.
+          Solo visualización: estos datos locales pueden no estar actualizados, no son autoritativos y no alimentan cantidades operativas de Logística ni Comparativa.
         </InfoNote>
 
         <Separator />

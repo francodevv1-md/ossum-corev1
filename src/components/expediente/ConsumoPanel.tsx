@@ -765,8 +765,11 @@ function ConsumoActionBar({
   )
 }
 
-export function ConsumoPanel({
+type ConsumoPanelBackendProps = ConsumoPanelProps & { surgeryBackendId: string }
+
+function ConsumoPanelBackend({
   surgery,
+  surgeryBackendId,
   consumo,
   remitos,
   box,
@@ -774,11 +777,10 @@ export function ConsumoPanel({
   setEditingConsumo,
   freshnessKey = 0,
   onDevolucionConfirmed,
-}: ConsumoPanelProps) {
+}: ConsumoPanelBackendProps) {
   const hasObservedFreshnessKey = useRef(false)
-  const surgeryBackendId = surgery.backendId ?? surgery.id
-  const consumoFilters = useMemo(() => ({ surgeryId: surgeryBackendId || "__missing_surgery__", take: 50 }), [surgeryBackendId])
-  const remitoFilters = useMemo(() => ({ surgeryId: surgeryBackendId || "__missing_surgery__", take: 100 }), [surgeryBackendId])
+  const consumoFilters = useMemo(() => ({ surgeryId: surgeryBackendId, take: 50 }), [surgeryBackendId])
+  const remitoFilters = useMemo(() => ({ surgeryId: surgeryBackendId, take: 100 }), [surgeryBackendId])
   const {
     consumos: backendConsumos,
     loading: consumosLoading,
@@ -1080,4 +1082,14 @@ export function ConsumoPanel({
       <DevolucionesPanel surgeryId={surgeryBackendId} selectedRemito={selectedRemito} selectedConsumo={panelConsumo?.apiId ? backendConsumos.find((row) => row.id === panelConsumo.apiId) ?? null : null} onConfirmed={onDevolucionConfirmed} />
     </div>
   )
+}
+
+export function ConsumoPanel(props: ConsumoPanelProps) {
+  const surgeryBackendId = props.surgery.backendId?.trim()
+
+  if (!surgeryBackendId) {
+    return <StatusState title="Consumo no disponible" message="La cirugía no tiene ID server-side disponible." />
+  }
+
+  return <ConsumoPanelBackend {...props} surgeryBackendId={surgeryBackendId} />
 }

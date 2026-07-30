@@ -92,18 +92,21 @@ interface LogisticaTabContentProps {
   freshnessKey?: number
 }
 
-export function LogisticaTabContent({
+type LogisticaTabContentBackendProps = LogisticaTabContentProps & { surgeryBackendId: string }
+
+function LogisticaTabContentBackend({
   surgery,
+  surgeryBackendId,
   logistics,
   box,
   remitos,
   materialTransito,
   freshnessKey = 0,
-}: LogisticaTabContentProps) {
+}: LogisticaTabContentBackendProps) {
   const hasObservedFreshnessKey = useRef(false)
   const [remitosOpen, setRemitosOpen] = useState(true)
   const [materialOpen, setMaterialOpen] = useState(true)
-  const remitoFilters = useMemo(() => ({ surgeryId: surgery.id || "__missing_surgery__", take: 100 }), [surgery.id])
+  const remitoFilters = useMemo(() => ({ surgeryId: surgeryBackendId, take: 100 }), [surgeryBackendId])
   const {
     remitos: backendRemitos,
     loading: remitosLoading,
@@ -115,7 +118,7 @@ export function LogisticaTabContent({
     emit: emitRemito,
     transition: transitionRemito,
   } = useRemitos(remitoFilters)
-  const { trace, refresh: refreshTrace } = useTrazabilidad(surgery.id)
+  const { trace, refresh: refreshTrace } = useTrazabilidad(surgeryBackendId)
 
   useEffect(() => {
     if (!hasObservedFreshnessKey.current) {
@@ -299,4 +302,19 @@ export function LogisticaTabContent({
       </div>
     </div>
   )
+}
+
+export function LogisticaTabContent(props: LogisticaTabContentProps) {
+  const surgeryBackendId = props.surgery.backendId?.trim()
+
+  if (!surgeryBackendId) {
+    return (
+      <div className="rounded-lg border border-slate-300 bg-white px-3 py-4 dark:border-slate-800 dark:bg-slate-900/90">
+        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Logística no disponible</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">La cirugía no tiene ID server-side disponible.</p>
+      </div>
+    )
+  }
+
+  return <LogisticaTabContentBackend {...props} surgeryBackendId={surgeryBackendId} />
 }
