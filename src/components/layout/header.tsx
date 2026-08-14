@@ -27,6 +27,8 @@ const ROUTE_LABELS: Record<string, string> = {
   "/ventas/comprobantes": "Comprobantes Asociados",
   "/stock": "Stock",
   "/cajas": "Cajas",
+  "/cajas/presentacion": "Cajas · Presentación",
+  "/tablero": "Tablero quirúrgico",
   "/remitos": "Remitos",
   "/consumo": "Consumo",
   "/logistica": "Logística",

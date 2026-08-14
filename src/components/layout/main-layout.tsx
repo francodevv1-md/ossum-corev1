@@ -6,8 +6,8 @@ import { useSidebar } from "./app-shell"
 import { cn } from "@/lib/utils"
 
 const MARGIN_MAP = {
-  expanded: "208px",
-  compact: "72px",
+  expanded: "248px",
+  compact: "56px",
   hidden: "0px",
 } as const
 

@@ -4,7 +4,8 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 
 type SidebarState = "expanded" | "compact" | "hidden"
 
-const DEFAULT_DESKTOP_SIDEBAR_STATE: SidebarState = "compact"
+const DEFAULT_DESKTOP_SIDEBAR_STATE: SidebarState = "expanded"
+const SIDEBAR_STATE_STORAGE_KEY = "ossum.sidebarState"
 
 interface SidebarContextType {
   sidebarState: SidebarState
@@ -66,25 +67,31 @@ function saveCollapsedGroups(groups: Record<string, boolean>) {
   }
 }
 
+function loadSidebarState(): SidebarState {
+  if (typeof window === "undefined") return DEFAULT_DESKTOP_SIDEBAR_STATE
+  try {
+    const stored = localStorage.getItem(SIDEBAR_STATE_STORAGE_KEY)
+    return stored === "expanded" || stored === "compact" || stored === "hidden"
+      ? stored
+      : DEFAULT_DESKTOP_SIDEBAR_STATE
+  } catch {
+    return DEFAULT_DESKTOP_SIDEBAR_STATE
+  }
+}
+
 export function AppShellProvider({ children }: { children: React.ReactNode }) {
-  const [sidebarState, setSidebarState] = useState<SidebarState>(DEFAULT_DESKTOP_SIDEBAR_STATE)
+  const [sidebarState, setSidebarStateValue] = useState<SidebarState>(DEFAULT_DESKTOP_SIDEBAR_STATE)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [expedienteOpen, setExpedienteOpen] = useState(false)
   const [selectedSurgeryId, setSelectedSurgeryId] = useState<string | null>(null)
-  const [initialized, setInitialized] = useState(false)
 
-  // Load persisted collapsed groups on mount
   useEffect(() => {
-    setCollapsedGroups(loadCollapsedGroups())
+    const frame = window.requestAnimationFrame(() => {
+      setSidebarStateValue(loadSidebarState())
+      setCollapsedGroups(loadCollapsedGroups())
+    })
+    return () => window.cancelAnimationFrame(frame)
   }, [])
-
-  // Stage 1 shell refactor: bias desktop toward compact rail on first load only.
-  useEffect(() => {
-    if (!initialized) {
-      setSidebarState(DEFAULT_DESKTOP_SIDEBAR_STATE)
-      setInitialized(true)
-    }
-  }, [initialized])
 
   const toggleGroup = useCallback((groupTitle: string) => {
     setCollapsedGroups((prev) => {
@@ -92,6 +99,15 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
       saveCollapsedGroups(next)
       return next
     })
+  }, [])
+
+  const setSidebarState = useCallback((value: SidebarState) => {
+    setSidebarStateValue(value)
+    try {
+      localStorage.setItem(SIDEBAR_STATE_STORAGE_KEY, value)
+    } catch {
+      // Storage may be unavailable in restricted browser contexts.
+    }
   }, [])
 
   const openExpediente = useCallback((id: string) => {
