@@ -36,7 +36,7 @@ type BootstrapSnapshot = {
   audits: Array<{
     userId: string;
     entityType: string;
-    entityId: string;
+    entityId: string | null;
     action: string;
     module: string;
     metadata: unknown;
@@ -131,10 +131,12 @@ export function classifyAvailabilityDevBootstrapState(
   );
   const auditedGrantIds = new Set<string>();
   const grantAuditMappingExact = grantAudits.every((audit) => {
-    const grant = grantsById.get(audit.entityId);
+    const entityId = audit.entityId;
+    const grant = entityId ? grantsById.get(entityId) : undefined;
     if (
+      !entityId ||
       !grant ||
-      auditedGrantIds.has(audit.entityId) ||
+      auditedGrantIds.has(entityId) ||
       audit.userId !== AVAILABILITY_DEV_ACTOR_ID ||
       audit.entityType !== "AvailabilityCapabilityGrant" ||
       audit.module !== "availability" ||
@@ -143,7 +145,7 @@ export function classifyAvailabilityDevBootstrapState(
     ) {
       return false;
     }
-    auditedGrantIds.add(audit.entityId);
+    auditedGrantIds.add(entityId);
     return true;
   });
   const final =

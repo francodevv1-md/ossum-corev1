@@ -295,7 +295,7 @@ class PrismaOverlayDomain implements OverlayDomainPort {
         && metadata.idAuthorityDigest === OVERLAY_ID_AUTHORITY_DIGEST
         && metadata.matrixDigest === OVERLAY_MATRIX_DIGEST
         && metadata.fixtureDigest === OVERLAY_FIXTURE_DIGEST
-      return metadataValid && intendedSurgeryIds.has(row.entityId) && (
+      return metadataValid && row.entityId !== null && intendedSurgeryIds.has(row.entityId) && (
       (createAuditIds.has(row.id) && row.action === "coordination_dev_overlay_created")
       || (cleanupAuditIds.has(row.id) && row.action === "coordination_dev_overlay_cleaned")
       )

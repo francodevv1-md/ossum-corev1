@@ -630,6 +630,7 @@ function buildTimeline(remitos: TraceRemito[], consumos: TraceConsumo[], devoluc
   }
 
   for (const audit of auditEvents) {
+    if (audit.entityId === null) continue;
     const sourceType = audit.entityType === "Remito"
       ? "Remito"
       : audit.entityType === "Consumo"
