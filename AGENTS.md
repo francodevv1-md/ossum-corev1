@@ -175,6 +175,36 @@ SDD es condicional: no es obligatorio para T0/T1. Ante alcance o riesgo ambiguo,
 
 Para T0/T1 alcanza un único handoff Caveman. Engram se usa solo ante sus triggers obligatorios y para el resumen de sesión; el worklog se actualiza únicamente en hitos o cambios críticos.
 
+### 8.2 Fast Delivery Contract — aprobación inicial única
+
+Franco prioriza entrega funcional rápida. Una solicitud explícita de implementación (`implementá`, `hacelo`, `corregilo`, `terminá la tarea` o equivalente inequívoco) constituye la aprobación humana inicial para el paquete DEV finito razonablemente necesario para producir ese resultado exacto.
+
+Flujo normal:
+
+```txt
+Pedido → brief interno → implementación continua → pruebas → Diagnose/correcciones → validación → único cierre final
+```
+
+Reglas:
+
+- No pedir aprobación entre análisis, diseño técnico, schema, artefacto de migración, ejecución sobre DB DEV descartable confirmada, tests, Diagnose y revisiones cuando sean partes necesarias del mismo resultado solicitado.
+- Los Task Briefs, Change Packs, specs, diseños, tareas, locks y handoffs intermedios obligatorios se generan y validan internamente; no se convierten en paradas conversacionales.
+- Una sola aprobación inicial cubre el paquete DEV delimitado. Los gates técnicos siguen existiendo, pero el agente continúa automáticamente cuando pasan y corrige automáticamente mediante Diagnose cuando fallan.
+- T0–T2 se ejecutan directamente hasta resultado. T3 usa las salvaguardas aplicables sin solicitar confirmaciones rutinarias adicionales dentro del mismo alcance aprobado.
+- Schema y migraciones dejan de ser fases conversacionales separadas. Cuando el pedido aprobado las requiere, el agente puede declarar schema, crear el artefacto, aplicarlo únicamente sobre una DB DEV explícitamente confirmada como descartable, ejecutar pruebas y revisar evidencia en una sola corrida continua.
+- El cierre al usuario es único. Solo se informa progreso intermedio si aporta evidencia útil o existe un bloqueo real.
+
+Esta aprobación permanente NO cubre:
+
+- producción, staging, deploy o datos reales/no descartables;
+- acciones destructivas o irreversibles no inequívocamente solicitadas;
+- cambio de proveedor, Auth productivo, seguridad productiva, facturación/fiscal o secretos fuera del resultado pedido;
+- commits, push, PR, merge o publicación;
+- expansión funcional no relacionada con el pedido;
+- decisiones de negocio ambiguas con resultados materialmente diferentes.
+
+Ante uno de esos límites se hace una sola pregunta precisa. El silencio, una aprobación vieja o este contrato no autorizan producción ni destrucción.
+
 ---
 
 ## 9. Multiagent Operating Policy
@@ -419,3 +449,14 @@ No usar Caveman para:
 Para bugs, tests fallidos, build roto, errores TypeScript, errores Prisma, loops UI o `storage.setItem is not a function`, el agente debe ejecutar el ciclo Diagnose (Reproduce / Scope / Evidence / Hypothesis / Minimal Fix / Validate / Regression Check / Handoff) **antes** de aplicar cualquier fix.
 
 No aplicar fixes a ciegas ni cambios de arquitectura sin evidencia reproducible. Si Diagnose resuelve el bug, el cierre puede comprimirse con Caveman.
+
+---
+
+## 14. Registros de aprobación T3 — C13/C14 (histórico)
+
+Los registros activos de aprobación T3 (C13 Stock/Cajas S18–S24 y C14 CX ejecución documental) fueron movidos a Engram para no cargarse en cada contexto. Siguen siendo evidencia autoritativa y visible para GGA; se recuperan desde Engram (obs "OSSUM COR T3 approval records C13/C14") o desde los Change Packs en `knowledge/specs/`.
+
+- C13: `knowledge/specs/STOCK-CAJAS-C13-CONTINUOUS-EXECUTION-001/CHANGE_PACK.md`.
+- C14: `knowledge/specs/STOCK-CAJAS-C14-CX-CONTINUOUS-EXECUTION-001/CHANGE_PACK.md`.
+
+Cualquier expansión de alcance, contradicción de hashes o acción excluida vuelve a requerir aprobación explícita de Franco.
