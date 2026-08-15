@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client"
 
-export const COORDINATION_BOOTSTRAP_NAMES = ["Nelson DEV", "Ezequiel DEV"] as const
+export const COORDINATION_BOOTSTRAP_NAMES = ["Nelson Gonzalez", "Ezequiel DEV"] as const
 export const COORDINATION_BOOTSTRAP_ROLE = "coordinator"
 export const COORDINATION_BOOTSTRAP_SURGERY_COUNT = 21
 
@@ -65,7 +65,7 @@ function canonicalIds(ids: readonly string[]) {
 
 function expectedMap(ids: readonly string[], contactIds: Record<(typeof COORDINATION_BOOTSTRAP_NAMES)[number], string>) {
   return new Map([
-    ...ids.slice(0, 8).map((surgeryId) => [surgeryId, contactIds["Nelson DEV"]] as const),
+    ...ids.slice(0, 8).map((surgeryId) => [surgeryId, contactIds["Nelson Gonzalez"]] as const),
     ...ids.slice(8, 16).map((surgeryId) => [surgeryId, contactIds["Ezequiel DEV"]] as const),
   ])
 }

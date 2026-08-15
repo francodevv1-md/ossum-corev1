@@ -32,7 +32,7 @@ function prisma() {
       users: [{ id: "access-1" }],
     }) },
     contact: { findMany: vi.fn().mockResolvedValue([
-      { id: "contact-1", email: null, firstName: null, lastName: null, legalName: "Nelson DEV" },
+      { id: "contact-1", email: null, firstName: null, lastName: null, legalName: "Nelson Gonzalez" },
     ]) },
     surgery: { findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     surgeryContactAssignment: { create: vi.fn(), update: vi.fn(), delete: vi.fn() },
@@ -65,7 +65,7 @@ describe("coordination preview capability", () => {
       env,
     })).resolves.toEqual({
       enabled: true,
-      targets: [{ contactId: "contact-1", label: "Nelson DEV" }],
+      targets: [{ contactId: "contact-1", label: "Nelson Gonzalez" }],
     });
     expect(db.company.findUnique).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "company-1" },

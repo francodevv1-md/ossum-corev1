@@ -162,7 +162,7 @@ describe("mapApiSurgeryListToSurgeries", () => {
         coordinatorAssignments: [{
           assignmentId: "assignment-1",
           contactId: "K1",
-          label: "Nelson DEV",
+          label: "Nelson Gonzalez",
           isPrimary: false,
           createdAt: "2026-07-16T10:00:00.000Z",
         }],
@@ -176,7 +176,7 @@ describe("mapApiSurgeryListToSurgeries", () => {
 
     expect(surgeries[0]).toMatchObject({
       coordinadorContactId: "K1",
-      coordinadorCx: "Nelson DEV",
+      coordinadorCx: "Nelson Gonzalez",
       coordinatorAssignmentState: "resolved",
       coordinatorAssignments: [{
         assignmentId: "assignment-1",

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   APPROVED_AUTHORITY_DIGEST,
   APPROVED_AUTHORITY_PATH,
+  authorityAssignmentMatches,
   OVERLAY_FIXTURES,
   OVERLAY_ID_AUTHORITY_DIGEST,
   OVERLAY_MATRIX_DIGEST,
@@ -15,6 +16,7 @@ import {
   buildOverlayEnvelope,
   canonicalJson,
   classifyCreateFailure,
+  contactNameForAuthoritySymbol,
   evaluateActorAndTarget,
   evaluateOverlayOwnership,
   fixedRedactedProcessResult,
@@ -166,6 +168,12 @@ describe("coordination Ezequiel overlay T1", () => {
     await expect(readApprovedAuthority(port, "project-ref", `${APPROVED_AUTHORITY_PATH}.other`)).rejects.toMatchObject({ code: "AUTHORITY_PATH_MISMATCH" })
     await expect(readApprovedAuthority({ ...port, verifyProtectedAcl: async () => false }, "project-ref")).rejects.toMatchObject({ code: "AUTHORITY_ACL_INVALID" })
     expect(APPROVED_AUTHORITY_DIGEST).toHaveLength(64)
+    expect(contactNameForAuthoritySymbol(authority.entries[0].expectedAssignee.symbolicName)).toBe("Nelson Gonzalez")
+    expect(contactNameForAuthoritySymbol(authority.entries[8].expectedAssignee.symbolicName)).toBe("Ezequiel DEV")
+    expect(authorityAssignmentMatches("Nelson DEV", ["Nelson Gonzalez"])).toBe(true)
+    expect(authorityAssignmentMatches("Ezequiel DEV", ["Ezequiel DEV"])).toBe(true)
+    expect(authorityAssignmentMatches("", [])).toBe(true)
+    expect(authorityAssignmentMatches("Nelson DEV", ["Nelson DEV"])).toBe(false)
   })
 
   it("SC02_reject_cardinality: accepts only one active operator access and one personal coordinator link", () => {

@@ -12,7 +12,7 @@ const sources = readdirSync(previewDirectory).filter((file) => file.endsWith(".t
 const joinedSource = sources.map(({ source }) => source).join("\n")
 
 function controller(overrides: Partial<CoordinationViewController> = {}): CoordinationViewController {
-  const target = { contactId: "contact-1", label: "Nelson DEV" }
+  const target = { contactId: "contact-1", label: "Nelson Gonzalez" }
   const row = {
     id: "surgery-1",
     companyId: "company-1",
@@ -125,7 +125,7 @@ describe("dedicated Coordination preview boundary", () => {
     render(<CoordinationPreviewRoot controller={controller()} />)
     expect(screen.getByText("Vista de prueba DEV · Solo lectura")).toBeInTheDocument()
     expect(screen.getByText("Sesión real: Ana Admin")).toBeInTheDocument()
-    expect(screen.getByText("Bandeja visualizada: Nelson DEV")).toBeInTheDocument()
+    expect(screen.getByText("Bandeja visualizada: Nelson Gonzalez")).toBeInTheDocument()
   })
 
   it("keeps filtering and row disclosure local without network refetch", () => {
@@ -165,7 +165,7 @@ describe("dedicated Coordination preview boundary", () => {
       previewRows: initial.previewRows,
     })} />)
     expect(document.querySelector("[data-preview-case-id='surgery-1']")).not.toBeInTheDocument()
-    expect(screen.queryByText("Bandeja visualizada: Nelson DEV")).not.toBeInTheDocument()
+    expect(screen.queryByText("Bandeja visualizada: Nelson Gonzalez")).not.toBeInTheDocument()
 
     rerender(<CoordinationPreviewRoot controller={controller({
       hasSuccessfulData: false,
@@ -184,7 +184,7 @@ describe("dedicated Coordination preview boundary", () => {
       prepStatus: "FROZEN",
       scheduledDate: new Date("2026-07-20T12:00:00.000Z"),
       createdAt: new Date("2025-01-01T00:00:00.000Z"),
-      coordinatorAssignments: [{ assignmentId: "assignment-1", contactId: "contact-1", label: "Nelson DEV", isPrimary: true, createdAt: "2026-07-16T11:00:00.000Z" }],
+      coordinatorAssignments: [{ assignmentId: "assignment-1", contactId: "contact-1", label: "Nelson Gonzalez", isPrimary: true, createdAt: "2026-07-16T11:00:00.000Z" }],
     }
     const presentation = deriveCoordinationPreviewPresentation(row)
 

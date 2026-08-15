@@ -14,6 +14,15 @@ export const RUNTIME_LOCK_PATH = `${APPROVED_ROOT}\\locks\\operation.lock` as co
 export const OVERLAY_ID_AUTHORITY_DIGEST = "e742282463489eaaa3035be3a63a1b0c929b9b26916658e249f777cd94ae2e52" as const
 export const OVERLAY_UUID_NAMESPACE = uuidv5.URL
 
+export function contactNameForAuthoritySymbol(symbolicName: string): string {
+  return symbolicName === "Nelson DEV" ? "Nelson Gonzalez" : symbolicName
+}
+
+export function authorityAssignmentMatches(symbolicName: string, contactNames: string[]): boolean {
+  if (symbolicName === "") return contactNames.length === 0
+  return contactNames.length === 1 && contactNames[0] === contactNameForAuthoritySymbol(symbolicName)
+}
+
 export type OverlayKey = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H"
 export type PendingCategory = "Documentación" | "Consumo" | "Facturación"
 export type OverlayMetric = "Poner fecha" | "Fuera de plazo" | "Coordinadas" | "En tránsito"

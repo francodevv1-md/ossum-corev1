@@ -10,6 +10,7 @@ import { config as loadEnv } from "dotenv"
 
 import {
   APPROVED_ROOT,
+  authorityAssignmentMatches,
   OVERLAY_FIXTURE_DIGEST,
   OVERLAY_FIXTURES,
   OVERLAY_ID_AUTHORITY_DIGEST,
@@ -23,6 +24,7 @@ import {
   buildCustodyMarker,
   canonicalJson,
   checksumOf,
+  contactNameForAuthoritySymbol,
   createAuthorityReadPort,
   createNodeLockFilePort,
   evaluateOverlayOwnership,
@@ -269,7 +271,7 @@ class PrismaOverlayDomain implements OverlayDomainPort {
       const row = baselineById.get(entry.surgeryId)
       if (!row || row.source !== entry.source) return false
       const names = row.contactAssignments.map((assignment) => assignment.contact.legalName ?? "")
-      return entry.expectedAssignee.symbolicName === "" ? names.length === 0 : names.length === 1 && names[0] === entry.expectedAssignee.symbolicName
+      return authorityAssignmentMatches(entry.expectedAssignee.symbolicName, names)
     })
     const overlayKeys = OVERLAY_FIXTURES.map((fixture) => fixture.externalKey)
     const overlayRows = await client.surgery.findMany({
@@ -303,7 +305,7 @@ class PrismaOverlayDomain implements OverlayDomainPort {
     const activeSurgeries = await client.surgery.count({ where: { companyId: this.environment.configuredCompanyId, archivedAt: null } })
     const coordinatorAssignments = target ? await client.surgeryContactAssignment.count({ where: { contactId: target.id, role: "coordinator", surgery: { companyId: this.environment.configuredCompanyId, archivedAt: null } } }) : 0
     const expectedNelsonIds = this.authority.entries.filter((entry) => entry.expectedAssignee.symbolicName === "Nelson DEV").map((entry) => entry.surgeryId)
-    const nelsonAssignments = await client.surgeryContactAssignment.count({ where: { surgeryId: { in: expectedNelsonIds }, role: "coordinator", contact: { legalName: "Nelson DEV" } } })
+    const nelsonAssignments = await client.surgeryContactAssignment.count({ where: { surgeryId: { in: expectedNelsonIds }, role: "coordinator", contact: { legalName: contactNameForAuthoritySymbol("Nelson DEV") } } })
     const unassignedIds = this.authority.entries.filter((entry) => entry.expectedAssignee.symbolicName === "").map((entry) => entry.surgeryId)
     const unassignedWithRows = await client.surgeryContactAssignment.count({ where: { surgeryId: { in: unassignedIds }, role: "coordinator" } })
     const orderedRows = this.authority.entries.map((entry) => baselineById.get(entry.surgeryId)).filter((row): row is NonNullable<typeof row> => Boolean(row))

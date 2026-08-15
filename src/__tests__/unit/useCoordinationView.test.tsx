@@ -25,7 +25,7 @@ function Harness({ discoverPreview = false, surface = "personal", onValue }: { d
   return null
 }
 
-function response(mode: "production" | "dev-preview", surgeryId: string, subject = { contactId: "contact-1", label: "Nelson DEV" }) {
+function response(mode: "production" | "dev-preview", surgeryId: string, subject = { contactId: "contact-1", label: "Nelson Gonzalez" }) {
   return {
     context: { mode, surface: "personal", readOnly: mode === "dev-preview", actor: { userId: "actor-1", label: "Ana Admin" }, personalResolution: { status: "resolved", subject }, viewSubject: subject },
     ...(mode === "dev-preview" ? { previewCapability: { enabled: true, targets: [subject, { contactId: "contact-2", label: "Ezequiel DEV" }] } } : {}),
@@ -83,7 +83,7 @@ describe("useCoordinationView", () => {
   })
 
   it("keeps preview rows local and never hydrates them into the store", async () => {
-    const subject = { contactId: "contact-1", label: "Nelson DEV" }
+    const subject = { contactId: "contact-1", label: "Nelson Gonzalez" }
     mocks.fetchView
       .mockResolvedValueOnce({ ...response("dev-preview", "global"), context: { ...response("dev-preview", "global").context, surface: "global", viewSubject: null }, previewCapability: { enabled: true, targets: [subject] } })
       .mockResolvedValue(response("dev-preview", "personal", subject))
@@ -97,7 +97,7 @@ describe("useCoordinationView", () => {
   it("rejects a stale target response and keeps the newest contact rows", async () => {
     const first = deferred<ReturnType<typeof response>>()
     const second = deferred<ReturnType<typeof response>>()
-    const subject1 = { contactId: "contact-1", label: "Nelson DEV" }
+    const subject1 = { contactId: "contact-1", label: "Nelson Gonzalez" }
     const subject2 = { contactId: "contact-2", label: "Ezequiel DEV" }
     mocks.fetchView
       .mockResolvedValueOnce({ ...response("dev-preview", "global"), context: { ...response("dev-preview", "global").context, surface: "global", viewSubject: null }, previewCapability: { enabled: true, targets: [subject1, subject2] } })
@@ -118,7 +118,7 @@ describe("useCoordinationView", () => {
   })
 
   it("tears preview rows down before returning to productive mode", async () => {
-    const subject = { contactId: "contact-1", label: "Nelson DEV" }
+    const subject = { contactId: "contact-1", label: "Nelson Gonzalez" }
     mocks.fetchView
       .mockResolvedValueOnce({ ...response("dev-preview", "global"), context: { ...response("dev-preview", "global").context, surface: "global", viewSubject: null }, previewCapability: { enabled: true, targets: [subject] } })
       .mockResolvedValueOnce(response("dev-preview", "preview", subject))
@@ -131,7 +131,7 @@ describe("useCoordinationView", () => {
   })
 
   it("refetches a server-issued target when moving from global to personal preview", async () => {
-    const subject = { contactId: "contact-1", label: "Nelson DEV" }
+    const subject = { contactId: "contact-1", label: "Nelson Gonzalez" }
     const global = { ...response("dev-preview", "global"), context: { ...response("dev-preview", "global").context, surface: "global" as const, viewSubject: null }, previewCapability: { enabled: true as const, targets: [subject] } }
     mocks.fetchView.mockResolvedValueOnce(global).mockResolvedValueOnce(response("dev-preview", "personal", subject))
     render(<Harness discoverPreview surface="global" onValue={(next) => { value = next }} />)
