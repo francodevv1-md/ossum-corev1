@@ -10,10 +10,10 @@ describe("CoordinadoresPage CX operations adoption", () => {
     expect(source).toContain('import { deriveCxOperationsDisplay } from "@/lib/cx-operations-derived"')
     expect(source).not.toContain("CxOperationsDerivedSummary")
     expect(source).toContain("<LocalCxOperationsSummary display={operationsDisplay} />")
-    expect(source).toContain("Próxima acción:</dt>")
-    expect(source).toContain("Área sugerida:</dt>")
-    expect(source).toContain("Derivada · {display.nextActionLabel}")
-    expect(source).toContain("Derivada · {display.responsibleAreaLabel}")
+    expect(source).toContain("Próximo paso:</dt>")
+    expect(source).toContain("Quién actúa:</dt>")
+    expect(source).toContain("{display.nextActionLabel}")
+    expect(source).toContain("Intervención sugerida · {display.responsibleAreaLabel}")
     expect(source).not.toContain("(derivada): Derivada")
     expect(source).not.toContain("function getGlobalNextActionLabel")
   })
@@ -35,22 +35,24 @@ describe("CoordinadoresPage CX operations adoption", () => {
   })
 
   it("renames the visible module while preserving its route", () => {
-    expect(source).toContain(">Coordinación</h1>")
+    expect(source).toContain(">Centro de Control</h1>")
     expect(sidebarSource).toContain('{ label: "Coordinación", href: "/coordinadores"')
     expect(sidebarSource).not.toContain('{ label: "Coordinadores", href: "/coordinadores"')
   })
 
   it("orders attention and the case queue before secondary workload reporting", () => {
-    expect(source.indexOf("Requieren atención")).toBeLessThan(source.indexOf("Filtros del panel global") === -1 ? source.indexOf("Buscar casos de coordinación") : source.indexOf("Filtros del panel global"))
+    expect(source.indexOf("Falta información")).toBeLessThan(source.indexOf("Filtros del panel global") === -1 ? source.indexOf("Buscar casos de coordinación") : source.indexOf("Filtros del panel global"))
     expect(source.indexOf("Buscar casos de coordinación")).toBeLessThan(source.indexOf("Resumen de carga"))
     expect(source.indexOf("(Object.keys(BUCKET_CONFIG)")).toBeLessThan(source.lastIndexOf("Resumen de carga"))
   })
 
   it("keeps metrics compact and reduces status and incident chip fragmentation", () => {
     expect(source).not.toContain("min-h-20")
-    expect(source.match(/min-h-12 items-center justify-between/g)).toHaveLength(2)
+    expect(source).toContain("Necesita definición")
+    expect(source).toContain("Hay un problema")
+    expect(source).toContain("Fuera de plazo")
     expect(source).toContain("setOnlyIncidents((prev) => !prev)")
-    expect(source).toContain('setCoordFilter((prev) => (prev === "Sin asignar" ? "" : "Sin asignar"))')
+    expect(source).toContain('setSituationFilter((current) => current === "Falta información" ? "" : "Falta información")')
     expect(source.match(/Estado CX: \{surgery\.state\}/g)).toHaveLength(2)
     expect(source.match(/Preparación: \{surgery\.preparationState\}/g)).toHaveLength(2)
     expect(source.match(/Atención: \{incidentReasons\.join\(" · "\)\}/g)).toHaveLength(2)

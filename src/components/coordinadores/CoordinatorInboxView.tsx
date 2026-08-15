@@ -39,7 +39,7 @@ const COORDINATION_STATE_OPTIONS = SURGERY_STATE_OPTIONS
 import { getFacturacionStatus } from "@/lib/cirugias.utils"
 import { CX_STATE_COLORS } from "@/lib/shared-constants"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Building2, CalendarDays, ChevronDown, ClipboardList, MapPin, MessageSquarePlus, Share2, ShieldCheck, Stethoscope, TriangleAlert, Truck, UserCircle } from "lucide-react"
+import { Building2, CalendarDays, ChevronDown, ClipboardList, MapPin, MessageSquarePlus, Share2, Stethoscope, TriangleAlert, Truck, UserCircle } from "lucide-react"
 import { useCoordinationView, type CoordinationViewController } from "@/hooks/useCoordinationView"
 import { CoordinationPreviewRoot } from "@/components/coordinadores/preview/CoordinationPreviewRoot"
 import { CoordinationStateSurface } from "@/components/coordinadores/CoordinationStateSurface"
@@ -47,6 +47,7 @@ import { deriveCoordinationUiState } from "@/components/coordinadores/coordinati
 import { useAuth } from "@/components/auth/AuthProvider"
 import { coordinationEzequielDevDiagnostic } from "@/lib/api/surgery-adapter"
 import { canAccessGlobalCoordination } from "@/lib/permissions/coordination"
+import { deriveCoordinatorCaseAdvisory } from "@/lib/cx-operations-derived"
 import { CoordinationMetricFilters } from "@/components/coordinadores/CoordinationMetricFilters"
 import { CoordinationAdvancedFilters, createEmptyAdvancedFilters } from "@/components/coordinadores/CoordinationAdvancedFilters"
 import {
@@ -77,6 +78,22 @@ function mapCoordinationDevMetric(metric: AcceptedCoordinationDevFacts["metrics"
   return "in-transit"
 }
 
+function PersonalCasePath({ entry }: { entry: CoordinatorCase }) {
+  if (entry.bucket === "finalizado") {
+    return <p className="text-[10px] font-medium text-slate-600" aria-label="Recorrido estimado del caso">Recorrido completado · {entry.surgery.state}</p>
+  }
+
+  const steps = [
+    { label: "Ingreso", done: true },
+    { label: "Fecha", done: Boolean(entry.surgery.date?.trim()) },
+    { label: "Disponibilidad", done: entry.materialAvailabilityDefined },
+    { label: "Preparación", done: entry.surgery.preparationState !== "Sin preparar" },
+    { label: "Envío", done: entry.bucket === "transito" || entry.surgery.preparationState === "Enviado" || entry.surgery.preparationState === "Entregado" },
+  ]
+  const activeIndex = Math.max(0, steps.findIndex((step) => !step.done))
+  return <ol className="flex min-w-0 flex-wrap items-center gap-1 text-[10px]" aria-label="Recorrido estimado del caso">{steps.map((step, index) => <li key={step.label} className="flex items-center gap-1"><span className={cn("font-semibold", step.done ? "text-[var(--ossum-action)]" : index === activeIndex ? "text-[var(--ossum-navy)]" : "text-slate-400")}>{step.done ? "✓" : index === activeIndex ? "●" : "○"}</span><span className={step.done || index === activeIndex ? "text-slate-700" : "text-slate-400"}>{step.label}</span>{index < steps.length - 1 ? <span className="text-slate-300">›</span> : null}</li>)}</ol>
+}
+
 export function CaseCard({
   entry,
   onManage,
@@ -100,6 +117,7 @@ export function CaseCard({
   const surgery = entry.surgery
   const stateClassName = STATE_COLORS[surgery.state] || "bg-slate-400 text-white"
   const metadata = getCoordinatorCardMetadata(surgery)
+  const context = deriveCoordinatorCaseAdvisory(entry)
   const { highestPriorityRisk, hiddenAlerts } = getCoordinatorCardAlertDisplay(entry)
   const closureSignals = {
     documentationIncomplete: store.getDocStatus(surgery.id) === "Incompleta",
@@ -110,6 +128,7 @@ export function CaseCard({
   const caseReference = surgery.visibleNumber?.trim() || `CX ${surgery.id}`
   const [alertsOpen, setAlertsOpen] = useState(false)
   const [closureOpen, setClosureOpen] = useState(false)
+  const latestHistory = entry.history[entry.history.length - 1]
   const metadataItems = [
     { label: "Fecha", value: metadata.date, icon: CalendarDays },
     { label: "Médico", value: metadata.doctor, icon: Stethoscope },
@@ -118,34 +137,40 @@ export function CaseCard({
   ]
 
   return (
-    <Card className="min-w-0 gap-0 border-slate-200/90 bg-white py-0 shadow-sm" data-coordinator-case-card="compact-responsive">
-      <CardContent className="space-y-2.5 p-3 sm:space-y-2 sm:px-3.5 sm:py-3">
+    <Card className="min-w-0 gap-0 rounded border-[var(--ossum-line-strong)] bg-white py-0 shadow-none" data-coordinator-case-card="compact-responsive">
+      <CardContent className="space-y-2 p-3">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <p className="min-w-0 truncate text-sm font-semibold text-slate-950">{surgery.patient}</p>
-              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{caseReference}</span>
+              <p className="min-w-0 truncate text-[13px] font-semibold text-[var(--ossum-navy)]">{surgery.patient}</p>
+              <span className="shrink-0 text-[11px] text-slate-500">· {caseReference}</span>
             </div>
             {showCoordinator && <p className="mt-0.5 truncate text-xs text-slate-500">Coordinador: {getCoordinatorLabel(surgery)}</p>}
           </div>
         </div>
 
-        <dl className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4" aria-label={`Datos de ${surgery.patient}`}>
+        <dl className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-4" aria-label={`Datos de ${surgery.patient}`}>
           {metadataItems.map(({ label, value, icon: Icon }) => (
             <div key={label} className="flex min-w-0 items-center gap-2" aria-label={`${label}: ${value}`}>
-              <Icon className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
+              <Icon className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
               <div className="min-w-0">
-                <dt className="text-xs font-medium text-slate-500">{label}</dt>
-                <dd className="truncate text-xs text-slate-800" title={value}>{value}</dd>
+                <dt className="text-[10px] font-medium text-slate-500">{label}</dt>
+                <dd className="truncate text-[11px] text-slate-800" title={value}>{value}</dd>
               </div>
             </div>
           ))}
         </dl>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
-          <span className={cn("rounded-full px-2 py-1 font-medium", stateClassName)}>{surgery.state}</span>
-          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">Prep: {surgery.preparationState}</span>
-          {highestPriorityRisk && <span className="rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-800">{highestPriorityRisk}</span>}
+        <div className="grid gap-2 border-y border-[var(--ossum-line)] bg-[var(--ossum-surface)] px-2 py-2 sm:grid-cols-[1fr_1fr_1fr]">
+          <div><p className="text-[9px] font-semibold text-slate-500">SITUACIÓN</p><p className="text-[11px] font-semibold text-slate-900">{context.situation}</p><p className="text-[10px] text-slate-500">{context.missing}</p></div>
+          <div><p className="text-[9px] font-semibold text-slate-500">QUIÉN DEBE ACTUAR</p><p className="text-[11px] font-semibold text-[var(--ossum-navy)]">{context.actor}</p><p className="text-[10px] text-slate-500">Intervención sugerida</p></div>
+          <div><p className="text-[9px] font-semibold text-slate-500">PRÓXIMO PASO</p><p className="text-[11px] text-slate-700">{context.next}</p></div>
+        </div>
+
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[10px]">
+          <span className={cn("rounded px-1.5 py-0.5 font-medium", stateClassName)}>{surgery.state}</span>
+          <span className="text-slate-600">Preparación: {surgery.preparationState}</span>
+          {highestPriorityRisk && <span className="font-semibold text-amber-800">{highestPriorityRisk}</span>}
 
           {hiddenAlerts.length > 0 && <Collapsible open={alertsOpen} onOpenChange={setAlertsOpen}>
             <CollapsibleTrigger asChild>
@@ -171,6 +196,11 @@ export function CaseCard({
               <p className="mt-1 text-xs font-medium text-slate-700">Falta: {pendingClosureItems.join(", ")}</p>
             </CollapsibleContent>
           </Collapsible>}
+        </div>
+
+        <div className="grid gap-1 sm:grid-cols-[1fr_auto] sm:items-center">
+          <PersonalCasePath entry={entry} />
+          <p className="truncate text-[10px] text-slate-500">{latestHistory ? `Último cambio: ${latestHistory.action}` : "Sin cambios recientes disponibles"}</p>
         </div>
 
         <div className="grid min-w-0 grid-cols-4 gap-1.5 sm:flex sm:items-center sm:justify-end">
@@ -206,13 +236,13 @@ function SectionBlock({
   if (count === 0) return null
 
   return (
-    <section className="space-y-2">
-      <div className={cn("rounded-2xl border px-3 py-3", tone)}>
+    <section className="space-y-1.5">
+      <div className={cn("border-b px-1 py-2", tone)}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold">{title}</h2>
+            <h2 className="text-[12px] font-semibold">{title}</h2>
           </div>
-          <Badge variant="outline" className="bg-white/80 text-xs">
+          <Badge variant="outline" className="h-5 rounded bg-white text-[10px]">
             {count}
           </Badge>
         </div>
@@ -474,21 +504,15 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
           />
         </div>
       ) : (
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 pb-6 sm:p-4 md:p-5">
-          <div className="rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5">
-            <div className="flex flex-col gap-3">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 bg-[var(--ossum-surface)] p-3 pb-6 sm:p-4 md:p-5">
+          <div className="border border-[var(--ossum-line-strong)] bg-white px-3 py-3 sm:px-4">
+            <div className="flex flex-col gap-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className="gap-1 text-xs">
-                      <ShieldCheck className="size-3" />
-                      Vista personal
-                    </Badge>
-                  </div>
-                  <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">Mi bandeja de coordinación</h1>
-                  <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
+                  <h1 className="text-lg font-semibold tracking-tight text-[var(--ossum-navy)]">Mi bandeja</h1>
+                  <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-slate-600">
                     <UserCircle className="size-3.5" />
-                    {controller.response?.context.viewSubject?.label || "Coordinador"} · Coordinador CX
+                    {controller.response?.context.viewSubject?.label || "Coordinador"} · {snapshot?.cases.length ?? 0} casos activos
                   </div>
                 </div>
 
@@ -499,7 +523,7 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
             </div>
           </div>
 
-          {snapshot ? <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+          {snapshot ? <div className="min-w-0 border border-[var(--ossum-line-strong)] bg-white p-2">
             <CoordinationAdvancedFilters
               applied={appliedAdvanced}
               institutionOptions={snapshot.institutionOptions}
@@ -514,7 +538,7 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
           <CoordinationStateSurface state={coordinationState} surface="personal" emptyStateVariant="productive-personal" loadedAnnouncements="external" onRetry={() => void controller.refresh()} onClearFilters={clearFilters}>
             <div className="space-y-4">
               <SectionBlock
-                title="Requieren coordinación"
+                title="Necesitan respuesta"
                 count={requiresCoordination.length}
                 tone="border-sky-200 bg-sky-50/70 text-sky-900"
               >
@@ -533,7 +557,7 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
               </SectionBlock>
 
               <SectionBlock
-                title="Programadas / preparadas"
+                title="Próximas cirugías"
                 count={scheduledPrepared.length}
                 tone="border-amber-200 bg-amber-50/70 text-amber-900"
               >
@@ -552,7 +576,7 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
               </SectionBlock>
 
               <SectionBlock
-                title="En tránsito"
+                title="Avanzando normalmente"
                 count={transitCases.length}
                 tone="border-violet-200 bg-violet-50/70 text-violet-900"
               >

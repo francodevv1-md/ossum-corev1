@@ -4,6 +4,7 @@
 
 import type { ApiAuthContext } from "./auth-context";
 import { forbidden } from "./errors";
+import { SEGUIMIENTO_EVENT_MUTATION_ALLOWED_ROLES } from "../permissions/seguimiento";
 
 export { type ApiAuthContext } from "./auth-context";
 
@@ -33,8 +34,6 @@ export function requireCompanyMutationAccess(
  * Temporary implementation-verification mapping for Seguimiento event mutations.
  * Replace only this mapping when an approved responsible-ingresos capability exists.
  */
-export const SEGUIMIENTO_EVENT_MUTATION_ALLOWED_ROLES = ["admin"] as const;
-
 /**
  * Require company mutation access for Seguimiento event mutations.
  */

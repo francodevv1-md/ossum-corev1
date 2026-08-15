@@ -62,6 +62,26 @@ describe("CoordinatorInboxView compact case card", () => {
     expect(screen.getByLabelText("Cliente: OSDE")).toBeInTheDocument()
   })
 
+  it("shows the current situation, suggested actor, next step, and compact path", () => {
+    const entry = makeFinalizedEntry()
+    entry.bucket = "autorizado"
+    entry.surgery = { ...entry.surgery, state: "Autorizada", date: "2026-08-16", preparationState: "Sin preparar" }
+    entry.materialAvailabilityDefined = false
+    renderCaseCard(entry)
+
+    expect(screen.getByText("Falta información")).toBeInTheDocument()
+    expect(screen.getByText("Gestión de Implantes")).toBeInTheDocument()
+    expect(screen.getByText("Confirmar disponibilidad antes de preparación")).toBeInTheDocument()
+    expect(screen.getByLabelText("Recorrido estimado del caso")).toBeInTheDocument()
+  })
+
+  it("does not show incomplete path steps for finalized cases", () => {
+    renderCaseCard(makeFinalizedEntry())
+
+    expect(screen.getByText("Recorrido completado · Finalizada")).toBeInTheDocument()
+    expect(screen.queryByText("Disponibilidad")).not.toBeInTheDocument()
+  })
+
   it("uses concise metadata fallbacks without an orphan time separator", () => {
     const entry = makeFinalizedEntry()
     entry.surgery = { ...entry.surgery, date: "", time: "09:30", surgeon: "", institution: "", financiador: "", obraSocial: "", client: "" }
@@ -282,6 +302,18 @@ describe("CoordinatorInboxView compact case card", () => {
     }
     expect(managementDialogSource).toContain('side="bottom"')
     expect(managementDialogSource).toContain('h-[100dvh]')
+  })
+
+  it("uses the OSSUM ERP Modern management hierarchy", () => {
+    expect(managementDialogSource).toContain('aria-label="Contexto del expediente"')
+    for (const section of ["Cirugía", "Disponibilidad y envío", "Coordinación", "Novedad"]) {
+      expect(managementDialogSource).toContain(`>${section}</h3>`)
+    }
+    expect(managementDialogSource).toContain("var(--ossum-action)")
+    expect(managementDialogSource).toContain("Guardar gestión")
+    expect(managementDialogSource).toContain('htmlFor="coord-priority"')
+    expect(managementDialogSource).toContain('id="coord-priority"')
+    expect(managementDialogSource).not.toContain("Gestión simple, mismo seguimiento")
   })
 
   it("does not expose unnamed icon-only controls", () => {

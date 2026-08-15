@@ -1,8 +1,8 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -126,6 +126,7 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
 
   useEffect(() => {
     if (!open || !entry) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opening a case resets its share draft
     setActiveTemplate("doctor")
     setDoctorMessage(buildCoordinatorDoctorMessage(entry))
     setFormalMessage(buildCoordinatorFormalMessage(entry))
@@ -133,6 +134,7 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
 
   useEffect(() => {
     if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- defaults follow the opened case evidence
     setSelectedEvidenceIds(evidenceItems.filter((item) => item.previewDataUrl).map((item) => item.id))
   }, [open, evidenceItems, entry?.surgery.id])
 

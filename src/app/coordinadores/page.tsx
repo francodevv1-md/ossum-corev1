@@ -37,7 +37,6 @@ import {
   getSlaDisplayLabel,
   getSlaDotClass,
   getSlaMeta,
-  hasAssignedCoordinator,
   hasScheduledDate,
   isIncidentCase,
   isTodayDate,
@@ -50,6 +49,7 @@ import { formatDate } from "@/lib/formatters"
 import { SURGERY_STATE_OPTIONS } from "@/lib/statusHelpers"
 import { getFacturacionStatus } from "@/lib/cirugias.utils"
 import { deriveCxOperationsDisplay } from "@/lib/cx-operations-derived"
+import { deriveCoordinatorCaseAdvisory } from "@/lib/cx-operations-derived"
 import type { CxOperationsDerivedDisplay } from "@/lib/cx-operations-derived"
 import {
   AlertTriangle,
@@ -72,14 +72,14 @@ type ManagingCaseState = {
 
 function LocalCxOperationsSummary({ display }: { display: Pick<CxOperationsDerivedDisplay, "nextActionLabel" | "responsibleAreaLabel"> }) {
   return (
-    <dl className="grid gap-0.5 text-xs">
+    <dl className="grid gap-0.5 text-[11px]">
       <div className="flex flex-wrap gap-x-1">
-        <dt className="font-medium">Próxima acción:</dt>
-        <dd>Derivada · {display.nextActionLabel}</dd>
+        <dt className="font-semibold text-slate-500">Próximo paso:</dt>
+        <dd>{display.nextActionLabel}</dd>
       </div>
       <div className="flex flex-wrap gap-x-1">
-        <dt className="font-medium">Área sugerida:</dt>
-        <dd>Derivada · {display.responsibleAreaLabel}</dd>
+        <dt className="font-semibold text-slate-500">Quién actúa:</dt>
+        <dd>Intervención sugerida · {display.responsibleAreaLabel}</dd>
       </div>
     </dl>
   )
@@ -107,6 +107,7 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
   const [stateFilter, setStateFilter] = useState("")
   const [coordFilter, setCoordFilter] = useState("")
   const [onlyIncidents, setOnlyIncidents] = useState(false)
+  const [situationFilter, setSituationFilter] = useState("")
   const [managingCase, setManagingCase] = useState<ManagingCaseState | null>(null)
 
   const coordinatorOptions = useMemo(() => {
@@ -173,11 +174,12 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
       .sort((a, b) => sortSurgeriesBySchedule(a.surgery, b.surgery))
   }, [filtered, store])
 
+  const operationalCases = useMemo(() => coordinatorCases.filter((entry) => entry.bucket !== null), [coordinatorCases])
   const visibleCases = useMemo(() => {
-    const base = coordinatorCases.filter((entry) => entry.bucket !== null)
-    const scoped = onlyIncidents ? base.filter(isIncidentCase) : base
-    return scoped.sort((a, b) => Number(isIncidentCase(b)) - Number(isIncidentCase(a)))
-  }, [coordinatorCases, onlyIncidents])
+    const scoped = onlyIncidents ? operationalCases.filter(isIncidentCase) : operationalCases
+    const situated = situationFilter ? scoped.filter((entry) => deriveCoordinatorCaseAdvisory(entry).situation === situationFilter) : scoped
+    return situated.sort((a, b) => Number(isIncidentCase(b)) - Number(isIncidentCase(a)))
+  }, [operationalCases, onlyIncidents, situationFilter])
 
   const bucketedCases = useMemo(() => {
     return {
@@ -218,8 +220,12 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
   const undefinedAvailabilityCount = bucketedCases.autorizado.filter((entry) => !entry.materialAvailabilityDefined).length
   const transitCount = bucketedCases.transito.length
   const finalizedTodayCount = bucketedCases.finalizado.filter((entry) => isTodayDate(entry.surgery.date)).length
-  const unassignedCount = visibleCases.filter((entry) => !hasAssignedCoordinator(entry.surgery)).length
-  const incidentCount = visibleCases.filter(isIncidentCase).length
+  const situationCounts = useMemo(() => ({
+    missing: operationalCases.filter((entry) => deriveCoordinatorCaseAdvisory(entry).situation === "Falta información").length,
+    problem: operationalCases.filter((entry) => deriveCoordinatorCaseAdvisory(entry).situation === "Hay un problema").length,
+    decision: operationalCases.filter((entry) => deriveCoordinatorCaseAdvisory(entry).situation === "Necesita definición").length,
+    overdue: operationalCases.filter((entry) => deriveCoordinatorCaseAdvisory(entry).situation === "Fuera de plazo").length,
+  }), [operationalCases])
   const unfilteredOperationalCount = useMemo(
     () => store.surgeries.filter((surgery) => getCoordinatorBucket(
       surgery,
@@ -228,7 +234,7 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
     ) !== null).length,
     [store],
   )
-  const hasActiveFilters = Boolean(search || stateFilter || coordFilter || onlyIncidents)
+  const hasActiveFilters = Boolean(search || stateFilter || coordFilter || onlyIncidents || situationFilter)
   const coordinationState = deriveCoordinationUiState({
     waitingForAuth: controller.waitingForAuth,
     loading: controller.loading,
@@ -243,6 +249,7 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
     setStateFilter("")
     setCoordFilter("")
     setOnlyIncidents(false)
+    setSituationFilter("")
   }
 
   const openExpedienteTab = (surgeryId: string, tab: string) => {
@@ -299,10 +306,11 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
           />
         </div>
       ) : (
-        <div className="flex flex-col gap-4 p-3 sm:p-4 md:p-5">
+        <div className="flex flex-col gap-3 bg-[var(--ossum-surface)] p-3 sm:p-4 md:p-5">
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-xl font-semibold tracking-tight text-slate-950">Coordinación</h1>
+              <h1 className="text-lg font-semibold tracking-tight text-[var(--ossum-navy)]">Centro de Control</h1>
+              <p className="text-[11px] text-slate-500">Vista global del circuito · {visibleCases.length} casos visibles</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline" className="min-h-11 text-xs">
@@ -318,28 +326,30 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
             </div>
           </header>
 
-          <section aria-labelledby="attention-heading" className="grid gap-2 sm:grid-cols-2">
+          <section aria-labelledby="attention-heading" className="grid border border-[var(--ossum-line-strong)] bg-white sm:grid-cols-2 lg:grid-cols-4">
             <button
               type="button"
-              className={cn("flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", onlyIncidents ? "border-red-300 bg-red-50 text-red-900" : "border-slate-200 bg-white text-slate-900")}
-              onClick={() => setOnlyIncidents((prev) => !prev)}
-              aria-pressed={onlyIncidents}
+              className={cn("flex min-h-11 items-center justify-between gap-3 border-b bg-white px-3 py-2 text-left text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:border-r lg:border-b-0", situationFilter === "Falta información" && "border-b-2 border-b-[var(--ossum-action)] text-[var(--ossum-navy)]")}
+              onClick={() => setSituationFilter((current) => current === "Falta información" ? "" : "Falta información")}
+              aria-pressed={situationFilter === "Falta información"}
             >
-              <span id="attention-heading" className="text-sm font-semibold">Requieren atención</span>
-              <strong className="text-lg font-semibold tabular-nums">{incidentCount}</strong>
+              <span id="attention-heading" className="text-[11px] font-semibold">Falta información</span>
+              <strong className="text-sm font-semibold tabular-nums">{situationCounts.missing}</strong>
             </button>
             <button
               type="button"
-              className={cn("flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", coordFilter === "Sin asignar" ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-900")}
-              onClick={() => setCoordFilter((prev) => (prev === "Sin asignar" ? "" : "Sin asignar"))}
-              aria-pressed={coordFilter === "Sin asignar"}
+              className={cn("flex min-h-11 items-center justify-between gap-3 border-b bg-white px-3 py-2 text-left text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:border-b-0 lg:border-r", situationFilter === "Necesita definición" && "border-b-2 border-b-[var(--ossum-action)] text-[var(--ossum-navy)]")}
+              onClick={() => setSituationFilter((current) => current === "Necesita definición" ? "" : "Necesita definición")}
+              aria-pressed={situationFilter === "Necesita definición"}
             >
-              <span className="text-sm font-semibold">Sin responsable</span>
-              <strong className="text-lg font-semibold tabular-nums">{unassignedCount}</strong>
+              <span className="text-[11px] font-semibold">Necesita definición</span>
+              <strong className="text-sm font-semibold tabular-nums">{situationCounts.decision}</strong>
             </button>
+            <button type="button" className={cn("flex min-h-11 items-center justify-between gap-3 border-b px-3 py-2 text-left lg:border-b-0 lg:border-r", situationFilter === "Hay un problema" && "bg-red-50")} onClick={() => setSituationFilter((current) => current === "Hay un problema" ? "" : "Hay un problema")} aria-pressed={situationFilter === "Hay un problema"}><span className="text-[11px] font-semibold">Hay un problema</span><strong className="text-sm tabular-nums">{situationCounts.problem}</strong></button>
+            <button type="button" className={cn("flex min-h-11 items-center justify-between gap-3 px-3 py-2 text-left text-red-800", situationFilter === "Fuera de plazo" && "bg-red-50")} onClick={() => setSituationFilter((current) => current === "Fuera de plazo" ? "" : "Fuera de plazo")} aria-pressed={situationFilter === "Fuera de plazo"}><span className="text-[11px] font-semibold">Fuera de plazo</span><strong className="text-sm tabular-nums">{situationCounts.overdue}</strong></button>
           </section>
 
-          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 sm:px-4">
+          <div className="border border-[var(--ossum-line-strong)] bg-white px-3 py-2">
             <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
               <label className="w-full sm:col-span-2 lg:w-72">
                 <span className="sr-only">Buscar casos de coordinación</span>
@@ -363,7 +373,7 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
                 <AlertTriangle className="mr-1 size-3" />
                 Ver solo incidencias
               </Button>
-              {(search || stateFilter || coordFilter || onlyIncidents) && (
+              {(search || stateFilter || coordFilter || onlyIncidents || situationFilter) && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -371,8 +381,9 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
                   onClick={() => {
                     setSearch("")
                     setStateFilter("")
-                    setCoordFilter("")
-                    setOnlyIncidents(false)
+                     setCoordFilter("")
+                     setOnlyIncidents(false)
+                     setSituationFilter("")
                   }}
                 >
                   <FilterX className="mr-1 size-3" />
@@ -393,10 +404,10 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
 
                 return (
                   <section key={bucketKey} className="space-y-2.5">
-                    <details open={bucketKey === "autorizado"} className={cn("rounded-xl border bg-white", bucketKey === "autorizado" && "border-sky-200", bucketKey === "transito" && "border-violet-200", bucketKey === "finalizado" && "border-emerald-200")}>
-                      <summary className={cn("flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2.5", bucketConfig.tone)}>
+                    <details open={bucketKey === "autorizado"} className={cn("border bg-white", bucketKey === "autorizado" && "border-sky-200", bucketKey === "transito" && "border-violet-200", bucketKey === "finalizado" && "border-emerald-200")}>
+                      <summary className={cn("flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2", bucketConfig.tone)}>
                         <div className="flex items-center gap-2.5">
-                          <div className="rounded-lg bg-white/80 p-1.5 shadow-sm">
+                          <div className="bg-white/80 p-1.5">
                             <BucketIcon className="size-3.5" />
                           </div>
                           <div>
@@ -447,7 +458,7 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
                                     <React.Fragment key={surgery.id}>
                                     <div
                                       className={cn(
-                                        "rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm",
+                                        "border border-slate-200 bg-white px-3 py-2.5",
                                         incidentReasons.length > 0 && "border-amber-200"
                                       )}
                                     >
@@ -533,7 +544,7 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
                           const caseReference = surgery.visibleNumber?.trim() || `CX ${surgery.id}`
 
                           return (
-                            <Card key={surgery.id} className="border-slate-200/80 bg-white shadow-sm">
+                            <Card key={surgery.id} className="rounded border-slate-200/80 bg-white shadow-none">
                               <CardContent className="px-3 py-2.5">
                                 <div className="grid gap-2 xl:grid-cols-[1.2fr,1.25fr,1fr,auto] xl:items-center">
                                   <div className="min-w-0">

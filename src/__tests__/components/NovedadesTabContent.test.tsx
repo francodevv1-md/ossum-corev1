@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import { NovedadesTabContent } from "@/components/expediente/NovedadesTabContent"
+import { canPublishSeguimientoComposer, NovedadesTabContent } from "@/components/expediente/NovedadesTabContent"
 
 const editEntry = vi.fn()
 const { authState, feedState } = vi.hoisted(() => ({
@@ -23,6 +23,62 @@ vi.mock("@/lib/api/mentionable-users", () => ({ fetchMentionableUsers: vi.fn().m
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 describe("NovedadesTabContent", () => {
+  it("prioritizes case context, important updates, and the full history", () => {
+    render(<NovedadesTabContent surgery={{ id: "surgery-1", patient: "Paciente Demo", date: "2026-08-16", time: "10:00", preparationState: "Sin preparar", state: "Autorizada" } as never} />)
+
+    expect(screen.getByRole("heading", { name: /surgery-1 · Paciente Demo/i })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "NOVEDADES IMPORTANTES" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "HISTORIAL COMPLETO" })).toBeInTheDocument()
+    expect(screen.getAllByText("Preparación").length).toBeGreaterThan(0)
+    expect(screen.getAllByLabelText("Recorrido estimado del caso")).toHaveLength(2)
+  })
+
+  it("does not show pending path steps for terminal cases", () => {
+    render(<NovedadesTabContent surgery={{ id: "surgery-1", patient: "Paciente Demo", preparationState: "Sin preparar", state: "Finalizada" } as never} />)
+
+    expect(screen.getAllByText("Recorrido completado · Finalizada")).toHaveLength(2)
+    expect(screen.getByText("Sin plazo pendiente")).toBeInTheDocument()
+    expect(screen.queryByText("Envío previsto")).not.toBeInTheDocument()
+  })
+
+  it("offers every action requested by the Coordination management surface", async () => {
+    authState.role = "admin"
+    render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} availableAddActions={["note", "mail", "image"]} openAddSheetKey={1} />)
+
+    for (const name of ["Agregar nota", "Agregar imagen", "Importar desde correo"]) {
+      expect(await screen.findByRole("button", { name: new RegExp(name, "i") })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole("button", { name: /Marcar autorizado/i })).not.toBeInTheDocument()
+  })
+
+  it("does not offer mutation actions to coordinators", async () => {
+    authState.role = "coordinator"
+    render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} openAddSheetKey={1} />)
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Agregar nota/i })).not.toBeInTheDocument())
+    expect(screen.queryByRole("button", { name: /Marcar autorizado/i })).not.toBeInTheDocument()
+  })
+
+  it("does not expose the composer to coordinators", async () => {
+    authState.role = "coordinator"
+    render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} initialAddAction="note" initialAddActionKey={1} />)
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Tipo y prioridad" })).not.toBeInTheDocument())
+  })
+
+  it("rejects a direct authorization composer request from coordinators", async () => {
+    authState.role = "coordinator"
+    render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} initialAddAction="auth" initialAddActionKey={1} />)
+
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Registrar autorización" })).not.toBeInTheDocument())
+  })
+
+  it("allows publishing image evidence without requiring text", () => {
+    expect(canPublishSeguimientoComposer("", 1)).toBe(true)
+    expect(canPublishSeguimientoComposer("", 0)).toBe(false)
+    expect(canPublishSeguimientoComposer("", 1, true)).toBe(false)
+  })
+
   it("offers Modify only on admin-visible notes, never on authorization evidence", () => {
     authState.role = "admin"
     const { container } = render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} />)

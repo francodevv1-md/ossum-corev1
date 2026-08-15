@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import type { Surgery } from "@/types"
+import { deriveSurgeryTrackingAdvisory } from "@/lib/cx-operations-derived"
+import { canMutateSeguimientoEvents } from "@/lib/permissions/seguimiento"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -28,7 +30,6 @@ import {
   ExternalLink,
   Eye,
   Flame,
-  Info,
   ImagePlus,
   Loader2,
   Mail,
@@ -63,6 +64,10 @@ interface NovedadesTabContentProps {
 type FeedFilter = "todo" | "notas" | "archivos" | "fotos" | "autorizado" | "correo"
 
 type AddAction = "note" | "mail" | "image" | "auth"
+
+export function canPublishSeguimientoComposer(content: string, mediaFileCount: number, requiresText = false) {
+  return Boolean(content.trim()) || (!requiresText && mediaFileCount > 0)
+}
 
 const NOTE_TYPES: Array<{ value: SeguimientoNoteType; label: string }> = [
   { value: "general", label: "General" },
@@ -317,6 +322,69 @@ function formatFeedDay(date: string) {
     month: "short",
     year: "numeric",
   }).format(parsed)
+}
+
+function formatEntryMoment(value?: string) {
+  if (!value) return "Sin fecha"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const today = new Date()
+  const day = date.toDateString() === today.toDateString()
+    ? "Hoy"
+    : new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(date)
+  return `${day} · ${date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`
+}
+
+function getEventTreatment(entry: SeguimientoEntryView) {
+  // ponytail: keyword styling avoids a new taxonomy; replace when event semantics are persisted.
+  const text = `${entry.summary ?? ""} ${entry.content}`.toLocaleLowerCase("es")
+  if (entry.noteType === "urgente" || /problema|faltante|demora|rechaz/.test(text)) return { title: entry.summary || "Problema informado", rail: "bg-[var(--ossum-danger)]" }
+  if (/defin|confirm|aprob|autoriz/.test(text) || entry.entryType === "authorization_evidence") return { title: entry.summary || "Definición registrada", rail: "bg-[var(--ossum-action)]" }
+  if (entry.entryType === "mail_evidence" || /respuesta|inform|recib/.test(text)) return { title: entry.summary || "Información recibida", rail: "bg-[var(--ossum-navy)]" }
+  if (/cambio|reprogram|actualiz/.test(text)) return { title: entry.summary || "Cambio registrado", rail: "bg-blue-500" }
+  return { title: entry.summary || "Actualización", rail: "bg-slate-300" }
+}
+
+function CasePath({ surgery, compact = false }: { surgery: Surgery; compact?: boolean }) {
+  const terminalState = ["Realizada", "Finalizada", "Suspendida", "Cancelada", "Sin consumo"].includes(surgery.state)
+  if (terminalState) {
+    const completed = ["Realizada", "Finalizada", "Sin consumo"].includes(surgery.state)
+    return <p className="text-[11px] font-medium text-slate-600" aria-label="Recorrido estimado del caso">{completed ? "Recorrido completado" : "Recorrido detenido"} · {surgery.state}</p>
+  }
+
+  const steps = [
+    { label: "Ingreso", done: true },
+    { label: "Fecha", done: Boolean(surgery.date?.trim()) },
+    { label: "Preparación", done: surgery.preparationState !== "Sin preparar" },
+    { label: "Envío previsto", done: Boolean(surgery.fechaEnvioMaterial?.trim()) },
+    { label: "Envío", done: surgery.state === "En tránsito" || ["Enviado", "Entregado"].includes(surgery.preparationState) },
+  ]
+  const activeIndex = Math.max(0, steps.findIndex((step) => !step.done))
+
+  return (
+    <ol className={cn(compact ? "space-y-1.5" : "flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2")} aria-label="Recorrido estimado del caso">
+      {steps.map((step, index) => (
+        <li key={step.label} className="flex items-center gap-1.5 text-[11px]">
+          <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold", step.done ? "border-[var(--ossum-action)] bg-[var(--ossum-action)] text-white" : index === activeIndex ? "border-[var(--ossum-action)] text-[var(--ossum-action)]" : "border-slate-300 text-slate-400")}>{step.done ? "✓" : index === activeIndex ? "●" : "○"}</span>
+          <span className={cn(step.done ? "text-slate-700" : index === activeIndex ? "font-semibold text-slate-900" : "text-slate-500")}>{step.label}</span>
+          {!compact && index < steps.length - 1 ? <span className="hidden text-slate-300 sm:inline">──</span> : null}
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function ImportantUpdate({ entry }: { entry: SeguimientoEntryView }) {
+  const treatment = getEventTreatment(entry)
+  return (
+    <article className="relative py-3 pl-4 first:pt-1">
+      <span className={cn("absolute inset-y-3 left-0 w-px", treatment.rail)} />
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{formatEntryMoment(entry.createdAt)}</p>
+      <h4 className="mt-0.5 text-[13px] font-semibold text-slate-950">{treatment.title}</h4>
+      <p className="text-[11px] text-slate-500">{entry.authorName}</p>
+      <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-5 text-slate-700">{entry.content}</p>
+    </article>
+  )
 }
 
 function entryMatchesFilter(entry: SeguimientoEntryView, filter: FeedFilter): boolean {
@@ -903,7 +971,7 @@ function FijadoItem({ entry }: { entry: SeguimientoEntryView }) {
   )
 }
 
-function EmptyFeed({ onCompose }: { onCompose: () => void }) {
+function EmptyFeed({ onCompose }: { onCompose?: () => void }) {
   return (
     <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-10 text-center dark:border-slate-700 dark:bg-slate-900/70">
       <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
@@ -913,10 +981,10 @@ function EmptyFeed({ onCompose }: { onCompose: () => void }) {
       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
         Todavía no hay novedades visibles para leer el caso como conversación operativa.
       </p>
-      <Button size="sm" className="mt-4" onClick={onCompose}>
+      {onCompose ? <Button size="sm" className="mt-4" onClick={onCompose}>
         <Plus className="mr-1 size-4" />
         Agregar novedad
-      </Button>
+      </Button> : null}
     </div>
   )
 }
@@ -943,6 +1011,8 @@ const ADD_ACTIONS: Array<{
   description: string
   Icon: React.ComponentType<{ className?: string }>
 }> = [
+  { id: "note", label: "Agregar nota", description: "Registrar una novedad breve", Icon: MessageSquare },
+  { id: "image", label: "Agregar imagen", description: "Adjuntar evidencia visual", Icon: ImagePlus },
   { id: "mail", label: "Importar desde correo", description: "Traer texto o archivos útiles", Icon: Download },
   { id: "auth", label: "Marcar autorizado", description: "Registrar una autorización formal", Icon: ShieldCheck },
 ]
@@ -1048,7 +1118,6 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     highlightedEntries,
     editEntry,
     editingEntryId,
-    take,
     total,
     canLoadMore,
     loadMore,
@@ -1058,7 +1127,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
 
   const { activeCompany, currentAccess } = useAuth()
   const companyId = activeCompany?.id
-  const canModifySeguimiento = currentAccess?.role === "admin"
+  const canModifySeguimiento = canMutateSeguimientoEvents(currentAccess?.role)
 
   const [search, setSearch] = useState("")
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("todo")
@@ -1089,10 +1158,11 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   )
 
   const allowedAddOptions = useMemo(() => {
-    if (!availableAddActions || availableAddActions.length === 0) return ADD_ACTIONS
+    const roleAllowed = canModifySeguimiento ? ADD_ACTIONS : []
+    if (!availableAddActions || availableAddActions.length === 0) return roleAllowed
     const allowed = new Set(availableAddActions)
-    return ADD_ACTIONS.filter((option) => allowed.has(option.id))
-  }, [availableAddActions])
+    return roleAllowed.filter((option) => allowed.has(option.id))
+  }, [availableAddActions, canModifySeguimiento])
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const mediaPhotoInputRef = useRef<HTMLInputElement>(null)
@@ -1108,10 +1178,12 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   useEffect(() => {
     if (!showComposer || !openImagePickerOnCompose) return
     mediaPhotoInputRef.current?.click()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- consume the one-shot picker command
     setOpenImagePickerOnCompose(false)
   }, [openImagePickerOnCompose, showComposer])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reusable feed follows its host filter
     setFeedFilter(initialFilter)
   }, [initialFilter, surgery.id])
 
@@ -1119,12 +1191,14 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     if (!initialAddAction) return
 
     handleAddAction(initialAddAction)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- host command is intentionally keyed by its explicit action counter
   }, [initialAddAction, initialAddActionKey, surgery.id])
 
   useEffect(() => {
-    if (!openAddSheetKey) return
+    if (!openAddSheetKey || !canModifySeguimiento) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the host key explicitly opens this sheet
     setAddSheetOpen(true)
-  }, [openAddSheetKey])
+  }, [canModifySeguimiento, openAddSheetKey])
 
   const filteredEntries = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -1162,6 +1236,15 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   }, [filteredEntries])
 
   const remainingEntries = Math.max(total - entries.length, 0)
+  const latestEntry = entries[0]
+  const importantEntries = entries.filter((entry) => entry.isHighlighted || entry.notePriority === "alta" || entry.entryType === "authorization_evidence").slice(0, 3)
+  const visibleImportantEntries = importantEntries.length > 0 ? importantEntries : entries.slice(0, 3)
+  const operationalContext = deriveSurgeryTrackingAdvisory(surgery)
+  const hasPendingOperationalWork = !["Realizada", "Finalizada", "Suspendida", "Cancelada", "Sin consumo"].includes(surgery.state)
+  const caseReference = surgery.visibleNumber?.trim() || surgery.id
+  const scheduledLabel = surgery.date
+    ? `${new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${surgery.date}T00:00:00`))}${surgery.time ? ` · ${surgery.time}` : ""}`
+    : "Sin fecha confirmada"
 
   useEffect(() => {
     if (!initialFocusEntryId || loading) return
@@ -1188,6 +1271,14 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     const content = noteDraft.content.trim()
     if (mediaFiles.length === 0 && !content) return
     const isAuth = noteIsAuth
+    if (isAuth && !content) {
+      toast.error("Describí la autorización antes de registrarla")
+      return
+    }
+    if (!canModifySeguimiento) {
+      toast.error("No tenés permiso para publicar novedades")
+      return
+    }
     try {
       if (isAuth) {
         if (!authorizationSourceEntryId) {
@@ -1248,6 +1339,10 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   }
 
   function handleAddAction(action: AddAction) {
+    if (!canModifySeguimiento) {
+      toast.error("No tenés permiso para publicar novedades")
+      return
+    }
     switch (action) {
       case "note":
         setNoteIsAuth(false)
@@ -1352,23 +1447,21 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4">
-      {/* 1. Header */}
-      <header className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">Seguimiento del expediente</h2>
-          {surgery.urgente ? (
-            <Badge className="shrink-0 rounded-full bg-red-600 px-2 text-[10px] text-white">Urgente</Badge>
-          ) : null}
+    <div className="space-y-3 bg-[var(--ossum-surface)] text-slate-950 sm:space-y-4">
+      <section className="border border-[var(--ossum-line-strong)] bg-white" aria-labelledby="case-context-heading">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--ossum-line)] bg-[var(--ossum-navy)] px-3 py-2 text-white">
+          <h2 id="case-context-heading" className="text-[13px] font-semibold">{caseReference} · {surgery.patient}</h2>
+          <span className="text-[11px] text-blue-100">· {scheduledLabel}</span>
+          {surgery.urgente ? <span className="ml-auto text-[10px] font-semibold text-red-200">URGENTE</span> : null}
         </div>
-        {showHeaderAddButton ? (
-          <Button size="sm" onClick={() => handleAddAction("note")} className="shrink-0">
-            <Plus className="mr-1 size-4" />
-            <span className="hidden sm:inline">Nueva novedad</span>
-            <span className="sm:hidden">Nueva</span>
-          </Button>
-        ) : null}
-      </header>
+        <div className="grid divide-y divide-[var(--ossum-line)] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+          <div className="px-3 py-2"><p className="text-[10px] font-semibold text-slate-500">ÚLTIMO CAMBIO</p><p className="mt-0.5 text-[12px] font-semibold text-slate-900">{latestEntry ? getEventTreatment(latestEntry).title : "Sin novedades"}</p><p className="text-[10px] text-slate-500">{latestEntry ? formatEntryMoment(latestEntry.createdAt) : "—"}</p></div>
+          <div className="px-3 py-2"><p className="text-[10px] font-semibold text-slate-500">SITUACIÓN ACTUAL</p><p className="mt-0.5 text-[12px] font-semibold text-slate-900">{operationalContext.missing}</p><p className="text-[10px] text-slate-500">Pendiente según información disponible</p></div>
+          <div className="px-3 py-2"><p className="text-[10px] font-semibold text-slate-500">QUIÉN ACTÚA</p><p className="mt-0.5 text-[12px] font-semibold text-slate-900">{operationalContext.actor}</p><p className="text-[10px] text-slate-500">Intervención sugerida</p></div>
+          <div className="px-3 py-2"><p className="text-[10px] font-semibold text-slate-500">PARA CUÁNDO</p><p className="mt-0.5 text-[12px] font-semibold text-slate-900">{!hasPendingOperationalWork ? "Sin plazo pendiente" : surgery.date ? `Antes del ${new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit" }).format(new Date(`${surgery.date}T00:00:00`))}` : "Sin plazo derivable"}</p></div>
+        </div>
+        <div className="px-3 py-2"><p className="mb-1 text-[10px] font-semibold text-slate-500">RECORRIDO ESTIMADO DEL CASO</p><CasePath surgery={surgery} /></div>
+      </section>
 
       {surgery.leyendaDestacada && surgery.leyenda ? (
         <p className="text-[11px] text-amber-700 dark:text-amber-300">
@@ -1376,14 +1469,31 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
         </p>
       ) : null}
 
-      {/* 2. Bloque "Fijado en el caso" */}
+      <div className="grid border border-[var(--ossum-line-strong)] bg-white lg:grid-cols-[minmax(0,2fr)_minmax(220px,1fr)]">
+        <section className="min-w-0 border-b border-[var(--ossum-line-strong)] p-3 lg:border-b-0 lg:border-r" aria-labelledby="important-updates-heading">
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--ossum-line)] pb-2">
+            <h3 id="important-updates-heading" className="text-[11px] font-semibold text-[var(--ossum-navy)]">{importantEntries.length > 0 ? "NOVEDADES IMPORTANTES" : "NOVEDADES RECIENTES"}</h3>
+            {showHeaderAddButton && canModifySeguimiento ? <Button size="sm" onClick={() => handleAddAction("note")} className="h-8 rounded text-[11px]"><Plus className="mr-1 size-3.5" />Nueva novedad</Button> : null}
+          </div>
+          {visibleImportantEntries.length > 0 ? <div className="divide-y divide-[var(--ossum-line)]">{visibleImportantEntries.map((entry) => <ImportantUpdate key={entry.id} entry={entry} />)}</div> : <p className="py-8 text-center text-xs text-slate-500">Todavía no hay novedades importantes.</p>}
+        </section>
+        <aside className="space-y-4 bg-[var(--ossum-surface-2)] p-3 lg:sticky lg:top-0 lg:self-start" aria-label="Contexto operativo sugerido">
+          <div><p className="text-[10px] font-semibold text-slate-500">QUIÉN DEBE ACTUAR</p><p className="mt-0.5 text-[13px] font-semibold text-[var(--ossum-navy)]">{operationalContext.actor}</p><p className="text-[10px] text-slate-500">Intervención sugerida</p></div>
+          <div><p className="text-[10px] font-semibold text-slate-500">QUÉ FALTA</p><p className="mt-0.5 text-[12px] font-medium text-slate-800">{operationalContext.missing}</p></div>
+          <div><p className="text-[10px] font-semibold text-slate-500">PRÓXIMO PASO</p><p className="mt-0.5 text-[12px] text-slate-700">{operationalContext.next}</p></div>
+          <div><p className="mb-1.5 text-[10px] font-semibold text-slate-500">RECORRIDO</p><CasePath surgery={surgery} compact /></div>
+        </aside>
+      </div>
+
+      <section className="border border-[var(--ossum-line-strong)] bg-white p-3" aria-labelledby="full-history-heading">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--ossum-line)] pb-2">
+        <h3 id="full-history-heading" className="text-[11px] font-semibold text-[var(--ossum-navy)]">HISTORIAL COMPLETO</h3>
+        <div className="relative w-full sm:w-72"><Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" /><Input aria-label="Buscar en seguimiento" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar en seguimiento..." className="h-8 rounded border-[var(--ossum-line-strong)] bg-white pl-8 text-xs" /></div>
+      </div>
+
       <FijadoBlock entries={highlightedEntries} />
 
-      {/* 4. Filtros (scroll horizontal, ancho completo mobile) */}
-      <div
-        className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 sm:pb-1"
-        style={{ scrollbarWidth: "none" }}
-      >
+      <div className="mt-2 flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {([
           ["todo", "Todos"],
           ["notas", "Notas"],
@@ -1396,10 +1506,11 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
             key={value}
             type="button"
             onClick={() => setFeedFilter(value)}
+            aria-pressed={feedFilter === value}
             className={cn(
-              "shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors",
+              "shrink-0 whitespace-nowrap rounded border px-2 py-1 text-[10px] font-medium transition-colors",
               feedFilter === value
-                ? "border-slate-900 bg-slate-900 text-white dark:border-slate-200"
+                ? "border-[var(--ossum-action)] bg-[var(--ossum-action)] text-white"
                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-900"
             )}
           >
@@ -1408,56 +1519,33 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
         ))}
       </div>
 
-      <div className="flex flex-col gap-2 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 text-[11px] text-sky-900 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-100">
-        <div className="flex items-start gap-2">
-          <Info className="mt-0.5 size-3.5 shrink-0 text-sky-700 dark:text-sky-300" />
-          <div>
-            <p className="font-medium">Seguimiento carga historial de forma incremental.</p>
-            <p className="text-sky-800/80 dark:text-sky-200/80">
-              Se traen hasta {take} entradas por vez. Ahora hay {entries.length} de {total} cargadas{search.trim() ? ` y ${filteredEntries.length} visibles por el filtro actual` : ""}.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 5. Buscador (ancho completo, debajo de filtros) */}
-      <div className="relative w-full">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar en el seguimiento"
-          className="h-9 w-full border-slate-200 bg-slate-50 pl-9 text-sm dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-100 dark:placeholder:text-slate-500"
-        />
-      </div>
+      {total > entries.length ? <p className="mt-1 text-[10px] text-slate-500">Se muestran {entries.length} de {total} eventos.</p> : null}
 
       {/* 6. Composer inline */}
       {showComposer ? (
         <div className={cn(
-          "rounded-lg border p-3",
+          "border border-[var(--ossum-line-strong)] bg-white",
           noteType === "urgente" ? "border-red-300 bg-red-50/30 dark:border-red-500/30 dark:bg-red-500/10" : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/90",
         )}>
-          <div className="mb-2">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{noteIsAuth ? "Registrar autorización" : "Nueva novedad"}</h3>
-            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-              {noteIsAuth ? "Dejá constancia de la autorización recibida." : "Compartí una actualización o adjuntá una imagen."}
-            </p>
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--ossum-line)] bg-[var(--ossum-surface-2)] px-3 py-2">
+            <div>
+              <h3 className="text-[13px] font-semibold text-[var(--ossum-navy)]">{noteIsAuth ? "Registrar autorización" : "Nueva novedad"}</h3>
+              <p className="text-[10px] text-slate-500">{noteIsAuth ? "Dejá constancia de la autorización recibida." : "Actualización breve para el equipo."}</p>
+            </div>
+            <button type="button" onClick={resetComposer} className="text-[11px] text-slate-500 hover:text-slate-900" disabled={addingNote || addingPhotoEvidence || addingAuthorizationEvidence}>Cerrar</button>
           </div>
-          <MentionComposer
-            ref={textareaRef}
-            companyId={companyId}
-            value={noteDraft}
-            onChange={setNoteDraft}
-            textareaClassName="min-h-[88px] resize-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
-            className="w-full"
-            placeholder={
-              noteIsAuth
-                ? "Describí la autorización registrada..."
-                : "Escribí una actualización para el equipo..."
-            }
-          />
+          <div className="px-3 py-2.5">
+            <MentionComposer
+              ref={textareaRef}
+              companyId={companyId}
+              value={noteDraft}
+              onChange={setNoteDraft}
+              textareaClassName="min-h-[64px] resize-none border-0 bg-transparent p-0 text-[13px] leading-5 shadow-none focus-visible:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
+              className="w-full"
+              placeholder={noteIsAuth ? "Describí la autorización registrada..." : "¿Qué cambió o qué necesita saber el equipo?"}
+            />
           {noteIsAuth ? (
-            <div className="mt-3">
+            <div className="mt-2">
               <Label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Novedad que respalda la autorización</Label>
               <Select value={authorizationSourceEntryId} onValueChange={setAuthorizationSourceEntryId}>
                 <SelectTrigger className="mt-1 h-9 text-sm"><SelectValue placeholder="Seleccionar novedad" /></SelectTrigger>
@@ -1467,7 +1555,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
               </Select>
             </div>
           ) : null}
-            <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
               {mediaFiles.length > 0 ? (
                 <div className="mb-3 flex flex-wrap gap-2">
                   {mediaFiles.map((file, index) => (
@@ -1481,14 +1569,11 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                   ))}
                 </div>
               ) : null}
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" className="h-9 text-[11px]" onClick={() => mediaPhotoInputRef.current?.click()} disabled={mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES}>
-                  <ImagePlus className="mr-1 size-3.5" />{mediaFiles.length > 0 ? "Agregar imagen" : "Adjuntar imagen"}
-                </Button>
-                <Button variant="ghost" size="sm" className="h-9 px-2 text-[11px] text-slate-500 dark:text-slate-400" onClick={() => void handlePasteToMediaComposer()} disabled={mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES}>
-                  <Clipboard className="mr-1 size-3.5" />Pegar desde portapapeles
-                </Button>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">Hasta {PHOTO_UPLOAD_MAX_FILES} imágenes</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => mediaPhotoInputRef.current?.click()} disabled={mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES}><ImagePlus className="mr-1 size-3.5" />{mediaFiles.length > 0 ? "Agregar imagen" : "Adjuntar"}</Button>
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px] text-slate-500 dark:text-slate-400" onClick={() => void handlePasteToMediaComposer()} disabled={mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES}><Clipboard className="mr-1 size-3.5" />Pegar</Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => setShowMoreOptions((open) => !open)} aria-expanded={showMoreOptions}>{showMoreOptions ? "Menos opciones" : "Tipo y prioridad"}</Button>
+                <span className="text-[10px] text-slate-400">Hasta {PHOTO_UPLOAD_MAX_FILES} imágenes</span>
               </div>
               {mediaViewerIndex !== null && mediaFiles[mediaViewerIndex] ? (
                 <Dialog open onOpenChange={(open) => { if (!open) setMediaViewerIndex(null) }}>
@@ -1503,20 +1588,9 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                 </Dialog>
               ) : null}
           </div>
-          <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-[11px]" onClick={() => setShowMoreOptions((open) => !open)} aria-expanded={showMoreOptions}>
-                {showMoreOptions ? "Menos opciones" : "Más opciones"}
-              </Button>
-              {noteIsAuth ? (
-                <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-[11px] text-emerald-700 dark:text-emerald-300" onClick={() => setNoteIsAuth(false)}>
-                  Volver a novedad
-                </Button>
-              ) : null}
-            </div>
-
+          </div>
             {showMoreOptions && !noteIsAuth ? (
-              <div className="mt-3 grid gap-3 rounded-md bg-slate-50 p-3 sm:grid-cols-[minmax(0,160px)_minmax(0,140px)_auto] sm:items-end dark:bg-slate-950/50">
+              <div className="mt-2 grid gap-2 border-t border-slate-100 bg-slate-50 p-2 sm:grid-cols-[minmax(0,150px)_minmax(0,130px)_auto] sm:items-end dark:bg-slate-950/50">
                 <div className="min-w-0">
                   <Label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Tipo</Label>
                   <Select value={noteType} onValueChange={(value) => setNoteType(value as SeguimientoNoteType)}>
@@ -1536,7 +1610,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                     <Checkbox checked={noteHighlighted} onCheckedChange={(checked) => setNoteHighlighted(Boolean(checked))} />
                     <Flame className="size-3.5 text-amber-600" /> Destacar
                   </label>
-                  <label className={cn("flex h-9 items-center gap-2 rounded-md border px-3 text-sm", noteIsAuth ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200" : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200")}>
+                  {canModifySeguimiento ? <label className={cn("flex h-9 items-center gap-2 rounded-md border px-3 text-sm", noteIsAuth ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200" : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200")}>
                     <Checkbox
                       checked={noteIsAuth}
                       onCheckedChange={(checked) => {
@@ -1544,19 +1618,19 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                       }}
                     />
                     <ShieldCheck className="size-3.5" /> Autorizado
-                  </label>
+                  </label> : null}
                 </div>
               </div>
             ) : null}
 
-            <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <Button type="button" variant="ghost" size="sm" className="h-10 sm:h-9" onClick={resetComposer} disabled={addingNote || addingPhotoEvidence || addingAuthorizationEvidence}>Cancelar</Button>
-              <Button type="button" size="sm" className="h-11 w-full sm:h-9 sm:w-auto" onClick={handlePublishComposer} disabled={addingNote || addingPhotoEvidence || addingAuthorizationEvidence || !noteDraft.content.trim() || (noteIsAuth && !authorizationSourceEntryId)}>
+            <div className="flex flex-col-reverse gap-2 border-t border-[var(--ossum-line)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="hidden text-[10px] text-slate-500 sm:block">Usá @ para mencionar a alguien.</p>
+              <div className="flex gap-2"><Button type="button" variant="ghost" size="sm" className="h-8 flex-1 text-[11px] sm:flex-none" onClick={resetComposer} disabled={addingNote || addingPhotoEvidence || addingAuthorizationEvidence}>Cancelar</Button>
+              <Button type="button" size="sm" className="h-9 flex-1 rounded bg-[var(--ossum-action)] text-[11px] sm:flex-none" onClick={handlePublishComposer} disabled={addingNote || addingPhotoEvidence || addingAuthorizationEvidence || !canPublishSeguimientoComposer(noteDraft.content, mediaFiles.length, noteIsAuth) || (noteIsAuth && !authorizationSourceEntryId)}>
                 {addingNote || addingPhotoEvidence || addingAuthorizationEvidence ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : null}
                 {noteIsAuth ? "Registrar autorización" : "Publicar novedad"}
-              </Button>
+              </Button></div>
             </div>
-          </div>
         </div>
       ) : null}
 
@@ -1812,7 +1886,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           </Button>
         </div>
       ) : filteredEntries.length === 0 ? (
-        <EmptyFeed onCompose={() => { setNoteIsAuth(false); setShowComposer(true) }} />
+        <EmptyFeed onCompose={canModifySeguimiento ? () => handleAddAction("note") : undefined} />
       ) : (
         <div className="space-y-4">
           {groupedTimeline.map((group) => (
@@ -1859,6 +1933,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           ) : null}
         </div>
       )}
+      </section>
 
       {/* 8. Hidden inputs + modals */}
       <input

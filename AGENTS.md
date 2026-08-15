@@ -460,3 +460,18 @@ Los registros activos de aprobación T3 (C13 Stock/Cajas S18–S24 y C14 CX ejec
 - C14: `knowledge/specs/STOCK-CAJAS-C14-CX-CONTINUOUS-EXECUTION-001/CHANGE_PACK.md`.
 
 Cualquier expansión de alcance, contradicción de hashes o acción excluida vuelve a requerir aprobación explícita de Franco.
+
+---
+
+## 15. Aprobación activa — Coordination/Tracking UI 2026-08-14
+
+Franco aprobó el paquete DEV de rediseño visual de Coordinación/Seguimiento y, ante la pregunta precisa `¿Aprobás ese cambio mínimo de seguridad para poder completar el commit?`, respondió `apruebo` el 2026-08-14.
+
+Alcance autorizado:
+
+- centralizar y reutilizar la política existente de mutaciones de Seguimiento (`admin`);
+- impedir que roles no autorizados abran o ejecuten compositores y gestiones que el API rechazaría;
+- mantener el API como autoridad final;
+- completar UI, pruebas, Diagnose, revisión GGA y commit local del paquete.
+
+Exclusiones: cambios de roles permitidos, Auth productivo, schema, migraciones, datos reales, deploy, push y PR. Evidencia operativa: Engram #5433 y `knowledge/specs/COORDINATION-TRACKING-UI-20260814/TASK_BRIEF.md`.

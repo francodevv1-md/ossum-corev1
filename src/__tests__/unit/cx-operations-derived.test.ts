@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import {
+  deriveCoordinatorCaseAdvisory,
   deriveCxOperationsDisplay,
+  deriveSurgeryTrackingAdvisory,
   type CxOperationsClosureSignals,
 } from "@/lib/cx-operations-derived"
 import type { CoordinatorCase } from "@/components/coordinadores/coordinator-queue.helpers"
@@ -118,5 +120,82 @@ describe("deriveCxOperationsDisplay", () => {
   it("contains no store, API, or persistence imports", () => {
     const source = readFileSync(resolve(process.cwd(), "src/lib/cx-operations-derived.ts"), "utf8")
     expect(source).not.toMatch(/(?:@\/lib\/store|zustand|\/api\/|localStorage|fetch\()/)
+  })
+})
+
+describe("coordination advisory projections", () => {
+  it("uses one precedence for global and personal coordinator views", () => {
+    const entry = buildCase({
+      surgery: { coordinadorCx: "", date: "", urgente: false } as CoordinatorCase["surgery"],
+      materialAvailabilityDefined: false,
+    })
+
+    expect(deriveCoordinatorCaseAdvisory(entry)).toEqual({
+      situation: "Falta información",
+      missing: "Asignar coordinación y confirmar disponibilidad",
+      actor: "Coordinación",
+      next: "Completar responsables y disponibilidad del material",
+    })
+  })
+
+  it("keeps tracking advice honest when only Surgery fields are available", () => {
+    expect(deriveSurgeryTrackingAdvisory({
+      date: "2026-08-20",
+      fechaEnvioMaterial: "",
+      preparationState: "En preparación",
+      state: "Autorizada",
+    })).toEqual({
+      missing: "Coordinar el envío del material",
+      actor: "Logística",
+      next: "Definir fecha de envío y transporte.",
+    })
+  })
+
+  it("does not escalate finalized cases from stale SLA metadata", () => {
+    expect(deriveCoordinatorCaseAdvisory(buildCase({
+      bucket: "finalizado",
+      sla: { tone: "overdue", label: ">=48 hs", hoursElapsed: 48 },
+    }))).toMatchObject({
+      situation: "Avanzando normalmente",
+      missing: "Caso finalizado",
+      actor: "Sin intervención pendiente",
+    })
+  })
+
+  it("does not describe urgency alone as missing preparation material", () => {
+    expect(deriveCoordinatorCaseAdvisory(buildCase({
+      bucket: "autorizado",
+      surgery: { coordinadorCx: "Coordinación", date: "2026-08-20", urgente: true } as CoordinatorCase["surgery"],
+    }))).toMatchObject({
+      situation: "Hay un problema",
+      missing: "Revisar prioridad urgente",
+      actor: "Coordinación",
+    })
+  })
+
+  it("does not suggest preparation work for terminal surgery states", () => {
+    expect(deriveSurgeryTrackingAdvisory({
+      state: "Finalizada",
+      preparationState: "Sin preparar",
+      date: "",
+      fechaEnvioMaterial: "",
+    })).toEqual({
+      missing: "Sin intervención operativa pendiente",
+      actor: "Sin asignación sugerida",
+      next: "Consultar el historial si hace falta.",
+    })
+  })
+
+  it("keeps preparation shortages ahead of shipping advice", () => {
+    expect(deriveSurgeryTrackingAdvisory({
+      state: "Autorizada",
+      preparationState: "Congelado con faltantes",
+      date: "2026-08-20",
+      fechaEnvioMaterial: "",
+    })).toEqual({
+      missing: "Resolver faltantes de preparación",
+      actor: "Preparación",
+      next: "Confirmar el material completo.",
+    })
   })
 })
