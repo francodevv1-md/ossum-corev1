@@ -46,6 +46,19 @@
 :root {
   color-scheme: light;
   --radius: 0.625rem;
+
+  /* OSSUM brand tokens — used by the Remito workspace and operational surfaces. */
+  --ossum-navy: #071935;
+  --ossum-navy-soft: #0f2748;
+  --ossum-action: #1D2FC0;
+  --ossum-action-hover: #1830a8;
+  --ossum-danger: #D02F28;
+  --ossum-danger-hover: #b82922;
+  --ossum-surface: #FBFBFB;
+  --ossum-surface-2: #F3F3F3;
+  --ossum-line: #e6e8eb;
+  --ossum-line-strong: #d0d4da;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
