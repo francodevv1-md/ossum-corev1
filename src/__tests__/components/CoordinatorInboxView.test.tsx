@@ -8,16 +8,27 @@ const mockedStore = vi.hoisted(() => ({
   getComprobantesBySurgeryId: vi.fn(),
   getConsumoBySurgeryId: vi.fn(),
   getDocStatus: vi.fn(),
+  changeSurgeryDate: vi.fn(),
+  updateSurgery: vi.fn(),
+  addAuditEvent: vi.fn(),
 }))
 
 const mockedAuth = vi.hoisted(() => ({ role: "admin" }))
 
 vi.mock("@/lib/store", () => ({
-  useOrtoTrackStore: () => mockedStore,
+  useOrtoTrackStore: (selector?: (state: typeof mockedStore) => unknown) => typeof selector === "function" ? selector(mockedStore) : mockedStore,
 }))
 
 vi.mock("@/components/auth/AuthProvider", () => ({
   useAuth: () => ({ currentAccess: { role: mockedAuth.role } }),
+}))
+
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }))
+vi.mock("@/hooks/useSeguimientoFeed", () => ({
+  useSeguimientoFeed: () => ({ addNote: vi.fn(), addingNote: false }),
+}))
+vi.mock("@/components/expediente/NovedadesTabContent", () => ({
+  NovedadesTabContent: () => <div>Historial del expediente</div>,
 }))
 
 import {
@@ -25,6 +36,7 @@ import {
   GlobalCoordinationLink,
   ProductiveRecentFinalized,
 } from "@/components/coordinadores/CoordinatorInboxView"
+import { CoordinatorManagementDialog } from "@/components/coordinadores/CoordinatorManagementDialog"
 import { acceptCoordinationEzequielDevFacts } from "@/components/coordinadores/coordination-filtering"
 import type { CoordinationEzequielDevDiagnostic } from "@/lib/api/surgery-adapter"
 
@@ -35,6 +47,7 @@ const managementDialogSource = readFileSync(resolve(process.cwd(), "src/componen
 describe("CoordinatorInboxView compact case card", () => {
   beforeEach(() => {
     vi.stubEnv("NODE_ENV", "development")
+    mockedAuth.role = "admin"
     mockedStore.getDocStatus.mockReturnValue("Completa")
     mockedStore.getConsumoBySurgeryId.mockReturnValue({ id: "consumo-1" })
     mockedStore.getComprobantesBySurgeryId.mockReturnValue([{ id: "fv-1", type: "FV" }])
@@ -305,15 +318,29 @@ describe("CoordinatorInboxView compact case card", () => {
   })
 
   it("uses the OSSUM ERP Modern management hierarchy", () => {
-    expect(managementDialogSource).toContain('aria-label="Contexto del expediente"')
+    render(<CoordinatorManagementDialog
+      open
+      onOpenChange={vi.fn()}
+      surgery={{
+        id: "surgery-1",
+        visibleNumber: "CX-1042",
+        patient: "Paciente Demo",
+        surgeon: "Dra. Elena Ruiz",
+        institution: "Clínica Central",
+        date: "2026-08-20",
+        time: "09:30",
+        state: "Autorizada",
+      } as never}
+    />)
+
+    expect(screen.getByRole("dialog", { name: "Gestión de coordinación" })).toBeInTheDocument()
+    expect(screen.getByLabelText("Contexto del expediente")).toHaveTextContent("CX-1042")
     for (const section of ["Cirugía", "Disponibilidad y envío", "Coordinación", "Novedad"]) {
-      expect(managementDialogSource).toContain(`>${section}</h3>`)
+      expect(screen.getByRole("heading", { name: section })).toBeInTheDocument()
     }
-    expect(managementDialogSource).toContain("var(--ossum-action)")
-    expect(managementDialogSource).toContain("Guardar gestión")
-    expect(managementDialogSource).toContain('htmlFor="coord-priority"')
-    expect(managementDialogSource).toContain('id="coord-priority"')
-    expect(managementDialogSource).not.toContain("Gestión simple, mismo seguimiento")
+    expect(screen.getByLabelText("Prioridad del registro")).toHaveAttribute("role", "combobox")
+    expect(screen.getByRole("button", { name: "Guardar gestión" })).toBeEnabled()
+    expect(screen.queryByText("Gestión simple, mismo seguimiento")).not.toBeInTheDocument()
   })
 
   it("does not expose unnamed icon-only controls", () => {
