@@ -111,6 +111,19 @@ describe("seguimiento-adapter", () => {
     })
   })
 
+  it("maps private operational document metadata without exposing its object key", () => {
+    const entry = mapApiEntryToView({
+      id: "doc-1", surgeryId: "sx-1", companyId: "co-1", entryType: "document_evidence", content: "Documento", summary: "case.pdf",
+      authorId: "user-1", authorName: "Ana", createdAt: "2026-08-17T10:00:00.000Z", updatedAt: "2026-08-17T10:00:00.000Z",
+      evidenceRef: { source: "r2_document_pipeline", status: "queued", file: { name: "case.pdf", mimeType: "application/pdf", sizeBytes: 1200, objectKey: "document-inbox/private" } },
+    })
+
+    expect(entry.documentMeta).toEqual({ status: "queued", fileName: "case.pdf", mimeType: "application/pdf", sizeBytes: 1200 })
+    expect(entry.documentMeta).not.toHaveProperty("objectKey")
+    expect(entry.evidenceRef).not.toHaveProperty("file.objectKey")
+    expect(entry.evidenceRef).not.toHaveProperty("file.etag")
+  })
+
   it("maps nested images for notes and authorization evidence without granting authorization priority", () => {
     const note = mapApiEntryToView({
       id: "seg-nested-note", surgeryId: "sx-1", companyId: "co-1", entryType: "note", content: "Nota", summary: null,

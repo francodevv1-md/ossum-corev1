@@ -39,6 +39,19 @@ export interface ListSeguimientoEntriesResult {
   take: number;
 }
 
+function publicSeguimientoEvidenceRef(entryType: string, value: Prisma.JsonValue | null) {
+  if (entryType !== "document_evidence" || !value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const evidenceRef = value as Record<string, unknown>;
+  const file = evidenceRef.file;
+  if (!file || typeof file !== "object" || Array.isArray(file)) return value;
+  const { objectKey: _objectKey, etag: _etag, ...publicFile } = file as Record<string, unknown>;
+  void _objectKey;
+  void _etag;
+  return { ...evidenceRef, file: publicFile } as Prisma.JsonValue;
+}
+
 export async function listSeguimientoEntries(
   prisma: PrismaClient,
   surgeryId: string,
@@ -77,7 +90,7 @@ export async function listSeguimientoEntries(
       authorName:
         [e.author.firstName, e.author.lastName].filter(Boolean).join(" ") ||
         "Usuario",
-      evidenceRef: e.evidenceRef,
+      evidenceRef: publicSeguimientoEvidenceRef(e.entryType, e.evidenceRef),
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     })),
@@ -291,7 +304,7 @@ function mapSeguimientoEntry(entry: {
     authorName:
       [entry.author.firstName, entry.author.lastName].filter(Boolean).join(" ") ||
       "Usuario",
-    evidenceRef: entry.evidenceRef,
+    evidenceRef: publicSeguimientoEvidenceRef(entry.entryType, entry.evidenceRef),
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   };

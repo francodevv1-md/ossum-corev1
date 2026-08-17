@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from "vitest"
 import { canPublishSeguimientoComposer, NovedadesTabContent } from "@/components/expediente/NovedadesTabContent"
 
 const editEntry = vi.fn()
-const { authState, feedState } = vi.hoisted(() => ({
+const { authState, feedState, addDocumentEvidence, downloadDocumentEvidence } = vi.hoisted(() => ({
   authState: { role: "admin" },
+  addDocumentEvidence: vi.fn(),
+  downloadDocumentEvidence: vi.fn(),
   feedState: { entries: [
     { id: "note-1", entryType: "note", content: "Nota editable", summary: "Resumen", authorId: "u-1", authorName: "Ana", evidenceRef: null, createdAt: "2026-07-15T10:00:00.000Z", timestamp: 0, isHighlighted: false, notePriority: "media", noteType: null, mailMeta: null, photoMeta: null, imageEvidenceMeta: null, editHistory: null, mentions: [] },
     { id: "auth-1", entryType: "authorization_evidence", content: "Autorización", summary: null, authorId: "u-1", authorName: "Ana", evidenceRef: null, createdAt: "2026-07-15T10:00:00.000Z", timestamp: 0, isHighlighted: false, notePriority: null, noteType: null, mailMeta: null, photoMeta: null, imageEvidenceMeta: null, editHistory: null, mentions: [] },
@@ -14,7 +16,7 @@ const { authState, feedState } = vi.hoisted(() => ({
 vi.mock("@/hooks/useSeguimientoFeed", () => ({
   useSeguimientoFeed: () => ({
     entries: feedState.entries,
-    loading: false, error: null, addNote: vi.fn(), addPhotoEvidence: vi.fn(), createAuthorizationEvidence: vi.fn(), addingNote: false, addingPhotoEvidence: false, addingAuthorizationEvidence: false, highlightedEntries: [], editEntry, editingEntryId: null, take: 50, total: 2, canLoadMore: false, loadMore: vi.fn(), loadingMore: false, refetch: vi.fn(),
+    loading: false, error: null, addNote: vi.fn(), addPhotoEvidence: vi.fn(), addDocumentEvidence, downloadDocumentEvidence, createAuthorizationEvidence: vi.fn(), addingNote: false, addingPhotoEvidence: false, addingDocumentEvidence: false, addingAuthorizationEvidence: false, highlightedEntries: [], editEntry, editingEntryId: null, take: 50, total: 2, canLoadMore: false, loadMore: vi.fn(), loadingMore: false, refetch: vi.fn(),
   }),
 }))
 vi.mock("@/components/auth/AuthProvider", () => ({ useAuth: () => ({ activeCompany: { id: "company-1" }, currentAccess: { role: authState.role } }) }))
@@ -45,7 +47,7 @@ describe("NovedadesTabContent", () => {
     authState.role = "admin"
     render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} availableAddActions={["note", "mail", "image"]} openAddSheetKey={1} />)
 
-    for (const name of ["Agregar nota", "Agregar imagen", "Importar desde correo"]) {
+    for (const name of ["Agregar nota", "Adjuntar documento", "Importar desde correo"]) {
       expect(await screen.findByRole("button", { name: new RegExp(name, "i") })).toBeInTheDocument()
     }
     expect(screen.queryByRole("button", { name: /Marcar autorizado/i })).not.toBeInTheDocument()
@@ -77,6 +79,26 @@ describe("NovedadesTabContent", () => {
     expect(canPublishSeguimientoComposer("", 1)).toBe(true)
     expect(canPublishSeguimientoComposer("", 0)).toBe(false)
     expect(canPublishSeguimientoComposer("", 1, true)).toBe(false)
+  })
+
+  it("uploads one PDF through the durable document action", async () => {
+    authState.role = "admin"
+    addDocumentEvidence.mockReset()
+    addDocumentEvidence.mockResolvedValue(undefined)
+    const { container } = render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} initialAddAction="note" initialAddActionKey={1} />)
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    const pdf = new File(["%PDF-1"], "case.pdf", { type: "application/pdf" })
+    fireEvent.change(input, { target: { files: [pdf] } })
+
+    expect(await screen.findByText("case.pdf")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Publicar novedad" }))
+    await waitFor(() => expect(addDocumentEvidence).toHaveBeenCalledWith({ file: pdf, content: "" }))
+  })
+
+  it("keeps document upload directly visible in the Ficha CX header", () => {
+    authState.role = "admin"
+    render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} />)
+    expect(screen.getByRole("button", { name: "Adjuntar documento" })).toBeInTheDocument()
   })
 
   it("offers Modify only on admin-visible notes, never on authorization evidence", () => {

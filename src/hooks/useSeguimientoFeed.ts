@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch, ApiClientError } from "@/lib/api/client";
+import { getAccessToken } from "@/lib/auth/client";
 import type { SeguimientoEntryApiRow, SeguimientoEntryView, SeguimientoFeedApiResponse, SeguimientoNotePriority, SeguimientoNoteType } from "@/lib/api/seguimiento-adapter";
 import { mapSeguimientoFeedResponse } from "@/lib/api/seguimiento-adapter";
 import { MAIL_STAGE1_PROVIDER, type MailLinkedConversationView } from "@/lib/mail-stage1/types";
@@ -104,6 +105,7 @@ export function useSeguimientoFeed(surgeryId: string | undefined) {
   const [error, setError] = useState<string | null>(null);
   const [addingNote, setAddingNote] = useState(false);
   const [addingPhotoEvidence, setAddingPhotoEvidence] = useState(false);
+  const [addingDocumentEvidence, setAddingDocumentEvidence] = useState(false);
   const [addingAuthorizationEvidence, setAddingAuthorizationEvidence] = useState(false);
   const [importingFromMail, setImportingFromMail] = useState(false);
   const [highlightingMailLinkId, setHighlightingMailLinkId] = useState<string | null>(null);
@@ -268,6 +270,39 @@ export function useSeguimientoFeed(surgeryId: string | undefined) {
     }
   }, [companyId, surgeryId, fetchEntries]);
 
+  const addDocumentEvidence = useCallback(async (input: { file: File; content?: string }) => {
+    if (!companyId || !surgeryId) throw new Error("Missing company or surgery context");
+    setAddingDocumentEvidence(true);
+    try {
+      const formData = new FormData();
+      formData.set("file", input.file);
+      if (input.content?.trim()) formData.set("description", input.content.trim());
+      await apiFetch<SeguimientoEntryApiRow>(
+        `/api/companies/${companyId}/surgeries/${surgeryId}/seguimiento/documents`,
+        { method: "POST", body: formData }
+      );
+      await fetchEntries();
+    } finally {
+      setAddingDocumentEvidence(false);
+    }
+  }, [companyId, surgeryId, fetchEntries]);
+
+  const downloadDocumentEvidence = useCallback(async (entryId: string, fileName: string) => {
+    if (!companyId || !surgeryId) throw new Error("Missing company or surgery context");
+    const token = await getAccessToken();
+    const response = await fetch(
+      `/api/companies/${companyId}/surgeries/${surgeryId}/seguimiento/documents/${entryId}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+    );
+    if (!response.ok) throw new ApiClientError("No se pudo descargar el documento", response.status);
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  }, [companyId, surgeryId]);
+
   const createAuthorizationEvidence = useCallback(async (sourceEntryId: string, input: CreateAuthorizationEvidenceInput) => {
     if (!companyId || !surgeryId) {
       throw new Error("Missing company or surgery context");
@@ -396,10 +431,13 @@ export function useSeguimientoFeed(surgeryId: string | undefined) {
     addNote,
     addMailEvidence,
     addPhotoEvidence,
+    addDocumentEvidence,
+    downloadDocumentEvidence,
     createAuthorizationEvidence,
     importFromMail,
     addingNote,
     addingPhotoEvidence,
+    addingDocumentEvidence,
     addingAuthorizationEvidence,
     importingFromMail,
     highlightingMailLinkId,

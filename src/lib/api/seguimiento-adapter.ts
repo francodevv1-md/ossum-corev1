@@ -41,8 +41,16 @@ export type SeguimientoEntryView = {
   mailMeta: SeguimientoMailMeta | null;
   photoMeta: SeguimientoPhotoMeta | null;
   imageEvidenceMeta: SeguimientoPhotoMeta | null;
+  documentMeta: SeguimientoDocumentMeta | null;
   editHistory: SeguimientoEditHistoryEntry[] | null;
   mentions: MentionRef[];
+};
+
+export type SeguimientoDocumentMeta = {
+  status: "uploading" | "queued" | "upload_failed";
+  fileName: string;
+  mimeType?: string;
+  sizeBytes?: number;
 };
 
 export type SeguimientoMailMeta = {
@@ -191,6 +199,38 @@ function mapPhotoMeta(evidenceRef: Record<string, unknown> | null): SeguimientoP
   return mapPhotoMetaValue(evidenceRef);
 }
 
+function mapDocumentMeta(evidenceRef: Record<string, unknown> | null): SeguimientoDocumentMeta | null {
+  if (!evidenceRef || evidenceRef.source !== "r2_document_pipeline") return null;
+  const file = asRecord(evidenceRef.file);
+  const fileName = toOptionalString(file?.name);
+  if (!fileName) return null;
+  const status = evidenceRef.status === "uploading" || evidenceRef.status === "upload_failed"
+    ? evidenceRef.status
+    : "queued";
+  return {
+    status,
+    fileName,
+    mimeType: toOptionalString(file?.mimeType),
+    sizeBytes: toOptionalNumber(file?.sizeBytes),
+  };
+}
+
+function sanitizeDocumentEvidenceRef(evidenceRef: Record<string, unknown> | null) {
+  if (!evidenceRef || evidenceRef.source !== "r2_document_pipeline") return evidenceRef;
+  const file = asRecord(evidenceRef.file);
+  return {
+    source: evidenceRef.source,
+    status: evidenceRef.status,
+    file: file
+      ? {
+          name: toOptionalString(file.name),
+          mimeType: toOptionalString(file.mimeType),
+          sizeBytes: toOptionalNumber(file.sizeBytes),
+        }
+      : undefined,
+  };
+}
+
 function mapEditHistory(evidenceRef: Record<string, unknown> | null): SeguimientoEditHistoryEntry[] | null {
   if (!evidenceRef) return null;
 
@@ -269,7 +309,7 @@ export function mapApiEntryToView(row: SeguimientoEntryApiRow): SeguimientoEntry
     summary: row.summary,
     authorId: row.authorId,
     authorName: row.authorName,
-    evidenceRef,
+    evidenceRef: row.entryType === "document_evidence" ? sanitizeDocumentEvidenceRef(evidenceRef) : evidenceRef,
     createdAt: row.createdAt,
     timestamp: new Date(row.createdAt).getTime(),
     isHighlighted: row.entryType === "note" && evidenceRef?.highlighted === true,
@@ -277,6 +317,7 @@ export function mapApiEntryToView(row: SeguimientoEntryApiRow): SeguimientoEntry
     noteType: row.entryType === "note" ? normalizeNoteType(evidenceRef?.noteType) : null,
     mailMeta: row.entryType === "mail_evidence" ? mapMailMeta(evidenceRef) : null,
     photoMeta: row.entryType === "file_photo_evidence" ? mapPhotoMeta(evidenceRef) : null,
+    documentMeta: row.entryType === "document_evidence" ? mapDocumentMeta(evidenceRef) : null,
     imageEvidenceMeta: row.entryType === "note" || row.entryType === "authorization_evidence"
       ? mapPhotoMetaValue(evidenceRef?.imageEvidence)
       : null,

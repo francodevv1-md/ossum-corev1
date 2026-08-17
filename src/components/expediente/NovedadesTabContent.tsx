@@ -101,6 +101,7 @@ const ENTRY_TYPE_MAP: Record<string, { label: string; tone: "slate" | "emerald" 
   note: { label: "Actualización", tone: "slate", Icon: MessageSquare },
   authorization_evidence: { label: "Autorizado", tone: "emerald", Icon: ShieldCheck },
   file_photo_evidence: { label: "Archivo / Foto", tone: "sky", Icon: Paperclip },
+  document_evidence: { label: "Documento", tone: "violet", Icon: Paperclip },
   mail_evidence: { label: "Correo", tone: "amber", Icon: Mail },
 }
 
@@ -118,6 +119,8 @@ const PHOTO_UPLOAD_MAX_ORIGINAL_BYTES = 6 * 1024 * 1024
 const PHOTO_UPLOAD_MAX_DIMENSION = 1400
 const PHOTO_UPLOAD_MAX_PREVIEW_BYTES = 260 * 1024
 const PHOTO_UPLOAD_TOTAL_PREVIEW_BYTES = 900 * 1024
+const DOCUMENT_UPLOAD_MAX_BYTES = 4_000_000
+const DOCUMENT_UPLOAD_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png"]
 const FEED_LOAD_MORE_STEP = 50
 
 const EMPTY_MENTION_COMPOSER: MentionComposerValue = {
@@ -390,7 +393,8 @@ function ImportantUpdate({ entry }: { entry: SeguimientoEntryView }) {
 function entryMatchesFilter(entry: SeguimientoEntryView, filter: FeedFilter): boolean {
   if (filter === "todo") return true
   if (filter === "notas") return entry.entryType === "note"
-  if (filter === "archivos" || filter === "fotos") return entry.entryType === "file_photo_evidence"
+  if (filter === "archivos") return entry.entryType === "file_photo_evidence" || entry.entryType === "document_evidence"
+  if (filter === "fotos") return entry.entryType === "file_photo_evidence"
   if (filter === "autorizado") return entry.entryType === "authorization_evidence"
   if (filter === "correo") return entry.entryType === "mail_evidence"
   return true
@@ -401,6 +405,7 @@ function TimelineCard({
   companyId,
   isDeepLinked = false,
   onEditEntry,
+  onDownloadDocument,
   editingEntryId,
   canModify,
 }: {
@@ -408,6 +413,7 @@ function TimelineCard({
   companyId?: string;
   isDeepLinked?: boolean;
   onEditEntry?: (entryId: string, edits: SeguimientoEventEditInput) => Promise<void>;
+  onDownloadDocument?: (entryId: string, fileName: string) => Promise<void>;
   editingEntryId?: string | null;
   canModify: boolean;
 }) {
@@ -606,6 +612,37 @@ function TimelineCard({
                   <ExternalLink className="mr-1 size-3" />
                   Ver correo
                 </Button>
+              </div>
+            </div>
+          ) : entry.entryType === "document_evidence" && entry.documentMeta ? (
+            <div className="space-y-1.5">
+              <p className="text-[13px] text-slate-700 dark:text-slate-200">{entry.content}</p>
+              <div className="flex flex-wrap items-center gap-2 border border-slate-200 bg-slate-50 px-2.5 py-2 dark:border-slate-700 dark:bg-slate-950/60">
+                <Paperclip className="size-4 text-violet-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium text-slate-800 dark:text-slate-100">{entry.documentMeta.fileName}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {entry.documentMeta.status === "upload_failed" ? "Falló la carga" : "Enviado a procesamiento"}
+                    {entry.documentMeta.sizeBytes ? ` · ${(entry.documentMeta.sizeBytes / 1024).toFixed(0)} KB` : ""}
+                  </p>
+                </div>
+                {entry.documentMeta.status === "queued" && onDownloadDocument ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-[11px]"
+                    onClick={async () => {
+                      try {
+                        await onDownloadDocument(entry.id, entry.documentMeta!.fileName)
+                      } catch {
+                        toast.error("No se pudo descargar el documento")
+                      }
+                    }}
+                  >
+                    <Download className="mr-1 size-3" />Descargar
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : entry.entryType === "file_photo_evidence" && entry.photoMeta ? (
@@ -1012,7 +1049,7 @@ const ADD_ACTIONS: Array<{
   Icon: React.ComponentType<{ className?: string }>
 }> = [
   { id: "note", label: "Agregar nota", description: "Registrar una novedad breve", Icon: MessageSquare },
-  { id: "image", label: "Agregar imagen", description: "Adjuntar evidencia visual", Icon: ImagePlus },
+  { id: "image", label: "Adjuntar documento", description: "Subir PDF, JPG o PNG", Icon: Paperclip },
   { id: "mail", label: "Importar desde correo", description: "Traer texto o archivos útiles", Icon: Download },
   { id: "auth", label: "Marcar autorizado", description: "Registrar una autorización formal", Icon: ShieldCheck },
 ]
@@ -1111,9 +1148,12 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     error,
     addNote,
     addPhotoEvidence,
+    addDocumentEvidence,
+    downloadDocumentEvidence,
     createAuthorizationEvidence,
     addingNote,
     addingPhotoEvidence,
+    addingDocumentEvidence,
     addingAuthorizationEvidence,
     highlightedEntries,
     editEntry,
@@ -1142,6 +1182,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   const [importMailOpen, setImportMailOpen] = useState(false)
   const [addSheetOpen, setAddSheetOpen] = useState(false)
   const [mediaFiles, setMediaFiles] = useState<SeguimientoPhotoEvidenceFileInput[]>([])
+  const [documentFile, setDocumentFile] = useState<File | null>(null)
   const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null)
   const [openImagePickerOnCompose, setOpenImagePickerOnCompose] = useState(false)
   // The legacy media composer remains unreachable while its JSX is retained for a later isolated cleanup.
@@ -1212,6 +1253,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
         (entry.summary ?? "").toLowerCase().includes(query) ||
         (entry.mailMeta?.subject ?? "").toLowerCase().includes(query) ||
         (entry.mailMeta?.participantsSummary ?? "").toLowerCase().includes(query) ||
+        (entry.documentMeta?.fileName.toLowerCase().includes(query) ?? false) ||
         (entry.photoMeta?.files.some((file) => (file.name ?? "").toLowerCase().includes(query)) ?? false)
       )
     })
@@ -1269,7 +1311,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
 
   const handlePublishComposer = async () => {
     const content = noteDraft.content.trim()
-    if (mediaFiles.length === 0 && !content) return
+    if (!documentFile && mediaFiles.length === 0 && !content) return
     const isAuth = noteIsAuth
     if (isAuth && !content) {
       toast.error("Describí la autorización antes de registrarla")
@@ -1291,6 +1333,9 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           ...(mediaFiles.length > 0 ? { imageEvidence: { files: mediaFiles } } : {}),
         })
         toast.success("Autorización registrada")
+      } else if (documentFile) {
+        await addDocumentEvidence({ file: documentFile, content })
+        toast.success("Documento cargado y enviado a procesamiento")
       } else if (mediaFiles.length > 0) {
         const firstName = mediaFiles[0]?.name || "Imagen"
         const summary = mediaFiles.length === 1
@@ -1324,6 +1369,16 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     }
   }
 
+  function selectDocumentFile(file: File) {
+    setDocumentFile(file)
+    setMediaFiles([])
+    setNoteDraft((current) => ({ content: current.content, mentions: [] }))
+    setNoteType("general")
+    setNotePriority("media")
+    setNoteHighlighted(false)
+    setShowMoreOptions(false)
+  }
+
   function resetComposer() {
     setNoteDraft(EMPTY_MENTION_COMPOSER)
     setNotePriority("media")
@@ -1334,6 +1389,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     setShowMoreOptions(false)
     setShowComposer(false)
     setMediaFiles([])
+    setDocumentFile(null)
     setMediaViewerIndex(null)
     setOpenImagePickerOnCompose(false)
   }
@@ -1357,6 +1413,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
         setOpenImagePickerOnCompose(true)
         break
       case "auth":
+        setDocumentFile(null)
         setNoteIsAuth(true)
         setAuthorizationSourceEntryId("")
         setShowComposer(true)
@@ -1386,6 +1443,16 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
       const blob = await imageItem.getType(mimeType)
       const file = new File([blob], `captura-${Date.now()}.png`, { type: mimeType })
 
+      if (!noteIsAuth) {
+        if (file.size > DOCUMENT_UPLOAD_MAX_BYTES) {
+          toast.error("La imagen supera el máximo de 4 MB")
+          return
+        }
+        selectDocumentFile(file)
+        toast.success("Imagen lista para cargar")
+        return
+      }
+
       const compressed = await compressImageFile(file)
       const newTotal = mediaFiles.length + 1
       if (newTotal > PHOTO_UPLOAD_MAX_FILES) {
@@ -1408,6 +1475,18 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     try {
       const files = event.target.files
       if (!files || files.length === 0) return
+
+      if (!noteIsAuth) {
+        const file = files[0]
+        if (!DOCUMENT_UPLOAD_MIME_TYPES.includes(file.type)) {
+          throw new Error("Solo se permiten archivos PDF, JPG y PNG")
+        }
+        if (file.size > DOCUMENT_UPLOAD_MAX_BYTES) {
+          throw new Error("El archivo supera el máximo de 4 MB")
+        }
+        selectDocumentFile(file)
+        return
+      }
 
       const remaining = PHOTO_UPLOAD_MAX_FILES - mediaFiles.length
       if (remaining <= 0) {
@@ -1473,7 +1552,12 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
         <section className="min-w-0 border-b border-[var(--ossum-line-strong)] p-3 lg:border-b-0 lg:border-r" aria-labelledby="important-updates-heading">
           <div className="flex items-center justify-between gap-2 border-b border-[var(--ossum-line)] pb-2">
             <h3 id="important-updates-heading" className="text-[11px] font-semibold text-[var(--ossum-navy)]">{importantEntries.length > 0 ? "NOVEDADES IMPORTANTES" : "NOVEDADES RECIENTES"}</h3>
-            {showHeaderAddButton && canModifySeguimiento ? <Button size="sm" onClick={() => handleAddAction("note")} className="h-8 rounded text-[11px]"><Plus className="mr-1 size-3.5" />Nueva novedad</Button> : null}
+            {showHeaderAddButton && canModifySeguimiento ? (
+              <div className="flex flex-wrap gap-1.5">
+                <Button size="sm" onClick={() => handleAddAction("note")} className="h-8 rounded text-[11px]"><Plus className="mr-1 size-3.5" />Nueva novedad</Button>
+                <Button size="sm" variant="outline" onClick={() => handleAddAction("image")} className="h-8 rounded text-[11px]"><Paperclip className="mr-1 size-3.5" />Adjuntar documento</Button>
+              </div>
+            ) : null}
           </div>
           {visibleImportantEntries.length > 0 ? <div className="divide-y divide-[var(--ossum-line)]">{visibleImportantEntries.map((entry) => <ImportantUpdate key={entry.id} entry={entry} />)}</div> : <p className="py-8 text-center text-xs text-slate-500">Todavía no hay novedades importantes.</p>}
         </section>
@@ -1532,18 +1616,27 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
               <h3 className="text-[13px] font-semibold text-[var(--ossum-navy)]">{noteIsAuth ? "Registrar autorización" : "Nueva novedad"}</h3>
               <p className="text-[10px] text-slate-500">{noteIsAuth ? "Dejá constancia de la autorización recibida." : "Actualización breve para el equipo."}</p>
             </div>
-            <button type="button" onClick={resetComposer} className="text-[11px] text-slate-500 hover:text-slate-900" disabled={addingNote || addingPhotoEvidence || addingAuthorizationEvidence}>Cerrar</button>
+            <button type="button" onClick={resetComposer} className="text-[11px] text-slate-500 hover:text-slate-900" disabled={addingNote || addingPhotoEvidence || addingDocumentEvidence || addingAuthorizationEvidence}>Cerrar</button>
           </div>
           <div className="px-3 py-2.5">
-            <MentionComposer
-              ref={textareaRef}
-              companyId={companyId}
-              value={noteDraft}
-              onChange={setNoteDraft}
-              textareaClassName="min-h-[64px] resize-none border-0 bg-transparent p-0 text-[13px] leading-5 shadow-none focus-visible:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
-              className="w-full"
-              placeholder={noteIsAuth ? "Describí la autorización registrada..." : "¿Qué cambió o qué necesita saber el equipo?"}
-            />
+            {documentFile ? (
+              <Textarea
+                value={noteDraft.content}
+                onChange={(event) => setNoteDraft({ content: event.target.value, mentions: [] })}
+                className="min-h-[64px] resize-none border-0 bg-transparent p-0 text-[13px] leading-5 shadow-none focus-visible:ring-0"
+                placeholder="Descripción opcional del documento..."
+              />
+            ) : (
+              <MentionComposer
+                ref={textareaRef}
+                companyId={companyId}
+                value={noteDraft}
+                onChange={setNoteDraft}
+                textareaClassName="min-h-[64px] resize-none border-0 bg-transparent p-0 text-[13px] leading-5 shadow-none focus-visible:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
+                className="w-full"
+                placeholder={noteIsAuth ? "Describí la autorización registrada..." : "¿Qué cambió o qué necesita saber el equipo?"}
+              />
+            )}
           {noteIsAuth ? (
             <div className="mt-2">
               <Label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Novedad que respalda la autorización</Label>
@@ -1556,6 +1649,16 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
             </div>
           ) : null}
             <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+              {documentFile ? (
+                <div className="mb-3 flex items-center gap-2 border border-slate-200 bg-slate-50 px-2.5 py-2 dark:border-slate-700 dark:bg-slate-950/60">
+                  <Paperclip className="size-4 text-violet-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-medium">{documentFile.name}</p>
+                    <p className="text-[10px] text-slate-500">{(documentFile.size / 1024).toFixed(0)} KB</p>
+                  </div>
+                  <button type="button" onClick={() => setDocumentFile(null)} aria-label={`Quitar ${documentFile.name}`}><X className="size-3.5" /></button>
+                </div>
+              ) : null}
               {mediaFiles.length > 0 ? (
                 <div className="mb-3 flex flex-wrap gap-2">
                   {mediaFiles.map((file, index) => (
@@ -1570,10 +1673,10 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                 </div>
               ) : null}
               <div className="flex flex-wrap items-center gap-1.5">
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => mediaPhotoInputRef.current?.click()} disabled={mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES}><ImagePlus className="mr-1 size-3.5" />{mediaFiles.length > 0 ? "Agregar imagen" : "Adjuntar"}</Button>
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px] text-slate-500 dark:text-slate-400" onClick={() => void handlePasteToMediaComposer()} disabled={mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES}><Clipboard className="mr-1 size-3.5" />Pegar</Button>
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => setShowMoreOptions((open) => !open)} aria-expanded={showMoreOptions}>{showMoreOptions ? "Menos opciones" : "Tipo y prioridad"}</Button>
-                <span className="text-[10px] text-slate-400">Hasta {PHOTO_UPLOAD_MAX_FILES} imágenes</span>
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => mediaPhotoInputRef.current?.click()} disabled={noteIsAuth ? mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES : Boolean(documentFile)}><ImagePlus className="mr-1 size-3.5" />{noteIsAuth && mediaFiles.length > 0 ? "Agregar imagen" : "Adjuntar"}</Button>
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px] text-slate-500 dark:text-slate-400" onClick={() => void handlePasteToMediaComposer()} disabled={noteIsAuth ? mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES : Boolean(documentFile)}><Clipboard className="mr-1 size-3.5" />Pegar</Button>
+                {!documentFile ? <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => setShowMoreOptions((open) => !open)} aria-expanded={showMoreOptions}>{showMoreOptions ? "Menos opciones" : "Tipo y prioridad"}</Button> : null}
+                <span className="text-[10px] text-slate-400">{noteIsAuth ? `Hasta ${PHOTO_UPLOAD_MAX_FILES} imágenes` : "PDF, JPG o PNG · máximo 4 MB"}</span>
               </div>
               {mediaViewerIndex !== null && mediaFiles[mediaViewerIndex] ? (
                 <Dialog open onOpenChange={(open) => { if (!open) setMediaViewerIndex(null) }}>
@@ -1589,7 +1692,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
               ) : null}
           </div>
           </div>
-            {showMoreOptions && !noteIsAuth ? (
+            {showMoreOptions && !noteIsAuth && !documentFile ? (
               <div className="mt-2 grid gap-2 border-t border-slate-100 bg-slate-50 p-2 sm:grid-cols-[minmax(0,150px)_minmax(0,130px)_auto] sm:items-end dark:bg-slate-950/50">
                 <div className="min-w-0">
                   <Label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Tipo</Label>
@@ -1624,10 +1727,10 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
             ) : null}
 
             <div className="flex flex-col-reverse gap-2 border-t border-[var(--ossum-line)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="hidden text-[10px] text-slate-500 sm:block">Usá @ para mencionar a alguien.</p>
-              <div className="flex gap-2"><Button type="button" variant="ghost" size="sm" className="h-8 flex-1 text-[11px] sm:flex-none" onClick={resetComposer} disabled={addingNote || addingPhotoEvidence || addingAuthorizationEvidence}>Cancelar</Button>
-              <Button type="button" size="sm" className="h-9 flex-1 rounded bg-[var(--ossum-action)] text-[11px] sm:flex-none" onClick={handlePublishComposer} disabled={addingNote || addingPhotoEvidence || addingAuthorizationEvidence || !canPublishSeguimientoComposer(noteDraft.content, mediaFiles.length, noteIsAuth) || (noteIsAuth && !authorizationSourceEntryId)}>
-                {addingNote || addingPhotoEvidence || addingAuthorizationEvidence ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : null}
+              <p className="hidden text-[10px] text-slate-500 sm:block">{documentFile ? "El documento se guardará de forma privada." : "Usá @ para mencionar a alguien."}</p>
+              <div className="flex gap-2"><Button type="button" variant="ghost" size="sm" className="h-8 flex-1 text-[11px] sm:flex-none" onClick={resetComposer} disabled={addingNote || addingPhotoEvidence || addingDocumentEvidence || addingAuthorizationEvidence}>Cancelar</Button>
+              <Button type="button" size="sm" className="h-9 flex-1 rounded bg-[var(--ossum-action)] text-[11px] sm:flex-none" onClick={handlePublishComposer} disabled={addingNote || addingPhotoEvidence || addingDocumentEvidence || addingAuthorizationEvidence || !canPublishSeguimientoComposer(noteDraft.content, mediaFiles.length + (documentFile ? 1 : 0), noteIsAuth) || (noteIsAuth && !authorizationSourceEntryId)}>
+                {addingNote || addingPhotoEvidence || addingDocumentEvidence || addingAuthorizationEvidence ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : null}
                 {noteIsAuth ? "Registrar autorización" : "Publicar novedad"}
               </Button></div>
             </div>
@@ -1905,6 +2008,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                       companyId={companyId}
                       isDeepLinked={focusedEntryId === entry.id}
                       onEditEntry={editEntry}
+                      onDownloadDocument={downloadDocumentEvidence}
                       editingEntryId={editingEntryId}
                       canModify={canModifySeguimiento}
                     />
@@ -1939,8 +2043,8 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
       <input
         ref={mediaPhotoInputRef}
         type="file"
-        accept="image/*"
-        multiple
+        accept={noteIsAuth ? "image/*" : "application/pdf,image/jpeg,image/png"}
+        multiple={noteIsAuth}
         className="hidden"
         onChange={(event) => {
           void handleMediaPhotoPickerChange(event)

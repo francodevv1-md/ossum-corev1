@@ -69,6 +69,23 @@ describe("seguimiento.service", () => {
     expect(result).toMatchObject({ total: 73, hasMore: true, take: 50, entries: [{ id: "seg-1" }] });
   });
 
+  it("redacts private R2 locators from document feed responses", async () => {
+    const count = vi.fn().mockResolvedValue(1);
+    const findMany = vi.fn().mockResolvedValue([entry({
+      entryType: "document_evidence",
+      evidenceRef: {
+        source: "r2_document_pipeline",
+        status: "queued",
+        file: { name: "case.pdf", mimeType: "application/pdf", sizeBytes: 10, objectKey: "document-inbox/private", etag: "secret-locator" },
+      },
+    })]);
+    const prisma = { seguimientoEntry: { count, findMany } } as unknown as PrismaClient;
+
+    const result = await listSeguimientoEntries(prisma, "sx-1", "co-1");
+    expect(result.entries[0].evidenceRef).not.toHaveProperty("file.objectKey");
+    expect(result.entries[0].evidenceRef).not.toHaveProperty("file.etag");
+  });
+
   it("uses the company, surgery, and entry predicates before a note update", async () => {
     const { prisma, findFirst, update } = prismaForEdit(entry());
 
