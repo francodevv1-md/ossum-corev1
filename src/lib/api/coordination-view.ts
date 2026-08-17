@@ -4,10 +4,11 @@ import type {
 } from "@/lib/services/coordination-view.service";
 import type { CoordinatorSubject } from "@/lib/services/personal-coordinator-resolver.service";
 
-export type CoordinationViewClientRequest =
+export type CoordinationViewClientRequest = (
   | { surface: "personal" | "global"; preview?: false }
   | { surface: "global"; preview: true }
-  | { surface: "personal"; preview: true; target: CoordinatorSubject };
+  | { surface: "personal"; preview: true; target: CoordinatorSubject }
+) & { take?: number; skip?: number };
 
 export async function fetchCoordinationView(
   companyId: string,
@@ -20,6 +21,8 @@ export async function fetchCoordinationView(
       params.set("subjectContactId", request.target.contactId);
     }
   }
+  if (request.take !== undefined) params.set("take", String(request.take));
+  if (request.skip !== undefined) params.set("skip", String(request.skip));
 
   return apiFetch<CoordinationViewResponse>(
     `/api/companies/${encodeURIComponent(companyId)}/coordination/view?${params.toString()}`,

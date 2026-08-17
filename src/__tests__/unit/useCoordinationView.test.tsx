@@ -30,6 +30,7 @@ function response(mode: "production" | "dev-preview", surgeryId: string, subject
     context: { mode, surface: "personal", readOnly: mode === "dev-preview", actor: { userId: "actor-1", label: "Ana Admin" }, personalResolution: { status: "resolved", subject }, viewSubject: subject },
     ...(mode === "dev-preview" ? { previewCapability: { enabled: true, targets: [subject, { contactId: "contact-2", label: "Ezequiel DEV" }] } } : {}),
     surgeries: [{ id: surgeryId }],
+    pagination: { take: 50, skip: 0, hasMore: false },
   }
 }
 
@@ -60,7 +61,7 @@ describe("useCoordinationView", () => {
     render(<Harness onValue={(next) => { value = next }} />)
     await waitFor(() => expect(value.hasSuccessfulData).toBe(true))
     expect(value.acceptedContextKey).toBe("actor-1:company-1:production:personal:contact-1")
-    expect(mocks.fetchView).toHaveBeenCalledWith("company-1", { surface: "personal" })
+    expect(mocks.fetchView).toHaveBeenCalledWith("company-1", { surface: "personal", take: 50, skip: 0 })
     expect(mocks.clear).toHaveBeenCalledBefore(mocks.hydrate)
     expect(mocks.hydrate).toHaveBeenCalledWith([{ id: "cx-1" }])
   })
@@ -80,6 +81,40 @@ describe("useCoordinationView", () => {
     await act(async () => refresh.resolve(response("production", "cx-2")))
     await waitFor(() => expect(value.acceptedAt).toBe(2_000))
     now.mockRestore()
+  })
+
+  it("loads the next server page and hydrates the accumulated deduplicated rows", async () => {
+    mocks.fetchView
+      .mockResolvedValueOnce({ ...response("production", "cx-1"), pagination: { take: 50, skip: 0, hasMore: true } })
+      .mockResolvedValueOnce({ ...response("production", "cx-2"), pagination: { take: 50, skip: 50, hasMore: false } })
+    render(<Harness onValue={(next) => { value = next }} />)
+    await waitFor(() => expect(value.hasMore).toBe(true))
+
+    await act(async () => { await value.loadMore() })
+
+    expect(mocks.fetchView).toHaveBeenLastCalledWith("company-1", { surface: "personal", take: 50, skip: 50 })
+    expect(mocks.hydrate).toHaveBeenLastCalledWith([{ id: "cx-1" }, { id: "cx-2" }])
+    expect(value.loadedCount).toBe(2)
+    expect(value.hasMore).toBe(false)
+  })
+
+  it("retries a failed load-more page without replacing accumulated rows", async () => {
+    mocks.fetchView
+      .mockResolvedValueOnce({ ...response("production", "cx-1"), pagination: { take: 50, skip: 0, hasMore: true } })
+      .mockRejectedValueOnce(new Error("Falló la página siguiente"))
+      .mockResolvedValueOnce({ ...response("production", "cx-2"), pagination: { take: 50, skip: 50, hasMore: false } })
+    render(<Harness onValue={(next) => { value = next }} />)
+    await waitFor(() => expect(value.hasMore).toBe(true))
+
+    await act(async () => { await value.loadMore() })
+    expect(value.error).toBeNull()
+    expect(value.loadMoreError).toBe("Falló la página siguiente")
+    expect(mocks.hydrate).toHaveBeenLastCalledWith([{ id: "cx-1" }])
+
+    await act(async () => { await value.loadMore() })
+    expect(mocks.fetchView).toHaveBeenLastCalledWith("company-1", { surface: "personal", take: 50, skip: 50 })
+    expect(mocks.hydrate).toHaveBeenLastCalledWith([{ id: "cx-1" }, { id: "cx-2" }])
+    expect(value.loadMoreError).toBeNull()
   })
 
   it("keeps preview rows local and never hydrates them into the store", async () => {
@@ -137,7 +172,7 @@ describe("useCoordinationView", () => {
     render(<Harness discoverPreview surface="global" onValue={(next) => { value = next }} />)
     await waitFor(() => expect(value.surface).toBe("global"))
     act(() => value.changePreviewSurface("personal"))
-    await waitFor(() => expect(mocks.fetchView).toHaveBeenLastCalledWith("company-1", { surface: "personal", preview: true, target: subject }))
+    await waitFor(() => expect(mocks.fetchView).toHaveBeenLastCalledWith("company-1", { surface: "personal", preview: true, target: subject, take: 50, skip: 0 }))
     expect(mocks.hydrate).not.toHaveBeenCalled()
   })
 
@@ -153,7 +188,7 @@ describe("useCoordinationView", () => {
 
     rendered.rerender(<Harness surface="global" onValue={(next) => { value = next }} />)
 
-    await waitFor(() => expect(mocks.fetchView).toHaveBeenLastCalledWith("company-1", { surface: "global" }))
+    await waitFor(() => expect(mocks.fetchView).toHaveBeenLastCalledWith("company-1", { surface: "global", take: 50, skip: 0 }))
     await waitFor(() => expect(mocks.hydrate).toHaveBeenLastCalledWith([{ id: "global-new" }]))
     expect(mocks.clear).toHaveBeenCalledBefore(mocks.hydrate)
   })

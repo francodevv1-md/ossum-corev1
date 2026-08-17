@@ -5,6 +5,7 @@ import {
   getCoordinatorCardMetadata,
   getCoordinatorBucket,
   getCoordinatorLabel,
+  getMaterialAvailability,
   getResolvedAssignmentSlaBasis,
   getIncidentReasons,
   getSlaDisplayLabel,
@@ -59,6 +60,16 @@ describe("getCoordinatorBucket", () => {
 
   it("derives finalization only from the Finalizada general CX state", () => {
     expect(getCoordinatorBucket(surgery({ state: "Finalizada", preparationState: "Sin preparar" }))).toBe("finalizado")
+  })
+})
+
+describe("getMaterialAvailability", () => {
+  it("uses only the canonical availability date and never the shipping date", () => {
+    expect(getMaterialAvailability(surgery({
+      materialAvailabilityDate: "2026-07-25",
+      fechaEnvioMaterial: "2026-07-20",
+    })).date).toBe("2026-07-25")
+    expect(getMaterialAvailability(surgery({ fechaEnvioMaterial: "2026-07-20" })).defined).toBe(false)
   })
 })
 

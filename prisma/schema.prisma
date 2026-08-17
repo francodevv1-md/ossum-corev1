@@ -337,6 +337,8 @@ model Surgery {
   archivePolicySnapshot    Json?
   createdById              String?
   materialAvailabilityDate DateTime? @db.Date
+  materialShippingDate     DateTime? @db.Date
+  materialTransport        String?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 

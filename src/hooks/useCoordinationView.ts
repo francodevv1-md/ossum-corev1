@@ -14,6 +14,16 @@ type CoordinationViewOptions = {
   discoverPreview?: boolean
 }
 
+const COORDINATION_PAGE_SIZE = 50
+
+function appendUniqueRows(
+  current: CoordinationViewResponse["surgeries"],
+  next: CoordinationViewResponse["surgeries"],
+) {
+  const seen = new Set(current.map((row) => row.id))
+  return [...current, ...next.filter((row) => !seen.has(row.id))]
+}
+
 function isPreviewDenial(error: unknown) {
   if (!error || typeof error !== "object") return false
   const candidate = error as { status?: number; code?: string }
@@ -37,7 +47,9 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
   const [response, setResponse] = useState<CoordinationViewResponse | null>(null)
   const [previewRows, setPreviewRows] = useState<CoordinationViewResponse["surgeries"]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [previewDenied, setPreviewDenied] = useState(false)
   const [successfulContextKey, setSuccessfulContextKey] = useState<string | null>(null)
   const [acceptedAt, setAcceptedAt] = useState<number | null>(null)
@@ -51,7 +63,7 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     [actorId, companyId, mode, selectedTarget?.contactId, surface],
   )
 
-  const runRequest = useCallback(async (requestMode = mode) => {
+  const runRequest = useCallback(async (requestMode = mode, options?: { append?: boolean }) => {
     if (waitingForAuth) return
     if (!companyId) {
       setError("No hay empresa activa disponible para cargar Coordinación")
@@ -62,6 +74,8 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     const requestContextKey = [actorId, companyId, requestMode, surface, selectedTarget?.contactId ?? "no-subject"].join(":")
     inFlightContextKeyRef.current = requestContextKey
     const contextChanged = activeContextKeyRef.current !== requestContextKey
+    const currentRows = response?.surgeries ?? []
+    const append = options?.append === true && !contextChanged && successfulContextKeyRef.current === requestContextKey && response !== null
     if (contextChanged) {
       activeContextKeyRef.current = requestContextKey
       successfulContextKeyRef.current = null
@@ -69,23 +83,37 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
       setAcceptedAt(null)
       setResponse(null)
       setError(null)
+      setLoadMoreError(null)
       setPreviewDenied(false)
       if (requestMode === "dev-preview" || requestMode === "probing") setPreviewRows([])
       if (requestMode === "production") clearBackendSurgeries()
     }
 
-    setLoading(true)
-    setError(null)
+    if (append) {
+      setLoadingMore(true)
+      setLoadMoreError(null)
+    } else {
+      setLoading(true)
+      setError(null)
+    }
 
     try {
       let nextResponse: CoordinationViewResponse
       let nextMode = requestMode
       let nextSurface = surface
       let nextTarget = selectedTarget
+      const pagination = {
+        take: COORDINATION_PAGE_SIZE,
+        skip: append
+          ? response?.pagination
+            ? response.pagination.skip + response.pagination.take
+            : currentRows.length
+          : 0,
+      }
 
       if (requestMode === "probing") {
         try {
-          const capabilityResponse = await fetchCoordinationView(companyId, { surface: "global", preview: true })
+          const capabilityResponse = await fetchCoordinationView(companyId, { surface: "global", preview: true, ...pagination })
           const capability = capabilityResponse.previewCapability
           if (capability?.enabled !== true) throw Object.assign(new Error("preview denied"), { status: 403 })
 
@@ -99,6 +127,7 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
               surface: "personal",
               preview: true,
               target: firstTarget,
+              ...pagination,
             })
           } else {
             nextSurface = "global"
@@ -109,14 +138,14 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
           nextMode = "production"
           nextSurface = productionSurface
           nextTarget = null
-          nextResponse = await fetchCoordinationView(companyId, { surface: productionSurface })
+          nextResponse = await fetchCoordinationView(companyId, { surface: productionSurface, ...pagination })
         }
       } else if (requestMode === "dev-preview") {
         nextResponse = surface === "personal" && selectedTarget
-          ? await fetchCoordinationView(companyId, { surface: "personal", preview: true, target: selectedTarget })
-          : await fetchCoordinationView(companyId, { surface: "global", preview: true })
+          ? await fetchCoordinationView(companyId, { surface: "personal", preview: true, target: selectedTarget, ...pagination })
+          : await fetchCoordinationView(companyId, { surface: "global", preview: true, ...pagination })
       } else {
-        nextResponse = await fetchCoordinationView(companyId, { surface: productionSurface })
+        nextResponse = await fetchCoordinationView(companyId, { surface: productionSurface, ...pagination })
       }
 
       if (requestSequenceRef.current !== requestSequence) return
@@ -124,7 +153,11 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
       setMode(nextMode)
       setSurface(nextSurface)
       setSelectedTarget(nextTarget)
-      setResponse(nextResponse)
+      const acceptedResponse = append
+        ? { ...nextResponse, surgeries: appendUniqueRows(currentRows, nextResponse.surgeries) }
+        : nextResponse
+      setResponse(acceptedResponse)
+      setLoadMoreError(null)
       setPreviewDenied(false)
       const completedContextKey = [
         actorId,
@@ -139,10 +172,10 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
       setAcceptedAt(Date.now())
 
       if (nextMode === "dev-preview") {
-        setPreviewRows([...nextResponse.surgeries])
+        setPreviewRows([...acceptedResponse.surgeries])
       } else {
         const existing = useOrtoTrackStore.getState().surgeries
-        hydrateBackendSurgeries(mapApiSurgeryListToSurgeries(nextResponse.surgeries, existing))
+        hydrateBackendSurgeries(mapApiSurgeryListToSurgeries(acceptedResponse.surgeries, existing))
         setPreviewRows([])
       }
     } catch (requestError) {
@@ -155,12 +188,15 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
         setAcceptedAt(null)
         setPreviewDenied(true)
       } else {
-        setError(requestError instanceof Error ? requestError.message : "No se pudo cargar Coordinación")
+        const message = requestError instanceof Error ? requestError.message : "No se pudo cargar Coordinación"
+        if (append) setLoadMoreError(message)
+        else setError(message)
       }
     } finally {
       if (requestSequenceRef.current === requestSequence) {
         inFlightContextKeyRef.current = null
         setLoading(false)
+        setLoadingMore(false)
       }
     }
   }, [
@@ -170,6 +206,7 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     hydrateBackendSurgeries,
     mode,
     productionSurface,
+    response,
     selectedTarget,
     surface,
     waitingForAuth,
@@ -224,6 +261,7 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     setAcceptedAt(null)
     setPreviewDenied(false)
     setError(null)
+    setLoadMoreError(null)
     setMode("production")
   }, [productionSurface])
 
@@ -232,6 +270,11 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
   const acceptedContextKey = hasSuccessfulData
     ? [actorId, companyId ?? "no-company", mode, surface, response?.context.viewSubject?.contactId ?? "no-subject"].join(":")
     : null
+  const hasMore = hasSuccessfulData && response?.pagination?.hasMore === true
+  const loadMore = useCallback(() => {
+    if (!hasMore || loadingMore) return Promise.resolve()
+    return runRequest(mode, { append: true })
+  }, [hasMore, loadingMore, mode, runRequest])
 
   return {
     mode,
@@ -242,7 +285,9 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     previewDenied,
     waitingForAuth,
     loading,
+    loadingMore,
     error,
+    loadMoreError,
     hasSuccessfulData,
     acceptedContextKey,
     acceptedAt,
@@ -252,6 +297,9 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     isRefreshError: Boolean(error) && hasSuccessfulData,
     trustContextKey,
     refresh: runRequest,
+    hasMore,
+    loadedCount: hasSuccessfulData ? response?.surgeries.length ?? 0 : 0,
+    loadMore,
     changePreviewSurface,
     changePreviewTarget,
     exitPreview,

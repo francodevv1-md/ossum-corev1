@@ -94,6 +94,27 @@ describe("coordination view service", () => {
     });
     expect(view.context.surface).toBe("global");
     expect(view.surgeries.map((row) => row.id)).toEqual(["s1", "s2"]);
+    expect(view.pagination).toEqual({ take: 50, skip: 0, hasMore: false });
+  });
+
+  it("returns one bounded page plus hasMore evidence", async () => {
+    const prisma = db();
+    prisma.surgery.findMany.mockResolvedValue(Array.from({ length: 3 }, (_, index) => ({
+      id: `s${index + 1}`,
+      companyId: "company-1",
+      contactAssignments: [],
+    })) as never);
+
+    const view = await getCoordinationView({
+      prisma: prisma as never,
+      routeCompanyId: "company-1",
+      ctx,
+      request: { mode: "production", surface: "global", take: 2, skip: 10 },
+    });
+
+    expect(prisma.surgery.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3, skip: 10 }));
+    expect(view.surgeries.map((row) => row.id)).toEqual(["s1", "s2"]);
+    expect(view.pagination).toEqual({ take: 2, skip: 10, hasMore: true });
   });
 
   it("deniega coordinator global antes de enumerar contactos o cirugías", async () => {
@@ -126,6 +147,13 @@ describe("coordination view service", () => {
     });
     expect(view.surgeries.map((row) => row.id)).toEqual(["s1"]);
     expect(view.surgeries.map((row) => row.id)).not.toContain("foreign-same-assignment");
+    expect(prisma.surgery.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        contactAssignments: expect.objectContaining({
+          some: expect.objectContaining({ contactId: "contact-1", role: "coordinator" }),
+        }),
+      }),
+    }));
     expectNoWrites(prisma);
   });
 
@@ -312,6 +340,8 @@ describe("coordination view service", () => {
       companyId: "company-1",
       contactAssignments: [],
       patient: { id: "patient-1", firstName: "Paz", lastName: "Uno", legalName: null, secret: "nested" },
+      materialShippingDate: new Date("2026-08-21T00:00:00.000Z"),
+      materialTransport: "Logística Sur",
       unexpectedSecret: "root",
       mutation: { method: "DELETE", routeTarget: "/forbidden" },
     }] as never);
@@ -327,6 +357,8 @@ describe("coordination view service", () => {
     expect(view.surgeries[0]).toMatchObject({
       id: "s-sensitive",
       patient: { id: "patient-1", firstName: "Paz", lastName: "Uno", legalName: null },
+      materialShippingDate: new Date("2026-08-21T00:00:00.000Z"),
+      materialTransport: "Logística Sur",
     });
     expect(view.surgeries[0]).not.toHaveProperty("unexpectedSecret");
     expect(view.surgeries[0]).not.toHaveProperty("mutation");
@@ -346,6 +378,9 @@ describe("coordination view service", () => {
       "id",
       "institution",
       "institutionId",
+      "materialAvailabilityDate",
+      "materialShippingDate",
+      "materialTransport",
       "notes",
       "patient",
       "patientId",

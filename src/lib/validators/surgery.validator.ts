@@ -36,6 +36,8 @@ export type UpdateSurgeryInput = {
   probableDate?: Date | null;
   scheduledDate?: Date | null;
   surgeryDate?: Date | null;
+  materialShippingDate?: Date | null;
+  materialTransport?: string | null;
   performedDate?: Date | null;
   cancelledDate?: Date | null;
   source?: string | null;
@@ -241,6 +243,37 @@ function validateOptionalPriority(
   return value;
 }
 
+function validateOptionalMaterialTransport(
+  value: unknown
+): string | null | undefined {
+  if (value === undefined || value === null) return value;
+  if (typeof value !== "string") {
+    throw badRequest("materialTransport must be a string when provided", "invalid_material_transport");
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 200) {
+    throw badRequest("materialTransport must contain at most 200 characters", "invalid_material_transport");
+  }
+  return trimmed;
+}
+
+export function parseIsoTimestamp(value: unknown, fieldName: string): Date {
+  const match = typeof value === "string"
+    ? /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-](\d{2}):(\d{2}))$/.exec(value)
+    : null;
+  if (!match) {
+    throw badRequest(`${fieldName} must be an ISO timestamp with an explicit offset`, "invalid_date_field");
+  }
+  const parsed = new Date(value);
+  const calendar = new Date(`${match[1]}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || Number.isNaN(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== match[1] ||
+    Number(match[2]) > 23 || Number(match[3]) > 59 || Number(match[4]) > 59 || Number(match[6] ?? 0) > 23 || Number(match[7] ?? 0) > 59) {
+    throw badRequest(`${fieldName} must be a valid ISO timestamp`, "invalid_date_field");
+  }
+  return parsed;
+}
+
 export function validateCreateSurgeryInput(
   data: CreateSurgeryInput
 ): CreateSurgeryInput {
@@ -311,6 +344,7 @@ export function validateUpdateSurgeryInput(
   validateOptionalNullableDate(data.probableDate, "probableDate");
   validateOptionalNullableDate(data.scheduledDate, "scheduledDate");
   validateOptionalNullableDate(data.surgeryDate, "surgeryDate");
+  validateOptionalNullableDate(data.materialShippingDate, "materialShippingDate");
   validateOptionalNullableDate(data.performedDate, "performedDate");
   validateOptionalNullableDate(data.cancelledDate, "cancelledDate");
 
@@ -322,7 +356,8 @@ export function validateUpdateSurgeryInput(
     throw badRequest("notes must be a string when provided", "invalid_notes");
   }
 
-  return data;
+  if (data.materialTransport === undefined) return data;
+  return { ...data, materialTransport: validateOptionalMaterialTransport(data.materialTransport) };
 }
 
 export function validateUpdateSurgeryCxStatusInput(

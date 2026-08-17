@@ -56,6 +56,7 @@ import {
   CalendarDays,
   ChevronDown,
   FilterX,
+  Loader2,
   MoreHorizontal,
   ShieldCheck,
   UserCircle,
@@ -619,6 +620,17 @@ function ProductiveCoordinadoresPage({ controller }: { controller: CoordinationV
               })}
             </div>
           </CoordinationStateSurface>
+
+          {controller.hasMore ? (
+            <div className="flex flex-col items-center gap-1.5 py-1">
+              <Button type="button" variant="outline" className="min-h-11" disabled={controller.loadingMore} onClick={() => void controller.loadMore()}>
+                {controller.loadingMore ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                {controller.loadMoreError ? "Reintentar carga" : "Cargar 50 más"}
+              </Button>
+              <span className="text-xs text-slate-500">{controller.loadedCount} casos cargados</span>
+              {controller.loadMoreError ? <span role="alert" className="text-xs text-red-700">{controller.loadMoreError}</span> : null}
+            </div>
+          ) : null}
 
           <details className="rounded-xl border border-slate-200 bg-white">
             <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">

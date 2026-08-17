@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { fireEvent, render, screen, within } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { CoordinatorCase } from "@/components/coordinadores/coordinator-queue.helpers"
 
@@ -14,18 +14,29 @@ const mockedStore = vi.hoisted(() => ({
 }))
 
 const mockedAuth = vi.hoisted(() => ({ role: "admin" }))
+const mockedManagement = vi.hoisted(() => ({
+  addNote: vi.fn(),
+  emitOperationalNotification: vi.fn(),
+  updateBackendSurgeryManagement: vi.fn(),
+}))
 
 vi.mock("@/lib/store", () => ({
   useOrtoTrackStore: (selector?: (state: typeof mockedStore) => unknown) => typeof selector === "function" ? selector(mockedStore) : mockedStore,
 }))
 
 vi.mock("@/components/auth/AuthProvider", () => ({
-  useAuth: () => ({ currentAccess: { role: mockedAuth.role } }),
+  useAuth: () => ({ currentAccess: { role: mockedAuth.role }, activeCompany: { id: "company-1" } }),
 }))
 
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }))
 vi.mock("@/hooks/useSeguimientoFeed", () => ({
-  useSeguimientoFeed: () => ({ addNote: vi.fn(), addingNote: false }),
+  useSeguimientoFeed: () => ({ addNote: mockedManagement.addNote, addingNote: false }),
+}))
+vi.mock("@/lib/api/operational-notifications", () => ({
+  emitOperationalNotification: mockedManagement.emitOperationalNotification,
+}))
+vi.mock("@/lib/api/backend-surgeries", () => ({
+  updateBackendSurgeryManagement: mockedManagement.updateBackendSurgeryManagement,
 }))
 vi.mock("@/components/expediente/NovedadesTabContent", () => ({
   NovedadesTabContent: () => <div>Historial del expediente</div>,
@@ -51,6 +62,9 @@ describe("CoordinatorInboxView compact case card", () => {
     mockedStore.getDocStatus.mockReturnValue("Completa")
     mockedStore.getConsumoBySurgeryId.mockReturnValue({ id: "consumo-1" })
     mockedStore.getComprobantesBySurgeryId.mockReturnValue([{ id: "fv-1", type: "FV" }])
+    mockedManagement.addNote.mockResolvedValue({ id: "note-1" })
+    mockedManagement.emitOperationalNotification.mockResolvedValue(undefined)
+    mockedManagement.updateBackendSurgeryManagement.mockResolvedValue({})
   })
 
   it("removes the verbose derived block and its copy", () => {
@@ -315,6 +329,10 @@ describe("CoordinatorInboxView compact case card", () => {
     }
     expect(managementDialogSource).toContain('side="bottom"')
     expect(managementDialogSource).toContain('h-[100dvh]')
+    expect(source).toContain("controller.hasMore")
+    expect(source).toContain("controller.loadMore()")
+    expect(source).toContain("Cargar 50 más")
+    expect(source).toContain("Reintentar carga")
   })
 
   it("uses the OSSUM ERP Modern management hierarchy", () => {
@@ -329,6 +347,8 @@ describe("CoordinatorInboxView compact case card", () => {
         institution: "Clínica Central",
         date: "2026-08-20",
         time: "09:30",
+        fechaEnvioMaterial: "2026-08-19",
+        materialTransport: "Logística Sur",
         state: "Autorizada",
       } as never}
     />)
@@ -339,8 +359,128 @@ describe("CoordinatorInboxView compact case card", () => {
       expect(screen.getByRole("heading", { name: section })).toBeInTheDocument()
     }
     expect(screen.getByLabelText("Prioridad del registro")).toHaveAttribute("role", "combobox")
+    expect(screen.getByLabelText("Fecha de envío")).toHaveValue("2026-08-19")
+    expect(screen.getByLabelText("Transporte")).toHaveValue("Logística Sur")
+    expect(screen.getByLabelText("Transporte")).toHaveAttribute("maxlength", "200")
     expect(screen.getByRole("button", { name: "Guardar gestión" })).toBeEnabled()
     expect(screen.queryByText("Gestión simple, mismo seguimiento")).not.toBeInTheDocument()
+  })
+
+  it("does not emit another urgency notification when an already-urgent case only saves a note", async () => {
+    render(<CoordinatorManagementDialog
+      open
+      onOpenChange={vi.fn()}
+      surgery={{
+        id: "CX-1042",
+        backendId: "surgery-1",
+        patient: "Paciente Demo",
+        surgeon: "Dra. Elena Ruiz",
+        institution: "Clínica Central",
+        date: "2026-08-20",
+        time: "09:30",
+        state: "Autorizada",
+        urgente: true,
+      } as never}
+    />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar gestión" }))
+    await waitFor(() => expect(mockedManagement.addNote).toHaveBeenCalledOnce())
+    expect(mockedManagement.updateBackendSurgeryManagement).not.toHaveBeenCalled()
+    expect(mockedManagement.emitOperationalNotification).not.toHaveBeenCalled()
+  })
+
+  it("persists changed shipping and transport with the backend surgery id", async () => {
+    render(<CoordinatorManagementDialog
+      open
+      onOpenChange={vi.fn()}
+      surgery={{
+        id: "CX-1042",
+        backendId: "surgery-1",
+        patient: "Paciente Demo",
+        surgeon: "Dra. Elena Ruiz",
+        institution: "Clínica Central",
+        date: "2026-08-20",
+        time: "09:30",
+        state: "Autorizada",
+        urgente: false,
+      } as never}
+    />)
+
+    fireEvent.change(screen.getByLabelText("Fecha de envío"), { target: { value: "2026-08-21" } })
+    fireEvent.change(screen.getByLabelText("Transporte"), { target: { value: "Logística Sur" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar gestión" }))
+
+    await waitFor(() => expect(mockedManagement.updateBackendSurgeryManagement).toHaveBeenCalledWith(
+      "company-1",
+      "surgery-1",
+      { materialShippingDate: "2026-08-21", materialTransport: "Logística Sur" },
+    ))
+    expect(mockedStore.updateSurgery).toHaveBeenCalledWith("CX-1042", {
+      fechaEnvioMaterial: "2026-08-21",
+      materialTransport: "Logística Sur",
+    })
+  })
+
+  it("retries a failed Seguimiento write without persisting the same backend patch twice", async () => {
+    mockedManagement.addNote.mockReset().mockRejectedValueOnce(new Error("tracking failed")).mockResolvedValueOnce({ id: "note-2" })
+    mockedManagement.updateBackendSurgeryManagement.mockClear()
+    render(<CoordinatorManagementDialog
+      open
+      onOpenChange={vi.fn()}
+      surgery={{
+        id: "CX-1042",
+        backendId: "surgery-1",
+        patient: "Paciente Demo",
+        surgeon: "Dra. Elena Ruiz",
+        institution: "Clínica Central",
+        date: "2026-08-20",
+        time: "09:30",
+        state: "Autorizada",
+        urgente: false,
+      } as never}
+    />)
+
+    fireEvent.change(screen.getByLabelText("Transporte"), { target: { value: "Logística Sur" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar gestión" }))
+    await waitFor(() => expect(mockedManagement.addNote).toHaveBeenCalledTimes(1))
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar gestión" }))
+    await waitFor(() => expect(mockedManagement.addNote).toHaveBeenCalledTimes(2))
+    expect(mockedManagement.updateBackendSurgeryManagement).toHaveBeenCalledTimes(1)
+  })
+
+  it("clears persisted shipping and transport explicitly", async () => {
+    render(<CoordinatorManagementDialog
+      open
+      onOpenChange={vi.fn()}
+      surgery={{
+        id: "CX-1042",
+        backendId: "surgery-1",
+        patient: "Paciente Demo",
+        surgeon: "Dra. Elena Ruiz",
+        institution: "Clínica Central",
+        date: "2026-08-20",
+        time: "09:30",
+        fechaEnvioMaterial: "2026-08-21",
+        materialTransport: "Logística Sur",
+        state: "Autorizada",
+        urgente: false,
+      } as never}
+    />)
+
+    fireEvent.change(screen.getByLabelText("Fecha de envío"), { target: { value: "" } })
+    fireEvent.change(screen.getByLabelText("Transporte"), { target: { value: "" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar gestión" }))
+
+    await waitFor(() => expect(mockedManagement.updateBackendSurgeryManagement).toHaveBeenCalledWith(
+      "company-1",
+      "surgery-1",
+      { materialShippingDate: null, materialTransport: null },
+    ))
+    expect(mockedStore.updateSurgery).toHaveBeenCalledWith("CX-1042", {
+      fechaEnvioMaterial: undefined,
+      materialTransport: undefined,
+    })
   })
 
   it("does not expose unnamed icon-only controls", () => {

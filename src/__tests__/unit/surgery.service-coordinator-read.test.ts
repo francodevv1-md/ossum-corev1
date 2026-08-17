@@ -51,6 +51,8 @@ describe("surgery service coordinator read projection", () => {
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ companyId: "company-1", archivedAt: null }),
       select: expect.objectContaining({
+        materialShippingDate: true,
+        materialTransport: true,
         contactAssignments: expect.objectContaining({
           where: expect.objectContaining({
             role: "coordinator",
@@ -105,5 +107,32 @@ describe("surgery service coordinator read projection", () => {
 
     expect(findMany).toHaveBeenCalledOnce();
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it("filters by coordinator in Prisma before any requested limit and has no implicit 50-row cap", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const prisma = { surgery: { findMany } } as never;
+
+    await listSurgeriesByCompany(prisma, "company-1", { coordinatorContactId: "contact-1", take: 25 });
+    const limitedQuery = findMany.mock.calls[0][0];
+    expect(limitedQuery.take).toBe(25);
+    expect(limitedQuery.where.contactAssignments).toMatchObject({
+      some: { role: "coordinator", contactId: "contact-1" },
+      none: { role: "coordinator", contactId: { not: "contact-1" } },
+    });
+
+    await listSurgeriesByCompany(prisma, "company-1");
+    expect(findMany.mock.calls[1][0]).not.toHaveProperty("take");
+  });
+
+  it("short-circuits pathological offsets beyond the scoped company result count", async () => {
+    const count = vi.fn().mockResolvedValue(12);
+    const findMany = vi.fn();
+    const prisma = { surgery: { count, findMany } } as never;
+
+    await expect(listSurgeriesByCompany(prisma, "company-1", { take: 50, skip: 2_147_483_647 })).resolves.toEqual([]);
+
+    expect(count).toHaveBeenCalledWith({ where: expect.objectContaining({ companyId: "company-1", archivedAt: null }) });
+    expect(findMany).not.toHaveBeenCalled();
   });
 });

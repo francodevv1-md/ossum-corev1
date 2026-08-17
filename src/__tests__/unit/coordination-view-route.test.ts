@@ -80,7 +80,7 @@ describe("coordination view route", () => {
     expect(getCoordinationView).toHaveBeenCalledWith(expect.objectContaining({
       routeCompanyId: "company-1",
       ctx,
-      request: { mode: "production", surface: "global" },
+      request: { mode: "production", surface: "global", take: 50, skip: 0 },
     }));
   });
 
@@ -120,6 +120,12 @@ describe("coordination view route", () => {
     });
     expect(apiFetch).toHaveBeenLastCalledWith(
       "/api/companies/company-1/coordination/view?surface=personal&preview=true&subjectContactId=contact-1",
+      { method: "GET", cache: "no-store" }
+    );
+
+    await fetchCoordinationView("company-1", { surface: "global", take: 50, skip: 100 });
+    expect(apiFetch).toHaveBeenLastCalledWith(
+      "/api/companies/company-1/coordination/view?surface=global&take=50&skip=100",
       { method: "GET", cache: "no-store" }
     );
   });
@@ -191,6 +197,11 @@ describe("coordination view route", () => {
     "surface=global&preview=true&subjectContactId=contact-1",
     "surface=personal&preview=true&subjectContactId=a&subjectContactId=b",
     "surface=global&extra=true",
+    "surface=global&take=0",
+    "surface=global&take=101",
+    "surface=global&skip=-1",
+    "surface=global&skip=2147483648",
+    "surface=global&take=50&take=25",
   ])("rechaza query manipulada/duplicada: %s", async (query) => {
     const response = await call(query);
     expect(response.status).toBe(400);

@@ -51,7 +51,11 @@ export type SurgeryApiRow = {
   prepStatus: string | null
   status: string | null
   surgeryDate: string | null
+  materialAvailabilityDate: string | null
+  materialShippingDate: string | null
+  materialTransport: string | null
   probableDate: string | null
+  priority: string | null
   authorizationNumber: string | null
   expedienteNumber: string | null
   createdAt: string | null
@@ -330,7 +334,11 @@ export function mapApiSurgeryToRow(apiSurgery: RawSurgeryApiRecord): SurgeryApiR
     prepStatus: pickString(apiSurgery, ["prepStatus"]),
     status: pickString(apiSurgery, ["cxStatus", "status", "estado"]),
     surgeryDate: pickString(apiSurgery, ["surgeryDate", "fechaCirugia", "date"]),
+    materialAvailabilityDate: pickString(apiSurgery, ["materialAvailabilityDate"]),
+    materialShippingDate: pickString(apiSurgery, ["materialShippingDate"]),
+    materialTransport: pickString(apiSurgery, ["materialTransport"]),
     probableDate: pickString(apiSurgery, ["probableDate"]),
+    priority: pickString(apiSurgery, ["priority"]),
     authorizationNumber: pickAdministrativeReference(apiSurgery, [
       "authorizationNumber",
       "autorizacion",
@@ -359,6 +367,23 @@ export function mapApiSurgeryListToRows(
 function normalizeDate(value: string | null, fallback = ""): string {
   if (!value) return fallback
   return value.includes("T") ? value.slice(0, 10) : value
+}
+
+function normalizeLocalDate(value: string | null, fallback = ""): string {
+  if (!value?.includes("T")) return value || fallback
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return fallback
+  const year = parsed.getFullYear()
+  const month = String(parsed.getMonth() + 1).padStart(2, "0")
+  const day = String(parsed.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function normalizeTime(value: string | null, fallback = ""): string {
+  if (!value?.includes("T")) return fallback
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return fallback
+  return parsed.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })
 }
 
 function normalizeSurgeryState(status: string | null): SurgeryState {
@@ -470,9 +495,9 @@ export function mapApiSurgeryRowToSurgery(
     institutionContactId: row.institutionId ?? undefined,
     institutionCity: existing?.institutionCity ?? "",
     procedure: row.description ?? existing?.procedure ?? "",
-    date: normalizeDate(row.surgeryDate, existing?.date ?? ""),
+    date: normalizeLocalDate(row.surgeryDate, existing?.date ?? ""),
     probableDate: normalizeDate(row.probableDate, existing?.probableDate ?? "") || undefined,
-    time: existing?.time ?? "",
+    time: normalizeTime(row.surgeryDate, existing?.time ?? ""),
     state: normalizedState,
     client: row.clientName ?? row.payerName ?? existing?.client ?? "—",
     clientContactId: row.payerContactId ?? undefined,
@@ -481,8 +506,11 @@ export function mapApiSurgeryRowToSurgery(
     preparationState: normalizePreparationState(row.prepStatus),
     facturado: existing?.facturado ?? false,
     autorizado: existing?.autorizado ?? normalizedState === "Autorizada",
-    urgente: existing?.urgente ?? false,
+    urgente: row.priority === "urgent",
     leyendaDestacada: existing?.leyendaDestacada ?? false,
+    materialAvailabilityDate: normalizeDate(row.materialAvailabilityDate) || undefined,
+    fechaEnvioMaterial: normalizeDate(row.materialShippingDate) || undefined,
+    materialTransport: row.materialTransport || undefined,
     referenciasAdministrativas: buildAdministrativeReferences(row, existing),
     coordinadorContactId: resolvedCoordinator?.contactId,
     coordinadorCx: resolvedCoordinator?.label || undefined,

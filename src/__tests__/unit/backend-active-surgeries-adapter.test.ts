@@ -101,7 +101,11 @@ describe("mapApiSurgeryListToSurgeries", () => {
     expect(surgeries[0].institution).toBe("Hospital Backend")
     expect(surgeries[0].state).toBe("Autorizada")
     expect(surgeries[0].preparationState).toBe("Congelado")
-    expect(surgeries[0].time).toBe("08:00")
+    expect(surgeries[0].time).toBe(new Date("2026-07-01T10:00:00.000Z").toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }))
     expect(surgeries[0].referenciasAdministrativas.some((reference) => reference.valor === "AUT-900")).toBe(true)
   })
 
@@ -132,6 +136,51 @@ describe("mapApiSurgeryListToSurgeries", () => {
 
     expect(surgeries[0].state).toBe("Realizada")
     expect(surgeries[0].backendCxStatus).toBe("performed")
+  })
+
+  it("hydrates canonical availability and urgency instead of shipping-derived local state", () => {
+    const [surgery] = mapApiSurgeryListToSurgeries([{
+      id: "db-surgery-canonical-management",
+      materialAvailabilityDate: "2026-07-25T00:00:00.000Z",
+      materialShippingDate: "2026-07-24T00:00:00.000Z",
+      materialTransport: "Logística Sur",
+      priority: "urgent",
+    }])
+
+    expect(surgery.materialAvailabilityDate).toBe("2026-07-25")
+    expect(surgery.fechaEnvioMaterial).toBe("2026-07-24")
+    expect(surgery.materialTransport).toBe("Logística Sur")
+    expect(surgery.urgente).toBe(true)
+  })
+
+  it("clears stale local shipping and transport when canonical backend values are null", () => {
+    const [surgery] = mapApiSurgeryListToSurgeries([{
+      id: "db-surgery-clear-logistics",
+      visibleNumber: "CX-0006",
+      materialShippingDate: null,
+      materialTransport: null,
+      priority: null,
+    }], [{
+      ...existingLocalSurgery,
+      fechaEnvioMaterial: "2026-07-24",
+      materialTransport: "Transporte anterior",
+      urgente: true,
+    }])
+
+    expect(surgery.fechaEnvioMaterial).toBeUndefined()
+    expect(surgery.materialTransport).toBeUndefined()
+    expect(surgery.urgente).toBe(false)
+  })
+
+  it("hydrates surgery date and time in the same local timezone across midnight", () => {
+    vi.stubEnv("TZ", "America/Argentina/Buenos_Aires")
+    const [surgery] = mapApiSurgeryListToSurgeries([{
+      id: "db-surgery-late",
+      surgeryDate: "2026-08-21T02:30:00.000Z",
+    }])
+
+    expect(surgery.date).toBe("2026-08-20")
+    expect(surgery.time).toBe("23:30")
   })
 
   it("falls back to backend id when visibleNumber collides so UI ids stay unique", () => {

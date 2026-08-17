@@ -152,6 +152,10 @@ export interface Surgery {
   localidad?: string
   leyendaDestacada: boolean
   fechaEnvioMaterial?: string
+  /** Canonical backend material availability date (YYYY-MM-DD). */
+  materialAvailabilityDate?: string
+  /** Canonical planned material transport for Coordination. */
+  materialTransport?: string
   referenciasAdministrativas: ReferenciaAdministrativa[]
   // CHATZAI-020: Contact references (transition — legacy text fields preserved)
   clientContactId?: string

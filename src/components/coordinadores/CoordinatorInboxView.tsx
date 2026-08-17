@@ -39,7 +39,7 @@ const COORDINATION_STATE_OPTIONS = SURGERY_STATE_OPTIONS
 import { getFacturacionStatus } from "@/lib/cirugias.utils"
 import { CX_STATE_COLORS } from "@/lib/shared-constants"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Building2, CalendarDays, ChevronDown, ClipboardList, MapPin, MessageSquarePlus, Share2, Stethoscope, TriangleAlert, Truck, UserCircle } from "lucide-react"
+import { Building2, CalendarDays, ChevronDown, ClipboardList, Loader2, MapPin, MessageSquarePlus, Share2, Stethoscope, TriangleAlert, Truck, UserCircle } from "lucide-react"
 import { useCoordinationView, type CoordinationViewController } from "@/hooks/useCoordinationView"
 import { CoordinationPreviewRoot } from "@/components/coordinadores/preview/CoordinationPreviewRoot"
 import { CoordinationStateSurface } from "@/components/coordinadores/CoordinationStateSurface"
@@ -596,6 +596,16 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
 
             </div>
           </CoordinationStateSurface>
+          {controller.hasMore ? (
+            <div className="flex flex-col items-center gap-1.5 py-1">
+              <Button type="button" variant="outline" className="min-h-11" disabled={controller.loadingMore} onClick={() => void controller.loadMore()}>
+                {controller.loadingMore ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                {controller.loadMoreError ? "Reintentar carga" : "Cargar 50 más"}
+              </Button>
+              <span className="text-xs text-slate-500">{controller.loadedCount} casos cargados</span>
+              {controller.loadMoreError ? <span role="alert" className="text-xs text-red-700">{controller.loadMoreError}</span> : null}
+            </div>
+          ) : null}
         </div>
       )}
 

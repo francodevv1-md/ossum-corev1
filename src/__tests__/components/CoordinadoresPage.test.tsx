@@ -76,6 +76,10 @@ describe("CoordinadoresPage CX operations adoption", () => {
     expect(source).toContain('useCoordinationView({ surface: "global" })')
     expect(source).toContain("deriveCoordinationUiState")
     expect(source).toContain('<CoordinationStateSurface state={coordinationState} surface="global"')
+    expect(source).toContain("controller.hasMore")
+    expect(source).toContain("controller.loadMore()")
+    expect(source).toContain("Cargar 50 más")
+    expect(source).toContain("Reintentar carga")
   })
 
   it("derives only the Coordination sidebar destination from current role", () => {

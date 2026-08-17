@@ -39,6 +39,7 @@ const SURGERY_MUTATION_ROLES = [
 const SURGERY_VISIBLE_NUMBER_PREFIX = "CX-";
 const SURGERY_VISIBLE_NUMBER_PADDING = 4;
 const CREATE_SURGERY_MAX_RETRIES = 3;
+const LARGE_OFFSET_THRESHOLD = 10_000;
 
 type ListSurgeriesOptions = {
   status?: string;
@@ -50,6 +51,7 @@ type ListSurgeriesOptions = {
   patientId?: string;
   doctorId?: string;
   institutionId?: string;
+  coordinatorContactId?: string;
   take?: number;
   skip?: number;
 };
@@ -110,6 +112,9 @@ function surgeryReadSelect(companyId: string) {
     probableDate: true,
     scheduledDate: true,
     surgeryDate: true,
+    materialAvailabilityDate: true,
+    materialShippingDate: true,
+    materialTransport: true,
     performedDate: true,
     cancelledDate: true,
     source: true,
@@ -215,6 +220,8 @@ type SurgeryAuditShape = Pick<
   | "probableDate"
   | "scheduledDate"
   | "surgeryDate"
+  | "materialShippingDate"
+  | "materialTransport"
   | "performedDate"
   | "cancelledDate"
   | "source"
@@ -308,6 +315,8 @@ function serializeSurgeryForAudit(surgery: SurgeryAuditShape | null) {
     probableDate: serializeDate(surgery.probableDate),
     scheduledDate: serializeDate(surgery.scheduledDate),
     surgeryDate: serializeDate(surgery.surgeryDate),
+    materialShippingDate: serializeDate(surgery.materialShippingDate),
+    materialTransport: surgery.materialTransport,
     performedDate: serializeDate(surgery.performedDate),
     cancelledDate: serializeDate(surgery.cancelledDate),
     source: surgery.source,
@@ -405,10 +414,8 @@ export async function listSurgeriesByCompany(
   options?: ListSurgeriesOptions
 ) {
   const scopedCompanyId = requireCompanyId(companyId);
-
-  const surgeries = await prisma.surgery.findMany({
-    select: surgeryReadSelect(scopedCompanyId),
-    where: {
+  const skip = options?.skip ?? 0;
+  const where: Prisma.SurgeryWhereInput = {
       companyId: scopedCompanyId,
       cxStatus: options?.cxStatus ?? options?.status,
       prepStatus: options?.prepStatus,
@@ -418,11 +425,52 @@ export async function listSurgeriesByCompany(
       patientId: options?.patientId,
       doctorId: options?.doctorId,
       institutionId: options?.institutionId,
+      contactAssignments: options?.coordinatorContactId
+        ? {
+            some: {
+              role: "coordinator",
+              contactId: options.coordinatorContactId,
+              contact: {
+                isActive: true,
+                isCompany: false,
+                companyLinks: {
+                  some: {
+                    companyId: scopedCompanyId,
+                    isActive: true,
+                    role: "coordinator",
+                  },
+                },
+              },
+            },
+            none: {
+              role: "coordinator",
+              contactId: { not: options.coordinatorContactId },
+              contact: {
+                isActive: true,
+                isCompany: false,
+                companyLinks: {
+                  some: {
+                    companyId: scopedCompanyId,
+                    isActive: true,
+                    role: "coordinator",
+                  },
+                },
+              },
+            },
+          }
+        : undefined,
       archivedAt: null,
-    },
-    orderBy: [{ surgeryDate: "desc" }, { createdAt: "desc" }],
-    take: options?.take ?? 50,
-    skip: options?.skip,
+  };
+  if (skip > LARGE_OFFSET_THRESHOLD && skip >= await prisma.surgery.count({ where })) {
+    return [];
+  }
+
+  const surgeries = await prisma.surgery.findMany({
+    select: surgeryReadSelect(scopedCompanyId),
+    where,
+    orderBy: [{ surgeryDate: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+    ...(options?.take !== undefined ? { take: options.take } : {}),
+    ...(options?.skip !== undefined ? { skip: options.skip } : {}),
   });
 
   return surgeries.map(serializeSurgeryCoordinatorReadModel);
@@ -797,6 +845,8 @@ export async function updateSurgery(
         probableDate: validatedData.probableDate,
         scheduledDate: validatedData.scheduledDate,
         surgeryDate: validatedData.surgeryDate,
+        materialShippingDate: validatedData.materialShippingDate,
+        materialTransport: validatedData.materialTransport,
         performedDate: validatedData.performedDate,
         cancelledDate: validatedData.cancelledDate,
         source: validatedData.source,

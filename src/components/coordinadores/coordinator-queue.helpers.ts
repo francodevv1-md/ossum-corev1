@@ -249,14 +249,11 @@ export function getSlaDisplayLabel(tone: SlaTone) {
 }
 
 export function getMaterialAvailability(surgery: Surgery, logistics?: LogisticsDetail, box?: Box) {
-  const candidates = [
-    logistics?.fechaEnvioMateriales,
-    surgery.fechaEnvioMaterial,
-    box?.preparedAt,
-    box?.sentAt,
-  ]
-
-  const match = candidates.find((candidate) => Boolean(parseDateSafe(candidate)))
+  void logistics
+  void box
+  const match = parseDateSafe(surgery.materialAvailabilityDate)
+    ? surgery.materialAvailabilityDate
+    : undefined
   const normalized = match?.split("T")[0]?.split(" ")[0]
 
   return {

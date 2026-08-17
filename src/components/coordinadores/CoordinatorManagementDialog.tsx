@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ import type { SeguimientoNotePriority } from "@/hooks/useSeguimientoFeed"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { emitOperationalNotification } from "@/lib/api/operational-notifications"
+import { updateBackendSurgeryManagement } from "@/lib/api/backend-surgeries"
 import { canMutateSeguimientoEvents } from "@/lib/permissions/seguimiento"
 import { useOrtoTrackStore } from "@/lib/store"
 import { formatDate } from "@/lib/formatters"
@@ -38,6 +39,13 @@ type ManagementFormState = {
 type CoordinatorDialogView = "gestion" | "seguimiento"
 type CoordinatorTrackingFilter = "todo" | "notas" | "archivos" | "fotos" | "autorizado" | "correo"
 type CoordinatorTrackingAction = "note" | "mail" | "image" | "auth"
+type PersistedManagementState = Pick<ManagementFormState, "surgeryDate" | "surgeryTime" | "shippingDate" | "transport" | "markCaseUrgent">
+type PendingOperationalChanges = {
+  surgeryDateChanged: boolean
+  urgencyChanged: boolean
+  previousSurgeryDate: string
+  previousSurgeryTime: string
+}
 
 interface CoordinatorManagementDialogProps {
   open: boolean
@@ -103,7 +111,8 @@ export function CoordinatorManagementDialog({
   const changeSurgeryDate = useOrtoTrackStore((state) => state.changeSurgeryDate)
   const updateSurgery = useOrtoTrackStore((state) => state.updateSurgery)
   const addAuditEvent = useOrtoTrackStore((state) => state.addAuditEvent)
-  const { addNote, addingNote } = useSeguimientoFeed(surgery?.id)
+  const backendSurgeryId = surgery?.backendId ?? surgery?.id
+  const { addNote, addingNote } = useSeguimientoFeed(backendSurgeryId)
 
   const [form, setForm] = useState<ManagementFormState>({
     surgeryDate: "",
@@ -122,6 +131,8 @@ export function CoordinatorManagementDialog({
   const [trackingActionKey, setTrackingActionKey] = useState(initialTrackingAction ? 1 : 0)
   const [trackingAddSheetKey, setTrackingAddSheetKey] = useState(0)
   const [saving, setSaving] = useState(false)
+  const persistedManagementRef = useRef<PersistedManagementState | null>(null)
+  const pendingOperationalChangesRef = useRef<PendingOperationalChanges | null>(null)
   const urgencyButtonRef = useCallback((node: HTMLButtonElement | null) => {
     if (node && open && initialManagementFocus === "urgency") node.focus()
   }, [initialManagementFocus, open])
@@ -135,7 +146,7 @@ export function CoordinatorManagementDialog({
       surgeryDate: surgery.date || "",
       surgeryTime: surgery.time || "",
       shippingDate: surgery.fechaEnvioMaterial || "",
-      transport: "",
+      transport: surgery.materialTransport || "",
       observation: "",
       internalNote: "",
       materialAvailabilityDate: materialAvailabilityDate || "",
@@ -147,6 +158,14 @@ export function CoordinatorManagementDialog({
     setTrackingAction(initialTrackingAction)
     setTrackingActionKey(initialTrackingAction ? 1 : 0)
     setTrackingAddSheetKey(0)
+    persistedManagementRef.current = {
+      surgeryDate: surgery.date || "",
+      surgeryTime: surgery.time || "",
+      shippingDate: surgery.fechaEnvioMaterial || "",
+      transport: surgery.materialTransport || "",
+      markCaseUrgent: Boolean(surgery.urgente),
+    }
+    pendingOperationalChangesRef.current = null
   }, [open, surgery, materialAvailabilityDate, initialView, initialTrackingAction, initialTrackingFilter])
 
   const isBusy = saving || addingNote
@@ -170,49 +189,110 @@ export function CoordinatorManagementDialog({
 
     try {
       const summary = buildStructuredSummary(form)
+      const persisted = persistedManagementRef.current ?? {
+        surgeryDate: surgery.date || "",
+        surgeryTime: surgery.time || "",
+        shippingDate: surgery.fechaEnvioMaterial || "",
+        transport: surgery.materialTransport || "",
+        markCaseUrgent: Boolean(surgery.urgente),
+      }
+      const surgeryDateChanged = form.surgeryDate !== persisted.surgeryDate || form.surgeryTime !== persisted.surgeryTime
+      const urgencyChanged = form.markCaseUrgent !== persisted.markCaseUrgent
+      const shippingChanged = form.shippingDate !== persisted.shippingDate
+      const transportChanged = form.transport.trim() !== persisted.transport
+      const backendManagementChanged = surgeryDateChanged || urgencyChanged || shippingChanged || transportChanged
 
-      const createdEntry = await addNote({
-        content: summary,
-        summary: `Gestión operativa · ${surgery.patient}`,
-        noteType: form.markCaseUrgent ? "urgente" : "coordinacion",
-        priority: form.notePriority,
-        highlighted: form.markCaseUrgent,
-      })
-
-      const surgeryDateChanged = form.surgeryDate !== (surgery.date || "") || form.surgeryTime !== (surgery.time || "")
-      const sourceEntityId = createdEntry?.id ?? (typeof crypto !== "undefined" ? crypto.randomUUID() : `${surgery.id}-${Date.now()}`)
-      if (surgeryDateChanged && form.surgeryDate) {
-        changeSurgeryDate(surgery.id, form.surgeryDate, form.surgeryTime || undefined)
-
-        if (activeCompany?.id) {
-          await emitOperationalNotification(activeCompany.id, surgery.id, {
-            sourceEntityId,
-            eventType: surgery.date ? "surgery_rescheduled" : "surgery_date_assigned",
-            scheduledDate: form.surgeryDate,
-            scheduledTime: form.surgeryTime || undefined,
-            previousScheduledDate: surgery.date || undefined,
-            previousScheduledTime: surgery.time || undefined,
-          })
+      if (backendManagementChanged && (!activeCompany?.id || !backendSurgeryId)) {
+        throw new Error("No se pudo identificar la cirugía activa")
+      }
+      if (activeCompany?.id && backendSurgeryId && backendManagementChanged) {
+        await updateBackendSurgeryManagement(activeCompany.id, backendSurgeryId, {
+          ...(surgeryDateChanged ? {
+            surgeryDate: form.surgeryDate
+              ? new Date(`${form.surgeryDate}T${form.surgeryTime || "00:00"}:00`).toISOString()
+              : null,
+          } : {}),
+          ...(urgencyChanged ? { priority: form.markCaseUrgent ? "urgent" : "normal" } : {}),
+          ...(shippingChanged ? { materialShippingDate: form.shippingDate || null } : {}),
+          ...(transportChanged ? { materialTransport: form.transport.trim() || null } : {}),
+        })
+        persistedManagementRef.current = {
+          surgeryDate: form.surgeryDate,
+          surgeryTime: form.surgeryTime,
+          shippingDate: form.shippingDate,
+          transport: form.transport.trim(),
+          markCaseUrgent: form.markCaseUrgent,
+        }
+        pendingOperationalChangesRef.current = {
+          surgeryDateChanged,
+          urgencyChanged,
+          previousSurgeryDate: persisted.surgeryDate,
+          previousSurgeryTime: persisted.surgeryTime,
         }
       }
 
-      if (form.shippingDate !== (surgery.fechaEnvioMaterial || "")) {
-        updateSurgery(surgery.id, { fechaEnvioMaterial: form.shippingDate || undefined })
+      if (surgeryDateChanged) {
+        changeSurgeryDate(surgery.id, form.surgeryDate, form.surgeryTime || undefined)
+      }
+      if (urgencyChanged) {
+        updateSurgery(surgery.id, { urgente: form.markCaseUrgent })
+      }
+      if (shippingChanged || transportChanged) {
+        updateSurgery(surgery.id, {
+          ...(shippingChanged ? { fechaEnvioMaterial: form.shippingDate || undefined } : {}),
+          ...(transportChanged ? { materialTransport: form.transport.trim() || undefined } : {}),
+        })
       }
 
-      if (form.markCaseUrgent !== Boolean(surgery.urgente)) {
-        updateSurgery(surgery.id, { urgente: form.markCaseUrgent })
+      let createdEntry
+      try {
+        createdEntry = await addNote({
+          content: summary,
+          summary: `Gestión operativa · ${surgery.patient}`,
+          noteType: form.markCaseUrgent ? "urgente" : "coordinacion",
+          priority: form.notePriority,
+          highlighted: form.markCaseUrgent,
+        })
+      } catch (error) {
+        if (backendManagementChanged || pendingOperationalChangesRef.current) {
+          toast.warning("Los cambios operativos quedaron guardados; Seguimiento quedó pendiente. Reintentá Guardar para completarlo.")
+        } else {
+          toast.error(error instanceof Error ? error.message : "No se pudo registrar la gestión en Seguimiento")
+        }
+        return
+      }
 
-        if (form.markCaseUrgent && activeCompany?.id) {
-          await emitOperationalNotification(activeCompany.id, surgery.id, {
+      const sourceEntityId = createdEntry?.id ?? (typeof crypto !== "undefined" ? crypto.randomUUID() : `${surgery.id}-${Date.now()}`)
+      const operationalChanges = pendingOperationalChangesRef.current
+      let notificationFailed = false
+      try {
+        if (operationalChanges?.surgeryDateChanged && activeCompany?.id && backendSurgeryId && form.surgeryDate) {
+          await emitOperationalNotification(activeCompany.id, backendSurgeryId, {
+            sourceEntityId,
+            eventType: operationalChanges.previousSurgeryDate ? "surgery_rescheduled" : "surgery_date_assigned",
+            scheduledDate: form.surgeryDate,
+            scheduledTime: form.surgeryTime || undefined,
+            previousScheduledDate: operationalChanges.previousSurgeryDate || undefined,
+            previousScheduledTime: operationalChanges.previousSurgeryTime || undefined,
+          })
+        }
+        if (operationalChanges?.urgencyChanged && form.markCaseUrgent && activeCompany?.id && backendSurgeryId) {
+          await emitOperationalNotification(activeCompany.id, backendSurgeryId, {
             sourceEntityId,
             eventType: "surgery_marked_urgent",
           })
         }
+      } catch {
+        notificationFailed = true
       }
+      pendingOperationalChangesRef.current = null
 
       addAuditEvent(surgery.id, "Gestión coordinador", "Gestión operativa registrada en seguimiento")
-      toast.success("Gestión operativa guardada")
+      if (notificationFailed) {
+        toast.warning("Gestión guardada; no se pudo emitir una notificación operativa.")
+      } else {
+        toast.success("Gestión operativa guardada")
+      }
       setTrackingFilter("notas")
       setTrackingAction("note")
       setTrackingActionKey((prev) => prev + 1)
@@ -305,7 +385,7 @@ export function CoordinatorManagementDialog({
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="coord-transport" className="text-xs">Transporte</Label>
-                    <Input id="coord-transport" value={form.transport} onChange={(event) => updateField("transport", event.target.value)} placeholder="Mensajería, retiro por clínica, correo…" className="h-9 text-xs" />
+                    <Input id="coord-transport" maxLength={200} value={form.transport} onChange={(event) => updateField("transport", event.target.value)} placeholder="Mensajería, retiro por clínica, correo…" className="h-9 text-xs" />
                   </div>
                 </div>
               </fieldset>

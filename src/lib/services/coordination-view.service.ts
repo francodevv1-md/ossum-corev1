@@ -61,6 +61,9 @@ function mapCoordinationSurgery(surgery: CoordinationSurgeryRead) {
     probableDate: surgery.probableDate,
     scheduledDate: surgery.scheduledDate,
     surgeryDate: surgery.surgeryDate,
+    materialAvailabilityDate: surgery.materialAvailabilityDate,
+    materialShippingDate: surgery.materialShippingDate,
+    materialTransport: surgery.materialTransport,
     performedDate: surgery.performedDate,
     cancelledDate: surgery.cancelledDate,
     source: surgery.source,
@@ -95,7 +98,30 @@ export type CoordinationViewResponse = {
   };
   previewCapability?: CoordinationPreviewCapability;
   surgeries: CoordinationSurgeryRow[];
+  pagination?: { take: number; skip: number; hasMore: boolean };
 };
+
+async function readCoordinationPage(input: {
+  prisma: PrismaClient;
+  companyId: string;
+  take: number;
+  skip: number;
+  coordinatorContactId?: string;
+}) {
+  const rows = await listSurgeriesByCompany(input.prisma, input.companyId, {
+    coordinatorContactId: input.coordinatorContactId,
+    take: input.take + 1,
+    skip: input.skip,
+  });
+  return {
+    rows: rows.slice(0, input.take),
+    pagination: {
+      take: input.take,
+      skip: input.skip,
+      hasMore: rows.length > input.take,
+    },
+  };
+}
 
 function actorLabel(ctx: ApiAuthContext): string {
   return [ctx.user.firstName, ctx.user.lastName]
@@ -137,6 +163,8 @@ export async function getCoordinationView(input: {
     throw forbidden("Acceso a empresa denegado", "company_access_denied");
   }
   const actor = { userId: ctx.actorUserId, label: actorLabel(ctx) };
+  const take = request.take ?? 50;
+  const skip = request.skip ?? 0;
 
   if (request.mode === "production") {
     if (request.surface === "global") {
@@ -146,6 +174,12 @@ export async function getCoordinationView(input: {
           "coordination_global_access_denied"
         );
       }
+      const page = await readCoordinationPage({
+        prisma,
+        companyId: ctx.companyId,
+        take,
+        skip,
+      });
       return {
         context: {
           mode: "production",
@@ -156,9 +190,10 @@ export async function getCoordinationView(input: {
           viewSubject: null,
         },
         surgeries: mapCoordinationSurgeries(
-          await listSurgeriesByCompany(prisma, ctx.companyId),
+          page.rows,
           ctx.companyId
         ),
+        pagination: page.pagination,
       };
     }
 
@@ -178,10 +213,17 @@ export async function getCoordinationView(input: {
           viewSubject: null,
         },
         surgeries: [],
+        pagination: { take, skip, hasMore: false },
       };
     }
 
-    const surgeries = await listSurgeriesByCompany(prisma, ctx.companyId);
+    const page = await readCoordinationPage({
+      prisma,
+      companyId: ctx.companyId,
+      take,
+      skip,
+      coordinatorContactId: personalResolution.subject.contactId,
+    });
     return {
       context: {
         mode: "production",
@@ -193,12 +235,13 @@ export async function getCoordinationView(input: {
       },
       surgeries: mapCoordinationSurgeries(
         filterPersonalSurgeries(
-          surgeries,
+          page.rows,
           ctx.companyId,
           personalResolution.subject.contactId
         ),
         ctx.companyId
       ),
+      pagination: page.pagination,
     };
   }
 
@@ -210,7 +253,12 @@ export async function getCoordinationView(input: {
   });
 
   if (request.surface === "global") {
-    const surgeries = await listSurgeriesByCompany(prisma, ctx.companyId);
+    const page = await readCoordinationPage({
+      prisma,
+      companyId: ctx.companyId,
+      take,
+      skip,
+    });
     return {
       context: {
         mode: "dev-preview",
@@ -221,12 +269,19 @@ export async function getCoordinationView(input: {
         viewSubject: null,
       },
       previewCapability,
-      surgeries: mapCoordinationSurgeries(surgeries, ctx.companyId),
+      surgeries: mapCoordinationSurgeries(page.rows, ctx.companyId),
+      pagination: page.pagination,
     };
   }
 
   const viewSubject = requirePreviewTarget(previewCapability, request.subjectContactId);
-  const surgeries = await listSurgeriesByCompany(prisma, ctx.companyId);
+  const page = await readCoordinationPage({
+    prisma,
+    companyId: ctx.companyId,
+    take,
+    skip,
+    coordinatorContactId: viewSubject.contactId,
+  });
   return {
     context: {
       mode: "dev-preview",
@@ -239,11 +294,12 @@ export async function getCoordinationView(input: {
     previewCapability,
     surgeries: mapCoordinationSurgeries(
       filterPersonalSurgeries(
-        surgeries,
+        page.rows,
         ctx.companyId,
         viewSubject.contactId
       ),
       ctx.companyId
     ),
+    pagination: page.pagination,
   };
 }
