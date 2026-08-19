@@ -1,41 +1,37 @@
 "use client"
 
 import type { ChangeEvent, DragEvent, KeyboardEvent } from "react"
-import { useCallback, useMemo, useRef, useState } from "react"
-import { AlertCircle, FileUp, Loader2, UploadCloud } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { AlertCircle, FileText, FileUp, Sparkles, UploadCloud } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+
+const OCR_STEPS = [
+  "Subiendo archivo…",
+  "Leyendo documento con Azure OCR…",
+  "Extrayendo texto y tablas…",
+  "Analizando con IA…",
+  "Organizando datos detectados…",
+] as const
+
+const STEP_INTERVAL_MS = 2200
 
 const ACCEPTED_MIME_TYPES = [
   "application/pdf",
   "image/jpeg",
   "image/png",
-  "image/webp",
   "image/bmp",
 ] as const
 
-const ACCEPTED_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.webp,.bmp"
-const MAX_FILE_SIZE_MB = 20
+const ACCEPTED_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.bmp"
+const MAX_FILE_SIZE_MB = 4
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 export type AiUploadZoneProps = {
   isProcessing?: boolean
   error?: string | null
   onFileSelected: (file: File) => void | Promise<void>
-}
-
-function formatSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  }
-
-  return `${bytes} B`
 }
 
 export function AiUploadZone({
@@ -47,11 +43,22 @@ export function AiUploadZone({
   const [localError, setLocalError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null)
+  const [stepIdx, setStepIdx] = useState(0)
 
   const displayError = error || localError
 
+  // Rotate status messages while processing. setState is inside the interval
+  // callback, not the effect body — safe under react-hooks/set-state-in-effect.
+  useEffect(() => {
+    if (!isProcessing) return
+    const id = setInterval(() => {
+      setStepIdx((prev) => (prev + 1) % OCR_STEPS.length)
+    }, STEP_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [isProcessing])
+
   const acceptedMimeTypesText = useMemo(
-    () => "PDF, JPG, JPEG, PNG, WebP o BMP",
+    () => "PDF, JPG, JPEG, PNG o BMP",
     []
   )
 
@@ -78,6 +85,7 @@ export function AiUploadZone({
 
       setLocalError(null)
       setSelectedFileName(file.name)
+      setStepIdx(0)
 
       try {
         await onFileSelected(file)
@@ -131,26 +139,7 @@ export function AiUploadZone({
   }, [])
 
   return (
-    <div className="rounded-md border border-border/70 bg-background/80 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold">Cargar autorización</p>
-          <p className="text-xs text-muted-foreground">
-          Subí un documento de autorización para extraer datos con IA (OpenAI).
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => inputRef.current?.click()}
-          disabled={isProcessing}
-        >
-          Seleccionar archivo
-        </Button>
-      </div>
-
-      <div className="mt-3 space-y-3">
+    <div className="space-y-3">
         <input
           ref={inputRef}
           type="file"
@@ -162,7 +151,8 @@ export function AiUploadZone({
 
         <div
           role="button"
-          tabIndex={0}
+          tabIndex={isProcessing ? -1 : 0}
+          aria-disabled={isProcessing}
           onClick={() => {
             if (!isProcessing) inputRef.current?.click()
           }}
@@ -176,7 +166,7 @@ export function AiUploadZone({
             }
           }}
           className={cn(
-            "flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-4 py-5 text-center transition-colors",
+            "flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed bg-background px-4 py-5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             isDragging && !isProcessing
               ? "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/20"
               : "border-muted-foreground/25 bg-muted/10 hover:bg-muted/20",
@@ -185,10 +175,46 @@ export function AiUploadZone({
         >
           {isProcessing ? (
             <>
-              <Loader2 className="mb-2 size-6 animate-spin text-emerald-600" />
-              <p className="text-sm font-medium">Procesando con IA…</p>
+              {/* Document icon with scan line + AI sparkle */}
+              <div className="relative mb-3 flex items-center justify-center">
+                <div className="relative">
+                  <FileText className="size-10 text-muted-foreground/40" />
+                  <div className="absolute inset-0 overflow-hidden rounded">
+                    <div className="ocr-scan-line absolute inset-x-0 top-0 h-0.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]" />
+                  </div>
+                  <Sparkles className="ocr-ai-pulse absolute -right-1.5 -top-1.5 size-4 text-emerald-500" />
+                </div>
+              </div>
+
+              {/* Rotating status message */}
+              <p
+                key={stepIdx}
+                className="text-sm font-medium transition-opacity duration-300"
+                style={{ animation: "ocr-fade-in 0.3s ease-out" }}
+              >
+                {OCR_STEPS[stepIdx]}
+              </p>
+
+              {/* Progress bar (perceived progress, CSS-driven) */}
+              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className="ocr-progress-bar h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400" />
+              </div>
+
+              {/* Step dots */}
+              <div className="mt-2.5 flex items-center justify-center gap-1.5">
+                {OCR_STEPS.map((_, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full transition-colors duration-300",
+                      i <= stepIdx ? "bg-emerald-500" : "bg-muted-foreground/20"
+                    )}
+                  />
+                ))}
+              </div>
+
               <p className="mt-1 text-xs text-muted-foreground">
-                Esto puede tardar unos segundos.
+                Paso {stepIdx + 1} de {OCR_STEPS.length} · Esto puede tardar unos segundos.
               </p>
             </>
           ) : (
@@ -199,23 +225,18 @@ export function AiUploadZone({
                 <UploadCloud className="mb-2 size-6 text-muted-foreground" />
               )}
               <p className="text-sm font-medium">
-                Arrastrá un archivo acá o hacé click para seleccionarlo
+                 Arrastrá el archivo acá o hacé click para elegirlo
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {acceptedMimeTypesText} · Máximo {MAX_FILE_SIZE_MB} MB
               </p>
               {selectedFileName && (
                 <p className="mt-3 text-xs text-foreground">
-                  Último archivo seleccionado: <span className="font-medium">{selectedFileName}</span>
+                  <span className="font-medium">{selectedFileName}</span>
                 </p>
               )}
             </>
           )}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-          <span>Formatos soportados: {acceptedMimeTypesText}</span>
-          <span>Tamaño máximo: {formatSize(MAX_FILE_SIZE_BYTES)}</span>
         </div>
 
         {displayError && (
@@ -225,8 +246,6 @@ export function AiUploadZone({
             <AlertDescription>{displayError}</AlertDescription>
           </Alert>
         )}
-
-      </div>
     </div>
   )
 }

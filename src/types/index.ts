@@ -729,16 +729,59 @@ export interface OrdenPago {
   observaciones?: string
 }
 
+/** Línea de una factura de compra. */
+export interface FacturaCompraItem {
+  name: string
+  code: string
+  quantity: number
+  unitPrice: number
+  subtotal: number
+  /** ID del StockItem en catálogo si se matcheó. */
+  stockItemId?: string
+}
+
 export interface FacturaCompra {
   id: string
   proveedorId: string
   proveedorName: string
   number: string
   date: string
-  items: { name: string; code: string; quantity: number; unitPrice: number; subtotal: number }[]
+  items: FacturaCompraItem[]
   total: number
   state: "Pendiente" | "Pagada" | "Anulada"
   ordenCompraId?: string
+}
+
+/** Línea de un remito de proveedor (mercadería recibida). */
+export interface RemitoProveedorItem {
+  name: string
+  code: string
+  quantity: number
+  /** Cantidad recibida efectivamente; por defecto igual a quantity. */
+  received?: number
+  /** Lote / serie reportado por el proveedor, si trae trazabilidad. */
+  lot?: string
+  /** Vencimiento reportado por el proveedor (YYYY-MM-DD), si aplica. */
+  expiry?: string
+  /** ID del StockItem en catálogo si se matcheó, sino vacío/artículo libre. */
+  stockItemId?: string
+}
+
+export type RemitoProveedorState = "Pendiente" | "Recibido" | "Verificado" | "Anulado"
+
+/** Remito de proveedor: documento de ingreso de mercadería por compra. */
+export interface RemitoProveedor {
+  id: string
+  proveedorId: string
+  proveedorName: string
+  number: string
+  date: string
+  items: RemitoProveedorItem[]
+  state: RemitoProveedorState
+  ordenCompraId?: string
+  facturaCompraId?: string
+  remitoEntradaRef?: string
+  observaciones?: string
 }
 
 export interface ForecastItem {

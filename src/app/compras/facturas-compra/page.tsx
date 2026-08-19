@@ -8,7 +8,6 @@ import {
   SurgeryDrawer,
 } from "@/components/shared"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -27,10 +26,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 import {
   Receipt, Clock, CheckCircle2, DollarSign,
   Eye, MoreHorizontal, FileText, CreditCard,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Sparkles,
 } from "lucide-react"
 
 const STATE_OPTIONS = [
@@ -42,6 +42,7 @@ const STATE_OPTIONS = [
 
 export default function FacturasCompraPage() {
   const store = useOrtoTrackStore()
+  const router = useRouter()
 
   const [search, setSearch] = useState("")
   const [stateFilter, setStateFilter] = useState("")
@@ -149,6 +150,10 @@ export default function FacturasCompraPage() {
           <h1 className="text-xl font-bold">Facturas de Compra</h1>
           <p className="text-sm text-muted-foreground">Facturas recibidas de proveedores</p>
         </div>
+        <Button onClick={() => router.push("/compras/facturas-compra/nueva")} className="gap-2">
+          <Sparkles className="size-4" />
+          Cargar comprobante
+        </Button>
       </div>
 
       {/* Stats */}

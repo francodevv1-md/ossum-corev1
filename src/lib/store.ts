@@ -6,7 +6,7 @@ import type {
   SurgeryDocumentChecklist, Instrumentador, InstrumentadorSurgery,
   MaterialTransito, ExpiryItem, ClassificationConfig, TraceEntry,
   NotaCredito, NotaDebito, Proveedor, NecesidadCompra,
-  OrdenCompra, MovimientoCompra, OrdenPago, FacturaCompra,
+  OrdenCompra, MovimientoCompra, OrdenPago, FacturaCompra, RemitoProveedor,
   ForecastItem, EvaluacionProveedor,
   SurgeryState, PreparationState, LogisticsState, DocumentStatus,
   FacturaVentaData, DiferenciaFactura, BaseFacturacion, PresupuestoItem,
@@ -40,6 +40,7 @@ import { mockOrdenesCompra } from "@/data/mock-ordenes-compra"
 import { mockMovimientosCompra } from "@/data/mock-movimientos-compra"
 import { mockOrdenesPago } from "@/data/mock-ordenes-pago"
 import { mockFacturasCompra } from "@/data/mock-facturas-compra"
+import { mockRemitosProveedor } from "@/data/mock-remitos-proveedor"
 import { mockForecast } from "@/data/mock-forecast"
 import { mockEvaluacionesProveedor } from "@/data/mock-evaluaciones-proveedor"
 import { mockContactos } from "@/data/mock-contactos"
@@ -93,6 +94,7 @@ interface OrtoTrackState {
   movimientosCompra: MovimientoCompra[]
   ordenesPago: OrdenPago[]
   facturasCompra: FacturaCompra[]
+  remitosProveedor: RemitoProveedor[]
   forecast: ForecastItem[]
   evaluacionesProveedor: EvaluacionProveedor[]
   contactos: Contacto[]
@@ -187,7 +189,11 @@ interface OrtoTrackState {
   createProveedor: (data: Omit<Proveedor, "id">) => Proveedor
   createOrdenPago: (data: Omit<OrdenPago, "id">) => OrdenPago
   createFacturaCompra: (data: Omit<FacturaCompra, "id">) => FacturaCompra
+  createRemitoProveedor: (data: Omit<RemitoProveedor, "id">) => RemitoProveedor
   createEvaluacionProveedor: (data: Omit<EvaluacionProveedor, "id">) => EvaluacionProveedor
+
+  // Stock Actions
+  createStockItem: (data: Omit<StockItem, "id">) => StockItem
 
   // ===== GETTERS =====
   getSurgeryById: (id: string) => Surgery | undefined
@@ -297,6 +303,7 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
       movimientosCompra: mockMovimientosCompra,
       ordenesPago: mockOrdenesPago,
       facturasCompra: mockFacturasCompra,
+      remitosProveedor: mockRemitosProveedor,
       forecast: mockForecast,
       evaluacionesProveedor: mockEvaluacionesProveedor,
       contactos: mockContactos,
@@ -1013,10 +1020,23 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
         return fc
       },
 
+      createRemitoProveedor: (data) => {
+        const rp: RemitoProveedor = { ...data, id: generateId("RP") }
+        set((s) => ({ remitosProveedor: [...s.remitosProveedor, rp] }))
+        return rp
+      },
+
       createEvaluacionProveedor: (data) => {
         const ev: EvaluacionProveedor = { ...data, id: generateId("EVA") }
         set((s) => ({ evaluacionesProveedor: [...s.evaluacionesProveedor, ev] }))
         return ev
+      },
+
+      // ===== STOCK ACTIONS =====
+      createStockItem: (data) => {
+        const item: StockItem = { ...data, id: generateId("STK") }
+        set((s) => ({ stock: [...s.stock, item] }))
+        return item
       },
 
       // ===== GETTERS =====

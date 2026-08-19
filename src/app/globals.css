@@ -3,6 +3,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Exclude docs/specs from Tailwind v4 automatic content detection.
+   Markdown code spans in knowledge/ contain class-like strings (e.g.
+   bg-[var(--op-[alert]-bg)]) that produce invalid CSS when generated. */
+@source not "../../knowledge";
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -90,6 +95,35 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* OSSUM Operational semantic tokens — coordinadores workspace + operational surfaces.
+     Light variant. Built on the --ossum-* brand layer. */
+  --op-app: #f7f8fa;
+  --op-surface: #ffffff;
+  --op-secondary: #f1f3f6;
+  --op-hover: #e9ecf1;
+  --op-border-default: var(--ossum-line);
+  --op-border-subtle: #eef0f3;
+  --op-text-primary: var(--ossum-navy-soft);
+  --op-text-secondary: #4a5568;
+  --op-text-muted: #6b7280;
+  --op-text-disabled: #9ca3af;
+  --op-text-inverse: #ffffff;
+  --op-primary: var(--ossum-action);
+  --op-primary-hover: var(--ossum-action-hover);
+  --op-primary-highlight: #2b3fd6;
+  --op-danger: var(--ossum-danger);
+  --op-danger-bg: #fdeceb;
+  --op-danger-border: #f5c2bf;
+  --op-success: #15803d;
+  --op-success-bg: #ecfdf3;
+  --op-success-border: #bbf7d0;
+  --op-warning: #b45309;
+  --op-warning-bg: #fffbeb;
+  --op-warning-border: #fde68a;
+  --op-info: #1d6fb8;
+  --op-info-bg: #e8f1fb;
+  --op-info-border: #bfdbfe;
 }
 
 .dark {
@@ -125,6 +159,35 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* OSSUM Operational semantic tokens — dark variant ("OSSUM Dark Operational").
+     Deep navy surfaces, lifted text, brightened action/semantic accents. */
+  --op-app: var(--ossum-navy);
+  --op-surface: var(--ossum-navy-soft);
+  --op-secondary: #0a1d3a;
+  --op-hover: #142b52;
+  --op-border-default: #1f3a63;
+  --op-border-subtle: #16305a;
+  --op-text-primary: #f1f3f6;
+  --op-text-secondary: #aab4c5;
+  --op-text-muted: #7c899e;
+  --op-text-disabled: #4b5a73;
+  --op-text-inverse: var(--ossum-navy-soft);
+  --op-primary: #3b5bff;
+  --op-primary-hover: #5070ff;
+  --op-primary-highlight: #6b86ff;
+  --op-danger: #ff6b6b;
+  --op-danger-bg: rgba(208, 47, 40, 0.16);
+  --op-danger-border: rgba(255, 107, 107, 0.35);
+  --op-success: #4ade80;
+  --op-success-bg: rgba(21, 128, 61, 0.18);
+  --op-success-border: rgba(74, 222, 128, 0.35);
+  --op-warning: #fbbf24;
+  --op-warning-bg: rgba(180, 83, 9, 0.18);
+  --op-warning-border: rgba(251, 191, 36, 0.35);
+  --op-info: #60a5fa;
+  --op-info-bg: rgba(29, 111, 184, 0.18);
+  --op-info-border: rgba(96, 165, 250, 0.35);
 }
 
 @layer base {
@@ -134,4 +197,89 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@layer components {
+  /* Operational text utilities — semantic color shortcuts over --op-text-*. */
+  .op-text-primary { color: var(--op-text-primary); }
+  .op-text-secondary { color: var(--op-text-secondary); }
+  .op-text-muted { color: var(--op-text-muted); }
+
+  /* Operational situation pills — combine bg + border-color + text tone.
+     Pair with a `border` utility when a visible border is desired. */
+  .op-sit-danger {
+    background-color: var(--op-danger-bg);
+    border-color: var(--op-danger-border);
+    color: var(--op-danger);
+  }
+  .op-sit-warning {
+    background-color: var(--op-warning-bg);
+    border-color: var(--op-warning-border);
+    color: var(--op-warning);
+  }
+  .op-sit-info {
+    background-color: var(--op-info-bg);
+    border-color: var(--op-info-border);
+    color: var(--op-info);
+  }
+  .op-sit-success {
+    background-color: var(--op-success-bg);
+    border-color: var(--op-success-border);
+    color: var(--op-success);
+  }
+
+  /* Operational indicator dots — background only (applied to sized rounded elements). */
+  .op-dot-danger { background-color: var(--op-danger); }
+  .op-dot-warning { background-color: var(--op-warning); }
+  .op-dot-info { background-color: var(--op-info); }
+  .op-dot-success { background-color: var(--op-success); }
+  .op-dot-muted { background-color: var(--op-text-muted); }
+
+  /* Operational selected list item — subtle highlight. */
+  .op-selected {
+    background-color: var(--op-hover);
+  }
+}
+
+/* ─── OCR processing animations ─────────────────────────────────── */
+
+/* Perceived progress bar — fast start, slow approach to 90%. */
+@keyframes ocr-progress {
+  0%   { width: 0%; }
+  10%  { width: 18%; }
+  25%  { width: 35%; }
+  45%  { width: 52%; }
+  65%  { width: 65%; }
+  80%  { width: 76%; }
+  95%  { width: 85%; }
+  100% { width: 90%; }
+}
+.ocr-progress-bar {
+  animation: ocr-progress 7s ease-out forwards;
+}
+
+/* Scan line moving vertically over the document icon. */
+@keyframes ocr-scan {
+  0%   { transform: translateY(0); opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { transform: translateY(36px); opacity: 0; }
+}
+.ocr-scan-line {
+  animation: ocr-scan 1.8s ease-in-out infinite;
+}
+
+/* Gentle pulse for the AI sparkle badge. */
+@keyframes ocr-ai-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+.ocr-ai-pulse {
+  animation: ocr-ai-pulse 1.4s ease-in-out infinite;
+}
+
+/* Fade-in for rotating status messages. */
+@keyframes ocr-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
