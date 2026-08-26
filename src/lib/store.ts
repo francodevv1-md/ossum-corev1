@@ -40,7 +40,6 @@ import { mockOrdenesCompra } from "@/data/mock-ordenes-compra"
 import { mockMovimientosCompra } from "@/data/mock-movimientos-compra"
 import { mockOrdenesPago } from "@/data/mock-ordenes-pago"
 import { mockFacturasCompra } from "@/data/mock-facturas-compra"
-import { mockRemitosProveedor } from "@/data/mock-remitos-proveedor"
 import { mockForecast } from "@/data/mock-forecast"
 import { mockEvaluacionesProveedor } from "@/data/mock-evaluaciones-proveedor"
 import { mockContactos } from "@/data/mock-contactos"
@@ -53,6 +52,12 @@ import {
 } from "@/lib/contact-code"
 import { normalizeAccents } from "@/lib/utils"
 import { formatCurrency } from "@/lib/formatters"
+
+const LEGACY_DEMO_SUPPLIER_RECEIPT_IDS = new Set(["RP-0001", "RP-0002", "RP-0003"])
+
+export function removeLegacyDemoSupplierRemittances(remitos: RemitoProveedor[]) {
+  return remitos.filter((remito) => !LEGACY_DEMO_SUPPLIER_RECEIPT_IDS.has(remito.id))
+}
 import { getResumenCobranzaBySurgeryId } from "@/lib/cobros.utils"
 import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
 
@@ -303,7 +308,7 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
       movimientosCompra: mockMovimientosCompra,
       ordenesPago: mockOrdenesPago,
       facturasCompra: mockFacturasCompra,
-      remitosProveedor: mockRemitosProveedor,
+      remitosProveedor: [],
       forecast: mockForecast,
       evaluacionesProveedor: mockEvaluacionesProveedor,
       contactos: mockContactos,
@@ -1398,6 +1403,15 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
     }),
     {
       name: "ortotrack-v2-storage",
+      version: 1,
+      migrate: (persistedState, version) => {
+        if (version >= 1 || !persistedState || typeof persistedState !== "object") return persistedState as OrtoTrackState
+        const state = persistedState as Partial<OrtoTrackState>
+        return {
+          ...state,
+          remitosProveedor: removeLegacyDemoSupplierRemittances(Array.isArray(state.remitosProveedor) ? state.remitosProveedor : []),
+        } as OrtoTrackState
+      },
       storage: createJSONStorage(() => {
         if (typeof window === "undefined") {
           // SSR-safe: return no-op storage on the server
