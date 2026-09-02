@@ -1,479 +1,294 @@
 "use client"
 
 import Link from "next/link"
-import React, { useState, useMemo } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
-import { formatCurrency, formatDate } from "@/lib/formatters"
-import {
-  MEDIO_COBRO_LABELS,
-  ESTADO_COBRO_LABELS,
-  ESTADO_COBRO_COLORS,
-  ESTADO_COBRANZA_LABELS,
-  ESTADO_COBRANZA_COLORS,
-  ESTADO_COBRO_BADGE_VARIANT,
-  ESTADO_COBRANZA_BADGE_VARIANT,
-} from "@/lib/cobros.constants"
-import {
-  getSaldoPendienteFactura,
-  getTotalCobradoFactura,
-  getImporteImputadoCobro,
-  getImporteNoImputadoCobro,
-  getEstadoCobro,
-  getEstadoCobranzaFactura,
-  getVencimientoFV,
-  isFacturaVencida,
-} from "@/lib/cobros.utils"
-import {
-  StatsCard, StateBadge, SearchInput, FilterSelect,
-  SurgeryDrawer,
-} from "@/components/shared"
-import { CobroFormDialog, ImputarSaldoDialog } from "@/components/cobros/CobroFormDialog"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useExpedienteDrawer } from "@/components/layout/app-shell"
+import { useMemo, useState } from "react"
+import { AlertCircle, Banknote, CreditCard, FileText, FolderOpen, Info, ReceiptText, Undo2 } from "lucide-react"
 import { toast } from "sonner"
+
+import { CobroFormDialog } from "@/components/cobros/CobroFormDialog"
+import { useExpedienteDrawer } from "@/components/layout/app-shell"
+import { StateBadge, StatsCard, SurgeryDrawer } from "@/components/shared"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
-  Banknote, Eye, MoreHorizontal, Plus, DollarSign,
-  Clock, CheckCircle2, FolderOpen, CreditCard,
-  AlertCircle, FileText, ArrowRightLeft,
-  TrendingDown, CircleDollarSign, AlertTriangle,
-} from "lucide-react"
-import type { Comprobante, CobroV2 } from "@/types"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useInvoices } from "@/hooks/useInvoices"
+import { usePayments } from "@/hooks/usePayments"
+import type { InvoiceApiRow } from "@/lib/api/invoices"
+import type { CreateInvoicePaymentPayload, PaymentApiRow } from "@/lib/api/payments"
+import { formatDecimalCurrency, parseDecimalScale4 } from "@/lib/decimal-money"
+import { formatDate } from "@/lib/formatters"
+
+const METHOD_LABELS: Record<string, string> = {
+  transfer: "Transferencia",
+  cash: "Efectivo",
+  check: "Cheque",
+  other: "Otro",
+}
+
+function invoiceNumber(invoice: InvoiceApiRow) {
+  return invoice.visibleNumber == null ? `Factura backend ${invoice.id}` : `FV ${invoice.visibleNumber}`
+}
+
+function metadataValue(metadata: unknown, key: "reference" | "notes") {
+  if (!metadata || typeof metadata !== "object") return ""
+  const value = (metadata as Record<string, unknown>)[key]
+  return typeof value === "string" ? value : ""
+}
 
 export default function CobrosPage() {
-  const store = useOrtoTrackStore()
+  const invoicesApi = useInvoices()
+  const paymentsApi = usePayments()
   const { openExpediente } = useExpedienteDrawer()
+  const [activeTab, setActiveTab] = useState("outstanding")
+  const [invoiceSelection, setInvoiceSelection] = useState<{ companyId: string; invoice: InvoiceApiRow } | null>(null)
+  const [paymentSelection, setPaymentSelection] = useState<{ companyId: string; payment: PaymentApiRow } | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const selectedInvoice = invoiceSelection && invoiceSelection.companyId === invoicesApi.companyId ? invoiceSelection.invoice : null
+  const paymentToCancel = paymentSelection && paymentSelection.companyId === paymentsApi.companyId ? paymentSelection.payment : null
 
-  const [search, setSearch] = useState("")
-  const [activeTab, setActiveTab] = useState("pendientes")
-  const [cobroDialogOpen, setCobroDialogOpen] = useState(false)
-  const [cobroDialogContext, setCobroDialogContext] = useState<"invoice" | "general">("general")
-  const [selectedFactura, setSelectedFactura] = useState<Comprobante | undefined>()
-  const [imputarDialogOpen, setImputarDialogOpen] = useState(false)
-  const [selectedCobro, setSelectedCobro] = useState<CobroV2 | null>(null)
+  const outstanding = useMemo(() => invoicesApi.invoices.filter((invoice) =>
+    (parseDecimalScale4(invoice.balance) ?? BigInt(0)) > BigInt(0) && (invoice.state === "Emitida" || invoice.state === "Parcialmente_cobrada"),
+  ), [invoicesApi.invoices])
 
-  const imputaciones = store.imputaciones ?? []
-  const cobrosV2 = store.cobrosV2 ?? []
+  const invoiceById = useMemo(() => new Map(invoicesApi.invoices.map((invoice) => [invoice.id, invoice])), [invoicesApi.invoices])
+  const registeredPayments = useMemo(() => paymentsApi.payments.filter((payment) => payment.state === "Registrado"), [paymentsApi.payments])
+  const outstandingTotal = useMemo(() => outstanding.reduce((sum, invoice) => sum + (parseDecimalScale4(invoice.balance) ?? BigInt(0)), BigInt(0)), [outstanding])
+  const registeredTotal = useMemo(() => registeredPayments.reduce((sum, payment) => sum + (parseDecimalScale4(payment.amount) ?? BigInt(0)), BigInt(0)), [registeredPayments])
 
-  // ── FV comprobantes enriched with cobranza state ──
-  const fvComprobantes = useMemo(() => {
-    return store.comprobantes
-      .filter((c) => c.type === "FV")
-      .map((c) => ({
-        comprobante: c,
-        cobrado: getTotalCobradoFactura(c.number, imputaciones),
-        saldo: getSaldoPendienteFactura(c, imputaciones),
-        estadoCobranza: getEstadoCobranzaFactura(c, imputaciones),
-        vencimiento: getVencimientoFV(c),
-        vencida: isFacturaVencida(c, imputaciones),
-        surgery: store.surgeries.find((s) => s.id === c.surgeryId),
-      }))
-  }, [store.comprobantes, imputaciones, store.surgeries])
+  const refreshBoth = () => Promise.all([invoicesApi.refresh(), paymentsApi.refresh()])
 
-  // ── CobrosV2 enriched ──
-  const cobrosEnriched = useMemo(() => {
-    return cobrosV2.map((c) => ({
-      cobro: c,
-      imputado: getImporteImputadoCobro(c.id, imputaciones),
-      noImputado: getImporteNoImputadoCobro(c, imputaciones),
-      estado: getEstadoCobro(c, imputaciones),
-    }))
-  }, [cobrosV2, imputaciones])
-
-  // ── Tab-specific filters ──
-  const tabData = useMemo(() => {
-    const filteredFV = search
-      ? fvComprobantes.filter((f) => {
-          const q = search.toLowerCase()
-          return (
-            f.comprobante.number.toLowerCase().includes(q) ||
-            f.comprobante.client.toLowerCase().includes(q) ||
-            f.comprobante.concept.toLowerCase().includes(q) ||
-            f.surgery?.patient.toLowerCase().includes(q) ||
-            f.comprobante.surgeryId.toLowerCase().includes(q)
-          )
-        })
-      : fvComprobantes
-
-    const filteredCobros = search
-      ? cobrosEnriched.filter((c) => {
-          const q = search.toLowerCase()
-          return (
-            c.cobro.id.toLowerCase().includes(q) ||
-            c.cobro.clienteNombre.toLowerCase().includes(q) ||
-            c.cobro.referencia?.toLowerCase().includes(q) ||
-            MEDIO_COBRO_LABELS[c.cobro.medioCobro].toLowerCase().includes(q)
-          )
-        })
-      : cobrosEnriched
-
-    return {
-      pendientes: filteredFV.filter((f) => f.estadoCobranza === "sin_cobrar"),
-      parciales: filteredFV.filter((f) => f.estadoCobranza === "cobro_parcial"),
-      cobradas: filteredFV.filter((f) => f.estadoCobranza === "cobrada"),
-      vencidas: filteredFV.filter((f) => f.estadoCobranza === "vencida"),
-      todos: filteredFV,
-      cobros: filteredCobros,
-      sinImputar: filteredCobros.filter((c) => c.noImputado > 0),
+  const registerPayment = async (payload: CreateInvoicePaymentPayload) => {
+    setActionError(null)
+    try {
+      await paymentsApi.create(payload)
+      await refreshBoth()
+      toast.success("Cobro operativo registrado")
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "No se pudo registrar el cobro."
+      setActionError(message)
+      throw cause
     }
-  }, [fvComprobantes, cobrosEnriched, search])
-
-  // ── Stats ──
-  const stats = useMemo(() => {
-    const totalPendientes = fvComprobantes.filter(
-      (f) => f.estadoCobranza === "sin_cobrar" || f.estadoCobranza === "cobro_parcial"
-    ).length
-    const totalSaldoPendiente = fvComprobantes
-      .filter((f) => f.saldo > 0)
-      .reduce((s, f) => s + f.saldo, 0)
-    const totalCobrado = fvComprobantes.reduce((s, f) => s + f.cobrado, 0)
-    const cobrosSinImputar = cobrosEnriched.filter((c) => c.noImputado > 0).length
-    return { totalPendientes, totalSaldoPendiente, totalCobrado, cobrosSinImputar }
-  }, [fvComprobantes, cobrosEnriched])
-
-  // ── Handlers ──
-  const handleNewCobro = () => {
-    setCobroDialogContext("general")
-    setSelectedFactura(undefined)
-    setCobroDialogOpen(true)
   }
 
-  const handleRegistrarCobroFactura = (factura: Comprobante) => {
-    setCobroDialogContext("invoice")
-    setSelectedFactura(factura)
-    setCobroDialogOpen(true)
+  const cancelPayment = async () => {
+    if (!paymentToCancel) return
+    setActionError(null)
+    try {
+      await paymentsApi.cancel(paymentToCancel.id)
+      await refreshBoth()
+      toast.success("Cobro operativo anulado")
+      setPaymentSelection(null)
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "No se pudo anular el cobro.")
+    }
   }
 
-  const handleImputarSaldo = (cobro: CobroV2) => {
-    setSelectedCobro(cobro)
-    setImputarDialogOpen(true)
-  }
-
-  // ── Render factura row ──
-  const renderFacturaRow = (f: typeof fvComprobantes[0]) => (
-    <tr key={f.comprobante.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-      <td className="px-3 py-2.5 font-mono text-xs font-medium">{f.comprobante.number}</td>
-      <td className="px-3 py-2.5 text-xs">{f.comprobante.surgeryId || "—"}</td>
-      <td className="px-3 py-2.5 text-xs">{f.surgery?.patient || "—"}</td>
-      <td className="px-3 py-2.5 text-xs">{f.comprobante.client}</td>
-      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{formatDate(f.comprobante.date)}</td>
-      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{formatDate(f.vencimiento.toISOString().split("T")[0])}</td>
-      <td className="px-3 py-2.5 text-right text-xs font-medium">{formatCurrency(f.comprobante.amount)}</td>
-      <td className="px-3 py-2.5 text-right text-xs text-emerald-700">{formatCurrency(f.cobrado)}</td>
-      <td className="px-3 py-2.5 text-right">
-        <span className={`text-xs font-medium ${f.saldo > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-          {formatCurrency(f.saldo)}
-        </span>
-      </td>
-      <td className="px-3 py-2.5">
-        <Badge
-          variant={ESTADO_COBRANZA_BADGE_VARIANT[f.estadoCobranza]}
-          className="text-[10px]"
-        >
-          {ESTADO_COBRANZA_LABELS[f.estadoCobranza]}
-        </Badge>
-      </td>
-      <td className="px-3 py-2.5">
-        <div className="flex items-center justify-end gap-1">
-          {f.saldo > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1 text-[11px] text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                  onClick={() => handleRegistrarCobroFactura(f.comprobante)}
-                >
-                  <Banknote className="size-3" /> Cobrar
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Registrar cobro para esta factura</TooltipContent>
-            </Tooltip>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="text-xs">Acciones</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {f.comprobante.surgeryId && (
-                <DropdownMenuItem onClick={() => openExpediente(f.comprobante.surgeryId)}>
-                  <FolderOpen className="size-4" /> Ver cirugía
-                </DropdownMenuItem>
-              )}
-              {f.comprobante.surgeryId && (
-                <DropdownMenuItem asChild>
-                  <Link href={`/ventas/recibos?from=cobros&surgeryId=${encodeURIComponent(f.comprobante.surgeryId)}&invoice=${encodeURIComponent(f.comprobante.number)}`}>
-                    <FileText className="size-4" /> Ver recibo digital mock
-                  </Link>
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => toast.info(`Detalle FV ${f.comprobante.number}`)}>
-                <Eye className="size-4" /> Ver detalle
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </td>
-    </tr>
-  )
-
-  // ── Render cobro row ──
-  const renderCobroRow = (c: typeof cobrosEnriched[0]) => (
-    <tr key={c.cobro.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-      <td className="px-3 py-2.5 font-mono text-xs font-medium">{c.cobro.id}</td>
-      <td className="px-3 py-2.5 text-xs">{c.cobro.clienteNombre}</td>
-      <td className="px-3 py-2.5 text-xs whitespace-nowrap">{formatDate(c.cobro.fecha)}</td>
-      <td className="px-3 py-2.5">
-        <Badge variant="outline" className="text-[10px]">{MEDIO_COBRO_LABELS[c.cobro.medioCobro]}</Badge>
-      </td>
-      <td className="px-3 py-2.5 text-right text-xs font-medium">{formatCurrency(c.cobro.importe)}</td>
-      <td className="px-3 py-2.5 text-right text-xs text-emerald-700">{formatCurrency(c.imputado)}</td>
-      <td className="px-3 py-2.5 text-right">
-        <span className={`text-xs font-medium ${c.noImputado > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-          {formatCurrency(c.noImputado)}
-        </span>
-      </td>
-      <td className="px-3 py-2.5">
-        <Badge
-          variant={ESTADO_COBRO_BADGE_VARIANT[c.estado]}
-          className="text-[10px]"
-        >
-          {ESTADO_COBRO_LABELS[c.estado]}
-        </Badge>
-      </td>
-      <td className="px-3 py-2.5">
-        <div className="flex items-center justify-end gap-1">
-          {c.noImputado > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1 text-[11px] text-amber-700 border-amber-300 hover:bg-amber-50"
-                  onClick={() => handleImputarSaldo(c.cobro)}
-                >
-                  <ArrowRightLeft className="size-3" /> Imputar
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Imputar saldo a facturas</TooltipContent>
-            </Tooltip>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel className="text-xs">Acciones</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => toast.info(`Detalle cobro ${c.cobro.id}`)}>
-                <Eye className="size-4" /> Ver detalle
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </td>
-    </tr>
-  )
-
-  // ── Empty state ──
-  const emptyState = (colSpan: number, message: string) => (
-    <tr>
-      <td colSpan={colSpan} className="px-4 py-12 text-center text-muted-foreground">
-        {message}
-      </td>
-    </tr>
-  )
-
-  // Tab counts
-  const tabCounts = useMemo(() => ({
-    pendientes: tabData.pendientes.length,
-    parciales: tabData.parciales.length,
-    cobradas: tabData.cobradas.length,
-    vencidas: tabData.vencidas.length,
-    cobros: tabData.cobros.length,
-    sinImputar: tabData.sinImputar.length,
-    todos: tabData.todos.length,
-  }), [tabData])
+  const pageError = actionError ?? invoicesApi.error ?? paymentsApi.error
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-bold">Cobros</h1>
-            <p className="text-sm text-muted-foreground">Registro, imputación y seguimiento de cobros</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5 shrink-0" asChild>
-              <Link href="/ventas/recibos?from=cobros">
-                <FileText className="size-4" /> Ver recibos digitales
-              </Link>
-            </Button>
-            <Button size="sm" className="gap-1.5 shrink-0" onClick={handleNewCobro}>
-              <Plus className="size-4" /> Nuevo Cobro
-            </Button>
-          </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold">Cobros operativos</h1>
+          <p className="text-sm text-muted-foreground">Registro por factura e historial respaldados por el backend.</p>
         </div>
-
-      {/* Stats */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatsCard title="FV pendientes" value={stats.totalPendientes} icon={Clock} />
-        <StatsCard title="Saldo pendiente" value={formatCurrency(stats.totalSaldoPendiente)} icon={DollarSign} />
-        <StatsCard title="Total cobrado" value={formatCurrency(stats.totalCobrado)} icon={CheckCircle2} />
-        <StatsCard title="Cobros sin imputar" value={stats.cobrosSinImputar} icon={AlertCircle} />
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/ventas/recibos?from=cobros"><FileText className="size-4" /> Ver recibos digitales</Link>
+        </Button>
       </div>
 
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-wrap gap-2">
-            <SearchInput value={search} onChange={setSearch} placeholder="Factura, cliente, cirugía, paciente..." className="w-full sm:w-80" />
-            {search && (
-              <Button variant="ghost" size="sm" className="text-xs h-9" onClick={() => setSearch("")}>
-                Limpiar
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <Alert>
+        <Info className="size-4" />
+        <AlertTitle>Registro operativo no fiscal</AlertTitle>
+        <AlertDescription>
+          Cada cobro se registra contra una factura backend específica. Esta pantalla no emite comprobantes fiscales.
+        </AlertDescription>
+      </Alert>
 
-      {/* Tabs */}
+      {pageError ? (
+        <Alert variant="destructive">
+          <AlertCircle className="size-4" />
+          <AlertTitle>No se pudo completar la operación</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span>{pageError}</span>
+            {invoicesApi.error || paymentsApi.error ? (
+              <Button variant="outline" size="sm" onClick={() => void refreshBoth()}>Reintentar</Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatsCard title="Facturas con saldo" value={outstanding.length} icon={FileText} />
+        <StatsCard title="Saldo operativo" value={formatDecimalCurrency(outstandingTotal)} icon={CreditCard} />
+        <StatsCard title="Cobros registrados" value={registeredPayments.length} icon={Banknote} />
+        <StatsCard title="Total registrado" value={formatDecimalCurrency(registeredTotal)} icon={ReceiptText} />
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap h-auto gap-0.5 p-0.5 bg-muted/50">
-          <TabsTrigger value="pendientes" className="text-xs gap-1 px-2.5 py-1.5">
-            <Clock className="size-3" /> Pendientes <span className="text-[9px] opacity-60">({tabCounts.pendientes})</span>
-          </TabsTrigger>
-          <TabsTrigger value="parciales" className="text-xs gap-1 px-2.5 py-1.5">
-            <CreditCard className="size-3" /> Parciales <span className="text-[9px] opacity-60">({tabCounts.parciales})</span>
-          </TabsTrigger>
-          <TabsTrigger value="cobradas" className="text-xs gap-1 px-2.5 py-1.5">
-            <CheckCircle2 className="size-3" /> Cobradas <span className="text-[9px] opacity-60">({tabCounts.cobradas})</span>
-          </TabsTrigger>
-          <TabsTrigger value="vencidas" className="text-xs gap-1 px-2.5 py-1.5">
-            <AlertTriangle className="size-3" /> Vencidas <span className="text-[9px] opacity-60">({tabCounts.vencidas})</span>
-          </TabsTrigger>
-          <TabsTrigger value="cobros" className="text-xs gap-1 px-2.5 py-1.5">
-            <Banknote className="size-3" /> Cobros <span className="text-[9px] opacity-60">({tabCounts.cobros})</span>
-          </TabsTrigger>
-          <TabsTrigger value="sinImputar" className="text-xs gap-1 px-2.5 py-1.5">
-            <ArrowRightLeft className="size-3" /> Sin imputar <span className="text-[9px] opacity-60">({tabCounts.sinImputar})</span>
-          </TabsTrigger>
-          <TabsTrigger value="todos" className="text-xs gap-1 px-2.5 py-1.5">
-            <FileText className="size-3" /> Todas <span className="text-[9px] opacity-60">({tabCounts.todos})</span>
-          </TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="outstanding">Facturas con saldo ({outstanding.length})</TabsTrigger>
+          <TabsTrigger value="history">Historial de cobros ({paymentsApi.payments.length})</TabsTrigger>
         </TabsList>
 
-        {/* ── Factura tabs (1-4, 7) ── */}
-        {["pendientes", "parciales", "cobradas", "vencidas", "todos"].map((tab) => (
-          <TabsContent key={tab} value={tab}>
-            <Card>
-              <CardContent className="p-0">
-                <div className="flex items-center justify-between px-4 py-3 border-b">
-                  <span className="text-sm text-muted-foreground">
-                    {tabData[tab as keyof typeof tabData].length} factura{(tabData[tab as keyof typeof tabData] as unknown[]).length !== 1 ? "s" : ""}
-                  </span>
-                </div>
+        <TabsContent value="outstanding">
+          <Card>
+            <CardContent className="p-0">
+              {invoicesApi.loading ? (
+                <p className="p-10 text-center text-sm text-muted-foreground" role="status">Cargando facturas con saldo…</p>
+              ) : outstanding.length === 0 ? (
+                <p className="p-10 text-center text-sm text-muted-foreground">No hay facturas emitidas con saldo operativo.</p>
+              ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/50">
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Factura</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Cirugía</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Paciente</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Cliente</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Fecha FV</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Vencimiento</th>
-                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap text-xs">Total</th>
-                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap text-xs">Cobrado</th>
-                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap text-xs">Saldo</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Estado</th>
-                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap text-xs">Acción</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Factura</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Fecha</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Descripción</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Total</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Cobrado</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Saldo</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Estado</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Acción</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(tabData[tab as keyof typeof tabData] as typeof fvComprobantes).length > 0
-                        ? (tabData[tab as keyof typeof tabData] as typeof fvComprobantes).map(renderFacturaRow)
-                        : emptyState(11, "No se encontraron facturas en esta categoría")
-                      }
+                      {outstanding.map((invoice) => (
+                        <tr key={invoice.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="px-3 py-2.5 font-mono font-medium">{invoiceNumber(invoice)}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">{formatDate(invoice.issuedAt ?? invoice.createdAt)}</td>
+                          <td className="max-w-72 px-3 py-2.5"><span className="line-clamp-2">{invoice.items.map((item) => item.description).join(" · ") || "Sin descripción"}</span></td>
+                          <td className="px-3 py-2.5 text-right">{formatDecimalCurrency(invoice.total)}</td>
+                          <td className="px-3 py-2.5 text-right text-emerald-700">{formatDecimalCurrency(invoice.paidTotal)}</td>
+                          <td className="px-3 py-2.5 text-right font-medium">{formatDecimalCurrency(invoice.balance)}</td>
+                          <td className="px-3 py-2.5"><StateBadge status={invoice.state} /></td>
+                          <td className="px-3 py-2.5 text-right">
+                            <div className="flex justify-end gap-1">
+                               <Button size="sm" variant="outline" onClick={() => invoicesApi.companyId && setInvoiceSelection({ companyId: invoicesApi.companyId, invoice })}>
+                                <Banknote className="size-3" /> Registrar cobro
+                              </Button>
+                              {invoice.surgeryId ? (
+                                <Button size="icon" variant="ghost" aria-label={`Ver expediente ${invoice.surgeryId}`} onClick={() => openExpediente(invoice.surgeryId!)}>
+                                  <FolderOpen className="size-4" />
+                                </Button>
+                              ) : null}
+                              {invoice.surgeryId && invoice.visibleNumber != null ? (
+                                <Button size="icon" variant="ghost" aria-label={`Ver recibos de ${invoiceNumber(invoice)}`} asChild>
+                                  <Link href={`/ventas/recibos?from=cobros&surgeryId=${encodeURIComponent(invoice.surgeryId)}&invoice=${encodeURIComponent(String(invoice.visibleNumber))}`}>
+                                    <FileText className="size-4" />
+                                  </Link>
+                                </Button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {/* ── Cobro tabs (5-6) ── */}
-        {["cobros", "sinImputar"].map((tab) => (
-          <TabsContent key={tab} value={tab}>
-            <Card>
-              <CardContent className="p-0">
-                <div className="flex items-center justify-between px-4 py-3 border-b">
-                  <span className="text-sm text-muted-foreground">
-                    {(tabData[tab as keyof typeof tabData] as typeof cobrosEnriched).length} cobro{(tabData[tab as keyof typeof tabData] as unknown[]).length !== 1 ? "s" : ""}
-                  </span>
-                </div>
+        <TabsContent value="history">
+          <Card>
+            <CardContent className="p-0">
+              {paymentsApi.loading ? (
+                <p className="p-10 text-center text-sm text-muted-foreground" role="status">Cargando historial de cobros…</p>
+              ) : paymentsApi.payments.length === 0 ? (
+                <p className="p-10 text-center text-sm text-muted-foreground">No hay cobros backend registrados.</p>
+              ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/50">
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Cobro ID</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Cliente</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Fecha</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Medio</th>
-                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap text-xs">Importe recibido</th>
-                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap text-xs">Imputado</th>
-                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap text-xs">Saldo no imputado</th>
-                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap text-xs">Estado</th>
-                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap text-xs">Acción</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Cobro</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Fecha</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Medio</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Factura asociada</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Referencia / notas</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Importe</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Estado</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Acción</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(tabData[tab as keyof typeof tabData] as typeof cobrosEnriched).length > 0
-                        ? (tabData[tab as keyof typeof tabData] as typeof cobrosEnriched).map(renderCobroRow)
-                        : emptyState(9, "No se encontraron cobros en esta categoría")
-                      }
+                      {paymentsApi.payments.map((payment) => {
+                        const reference = metadataValue(payment.metadata, "reference")
+                        const notes = metadataValue(payment.metadata, "notes")
+                        return (
+                          <tr key={payment.id} className="border-b last:border-0 hover:bg-muted/30">
+                            <td className="px-3 py-2.5 font-mono font-medium">Cobro {payment.visibleNumber}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{formatDate(payment.receivedAt)}</td>
+                            <td className="px-3 py-2.5">{payment.method ? METHOD_LABELS[payment.method] ?? payment.method : "Sin método informado"}</td>
+                            <td className="px-3 py-2.5">
+                              {payment.imputations.length > 0
+                                ? payment.imputations.map((imputation) => invoiceNumber(invoiceById.get(imputation.invoiceId) ?? { id: imputation.invoiceId, visibleNumber: null } as InvoiceApiRow)).join(" · ")
+                                : "Sin factura asociada en la respuesta backend"}
+                            </td>
+                            <td className="max-w-64 px-3 py-2.5 text-muted-foreground">{[reference, notes].filter(Boolean).join(" · ") || "—"}</td>
+                            <td className="px-3 py-2.5 text-right font-medium">{formatDecimalCurrency(payment.amount)}</td>
+                            <td className="px-3 py-2.5"><StateBadge status={payment.state} /></td>
+                            <td className="px-3 py-2.5 text-right">
+                              {payment.state === "Registrado" ? (
+                                 <Button size="sm" variant="outline" onClick={() => paymentsApi.companyId && setPaymentSelection({ companyId: paymentsApi.companyId, payment })}>
+                                  <Undo2 className="size-3" /> Anular
+                                </Button>
+                              ) : null}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
-      {/* ── Dialogs ── */}
       <CobroFormDialog
-        open={cobroDialogOpen}
-        onOpenChange={setCobroDialogOpen}
-        context={cobroDialogContext}
-        preselectedFactura={selectedFactura}
+        open={selectedInvoice != null}
+        onOpenChange={(open) => { if (!open) setInvoiceSelection(null) }}
+        invoice={selectedInvoice}
+        onSubmit={registerPayment}
+        submitting={paymentsApi.mutatingId === "__create__"}
       />
 
-      <ImputarSaldoDialog
-        open={imputarDialogOpen}
-        onOpenChange={setImputarDialogOpen}
-        cobro={selectedCobro}
-      />
-
-      {/* Expediente Drawer */}
+      <AlertDialog open={paymentToCancel != null} onOpenChange={(open) => { if (!open) setPaymentSelection(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Anular cobro operativo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se anulará el cobro backend {paymentToCancel?.visibleNumber}. Los saldos de sus facturas serán recalculados por el backend.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={paymentsApi.mutatingId === paymentToCancel?.id}>Conservar cobro</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={paymentsApi.mutatingId === paymentToCancel?.id}
+              onClick={() => void cancelPayment()}
+            >
+              Confirmar anulación
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <SurgeryDrawer />
     </div>
   )

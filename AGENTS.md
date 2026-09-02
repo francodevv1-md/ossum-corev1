@@ -475,3 +475,15 @@ Alcance autorizado:
 - completar UI, pruebas, Diagnose, revisión GGA y commit local del paquete.
 
 Exclusiones: cambios de roles permitidos, Auth productivo, schema, migraciones, datos reales, deploy, push y PR. Evidencia operativa: Engram #5433 y `knowledge/specs/COORDINATION-TRACKING-UI-20260814/TASK_BRIEF.md`.
+
+---
+
+## 16. Aprobación activa — Facturación/Cobros operativos DEV 2026-09-02
+
+Ante la pregunta precisa `¿Aprobás el paquete DEV de Facturación/Cobros operativos —borradores, emisión no fiscal, cobros imputados y anulaciones— excluyendo fiscalización, schema, Auth, deploy y datos reales?`, Franco respondió `Apruebo` el 2026-09-02.
+
+Alcance autorizado: UI backend-authoritative de borradores y emisión operativa no fiscal, cobros ligados a facturas backend, anulaciones, paginación completa, validaciones, revisión GGA y commit local.
+
+Exclusiones: emisión fiscal, ARCA/AFIP, CAE, schema, migraciones, Auth/roles/seguridad, producción/staging, datos reales, deploy, push y PR.
+
+Evidencia operativa: Engram #6269 y `knowledge/specs/BILLING-PAYMENTS-OPERATIONAL-UI-DEV-001/TASK_BRIEF.md`.
