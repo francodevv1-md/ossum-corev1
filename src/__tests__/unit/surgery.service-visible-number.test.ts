@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { Prisma } from "@prisma/client"
 
 const { createAuditEvent } = vi.hoisted(() => ({
   createAuditEvent: vi.fn(),
@@ -104,6 +105,19 @@ describe("createSurgery visible number allocation", () => {
     expect(surgery.visibleNumber).toBe("CX-0010")
   })
 
+  it("allocates beyond int32 and JavaScript safe integers without truncation", async () => {
+    tx.$queryRaw.mockResolvedValue([{ maxNumber: "999999999999999999999999" }])
+    tx.surgery.create.mockImplementation(async ({ data }: { data: { visibleNumber: string | null } }) => buildCreatedSurgery(data.visibleNumber))
+
+    const surgery = await createSurgery(
+      prismaMock as never,
+      { actorUserId: "user-1", companyId: "company-1", module: "surgery" },
+      { patientId: "patient-1", source: "PRESUPUESTO_AUTHORITY_S7_2" }
+    )
+
+    expect(surgery.visibleNumber).toBe("CX-1000000000000000000000000")
+  })
+
   it("preserves explicit visible numbers for legacy sync callers", async () => {
     tx.surgery.create.mockImplementation(async ({ data }: { data: { visibleNumber: string | null } }) => buildCreatedSurgery(data.visibleNumber))
 
@@ -129,5 +143,64 @@ describe("createSurgery visible number allocation", () => {
       })
     )
     expect(surgery.visibleNumber).toBe("CX-LEGACY-42")
+  })
+
+  it("retries a generated visible number rejected by the company uniqueness constraint", async () => {
+    tx.$queryRaw
+      .mockResolvedValueOnce([{ maxNumber: BigInt(4) }])
+      .mockResolvedValueOnce([{ maxNumber: BigInt(5) }])
+    tx.surgery.create
+      .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError("Duplicate visible number", {
+        code: "P2002",
+        clientVersion: "test",
+        meta: { target: ["companyId", "visibleNumber"] },
+      }))
+      .mockImplementationOnce(async ({ data }: { data: { visibleNumber: string | null } }) => buildCreatedSurgery(data.visibleNumber))
+
+    const surgery = await createSurgery(
+      prismaMock as never,
+      { actorUserId: "user-1", companyId: "company-1", module: "surgery" },
+      { patientId: "patient-1", source: "PRESUPUESTO_AUTHORITY_S7_2" }
+    )
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2)
+    expect(tx.surgery.create).toHaveBeenNthCalledWith(1, expect.objectContaining({ data: expect.objectContaining({ visibleNumber: "CX-0005" }) }))
+    expect(tx.surgery.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ data: expect.objectContaining({ visibleNumber: "CX-0006" }) }))
+    expect(surgery.visibleNumber).toBe("CX-0006")
+  })
+
+  it("still retries serialization failures for explicit legacy numbers", async () => {
+    tx.surgery.create
+      .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError("Serialization failure", {
+        code: "P2034",
+        clientVersion: "test",
+      }))
+      .mockImplementationOnce(async ({ data }: { data: { visibleNumber: string | null } }) => buildCreatedSurgery(data.visibleNumber))
+
+    const surgery = await createSurgery(
+      prismaMock as never,
+      { actorUserId: "user-1", companyId: "company-1", module: "surgery" },
+      { patientId: "patient-1", visibleNumber: "CX-LEGACY-42", source: "legacy-surgery-sync" }
+    )
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2)
+    expect(surgery.visibleNumber).toBe("CX-LEGACY-42")
+  })
+
+  it("does not retry unrelated uniqueness conflicts", async () => {
+    tx.$queryRaw.mockResolvedValueOnce([{ maxNumber: BigInt(4) }])
+    tx.surgery.create.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError("Duplicate id", {
+      code: "P2002",
+      clientVersion: "test",
+      meta: { target: ["id"] },
+    }))
+
+    await expect(createSurgery(
+      prismaMock as never,
+      { actorUserId: "user-1", companyId: "company-1", module: "surgery" },
+      { patientId: "patient-1", source: "PRESUPUESTO_AUTHORITY_S7_2" }
+    )).rejects.toMatchObject({ code: "P2002" })
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
   })
 })

@@ -368,18 +368,20 @@ async function getNextSurgeryVisibleNumber(
   tx: Prisma.TransactionClient,
   companyId: string
 ): Promise<string> {
-  const rows = await tx.$queryRaw<Array<{ maxNumber: bigint | number | null }>>`
-    SELECT MAX(CAST(SUBSTRING("visibleNumber" FROM ${SURGERY_VISIBLE_NUMBER_PREFIX.length + 1}) AS INTEGER)) AS "maxNumber"
+  const rows = await tx.$queryRaw<Array<{ maxNumber: string | bigint | number | null }>>`
+    SELECT COALESCE(
+      MAX(CAST(SUBSTRING("visibleNumber" FROM ${SURGERY_VISIBLE_NUMBER_PREFIX.length + 1}) AS NUMERIC)),
+      0
+    )::TEXT AS "maxNumber"
     FROM "Surgery"
     WHERE "companyId" = ${companyId}
       AND "visibleNumber" ~ '^CX-[0-9]+$'
   `;
 
   const rawMaxNumber = rows[0]?.maxNumber;
-  const maxNumber = rawMaxNumber == null ? 0 : Number(rawMaxNumber);
-  const nextNumber = maxNumber + 1;
+  const nextNumber = BigInt(rawMaxNumber ?? 0) + BigInt(1);
 
-  return `${SURGERY_VISIBLE_NUMBER_PREFIX}${String(nextNumber).padStart(SURGERY_VISIBLE_NUMBER_PADDING, "0")}`;
+  return `${SURGERY_VISIBLE_NUMBER_PREFIX}${nextNumber.toString().padStart(SURGERY_VISIBLE_NUMBER_PADDING, "0")}`;
 }
 
 async function assertSurgeryReferencesBelongToCompany(
@@ -781,11 +783,19 @@ export async function createSurgery(
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2034" &&
-        attempt < CREATE_SURGERY_MAX_RETRIES - 1
-      ) {
+      const generatedVisibleNumber = shouldGenerateVisibleNumber(validatedData);
+      const uniqueTarget = error instanceof Prisma.PrismaClientKnownRequestError
+        ? error.meta?.target
+        : null;
+      const isVisibleNumberTarget = Array.isArray(uniqueTarget)
+        ? uniqueTarget.length === 2 && uniqueTarget.includes("companyId") && uniqueTarget.includes("visibleNumber")
+        : uniqueTarget === "Surgery_companyId_visibleNumber_key";
+      const retryableAllocationConflict = error instanceof Prisma.PrismaClientKnownRequestError && (
+        error.code === "P2034" ||
+        (generatedVisibleNumber && error.code === "P2002" && isVisibleNumberTarget)
+      );
+
+      if (retryableAllocationConflict && attempt < CREATE_SURGERY_MAX_RETRIES - 1) {
         continue;
       }
 

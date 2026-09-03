@@ -366,6 +366,7 @@ model Surgery {
   documentChecklist     SurgeryDocumentChecklist?  @relation("SurgeryDocumentChecklistSurgery")
 
   @@unique([companyId, id], map: "uq_surgery_company_id")
+  @@unique([companyId, visibleNumber], map: "Surgery_companyId_visibleNumber_key")
   @@index([companyId, archivedAt])
   @@index([companyId, materialAvailabilityDate], map: "ix_surgery_company_material_availability")
   @@index([companyId, createdById], map: "ix_surgery_company_created_by")
