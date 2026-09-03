@@ -1,333 +1,171 @@
 "use client"
 
-import React, { useState, useMemo, useCallback } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
-import type { Contacto, ContactRole } from "@/types"
+import React, { useEffect, useMemo, useRef, useState } from "react"
+import { Check, ChevronDown, ChevronUp, CircleAlert, Loader2, Plus, Search } from "lucide-react"
+import { toast } from "sonner"
+
+import { useAuth } from "@/components/auth/AuthProvider"
+import { ContactoFormDialog } from "@/components/contactos/ContactoFormDialog"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { listContacts, updateContactApi } from "@/lib/api/contacts"
+import { mapApiContactListToContactos, mapApiContactToContacto } from "@/lib/api/contact-adapter"
 import {
-  ContactSearchContext,
-  CONTACT_ROLE_LABELS,
-  CONTACT_ROLE_BADGE_COLORS,
   ALL_CONTACT_ROLES,
+  CONTACT_ROLE_BADGE_COLORS,
+  CONTACT_ROLE_LABELS,
+  type ContactSearchContext,
+  getGroupById,
   getGroupLabel,
   getGroupsForRole,
-  getGroupById,
   GROUP_BADGE_COLORS,
 } from "@/lib/contacts.constants"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { toast } from "sonner"
-import { Search, Plus, Check, ChevronDown, ChevronUp } from "lucide-react"
-import { ContactoFormDialog } from "./ContactoFormDialog"
-
-// ═══════════════════════════════════════════════════════════════
-// Props
-// ═══════════════════════════════════════════════════════════════
+import type { Contacto } from "@/types"
 
 interface ContactSearchModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Context configuration (DC-CT-017) */
   context: ContactSearchContext
-  /** Called when a contact is selected */
   onSelect: (contacto: Contacto) => void
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Component
-// ═══════════════════════════════════════════════════════════════
-
-export function ContactSearchModal({
-  open,
-  onOpenChange,
-  context,
-  onSelect,
-}: ContactSearchModalProps) {
-  const store = useOrtoTrackStore()
-
-  const [searchQuery, setSearchQuery] = useState("")
-  const [expandedSearch, setExpandedSearch] = useState(false)
+export function ContactSearchModal({ open, onOpenChange, context, onSelect }: ContactSearchModalProps) {
+  const { activeCompany } = useAuth()
+  const companyId = activeCompany?.id
+  const requestRef = useRef(0)
+  const mutationRef = useRef(0)
+  const companyIdRef = useRef(companyId)
+  const openRef = useRef(open)
+  const [query, setQuery] = useState("")
+  const [contacts, setContacts] = useState<Contacto[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [expanded, setExpanded] = useState(false)
+  const [groupFilter, setGroupFilter] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
-  const [formKey, setFormKey] = useState(0)
-  // CHATZAI-025A.5-fix: Track selected category group for filtering
-  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null)
+  const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
 
-  // Determine effective roles/groups for filtering
-  // CHATZAI-025A.5-fix: selectedGroupFilter overrides preferredGroups when set
-  const effectiveRoles = expandedSearch ? undefined : context.allowedRoles
-  const effectiveGroups = expandedSearch
-    ? undefined
-    : selectedGroupFilter
-      ? [selectedGroupFilter]
-      : context.preferredGroups
+  useEffect(() => {
+    const companyChanged = companyIdRef.current !== companyId
+    companyIdRef.current = companyId
+    mutationRef.current += 1
+    if (companyChanged) {
+      setFormOpen(false)
+      setAddingGroupId(null)
+    }
+  }, [companyId])
+  useEffect(() => {
+    openRef.current = open
+    if (!open) mutationRef.current += 1
+  }, [open])
 
-  // Search results — prioritize by preferred groups
+  const load = async (search = query) => {
+    const requestId = ++requestRef.current
+    if (!companyId) {
+      setContacts([])
+      setLoading(false)
+      setError("Seleccioná una empresa activa para buscar contactos.")
+      return
+    }
+    setLoading(true)
+    setError("")
+    try {
+      const role = !expanded && context.allowedRoles?.length === 1 ? context.allowedRoles[0] : undefined
+      const result: Awaited<ReturnType<typeof listContacts>> = []
+      for (let skip = 0; ; skip += 100) {
+        const page = await listContacts(companyId, { search: search.trim() || undefined, role, take: 100, ...(skip ? { skip } : {}) })
+        result.push(...page)
+        if (page.length < 100) break
+      }
+      if (requestId === requestRef.current) setContacts(mapApiContactListToContactos(result))
+    } catch (cause) {
+      if (requestId === requestRef.current) setError(cause instanceof Error ? cause.message : "No se pudieron cargar los contactos.")
+    } finally {
+      if (requestId === requestRef.current) setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setTimeout(() => { void load(query) }, query ? 220 : 0)
+    return () => { window.clearTimeout(timer); requestRef.current += 1 }
+    // load intentionally follows the current search/context inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, context.allowedRoles, expanded, open, query])
+
+  const contextGroups = useMemo(() => (context.allowedRoles ?? ALL_CONTACT_ROLES).flatMap(getGroupsForRole), [context.allowedRoles])
   const results = useMemo(() => {
-    const base = store.searchContactos(searchQuery, effectiveRoles?.[0], effectiveGroups)
-    if (!searchQuery.trim() && !effectiveGroups) {
-      // No search and no group filter: show all for allowed roles
-      return store.searchContactos("", effectiveRoles?.[0])
-    }
-    return base
-  }, [store, searchQuery, effectiveRoles, effectiveGroups, expandedSearch])
-
-  // Sort results: preferred groups first
-  const sortedResults = useMemo(() => {
-    if (!context.preferredGroups.length) return results
-    return [...results].sort((a, b) => {
-      const aInPreferred = a.groups.some((g) => context.preferredGroups.includes(g))
-      const bInPreferred = b.groups.some((g) => context.preferredGroups.includes(g))
-      if (aInPreferred && !bInPreferred) return -1
-      if (!aInPreferred && bInPreferred) return 1
-      return 0
+    const allowedRoles = expanded ? undefined : context.allowedRoles
+    const allowedGroups = expanded ? undefined : context.allowedGroups
+    const filtered = contacts.filter((contact) => {
+      if (contact.estado !== "activo") return false
+      if (allowedRoles?.length && !contact.roles.some((role) => allowedRoles.includes(role))) return false
+      if (allowedGroups?.length && !contact.groups.some((group) => allowedGroups.includes(group))) return false
+      if (groupFilter && !contact.groups.includes(groupFilter)) return false
+      return true
     })
-  }, [results, context.preferredGroups])
+    return filtered.sort((a, b) => {
+      const score = (contact: Contacto) => Number(contact.groups.some((group) => context.preferredGroups.includes(group))) * 2 + Number(contact.roles.some((role) => context.preferredRoles.includes(role)))
+      return score(b) - score(a) || a.nombre.localeCompare(b.nombre, "es")
+    })
+  }, [contacts, context.allowedGroups, context.allowedRoles, context.preferredGroups, context.preferredRoles, expanded, groupFilter])
 
-  // Available group categories for the context
-  const contextGroups = useMemo(() => {
-    const roles = context.allowedRoles || ALL_CONTACT_ROLES
-    return roles.flatMap((r) => getGroupsForRole(r))
-  }, [context.allowedRoles])
+  const close = () => { requestRef.current += 1; mutationRef.current += 1; setQuery(""); setExpanded(false); setGroupFilter(null); onOpenChange(false) }
+  const select = (contact: Contacto) => { onSelect(contact); close() }
 
-  // Reset on open
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    if (nextOpen) {
-      setSearchQuery("")
-      setExpandedSearch(false)
-      setSelectedGroupFilter(null) // CHATZAI-025A.5-fix: Reset category filter
+  const addGroupAndSelect = async (contact: Contacto, group: string) => {
+    if (!companyId) { setError("Seleccioná una empresa activa para actualizar el contacto."); return }
+    setAddingGroupId(contact.id)
+    const requestId = ++mutationRef.current
+    const requestCompanyId = companyId
+    try {
+      const response = await updateContactApi(requestCompanyId, contact.id, { groupSlugs: [...new Set([...contact.groups, group])] })
+      if (requestId !== mutationRef.current || companyIdRef.current !== requestCompanyId || !openRef.current) return
+      const canonical = mapApiContactToContacto(response)
+      toast.success(`Grupo "${getGroupLabel(group)}" agregado a ${canonical.nombre}`)
+      select(canonical)
+    } catch (cause) {
+      if (requestId !== mutationRef.current || companyIdRef.current !== requestCompanyId || !openRef.current) return
+      setError(cause instanceof Error ? cause.message : "No se pudo actualizar el grupo del contacto.")
+    } finally {
+      if (requestId === mutationRef.current) setAddingGroupId(null)
     }
-    onOpenChange(nextOpen)
-  }, [onOpenChange])
-
-  // Handle select
-  const handleSelect = (contacto: Contacto) => {
-    onSelect(contacto)
-    handleOpenChange(false)
   }
 
-  // Handle add group and select (if contact doesn't have preferred group)
-  const handleAddGroupAndSelect = (contacto: Contacto, groupId: string) => {
-    store.addGroupToContacto(contacto.id, groupId)
-    toast.success(`Grupo "${getGroupLabel(groupId)}" agregado a ${contacto.nombre}`)
-    const updated = store.getContactoById(contacto.id)
-    if (updated) {
-      onSelect(updated)
-    }
-    handleOpenChange(false)
-  }
+  return <>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (nextOpen) onOpenChange(true); else close() }}>
+      <DialogContent className="flex h-[min(44rem,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw-2rem)]">
+        <DialogHeader className="shrink-0 border-b border-[var(--ossum-line)] bg-white px-4 py-3 sm:px-5">
+          <DialogTitle className="text-base text-[var(--ossum-navy)]">{context.title}</DialogTitle>
+          <DialogDescription className="text-xs">Buscá en los contactos activos de la empresa seleccionada.</DialogDescription>
+        </DialogHeader>
 
-  // Handle create
-  const handleCreated = (newContacto: Contacto) => {
-    setFormOpen(false)
-    onSelect(newContacto)
-    handleOpenChange(false)
-  }
+        <div className="shrink-0 space-y-2 border-b border-[var(--ossum-line)] bg-white px-4 py-3">
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" /><Input autoFocus aria-label="Buscar contactos" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Código, nombre, CUIT o DNI…" className="h-11 pl-9 text-sm sm:h-8 sm:text-xs" /></div>
+          {contextGroups.length > 0 && <div className="flex flex-wrap gap-1">{contextGroups.map((group) => <button key={group.id} type="button" aria-pressed={groupFilter === group.id} onClick={() => setGroupFilter((current) => current === group.id ? null : group.id)} className={cn("h-8 border px-2 text-xs transition-[background-color,border-color,color] motion-reduce:transition-none", groupFilter === group.id ? "border-[var(--ossum-action)] bg-[#eef0ff] text-[var(--ossum-action)]" : "border-[var(--ossum-line)] bg-white text-gray-600 hover:bg-[var(--ossum-surface-2)]")}>{group.nombre}</button>)}</div>}
+          {context.allowExpandedSearch && context.allowedRoles?.length && context.allowedRoles.length < ALL_CONTACT_ROLES.length ? <button type="button" onClick={() => setExpanded((value) => !value)} className="inline-flex h-8 items-center gap-1 text-xs text-gray-500 hover:text-gray-800">{expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}{expanded ? "Restringir al contexto" : "Ampliar a todos los contactos"}</button> : null}
+        </div>
 
-  return (
-    <>
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Search className="size-5" />
-              {context.title}
-            </DialogTitle>
-            <DialogDescription>
-              Busque por código, nombre, CUIT o DNI y seleccione un contacto
-            </DialogDescription>
-          </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--ossum-surface)] p-3" aria-live="polite">
+          {loading ? <div className="flex h-full items-center justify-center gap-2 text-sm text-gray-500" role="status"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />Cargando contactos…</div>
+            : error ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center" role="alert"><CircleAlert className="size-5 text-destructive" /><div><p className="text-sm font-medium">No se pudieron cargar los contactos</p><p className="mt-1 max-w-sm text-xs text-gray-500">{error}</p></div>{companyId && <Button type="button" variant="outline" size="sm" onClick={() => void load()} className="h-11 sm:h-8">Reintentar</Button>}</div>
+            : results.length === 0 ? <div className="flex h-full flex-col items-center justify-center text-center"><p className="text-sm font-medium">No se encontraron contactos</p><p className="mt-1 text-xs text-gray-500">Probá otro texto o ampliá la búsqueda.</p></div>
+            : <ul className="divide-y divide-[var(--ossum-line)] border border-[var(--ossum-line)] bg-white">{results.map((contact) => {
+              const missingPreferred = context.preferredGroups.length > 0 && !contact.groups.some((group) => context.preferredGroups.includes(group)) ? context.preferredGroups[0] : undefined
+              return <li key={contact.id} className="flex items-start justify-between gap-3 px-3 py-2 hover:bg-[var(--ossum-surface-2)]">
+                <div className="min-w-0"><div className="flex items-center gap-2"><span className="shrink-0 font-mono text-xs font-semibold text-[var(--ossum-action)]">{contact.codigoContacto}</span><span className="truncate text-sm font-medium">{contact.nombre}</span></div><p className="mt-0.5 text-xs text-gray-500">{contact.cuit || contact.dni || contact.localidad || "Sin documento informado"}</p><div className="mt-1 flex flex-wrap gap-1">{contact.roles.map((role) => <Badge key={role} variant="outline" className={cn("h-4 px-1.5 text-[9px]", CONTACT_ROLE_BADGE_COLORS[role])}>{CONTACT_ROLE_LABELS[role]}</Badge>)}{contact.groups.map((group) => { const role = getGroupById(group)?.role ?? contact.roles[0] ?? "cliente"; return <Badge key={group} variant="outline" className={cn("h-4 px-1.5 text-[9px]", GROUP_BADGE_COLORS[role])}>{getGroupLabel(group)}</Badge> })}</div></div>
+                {missingPreferred && !expanded ? <Button type="button" variant="outline" size="sm" disabled={addingGroupId === contact.id} onClick={() => void addGroupAndSelect(contact, missingPreferred)} className="h-11 shrink-0 text-xs sm:h-8">{addingGroupId === contact.id ? "Actualizando…" : `Agregar ${getGroupLabel(missingPreferred)}`}</Button> : <Button type="button" size="sm" onClick={() => select(contact)} className="h-11 shrink-0 bg-[var(--ossum-action)] text-xs text-white hover:bg-[#1830a8] sm:h-8"><Check className="size-3" />Seleccionar</Button>}
+              </li>
+            })}</ul>}
+        </div>
 
-          <div className="space-y-3">
-            {/* Search input */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                className="h-8 text-sm pl-8"
-                placeholder="Buscar por código, nombre, CUIT..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
-              />
-            </div>
+        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--ossum-line)] bg-white px-4 py-3"><span className="text-xs text-gray-500">{!loading && !error ? `${results.length} resultado${results.length === 1 ? "" : "s"}` : ""}</span><div className="flex gap-2"><Button type="button" variant="outline" onClick={close} className="h-11 sm:h-8">Cancelar</Button>{context.allowCreate && <Button type="button" disabled={!companyId} onClick={() => setFormOpen(true)} className="h-11 bg-[var(--ossum-action)] text-white hover:bg-[#1830a8] sm:h-8"><Plus className="size-3.5" />Nuevo contacto</Button>}</div></footer>
+      </DialogContent>
+    </Dialog>
 
-            {/* Context group categories */}
-            {contextGroups.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                  Categorías
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {contextGroups.map((group) => (
-                    <button
-                      key={group.id}
-                      className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-medium border transition-colors",
-                        GROUP_BADGE_COLORS[group.role],
-                        // CHATZAI-025A.5-fix: Highlight the selected group
-                        selectedGroupFilter === group.id
-                          ? "ring-2 ring-primary/60 bg-primary/10"
-                          : context.preferredGroups.includes(group.id)
-                            ? "ring-1 ring-primary/40"
-                            : ""
-                      )}
-                      onClick={() => {
-                        setSearchQuery("")
-                        setExpandedSearch(false)
-                        // CHATZAI-025A.5-fix: Toggle group filter — click again to clear
-                        setSelectedGroupFilter((prev) => prev === group.id ? null : group.id)
-                      }}
-                    >
-                      {group.nombre}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Expanded search toggle */}
-            {context.allowExpandedSearch && context.allowedRoles && context.allowedRoles.length < ALL_CONTACT_ROLES.length && (
-              <button
-                className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => setExpandedSearch(!expandedSearch)}
-              >
-                {expandedSearch ? (
-                  <><ChevronUp className="size-3" /> Restringir búsqueda a {context.allowedRoles.map((r) => CONTACT_ROLE_LABELS[r]).join(", ")}</>
-                ) : (
-                  <><ChevronDown className="size-3" /> Ampliar búsqueda a todos los contactos</>
-                )}
-              </button>
-            )}
-
-            {/* Results */}
-            <div className="max-h-96 overflow-y-auto space-y-1.5 rounded-md border p-2">
-              {sortedResults.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground text-sm">
-                  No se encontraron contactos
-                </div>
-              ) : (
-                sortedResults.map((contacto) => {
-                  const isInPreferredGroup = contacto.groups.some((g) => context.preferredGroups.includes(g))
-                  const preferredGroupMissing = context.preferredGroups.filter((g) => !contacto.groups.includes(g))
-                  return (
-                    <div
-                      key={contacto.id}
-                      className={cn(
-                        "rounded-md border bg-card px-3 py-2 hover:bg-accent/50 transition-colors",
-                        !isInPreferredGroup && "opacity-75"
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-semibold text-primary">
-                              {contacto.codigoContacto}
-                            </span>
-                            <span className="text-sm font-medium truncate">
-                              {contacto.nombre}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                            {contacto.cuit && <span>CUIT: {contacto.cuit}</span>}
-                            {contacto.dni && <span>DNI: {contacto.dni}</span>}
-                            {contacto.localidad && <span>{contacto.localidad}</span>}
-                          </div>
-                          {/* Roles + Groups badges */}
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {contacto.roles.map((role) => (
-                              <Badge
-                                key={role}
-                                variant="outline"
-                                className={cn("text-[9px] px-1.5 py-0 h-4", CONTACT_ROLE_BADGE_COLORS[role])}
-                              >
-                                {CONTACT_ROLE_LABELS[role]}
-                              </Badge>
-                            ))}
-                            {contacto.groups.map((groupId) => {
-                              const group = getGroupById(groupId)
-                              const badgeRole = group?.role ?? contacto.roles[0] ?? "cliente"
-                              return (
-                                <Badge
-                                  key={groupId}
-                                  variant="outline"
-                                  className={cn(
-                                    "text-[9px] px-1.5 py-0 h-4",
-                                    GROUP_BADGE_COLORS[badgeRole]
-                                  )}
-                                >
-                                  {getGroupLabel(groupId)}
-                                </Badge>
-                              )
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-1 shrink-0">
-                          {isInPreferredGroup || context.preferredGroups.length === 0 ? (
-                            <Button
-                              size="sm"
-                              className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-700"
-                              onClick={() => handleSelect(contacto)}
-                            >
-                              <Check className="size-3 mr-0.5" /> Seleccionar
-                            </Button>
-                          ) : (
-                            <div className="space-y-1 text-right">
-                              <p className="text-[10px] text-amber-700">
-                                Sin grupo {getGroupLabel(preferredGroupMissing[0])}
-                              </p>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-[11px]"
-                                onClick={() => handleAddGroupAndSelect(contacto, preferredGroupMissing[0])}
-                              >
-                                Agregar grupo
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-
-            {/* Nuevo contacto button */}
-            {context.allowCreate && (
-              <div className="flex justify-end pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={() => { setFormKey((k) => k + 1); setFormOpen(true) }}
-                >
-                  <Plus className="size-3.5 mr-1" />
-                  Nuevo contacto
-                </Button>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create form dialog — with context defaults for alta rápida */}
-      <ContactoFormDialog
-        key={formKey}
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        onSaved={handleCreated}
-        defaultRoles={context.createDefaults?.roles}
-        defaultGroups={context.createDefaults?.groups}
-      />
-    </>
-  )
+    <ContactoFormDialog open={formOpen} onOpenChange={setFormOpen} defaultRoles={context.createDefaults?.roles} defaultGroups={context.createDefaults?.groups} onSaved={(contact) => { setFormOpen(false); select(contact) }} />
+  </>
 }

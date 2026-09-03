@@ -487,3 +487,13 @@ Alcance autorizado: UI backend-authoritative de borradores y emisión operativa 
 Exclusiones: emisión fiscal, ARCA/AFIP, CAE, schema, migraciones, Auth/roles/seguridad, producción/staging, datos reales, deploy, push y PR.
 
 Evidencia operativa: Engram #6269 y `knowledge/specs/BILLING-PAYMENTS-OPERATIONAL-UI-DEV-001/TASK_BRIEF.md`.
+
+---
+
+## 18. Aprobación activa — Contactos backend authority DEV 2026-09-03
+
+Franco aprobó explícitamente el paquete DEV `CONTACTS-BACKEND-AUTHORITY-UI-DEV-001` respondiendo `confirmo y apruebo` al alcance de schema/migración necesario para convertir Contactos en autoridad backend. Luego confirmó la DB conectada como DEV descartable antes de aplicar la migración y solicitó explícitamente el commit local con `metele commit pa`.
+
+Alcance autorizado: schema y migración aditiva de Contactos, persistencia multiempresa de código/roles/grupos/dirección/perfiles, servicios/validadores/API, UI de Contactos, selectores reutilizables por Nueva Cirugía sin modificar su núcleo, pruebas, Diagnose, revisión GGA y commit local.
+
+Exclusiones: Auth/roles/permisos, cambios del circuito núcleo de Cirugías, datos reales, producción/staging, deploy, push y PR. Evidencia operativa: Engram #6346/#6355 y `knowledge/specs/CONTACTS-BACKEND-AUTHORITY-UI-DEV-001/TASK_BRIEF.md`.

@@ -1,521 +1,166 @@
 "use client"
 
-import React, { useState, useMemo, useEffect, useCallback } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
-import type { Contacto, ContactRole } from "@/types"
-import { apiFetch } from "@/lib/api/client"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { CircleAlert, Pencil, Plus, RefreshCw, Search, ToggleLeft, ToggleRight, Users, X } from "lucide-react"
+import { toast } from "sonner"
+
 import { useAuth } from "@/components/auth/AuthProvider"
-import { mapApiContactListToContactos } from "@/lib/api/contact-adapter"
-import {
-  CONTACT_ROLE_LABELS,
-  CONTACT_ROLE_BADGE_COLORS,
-  ALL_CONTACT_ROLES,
-  CONTACT_GROUPS,
-  getGroupLabel,
-  GROUP_BADGE_COLORS,
-} from "@/lib/contacts.constants"
-import { cn } from "@/lib/utils"
+import { ContactoFormDialog } from "@/components/contactos/ContactoFormDialog"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { toast } from "sonner"
-import {
-  Search,
-  Plus,
-  Pencil,
-  ToggleLeft,
-  ToggleRight,
-  Users,
-} from "lucide-react"
-import { ContactoFormDialog } from "@/components/contactos/ContactoFormDialog"
-
-// ═══════════════════════════════════════════════════════════════
-// Constants
-// ═══════════════════════════════════════════════════════════════
-
-const ALL_ROLES_OPTIONS: { value: ContactRole | "all"; label: string }[] = [
-  { value: "all", label: "Todos los roles" },
-  { value: "cliente", label: "Cliente" },
-  { value: "proveedor", label: "Proveedor" },
-  { value: "interno", label: "Interno" },
-]
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { listContacts, updateContactApi } from "@/lib/api/contacts"
+import { mapApiContactListToContactos, mapApiContactToContacto } from "@/lib/api/contact-adapter"
+import { CONTACT_GROUPS, CONTACT_ROLE_BADGE_COLORS, CONTACT_ROLE_LABELS, getGroupById, getGroupLabel, GROUP_BADGE_COLORS } from "@/lib/contacts.constants"
+import { cn } from "@/lib/utils"
+import type { Contacto, ContactRole } from "@/types"
 
 type StatusFilter = "todos" | "activos" | "inactivos"
-
-// ═══════════════════════════════════════════════════════════════
-// Page
-// ═══════════════════════════════════════════════════════════════
+const ROLE_OPTIONS: Array<{ value: ContactRole | "all"; label: string }> = [{ value: "all", label: "Todos los roles" }, { value: "cliente", label: "Cliente" }, { value: "proveedor", label: "Proveedor" }, { value: "interno", label: "Interno" }]
+const selectClass = "h-11 rounded-md border border-[var(--ossum-line)] bg-white px-3 text-sm transition-[border-color,box-shadow] focus:outline-none focus:ring-2 focus:ring-[var(--ossum-action)]/30 motion-reduce:transition-none sm:h-8 sm:px-2 sm:text-xs"
 
 export default function ContactosPage() {
-  const store = useOrtoTrackStore()
   const { activeCompany } = useAuth()
-
-  // ── API-based contact loading ──
-  const [apiContacts, setApiContacts] = useState<Contacto[] | null>(null)
-  const [apiLoading, setApiLoading] = useState(false)
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [apiFetched, setApiFetched] = useState(false)
-
-  const fetchContacts = useCallback(() => {
-    if (!activeCompany?.id) return
-
-    setApiLoading(true)
-    setApiError(null)
-
-    apiFetch<Array<Record<string, unknown>>>(
-      `/api/companies/${encodeURIComponent(activeCompany.id)}/contacts?isActive=true&take=100`
-    )
-      .then((data) => {
-        setApiContacts(mapApiContactListToContactos(data))
-        setApiLoading(false)
-        setApiFetched(true)
-      })
-      .catch((err: unknown) => {
-        const msg =
-          err instanceof Error ? err.message : "Error loading contacts"
-        setApiError(msg)
-        setApiLoading(false)
-        setApiFetched(true)
-        toast.error(
-          "No se pudieron cargar contactos desde el servidor. Mostrando datos locales."
-        )
-      })
-  }, [activeCompany?.id])
-
-  useEffect(() => {
-    fetchContacts()
-  }, [fetchContacts])
-
-  // ── State ──
-  const [searchQuery, setSearchQuery] = useState("")
+  const companyId = activeCompany?.id
+  const requestRef = useRef(0)
+  const statusMutationRef = useRef(0)
+  const companyIdRef = useRef(companyId)
+  const [contacts, setContacts] = useState<Contacto[]>([])
+  const [contactsCompanyId, setContactsCompanyId] = useState(companyId)
+  const [loading, setLoading] = useState(Boolean(companyId))
+  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState("")
+  const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<ContactRole | "all">("all")
-  const [groupFilter, setGroupFilter] = useState<string | "all">("all")
+  const [groupFilter, setGroupFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("activos")
   const [formOpen, setFormOpen] = useState(false)
-  const [editingContacto, setEditingContacto] = useState<Contacto | null>(null)
-  const [formKey, setFormKey] = useState(0)
+  const [editing, setEditing] = useState<Contacto | null>(null)
+  const [confirming, setConfirming] = useState<Contacto | null>(null)
+  const [statusSaving, setStatusSaving] = useState(false)
 
-  // Confirm dialog
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{
-    contacto: Contacto
-    action: "inactivate" | "reactivate"
-  } | null>(null)
-
-  // Available groups based on selected role
-  const availableGroups = useMemo(() => {
-    if (roleFilter === "all") return CONTACT_GROUPS.filter((g) => g.activo)
-    return CONTACT_GROUPS.filter((g) => g.role === roleFilter && g.activo)
-  }, [roleFilter])
-
-  // ── Contact source (API first, Zustand fallback only on error) ──
-  // Never render Zustand data while API is loading (prevents flicker).
-  const contactSource: Contacto[] = apiContacts
-    ?? (apiFetched && apiError ? store.contactos : [])
-
-  // ── Filtered contacts ──
-  const filteredContactos = useMemo(() => {
-    let result = contactSource
-
-    // Status filter
-    if (statusFilter === "activos") {
-      result = result.filter((c) => c.estado === "activo")
-    } else if (statusFilter === "inactivos") {
-      result = result.filter((c) => c.estado === "inactivo")
+  useEffect(() => {
+    const companyChanged = companyIdRef.current !== companyId
+    companyIdRef.current = companyId
+    statusMutationRef.current += 1
+    if (companyChanged) {
+      setConfirming(null)
+      setStatusSaving(false)
+      setEditing(null)
+      setFormOpen(false)
     }
+  }, [companyId])
 
-    // Role filter
-    if (roleFilter !== "all") {
-      result = result.filter((c) => c.roles.includes(roleFilter))
+  const loadContacts = useCallback(async (clearRows = false) => {
+    const requestId = ++requestRef.current
+    if (!companyId) {
+      setContacts([])
+      setContactsCompanyId(undefined)
+      setLoading(false)
+      setLoaded(false)
+      setLoadError("")
+      return
     }
-
-    // Group filter
-    if (groupFilter !== "all") {
-      result = result.filter((c) => c.groups.includes(groupFilter))
-    }
-
-    // Search
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim()
-      result = result.filter(
-        (c) =>
-          c.codigoContacto.toLowerCase().includes(q) ||
-          c.nombre.toLowerCase().includes(q) ||
-          (c.cuit && c.cuit.toLowerCase().includes(q)) ||
-          (c.dni && c.dni.toLowerCase().includes(q)) ||
-          (c.nombreFantasia && c.nombreFantasia.toLowerCase().includes(q)) ||
-          (c.razonSocial && c.razonSocial.toLowerCase().includes(q))
-      )
-    }
-
-    // Sort by code
-    return result.sort((a, b) => a.codigoContacto.localeCompare(b.codigoContacto))
-  }, [contactSource, searchQuery, roleFilter, groupFilter, statusFilter])
-
-  // ── Counts ──
-  const activeCount = contactSource.filter((c) => c.estado === "activo").length
-  const inactiveCount = contactSource.filter((c) => c.estado === "inactivo").length
-
-  // ── Handlers ──
-  const handleNewContact = () => {
-    setEditingContacto(null)
-    setFormKey((k) => k + 1)
-    setFormOpen(true)
-  }
-
-  const handleEdit = (contacto: Contacto) => {
-    setEditingContacto(contacto)
-    setFormKey((k) => k + 1)
-    setFormOpen(true)
-  }
-
-  const handleToggleStatus = (contacto: Contacto) => {
-    const action = contacto.estado === "activo" ? "inactivate" : "reactivate"
-    setConfirmAction({ contacto, action })
-    setConfirmOpen(true)
-  }
-
-  const confirmToggleStatus = async () => {
-    if (!confirmAction) return
-
-    const { contacto, action } = confirmAction
-    const newState = action === "inactivate" ? false : true
-
-    setConfirmOpen(false)
-    setConfirmAction(null)
-
+    if (clearRows) { setContacts([]); setContactsCompanyId(companyId); setLoaded(false) }
+    setLoading(true)
+    setLoadError("")
     try {
-      const url = `/api/companies/${encodeURIComponent(activeCompany?.id ?? "")}/contacts/${encodeURIComponent(contacto.id)}`
-      await apiFetch(url, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive: newState }),
-        headers: { "Content-Type": "application/json" },
-      })
-
-      toast.success(
-        action === "inactivate"
-          ? `Contacto ${contacto.codigoContacto} inactivado`
-          : `Contacto ${contacto.codigoContacto} reactivado`
-      )
-      fetchContacts()
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Error al cambiar estado"
-
-      // Fallback: use Zustand store
-      if (action === "inactivate") {
-        store.inactivateContacto(contacto.id)
-      } else {
-        store.reactivateContacto(contacto.id)
+      const response: Awaited<ReturnType<typeof listContacts>> = []
+      for (let skip = 0; ; skip += 500) {
+        const page = await listContacts(companyId, { includeInactive: true, take: 500, ...(skip ? { skip } : {}) })
+        response.push(...page)
+        if (page.length < 500) break
       }
+      if (requestId === requestRef.current) { setContacts(mapApiContactListToContactos(response)); setContactsCompanyId(companyId); setLoaded(true) }
+    } catch (cause) {
+      if (requestId === requestRef.current) { setLoadError(cause instanceof Error ? cause.message : "No se pudieron cargar los contactos."); setLoaded(true) }
+    } finally {
+      if (requestId === requestRef.current) setLoading(false)
+    }
+  }, [companyId])
 
-      toast.error(msg)
+  useEffect(() => {
+    void Promise.resolve().then(() => loadContacts(true))
+    return () => { requestRef.current += 1; statusMutationRef.current += 1 }
+  }, [loadContacts])
+
+  const availableGroups = useMemo(() => CONTACT_GROUPS.filter((group) => group.activo && (roleFilter === "all" || group.role === roleFilter)), [roleFilter])
+  const companyContacts = useMemo(() => contactsCompanyId === companyId ? contacts : [], [companyId, contacts, contactsCompanyId])
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    return companyContacts.filter((contact) => {
+      if (statusFilter === "activos" && contact.estado !== "activo") return false
+      if (statusFilter === "inactivos" && contact.estado !== "inactivo") return false
+      if (roleFilter !== "all" && !contact.roles.includes(roleFilter)) return false
+      if (groupFilter !== "all" && !contact.groups.includes(groupFilter)) return false
+      if (normalized && ![contact.codigoContacto, contact.nombre, contact.nombreFantasia, contact.razonSocial, contact.cuit, contact.dni, contact.email].filter(Boolean).some((value) => value?.toLowerCase().includes(normalized))) return false
+      return true
+    }).sort((a, b) => a.codigoContacto.localeCompare(b.codigoContacto))
+  }, [companyContacts, groupFilter, query, roleFilter, statusFilter])
+  const hasFilters = Boolean(query || roleFilter !== "all" || groupFilter !== "all" || statusFilter !== "todos")
+  const activeCount = companyContacts.filter((contact) => contact.estado === "activo").length
+  const inactiveCount = companyContacts.length - activeCount
+
+  const clearFilters = () => { setQuery(""); setRoleFilter("all"); setGroupFilter("all"); setStatusFilter("todos") }
+  const handleSaved = (canonical: Contacto) => {
+    setContactsCompanyId(companyId)
+    setContacts((current) => current.some((contact) => contact.id === canonical.id) ? current.map((contact) => contact.id === canonical.id ? canonical : contact) : [...current, canonical])
+    setEditing(null)
+    setFormOpen(false)
+  }
+  const toggleStatus = async () => {
+    if (!confirming || !companyId) return
+    const requestId = ++statusMutationRef.current
+    const requestCompanyId = companyId
+    setStatusSaving(true)
+    try {
+      const response = await updateContactApi(requestCompanyId, confirming.id, { isActive: confirming.estado !== "activo" })
+      if (requestId !== statusMutationRef.current || companyIdRef.current !== requestCompanyId) return
+      const canonical = mapApiContactToContacto(response)
+      setContacts((current) => current.map((contact) => contact.id === canonical.id ? canonical : contact))
+      toast.success(`Contacto ${canonical.codigoContacto} ${canonical.estado === "activo" ? "reactivado" : "inactivado"}`)
+      setConfirming(null)
+    } catch (cause) {
+      if (requestId !== statusMutationRef.current || companyIdRef.current !== requestCompanyId) return
+      toast.error(cause instanceof Error ? cause.message : "No se pudo cambiar el estado del contacto.")
+    } finally {
+      if (requestId === statusMutationRef.current) setStatusSaving(false)
     }
   }
 
-  const handleFormSaved = () => {
-    setFormOpen(false)
-    setEditingContacto(null)
-    fetchContacts()
-  }
+  return <div className="flex h-full min-h-0 flex-col bg-[var(--ossum-surface)]">
+    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--ossum-line)] bg-white px-4 py-2">
+      <div><h1 className="text-base font-semibold text-[var(--ossum-navy)]">Contactos</h1><p className="text-[11px] text-gray-400">{companyContacts.length} total · {activeCount} activos · {inactiveCount} inactivos</p></div>
+      <Button type="button" size="sm" disabled={!companyId} onClick={() => { setEditing(null); setFormOpen(true) }} className="h-11 bg-[var(--ossum-action)] text-sm text-white transition-[background-color] motion-reduce:transition-none hover:bg-[#1830a8] sm:h-8 sm:text-xs"><Plus className="size-3.5" />Nuevo contacto</Button>
+    </header>
 
-  // Reset group filter when role changes
-  const handleRoleChange = (value: string) => {
-    setRoleFilter(value as ContactRole | "all")
-    setGroupFilter("all")
-  }
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="shrink-0 border-b bg-card/80 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Users className="size-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">Maestro de Contactos</h1>
-            <p className="text-xs text-muted-foreground">
-              {activeCount} activos · {inactiveCount} inactivos · {contactSource.length} total
-            </p>
-          </div>
-        </div>
+    <div className="shrink-0 border-b border-[var(--ossum-line)] bg-white px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-56 flex-1 sm:max-w-xs"><Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" /><Input aria-label="Buscar contactos" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Código, nombre, CUIT o DNI…" className="h-11 pl-8 pr-8 text-sm sm:h-8 sm:text-xs" />{query && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"><X className="size-3.5" /></button>}</div>
+        <select aria-label="Filtrar por rol" value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value as typeof roleFilter); setGroupFilter("all") }} className={selectClass}>{ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+        <select aria-label="Filtrar por grupo" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)} className={selectClass}><option value="all">Todos los grupos</option>{availableGroups.map((group) => <option key={group.id} value={group.id}>{group.nombre}</option>)}</select>
+        <select aria-label="Filtrar por estado" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className={selectClass}><option value="todos">Todos los estados</option><option value="activos">Activos</option><option value="inactivos">Inactivos</option></select>
+        {hasFilters && <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="h-11 text-xs sm:h-8">Limpiar filtros</Button>}
+        <Button type="button" variant="outline" size="sm" disabled={!companyId || loading} onClick={() => void loadContacts(false)} className="ml-auto h-11 text-xs sm:h-8"><RefreshCw className={cn("size-3.5", loading && "animate-spin motion-reduce:animate-none")} />Actualizar</Button>
       </div>
-
-      {/* Toolbar */}
-      <div className="shrink-0 border-b bg-card/50 px-6 py-3">
-        {apiError && (
-          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1.5 mb-2">
-            ⚠ {apiError}. Mostrando datos locales.
-          </div>
-        )}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-            <Input
-              className="h-8 text-sm pl-8"
-              placeholder="Buscar por código, nombre, CUIT, DNI..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {/* Role filter */}
-          <Select value={roleFilter} onValueChange={handleRoleChange}>
-            <SelectTrigger className="h-8 text-sm w-36">
-              <SelectValue placeholder="Todos los roles" />
-            </SelectTrigger>
-            <SelectContent>
-              {ALL_ROLES_OPTIONS.map((r) => (
-                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Group filter */}
-          <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v)}>
-            <SelectTrigger className="h-8 text-sm w-48">
-              <SelectValue placeholder="Todos los grupos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los grupos</SelectItem>
-              {availableGroups.map((g) => (
-                <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Status filter */}
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="h-8 text-sm w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="activos">Activos</SelectItem>
-              <SelectItem value="inactivos">Inactivos</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* New button */}
-          <Button
-            className="h-8 text-sm ml-auto bg-emerald-600 hover:bg-emerald-700"
-            onClick={handleNewContact}
-          >
-            <Plus className="size-4 mr-1" />
-            Nuevo contacto
-          </Button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="flex-1 overflow-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-[11px] w-20">Código</TableHead>
-              <TableHead className="text-[11px]">Nombre / Razón social</TableHead>
-              <TableHead className="text-[11px]">CUIT / DNI</TableHead>
-              <TableHead className="text-[11px]">Localidad</TableHead>
-              <TableHead className="text-[11px]">Roles</TableHead>
-              <TableHead className="text-[11px]">Grupos</TableHead>
-              <TableHead className="text-[11px] w-20">Estado</TableHead>
-              <TableHead className="text-[11px] w-24">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {apiLoading && !apiFetched ? (
-              // Loading skeleton — never show Zustand rows during API fetch
-              Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={`skel-${i}`}>
-                  <TableCell className="font-mono text-xs"><div className="h-3 w-14 bg-muted animate-pulse rounded" /></TableCell>
-                  <TableCell><div className="h-3 w-40 bg-muted animate-pulse rounded" /></TableCell>
-                  <TableCell><div className="h-3 w-24 bg-muted animate-pulse rounded" /></TableCell>
-                  <TableCell><div className="h-3 w-20 bg-muted animate-pulse rounded" /></TableCell>
-                  <TableCell><div className="h-3 w-16 bg-muted animate-pulse rounded" /></TableCell>
-                  <TableCell><div className="h-3 w-16 bg-muted animate-pulse rounded" /></TableCell>
-                  <TableCell><div className="h-3 w-14 bg-muted animate-pulse rounded" /></TableCell>
-                  <TableCell><div className="h-3 w-16 bg-muted animate-pulse rounded" /></TableCell>
-                </TableRow>
-              ))
-            ) : filteredContactos.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground text-sm">
-                  No se encontraron contactos
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredContactos.map((contacto) => (
-                <TableRow key={contacto.id} className="group">
-                  <TableCell className="font-mono text-xs font-semibold text-primary">
-                    {contacto.codigoContacto}
-                  </TableCell>
-
-                  <TableCell className="text-sm">
-                    <div>
-                      <span className="font-medium">{contacto.nombre}</span>
-                      {contacto.razonSocial && contacto.tipoPersona === "juridica" && (
-                        <p className="text-[10px] text-muted-foreground">{contacto.razonSocial}</p>
-                      )}
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="text-xs">
-                    {contacto.cuit || contacto.dni || "—"}
-                  </TableCell>
-
-                  <TableCell className="text-xs text-muted-foreground">
-                    {contacto.localidad || "—"}
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="flex flex-wrap gap-0.5">
-                      {contacto.roles.map((role) => (
-                        <Badge
-                          key={role}
-                          variant="outline"
-                          className={cn("text-[9px] px-1.5 py-0 h-4", CONTACT_ROLE_BADGE_COLORS[role])}
-                        >
-                          {CONTACT_ROLE_LABELS[role]}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="flex flex-wrap gap-0.5">
-                      {contacto.groups.map((groupId) => {
-                        const group = CONTACT_GROUPS.find((g) => g.id === groupId)
-                        return (
-                          <Badge
-                            key={groupId}
-                            variant="outline"
-                            className={cn("text-[9px] px-1.5 py-0 h-4", group ? GROUP_BADGE_COLORS[group.role] : "bg-gray-100 text-gray-600 border-gray-200")}
-                          >
-                            {getGroupLabel(groupId)}
-                          </Badge>
-                        )
-                      })}
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px] px-1.5 py-0 h-4",
-                        contacto.estado === "activo"
-                          ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                          : "bg-gray-100 text-gray-600 border-gray-200"
-                      )}
-                    >
-                      {contacto.estado === "activo" ? "Activo" : "Inactivo"}
-                    </Badge>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="flex items-center gap-0.5">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 text-muted-foreground hover:text-foreground"
-                        onClick={() => handleEdit(contacto)}
-                        aria-label="Editar"
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          "size-7",
-                          contacto.estado === "activo"
-                            ? "text-amber-600 hover:text-amber-700"
-                            : "text-emerald-600 hover:text-emerald-700"
-                        )}
-                        onClick={() => handleToggleStatus(contacto)}
-                        aria-label={contacto.estado === "activo" ? "Inactivar" : "Reactivar"}
-                      >
-                        {contacto.estado === "activo" ? (
-                          <ToggleLeft className="size-4" />
-                        ) : (
-                          <ToggleRight className="size-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Form dialog */}
-      <ContactoFormDialog
-        key={formKey}
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        contacto={editingContacto}
-        onSaved={handleFormSaved}
-      />
-
-      {/* Confirm dialog */}
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmAction?.action === "inactivate"
-                ? "Inactivar contacto"
-                : "Reactivar contacto"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmAction?.action === "inactivate"
-                ? `¿Está seguro de inactivar el contacto "${confirmAction?.contacto.nombre}" (${confirmAction?.contacto.codigoContacto})? El contacto no aparecerá en las búsquedas pero no será eliminado.`
-                : `¿Está seguro de reactivar el contacto "${confirmAction?.contacto.nombre}" (${confirmAction?.contacto.codigoContacto})?`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmToggleStatus}
-              className={cn(
-                confirmAction?.action === "inactivate"
-                  ? "bg-amber-600 hover:bg-amber-700"
-                  : "bg-emerald-600 hover:bg-emerald-700"
-              )}
-            >
-              {confirmAction?.action === "inactivate" ? "Inactivar" : "Reactivar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {loadError && companyContacts.length > 0 && <div role="alert" className="mt-2 flex items-center justify-between gap-3 border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"><span>No se pudo actualizar: {loadError}. Se mantienen los contactos cargados.</span><button type="button" onClick={() => void loadContacts(false)} className="font-medium underline">Reintentar</button></div>}
     </div>
-  )
+
+    <main className="flex min-h-0 flex-1 flex-col">
+      {!companyId ? <State icon={Users} title="No hay una empresa activa" detail="Seleccioná una empresa para consultar su maestro de contactos." />
+        : loading && !loaded ? <State icon={RefreshCw} title="Cargando contactos…" detail="Consultando el maestro de la empresa activa." loading />
+        : loadError && companyContacts.length === 0 ? <State icon={CircleAlert} title="No se pudieron cargar los contactos" detail={loadError} action="Reintentar" onAction={() => void loadContacts(true)} alert />
+        : companyContacts.length === 0 ? <State icon={Users} title="Todavía no hay contactos" detail="Creá el primer contacto para esta empresa." action="Nuevo contacto" onAction={() => setFormOpen(true)} />
+        : filtered.length === 0 ? <State icon={Search} title="No se encontraron contactos" detail="Probá otro texto o quitá los filtros activos." action="Limpiar filtros" onAction={clearFilters} />
+        : <div className="m-3 min-h-0 flex-1 overflow-hidden border border-[var(--ossum-line)] bg-white"><div className="h-full overflow-auto"><table className="w-full min-w-[980px] border-separate border-spacing-0 text-xs"><thead><tr>{["Código", "Nombre / razón social", "CUIT / DNI", "Localidad", "Roles", "Grupos", "Estado", "Acciones"].map((label) => <th key={label} className="sticky top-0 z-10 whitespace-nowrap bg-[var(--ossum-navy)] px-3 py-2 text-left font-medium text-white">{label}</th>)}</tr></thead><tbody>{filtered.map((contact) => <tr key={contact.id} className="group hover:bg-[var(--ossum-surface-2)]"><td className="border-b border-[var(--ossum-line)] px-3 py-1.5 font-mono font-semibold text-[var(--ossum-action)]">{contact.codigoContacto}</td><td className="border-b border-[var(--ossum-line)] px-3 py-1.5"><p className="font-medium text-gray-900">{contact.nombre}</p>{contact.nombreFantasia && <p className="text-[11px] text-gray-400">{contact.nombreFantasia}</p>}</td><td className="border-b border-[var(--ossum-line)] px-3 py-1.5 font-mono text-gray-600">{contact.cuit || contact.dni || "—"}</td><td className="border-b border-[var(--ossum-line)] px-3 py-1.5 text-gray-600">{contact.localidad || "—"}</td><td className="border-b border-[var(--ossum-line)] px-3 py-1.5"><div className="flex flex-wrap gap-1">{contact.roles.map((role) => <Badge key={role} variant="outline" className={cn("h-4 px-1.5 text-[9px]", CONTACT_ROLE_BADGE_COLORS[role])}>{CONTACT_ROLE_LABELS[role]}</Badge>)}</div></td><td className="border-b border-[var(--ossum-line)] px-3 py-1.5"><div className="flex flex-wrap gap-1">{contact.groups.map((group) => { const role = getGroupById(group)?.role ?? contact.roles[0] ?? "cliente"; return <Badge key={group} variant="outline" className={cn("h-4 px-1.5 text-[9px]", GROUP_BADGE_COLORS[role])}>{getGroupLabel(group)}</Badge> })}</div></td><td className="border-b border-[var(--ossum-line)] px-3 py-1.5"><span className="inline-flex items-center gap-1.5"><span className={cn("size-2 rounded-full", contact.estado === "activo" ? "bg-sky-500" : "bg-gray-300")} />{contact.estado === "activo" ? "Activo" : "Inactivo"}</span></td><td className="border-b border-[var(--ossum-line)] px-2 py-1"><div className="flex gap-1"><Button type="button" variant="ghost" size="icon" className="size-8" onClick={() => { setEditing(contact); setFormOpen(true) }} aria-label={`Editar ${contact.nombre}`}><Pencil className="size-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="size-8" onClick={() => setConfirming(contact)} aria-label={`${contact.estado === "activo" ? "Inactivar" : "Reactivar"} ${contact.nombre}`}>{contact.estado === "activo" ? <ToggleLeft className="size-4 text-amber-600" /> : <ToggleRight className="size-4 text-[var(--ossum-action)]" />}</Button></div></td></tr>)}</tbody></table></div></div>}
+    </main>
+
+    <ContactoFormDialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) setEditing(null) }} contacto={editing} onSaved={handleSaved} />
+    <AlertDialog open={Boolean(confirming)} onOpenChange={(open) => { if (!open && !statusSaving) setConfirming(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirming?.estado === "activo" ? "Inactivar contacto" : "Reactivar contacto"}</AlertDialogTitle><AlertDialogDescription>{confirming?.estado === "activo" ? `El contacto ${confirming?.nombre} dejará de aparecer en búsquedas activas, pero no será eliminado.` : `El contacto ${confirming?.nombre} volverá a estar disponible en las búsquedas.`}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={statusSaving}>Cancelar</AlertDialogCancel><AlertDialogAction disabled={statusSaving} onClick={(event) => { event.preventDefault(); void toggleStatus() }} className="bg-[var(--ossum-action)] text-white hover:bg-[#1830a8]">{statusSaving ? "Guardando…" : "Confirmar"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+  </div>
+}
+
+function State({ icon: Icon, title, detail, action, onAction, loading, alert }: { icon: typeof Users; title: string; detail: string; action?: string; onAction?: () => void; loading?: boolean; alert?: boolean }) {
+  return <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 py-10 text-center" role={alert ? "alert" : loading ? "status" : undefined}><Icon className={cn("size-5 text-gray-400", loading && "animate-spin motion-reduce:animate-none", alert && "text-destructive")} /><div><p className="text-sm font-medium">{title}</p><p className="mt-1 max-w-sm text-xs text-gray-500">{detail}</p></div>{action && <Button type="button" variant="outline" size="sm" onClick={onAction} className="h-11 sm:h-8">{action}</Button>}</div>
 }

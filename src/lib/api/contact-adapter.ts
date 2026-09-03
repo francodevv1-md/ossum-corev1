@@ -11,20 +11,19 @@
  *   Link fields: linkRole, linkIsActive
  */
 
-import type { Contacto, ContactRole } from "@/types"
+import type { CondicionIvaCliente, Contacto, ContactRole } from "@/types"
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
 /**
- * Resolve a Contacto code from the API response.
- * Phase 2 will populate api.codigo from the DB-backed SequenceCounter.
- * Phase 1 fallback: a deterministic transient label that CANNOT collide
+ * Resolve the company-scoped Contacto code from the API response.
+ * Legacy fallback: a deterministic transient label that CANNOT collide
  *   with the canonical C-\d{4,} regex (uses "C-T" prefix), and is
  *   clearly flagged as transient for migration.
  */
 function resolveContactoCodigo(api: Record<string, unknown>): string {
-  // TODO(P2): replace fallback with DB-backed api.codigo once Phase 2 lands.
-  const real = typeof api.codigo === "string" ? api.codigo.trim() : ""
+  const candidate = api.code ?? api.codigo
+  const real = typeof candidate === "string" ? candidate.trim() : ""
   if (real) return real
   // Transient fallback: deterministic but obviously non-canonical.
   const id = (api.id as string) ?? ""
@@ -38,6 +37,7 @@ function buildNombre(api: Record<string, unknown>): string {
   if (firstName && lastName) return `${firstName} ${lastName}`
   const legalName = (api.legalName as string | null)?.trim()
   if (legalName) return legalName
+  if (firstName || lastName) return [firstName, lastName].filter(Boolean).join(" ")
   return "Sin nombre"
 }
 
@@ -70,28 +70,58 @@ export function mapApiContactToContacto(
   const cuit = documentType === "CUIT" ? documentNumber : undefined
   const dni = documentType === "DNI" ? documentNumber : undefined
 
-  // Resolve role(s) — single linkRole for now
-  const linkRole = apiContact.linkRole
-  const role: ContactRole = resolveContactRole(linkRole)
+  const rawRoles = apiContact.roles
+  const roles = Array.isArray(rawRoles)
+    ? rawRoles.filter((role): role is ContactRole => role === "cliente" || role === "proveedor" || role === "interno")
+    : [resolveContactRole(apiContact.linkRole)]
+  const groupSlugs = Array.isArray(apiContact.groupSlugs)
+    ? apiContact.groupSlugs.filter((group): group is string => typeof group === "string")
+    : []
+  const mainAddress = apiContact.mainAddress && typeof apiContact.mainAddress === "object"
+    ? apiContact.mainAddress as Record<string, unknown>
+    : undefined
+  const street = typeof mainAddress?.street === "string" ? mainAddress.street : ""
+  const number = typeof mainAddress?.number === "string" ? mainAddress.number : ""
+  const domicilio = [street, number].filter(Boolean).join(" ") || undefined
+  const usualDiscount = typeof apiContact.usualDiscount === "number"
+    ? apiContact.usualDiscount
+    : typeof apiContact.usualDiscount === "string"
+      ? Number(apiContact.usualDiscount)
+      : undefined
 
   return {
     id,
     codigoContacto: resolveContactoCodigo(apiContact),
     tipoPersona: isCompany ? "juridica" : "fisica",
     nombre: buildNombre(apiContact),
-    nombreFantasia: undefined,
+    nombreFantasia: (apiContact.tradeName as string | undefined) || undefined,
     razonSocial: isCompany ? ((apiContact.legalName as string) ?? undefined) : undefined,
     cuit,
     dni,
     estado: linkIsActive ? "activo" : "inactivo",
-    roles: [role],
-    groups: [],
+    observaciones: (apiContact.notes as string | undefined) || undefined,
+    roles,
+    groups: groupSlugs,
     email,
     telefonos: phone ? [phone] : undefined,
-    domicilio: undefined,
-    provincia: undefined,
-    localidad: undefined,
-    codigoPostal: undefined,
+    domicilio,
+    provincia: (mainAddress?.state as string | undefined) || undefined,
+    localidad: (mainAddress?.city as string | undefined) || undefined,
+    codigoPostal: (mainAddress?.zipCode as string | undefined) || undefined,
+    datosClientePagador: roles.includes("cliente") ? {
+      esPagador: typeof apiContact.isPayer === "boolean" ? apiContact.isPayer : true,
+      condicionIva: (apiContact.vatCondition as CondicionIvaCliente | undefined) || "Consumidor Final",
+      condicionPago: (apiContact.paymentTerms as string | undefined) || undefined,
+      listaPreciosDefault: (apiContact.defaultPriceList as string | undefined) || undefined,
+      descuentoHabitual: Number.isFinite(usualDiscount) ? usualDiscount : undefined,
+    } : undefined,
+    datosMedico: groupSlugs.includes("medicos") || apiContact.doctorLicense || apiContact.specialty ? {
+      matricula: (apiContact.doctorLicense as string | undefined) || undefined,
+      especialidad: (apiContact.specialty as string | undefined) || undefined,
+    } : undefined,
+    datosInstitucion: groupSlugs.includes("instituciones") || apiContact.deliveryNotes ? {
+      observacionEntrega: (apiContact.deliveryNotes as string | undefined) || undefined,
+    } : undefined,
     createdAt: (apiContact.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (apiContact.updatedAt as string) ?? new Date().toISOString(),
   }
@@ -112,14 +142,7 @@ export function mapApiContactListToContactos(
  * Maps domain fields (tipoPersona, nombre, cuit, dni, roles, telefonos)
  * to Prisma Contact fields (isCompany, legalName, firstName, lastName, etc.).
  *
- * Fields NOT mapped (kept only in Zustand/local):
- *   nombreFantasia, domicilio, provincia, localidad,
- *   codigoPostal, observaciones, datosClientePagador, datosMedico,
- *   datosInstitucion, groups
- *
- * NOTE (CONTACTO-CODIGO-AUTO-P1): `codigoContacto` is now mapped OUT to
- * `payload.codigo` (FR-13, forward-compat P2) and IN from `api.codigo`
- * (FR-12), with a transient `C-T####` fallback when the API does not provide one.
+ * All persisted Contacto form fields are flattened into the API contract.
  */
 export function mapContactoToApiPayload(
   formData: Partial<Contacto>
@@ -129,10 +152,10 @@ export function mapContactoToApiPayload(
   // Person type → isCompany + name split
   if (formData.tipoPersona === "juridica") {
     payload.isCompany = true
-    if (formData.razonSocial?.trim()) {
-      payload.legalName = formData.razonSocial.trim()
-    } else if (formData.nombre?.trim()) {
+    if (formData.nombre?.trim()) {
       payload.legalName = formData.nombre.trim()
+    } else if (formData.razonSocial?.trim()) {
+      payload.legalName = formData.razonSocial.trim()
     }
   } else {
     payload.isCompany = false
@@ -148,15 +171,13 @@ export function mapContactoToApiPayload(
     }
   }
 
-  // Email
-  if (formData.email?.trim()) {
-    payload.email = formData.email.trim()
-  }
+  if ("nombreFantasia" in formData) payload.tradeName = formData.nombreFantasia?.trim() || null
+  if ("observaciones" in formData) payload.notes = formData.observaciones?.trim() || null
+
+  if ("email" in formData) payload.email = formData.email?.trim() || null
 
   // Phone (first phone from the array)
-  if (formData.telefonos?.[0]?.trim()) {
-    payload.phone = formData.telefonos[0].trim()
-  }
+  if ("telefonos" in formData) payload.phone = formData.telefonos?.[0]?.trim() || null
 
   // Document: CUIT takes precedence over DNI
   if (formData.cuit?.trim()) {
@@ -165,17 +186,42 @@ export function mapContactoToApiPayload(
   } else if (formData.dni?.trim()) {
     payload.documentType = "DNI"
     payload.documentNumber = formData.dni.trim()
+  } else if ("cuit" in formData || "dni" in formData) {
+    payload.documentType = null
+    payload.documentNumber = null
   }
 
   // Role → contactType + role
-  const firstRole = formData.roles?.[0]
-  if (firstRole) {
-    payload.contactType = firstRole
-    payload.role = firstRole
+  if ("roles" in formData) {
+    payload.roles = formData.roles ?? []
+  }
+  if ("groups" in formData) payload.groupSlugs = formData.groups ?? []
+
+  if (["domicilio", "provincia", "localidad", "codigoPostal"].some((key) => key in formData)) {
+    payload.mainAddress = {
+      street: formData.domicilio?.trim() || null,
+      city: formData.localidad?.trim() || null,
+      state: formData.provincia?.trim() || null,
+      zipCode: formData.codigoPostal?.trim() || null,
+      country: "AR",
+    }
   }
 
-  // CONTACTO-CODIGO-AUTO-P1 / FR-13: Forward-compat P2 — send the contact code
-  // so the API can persist it. Phase 1 API may ignore it.
+  if ("datosClientePagador" in formData) {
+    payload.isPayer = formData.datosClientePagador?.esPagador ?? null
+    payload.vatCondition = formData.datosClientePagador?.condicionIva ?? null
+    payload.paymentTerms = formData.datosClientePagador?.condicionPago?.trim() || null
+    payload.defaultPriceList = formData.datosClientePagador?.listaPreciosDefault?.trim() || null
+    payload.usualDiscount = formData.datosClientePagador?.descuentoHabitual ?? null
+  }
+  if ("datosMedico" in formData) {
+    payload.doctorLicense = formData.datosMedico?.matricula?.trim() || null
+    payload.specialty = formData.datosMedico?.especialidad?.trim() || null
+  }
+  if ("datosInstitucion" in formData) {
+    payload.deliveryNotes = formData.datosInstitucion?.observacionEntrega?.trim() || null
+  }
+
   const codigo = formData.codigoContacto?.trim()
   if (codigo) {
     payload.codigo = codigo

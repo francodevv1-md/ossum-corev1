@@ -1,879 +1,250 @@
 "use client"
 
-import React, { useState } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
-import type { Contacto, ContactRole, TipoPersona, DatosClientePagador, DatosMedico, DatosInstitucion, CondicionIvaCliente } from "@/types"
-import { cn } from "@/lib/utils"
+import React, { useEffect, useId, useRef, useState } from "react"
+import { CircleAlert, Loader2 } from "lucide-react"
+import { toast } from "sonner"
+
+import { useAuth } from "@/components/auth/AuthProvider"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { toast } from "sonner"
-import { Save, UserPlus, Loader2, Pencil } from "lucide-react"
+import { createContactApi, updateContactApi } from "@/lib/api/contacts"
+import { mapApiContactToContacto, mapContactoToApiPayload } from "@/lib/api/contact-adapter"
 import { CONTACT_GROUPS, CONTACT_ROLE_LABELS, getGroupsForRole } from "@/lib/contacts.constants"
-import { apiFetch } from "@/lib/api/client"
-import { useAuth } from "@/components/auth/AuthProvider"
-import { mapContactoToApiPayload } from "@/lib/api/contact-adapter"
-import {
-  isValidContactCodeFormat,
-  normalizeContactCode,
-} from "@/lib/contact-code"
+import type { CondicionIvaCliente, Contacto, ContactRole, TipoPersona } from "@/types"
 
-// ═══════════════════════════════════════════════════════════════
-// Constants
-// ═══════════════════════════════════════════════════════════════
-
-const ROL_OPTIONS: { value: ContactRole; label: string }[] = [
-  { value: "cliente", label: "Cliente" },
-  { value: "proveedor", label: "Proveedor" },
-  { value: "interno", label: "Interno" },
-]
-
-const CONDICION_IVA_OPTIONS: { value: CondicionIvaCliente; label: string }[] = [
-  { value: "Responsable Inscripto", label: "Responsable Inscripto" },
-  { value: "Responsable Monotributo", label: "Responsable Monotributo" },
-  { value: "Exento", label: "Exento" },
-  { value: "Consumidor Final", label: "Consumidor Final" },
-  { value: "No Responsable", label: "No Responsable" },
-]
+const ROLE_OPTIONS: ContactRole[] = ["cliente", "proveedor", "interno"]
+const VAT_OPTIONS: CondicionIvaCliente[] = ["Responsable Inscripto", "Responsable Monotributo", "Exento", "Consumidor Final", "No Responsable"]
+const controlClass = "h-11 text-sm transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none sm:h-8 sm:text-xs"
+const selectClass = "h-11 w-full rounded-md border border-[var(--ossum-line)] bg-white px-3 text-sm transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-[var(--ossum-action)]/30 motion-reduce:transition-none sm:h-8 sm:px-2 sm:text-xs"
 
 export function sanitizeContactoSaveError(error: unknown): string {
-  const rawMessage = error instanceof Error ? error.message : String(error || "")
-  const message = rawMessage.trim()
-
+  const message = (error instanceof Error ? error.message : String(error || "")).trim()
   if (!message) return "No se pudo guardar el contacto. Revisá los datos e intentá nuevamente."
-
   const normalized = message.toLowerCase()
-  const isIdentifiableFieldError =
-    normalized.includes("at least one identifiable field is required") ||
-    (normalized.includes("firstName") && normalized.includes("lastName") && normalized.includes("documentNumber"))
-
-  if (isIdentifiableFieldError) {
+  if (normalized.includes("at least one identifiable field is required") || (normalized.includes("firstname") && normalized.includes("documentnumber"))) {
     return "Para guardar el contacto, completá al menos un dato identificable: nombre, email, teléfono, DNI o CUIT."
   }
-
-  if (normalized.includes("failed to fetch") || normalized.includes("networkerror")) {
-    return "No se pudo conectar con el servidor. El contacto se guardará localmente si corresponde."
-  }
-
+  if (normalized.includes("failed to fetch") || normalized.includes("networkerror")) return "No se pudo conectar con el servidor. Intentá nuevamente."
   return message
 }
-
-// ═══════════════════════════════════════════════════════════════
-// Props
-// ═══════════════════════════════════════════════════════════════
 
 interface ContactoFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   contacto?: Contacto | null
   onSaved?: (contacto: Contacto) => void
-  /** DC-CT-017: Default roles for alta rápida from context */
   defaultRoles?: ContactRole[]
-  /** DC-CT-016: Default groups for alta rápida from context */
   defaultGroups?: string[]
-  /** Valores iniciales para alta rápida contextual */
-  initialValues?: {
-    tipoPersona?: TipoPersona
-    nombre?: string
-    dni?: string
-  }
+  initialValues?: { tipoPersona?: TipoPersona; nombre?: string; dni?: string }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Inner form component — state initialized from props,
-// remounted via key when contacto changes
-// ═══════════════════════════════════════════════════════════════
+type FormErrors = Record<string, string>
 
-function ContactoFormInner({
-  contacto,
-  onSaved,
-  onOpenChange,
-  defaultRoles,
-  defaultGroups,
-  initialValues,
-}: {
-  contacto?: Contacto | null
-  onSaved?: (contacto: Contacto) => void
-  onOpenChange: (open: boolean) => void
-  defaultRoles?: ContactRole[]
-  defaultGroups?: string[]
-  initialValues?: {
-    tipoPersona?: TipoPersona
-    nombre?: string
-    dni?: string
-  }
-}) {
-  const store = useOrtoTrackStore()
+function Field({ name, label, error, required, className, children }: { name: string; label: string; error?: string; required?: boolean; className?: string; children: React.ReactNode }) {
+  const generatedId = useId()
+  const id = `contact-${name}-${generatedId.replace(/:/g, "")}`
+  const errorId = `${id}-error`
+  const control = React.isValidElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean }>(children)
+    ? React.cloneElement(children, { id, "aria-describedby": error ? errorId : children.props["aria-describedby"], "aria-invalid": Boolean(error) })
+    : children
+  return <div className={`space-y-1 ${className ?? ""}`}><Label htmlFor={id} className="text-xs font-medium">{label}{required ? " *" : ""}</Label>{control}{error && <p id={errorId} role="alert" className="text-xs text-destructive">{error}</p>}</div>
+}
+
+function ContactoFormInner({ contacto, onSaved, onOpenChange, defaultRoles, defaultGroups, initialValues }: Omit<ContactoFormDialogProps, "open">) {
   const { activeCompany } = useAuth()
-  const isEditing = !!contacto
-
-  // ── API mutation state ──
+  const isEditing = Boolean(contacto)
   const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState("")
+  const [errors, setErrors] = useState<FormErrors>({})
+  const companyIdRef = useRef(activeCompany?.id)
+  const mutationRef = useRef(0)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
+  const discountRef = useRef<HTMLInputElement>(null)
 
-  // ── Form state — initialized from contacto prop ──
-  // CONTACTO-CODIGO-AUTO-P1 / FR-4: in create mode, pre-fill with the next
-  // sequential code from the store (per-company stub). Edit mode keeps the
-  // existing code (immutable).
-  const [codigoContacto, setCodigoContacto] = useState(
-    contacto?.codigoContacto ?? store.getNextContactoCodigo(activeCompany?.id)
-  )
   const [tipoPersona, setTipoPersona] = useState<TipoPersona>(contacto?.tipoPersona ?? initialValues?.tipoPersona ?? "fisica")
   const [nombre, setNombre] = useState(contacto?.nombre ?? initialValues?.nombre ?? "")
   const [nombreFantasia, setNombreFantasia] = useState(contacto?.nombreFantasia ?? "")
-  const [razonSocial, setRazonSocial] = useState(contacto?.razonSocial ?? "")
   const [cuit, setCuit] = useState(contacto?.cuit ?? "")
   const [dni, setDni] = useState(contacto?.dni ?? initialValues?.dni ?? "")
   const [estado, setEstado] = useState<"activo" | "inactivo">(contacto?.estado ?? "activo")
   const [observaciones, setObservaciones] = useState(contacto?.observaciones ?? "")
-
   const [domicilio, setDomicilio] = useState(contacto?.domicilio ?? "")
   const [provincia, setProvincia] = useState(contacto?.provincia ?? "")
   const [localidad, setLocalidad] = useState(contacto?.localidad ?? "")
   const [codigoPostal, setCodigoPostal] = useState(contacto?.codigoPostal ?? "")
   const [telefono, setTelefono] = useState(contacto?.telefonos?.[0] ?? "")
   const [email, setEmail] = useState(contacto?.email ?? "")
-
-  const [roles, setRoles] = useState<ContactRole[]>(contacto?.roles ? [...contacto.roles] : (defaultRoles ?? []))
-  const [groups, setGroups] = useState<string[]>(contacto?.groups ? [...contacto.groups] : (defaultGroups ?? []))
-
+  const [roles, setRoles] = useState<ContactRole[]>(contacto?.roles ? [...contacto.roles] : [...(defaultRoles ?? [])])
+  const [groups, setGroups] = useState<string[]>(contacto?.groups ? [...contacto.groups] : [...(defaultGroups ?? [])])
   const [esPagador, setEsPagador] = useState(contacto?.datosClientePagador?.esPagador ?? true)
   const [condicionIva, setCondicionIva] = useState<CondicionIvaCliente>(contacto?.datosClientePagador?.condicionIva ?? "Consumidor Final")
   const [condicionPago, setCondicionPago] = useState(contacto?.datosClientePagador?.condicionPago ?? "")
   const [listaPreciosDefault, setListaPreciosDefault] = useState(contacto?.datosClientePagador?.listaPreciosDefault ?? "")
-  const [descuentoHabitual, setDescuentoHabitual] = useState(contacto?.datosClientePagador?.descuentoHabitual ?? 0)
-
+  const [descuentoHabitual, setDescuentoHabitual] = useState(contacto?.datosClientePagador?.descuentoHabitual?.toString() ?? "")
   const [matricula, setMatricula] = useState(contacto?.datosMedico?.matricula ?? "")
   const [especialidad, setEspecialidad] = useState(contacto?.datosMedico?.especialidad ?? "")
-
   const [observacionEntrega, setObservacionEntrega] = useState(contacto?.datosInstitucion?.observacionEntrega ?? "")
 
-  const [codigoError, setCodigoError] = useState("")
-  const [nombreError, setNombreError] = useState("")
-  // CONTACTO-CODIGO-AUTO-P1 / FR-8: in create mode the code is read-only by
-  // default with a pencil toggle that enables manual editing.
-  const [codigoEditable, setCodigoEditable] = useState(false)
+  useEffect(() => {
+    companyIdRef.current = activeCompany?.id
+    mutationRef.current += 1
+  }, [activeCompany?.id])
+  useEffect(() => () => { mutationRef.current += 1 }, [])
 
-  // ── Toggle role ──
+  const clearError = (name: string) => setErrors((current) => { const next = { ...current }; delete next[name]; return next })
+
   const toggleRole = (role: ContactRole) => {
-    setRoles((prev) => {
-      const next = prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
-      // Remove groups that are incompatible with the new role set
-      setGroups((prevGroups) =>
-        prevGroups.filter((g) => {
-          const group = CONTACT_GROUPS.find((cg) => cg.id === g)
-          return group ? next.includes(group.role) : true
-        })
-      )
+    setRoles((current) => {
+      const next = current.includes(role) ? current.filter((item) => item !== role) : [...current, role]
+      const validGroups = new Set(next.flatMap(getGroupsForRole).map((group) => group.id))
+      const canonicalGroups = new Set(CONTACT_GROUPS.map((group) => group.id))
+      setGroups((currentGroups) => currentGroups.filter((group) => !canonicalGroups.has(group) || validGroups.has(group)))
       return next
     })
   }
 
-  // ── Toggle group ──
-  const toggleGroup = (groupId: string) => {
-    setGroups((prev) =>
-      prev.includes(groupId) ? prev.filter((g) => g !== groupId) : [...prev, groupId]
-    )
+  const validate = () => {
+    const next: FormErrors = {}
+    if (!nombre.trim()) next.nombre = tipoPersona === "juridica" ? "La denominación es obligatoria." : "El nombre es obligatorio."
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) next.email = "Ingresá un email válido."
+    if (descuentoHabitual && (!Number.isFinite(Number(descuentoHabitual)) || Number(descuentoHabitual) < 0 || Number(descuentoHabitual) > 100)) next.descuentoHabitual = "Ingresá un porcentaje entre 0 y 100."
+    setErrors(next)
+    const first = Object.keys(next)[0]
+    if (first) requestAnimationFrame(() => ({ nombre: nameRef, email: emailRef, descuentoHabitual: discountRef }[first]?.current?.focus()))
+    return !first
   }
 
-  // ── Validate ──
-  const handleCodigoBlur = () => {
-    // CONTACTO-CODIGO-AUTO-P1 / FR-3: normalize on blur in create mode only.
-    if (isEditing) return // immutable, nothing to normalize
-    const trimmed = codigoContacto.trim()
-    if (!trimmed) {
-      setCodigoContacto("")
-      return
-    }
-    const normalized = normalizeContactCode(trimmed)
-    setCodigoContacto(normalized ?? trimmed) // keep raw visible if invalid so user sees input
-  }
-
-  const validate = (): boolean => {
-    let valid = true
-
-    if (!nombre.trim()) {
-      setNombreError("El nombre es obligatorio")
-      valid = false
-    } else {
-      setNombreError("")
-    }
-
-    // ── Code validation (CONTACTO-CODIGO-AUTO-P1) ──
-    if (isEditing) {
-      // FR-10 / FR-14: immutable in edit mode — field is display-only.
-      setCodigoError("")
-    } else if (!codigoContacto.trim()) {
-      setCodigoError("El código es obligatorio")
-      valid = false
-    } else if (!isValidContactCodeFormat(codigoContacto.trim())) {
-      setCodigoError("Formato inválido (usar C-0001)")
-      valid = false
-    } else if (!store.isCodigoContactoDisponible(codigoContacto.trim(), activeCompany?.id)) {
-      setCodigoError("El código ya existe")
-      valid = false
-    } else {
-      setCodigoError("")
-    }
-
-    return valid
-  }
-
-  // ── Handle save (API first, Zustand fallback) ──
-  const handleSave = async () => {
+  const save = async () => {
+    if (!activeCompany?.id) { setSaveError("Seleccioná una empresa activa antes de guardar."); return }
     if (!validate()) return
-
     setSaving(true)
-    setSaveError(null)
-
-    const telefonos = telefono.trim() ? [telefono.trim()] : undefined
-
-    const datosClientePagador: DatosClientePagador | undefined =
-      roles.includes("cliente")
-        ? {
-            esPagador,
-            condicionIva,
-            condicionPago: condicionPago.trim() || undefined,
-            listaPreciosDefault: listaPreciosDefault.trim() || undefined,
-            descuentoHabitual: descuentoHabitual || undefined,
-          }
-        : undefined
-
-    const datosMedico: DatosMedico | undefined =
-      groups.includes("medicos")
-        ? {
-            matricula: matricula.trim() || undefined,
-            especialidad: especialidad.trim() || undefined,
-          }
-        : undefined
-
-    const datosInstitucion: DatosInstitucion | undefined =
-      groups.includes("instituciones")
-        ? {
-            observacionEntrega: observacionEntrega.trim() || undefined,
-          }
-        : undefined
-
-    // Build form data for API payload mapping
+    setSaveError("")
     const formData: Partial<Contacto> = {
       tipoPersona,
       nombre: nombre.trim(),
-      razonSocial: razonSocial.trim() || undefined,
+      nombreFantasia: nombreFantasia.trim() || undefined,
       cuit: cuit.trim() || undefined,
       dni: dni.trim() || undefined,
+      estado,
+      observaciones: observaciones.trim() || undefined,
+      domicilio: domicilio.trim() || undefined,
+      provincia: provincia.trim() || undefined,
+      localidad: localidad.trim() || undefined,
+      codigoPostal: codigoPostal.trim() || undefined,
+      telefonos: telefono.trim() ? [telefono.trim()] : undefined,
       email: email.trim() || undefined,
-      telefonos,
       roles,
-      // CONTACTO-CODIGO-AUTO-P1 / FR-13: send codigo to API on create for
-      // forward-compat P2 persistence. Omitted in edit mode (FR-14 immutability).
-      ...( !isEditing ? { codigoContacto: codigoContacto.trim() } : {} ),
+      groups,
+      datosClientePagador: roles.includes("cliente") ? { esPagador, condicionIva, condicionPago: condicionPago.trim() || undefined, listaPreciosDefault: listaPreciosDefault.trim() || undefined, descuentoHabitual: descuentoHabitual ? Number(descuentoHabitual) : undefined } : undefined,
+      datosMedico: groups.includes("medicos") ? { matricula: matricula.trim() || undefined, especialidad: especialidad.trim() || undefined } : undefined,
+      datosInstitucion: groups.includes("instituciones") ? { observacionEntrega: observacionEntrega.trim() || undefined } : undefined,
     }
-
-    const apiPayload = mapContactoToApiPayload(formData)
-
-    // Track whether the status changed (for edit)
-    const statusChanged = isEditing && contacto && contacto.estado !== estado
-    const patchPayload = isEditing && statusChanged
-      ? { ...apiPayload, isActive: estado === "activo" }
-      : apiPayload
-
+    const payload = mapContactoToApiPayload(formData)
+    if (isEditing) {
+      payload.isActive = estado === "activo"
+      if (tipoPersona === "juridica") {
+        payload.firstName = null
+        payload.lastName = null
+      } else {
+        payload.legalName = null
+        if (!nombre.trim().includes(" ")) payload.lastName = null
+      }
+    }
+    const requestId = ++mutationRef.current
+    const requestCompanyId = activeCompany.id
     try {
-      if (isEditing && contacto) {
-        // ── Edit via PATCH ──
-        const url = `/api/companies/${encodeURIComponent(activeCompany?.id ?? "")}/contacts/${encodeURIComponent(contacto.id)}`
-        await apiFetch(url, {
-          method: "PATCH",
-          body: JSON.stringify(patchPayload),
-          headers: { "Content-Type": "application/json" },
-        })
-
-        // Update Zustand for local fields not persisted by API
-        // FR-14 (immutability): codigoContacto is dropped from edit-branch
-        // updateContacto here and in the catch fallback — do NOT pass it.
-        store.updateContacto(contacto.id, {
-          tipoPersona,
-          nombre: nombre.trim(),
-          nombreFantasia: nombreFantasia.trim() || undefined,
-          razonSocial: razonSocial.trim() || undefined,
-          cuit: cuit.trim() || undefined,
-          dni: dni.trim() || undefined,
-          estado,
-          observaciones: observaciones.trim() || undefined,
-          telefonos,
-          email: email.trim() || undefined,
-          domicilio: domicilio.trim() || undefined,
-          provincia: provincia.trim() || undefined,
-          localidad: localidad.trim() || undefined,
-          codigoPostal: codigoPostal.trim() || undefined,
-          roles,
-          groups,
-          datosClientePagador,
-          datosMedico,
-          datosInstitucion,
-        })
-        const updated = store.getContactoById(contacto.id)
-        toast.success(`Contacto ${codigoContacto} actualizado`)
-        onSaved?.(updated!)
-        onOpenChange(false)
-      } else {
-        // ── Create via POST ──
-        const url = `/api/companies/${encodeURIComponent(activeCompany?.id ?? "")}/contacts`
-        await apiFetch(url, {
-          method: "POST",
-          body: JSON.stringify(apiPayload),
-          headers: { "Content-Type": "application/json" },
-        })
-
-        // Create in Zustand as well (local fields)
-        const created = store.createContacto({
-          codigoContacto: codigoContacto.trim(),
-          tipoPersona,
-          nombre: nombre.trim(),
-          nombreFantasia: nombreFantasia.trim() || undefined,
-          razonSocial: razonSocial.trim() || undefined,
-          cuit: cuit.trim() || undefined,
-          dni: dni.trim() || undefined,
-          estado,
-          observaciones: observaciones.trim() || undefined,
-          telefonos,
-          email: email.trim() || undefined,
-          domicilio: domicilio.trim() || undefined,
-          provincia: provincia.trim() || undefined,
-          localidad: localidad.trim() || undefined,
-          codigoPostal: codigoPostal.trim() || undefined,
-          roles,
-          groups,
-          datosClientePagador,
-          datosMedico,
-          datosInstitucion,
-        })
-        toast.success(`Contacto ${codigoContacto} creado`)
-        onSaved?.(created)
-        onOpenChange(false)
-      }
-    } catch (err: unknown) {
-      const msg = sanitizeContactoSaveError(err)
-      setSaveError(msg)
-      toast.error(msg)
-
-      // Fallback: save to Zustand only if API fails
-      if (isEditing && contacto) {
-        // FR-14 (immutability): codigoContacto dropped on edit fallback too.
-        store.updateContacto(contacto.id, {
-          tipoPersona,
-          nombre: nombre.trim(),
-          nombreFantasia: nombreFantasia.trim() || undefined,
-          razonSocial: razonSocial.trim() || undefined,
-          cuit: cuit.trim() || undefined,
-          dni: dni.trim() || undefined,
-          estado,
-          observaciones: observaciones.trim() || undefined,
-          telefonos,
-          email: email.trim() || undefined,
-          domicilio: domicilio.trim() || undefined,
-          provincia: provincia.trim() || undefined,
-          localidad: localidad.trim() || undefined,
-          codigoPostal: codigoPostal.trim() || undefined,
-          roles,
-          groups,
-          datosClientePagador,
-          datosMedico,
-          datosInstitucion,
-        })
-      } else {
-        store.createContacto({
-          codigoContacto: codigoContacto.trim(),
-          tipoPersona,
-          nombre: nombre.trim(),
-          nombreFantasia: nombreFantasia.trim() || undefined,
-          razonSocial: razonSocial.trim() || undefined,
-          cuit: cuit.trim() || undefined,
-          dni: dni.trim() || undefined,
-          estado,
-          observaciones: observaciones.trim() || undefined,
-          telefonos,
-          email: email.trim() || undefined,
-          domicilio: domicilio.trim() || undefined,
-          provincia: provincia.trim() || undefined,
-          localidad: localidad.trim() || undefined,
-          codigoPostal: codigoPostal.trim() || undefined,
-          roles,
-          groups,
-          datosClientePagador,
-          datosMedico,
-          datosInstitucion,
-        })
-      }
+      const response = isEditing && contacto
+        ? await updateContactApi(requestCompanyId, contacto.id, payload)
+        : await createContactApi(requestCompanyId, payload)
+      if (requestId !== mutationRef.current || companyIdRef.current !== requestCompanyId) return
+      const canonical = mapApiContactToContacto(response)
+      toast.success(`Contacto ${canonical.codigoContacto} ${isEditing ? "actualizado" : "creado"}`)
+      onSaved?.(canonical)
+      onOpenChange(false)
+    } catch (error) {
+      if (requestId !== mutationRef.current || companyIdRef.current !== requestCompanyId) return
+      const message = sanitizeContactoSaveError(error)
+      setSaveError(message)
+      toast.error(message)
     } finally {
-      setSaving(false)
+      if (requestId === mutationRef.current) setSaving(false)
     }
   }
 
-  // ── Render ──
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2">
-          <UserPlus className="size-5" />
-          {isEditing ? `Editar Contacto — ${contacto?.codigoContacto}` : "Nuevo Contacto"}
-        </DialogTitle>
-        <DialogDescription>
-          {isEditing ? "Modifique los datos del contacto" : "Complete los datos del nuevo contacto"}
-        </DialogDescription>
-      </DialogHeader>
+  const availableGroups = roles.flatMap(getGroupsForRole)
 
-      <div className="space-y-6 py-2">
-        {/* ── A. General ── */}
-        <section>
-          <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">General</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Código *</Label>
-                {!isEditing && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCodigoEditable((v) => !v)
-                      setCodigoError("")
-                    }}
-                    className="text-muted-foreground hover:text-primary"
-                    aria-label={codigoEditable ? "Bloquear código sugerido" : "Editar código manualmente"}
-                    title={codigoEditable ? "Bloquear" : "Editar manualmente"}
-                  >
-                    <Pencil className="size-3.5" />
-                  </button>
-                )}
-              </div>
-              <Input
-                className="h-8 text-sm"
-                value={codigoContacto}
-                readOnly={isEditing || !codigoEditable}
-                onChange={(e) => { setCodigoContacto(e.target.value); setCodigoError("") }}
-                onBlur={handleCodigoBlur}
-                placeholder="Ej: C-0001"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                {isEditing
-                  ? "Inmutable (solo lectura)"
-                  : codigoEditable
-                    ? "Ingresa el código, se normaliza al salir (ej: 42 → C-0042)"
-                    : "Sugerido automáticamente"}
-              </p>
-              {codigoError && <p className="text-[10px] text-red-600">{codigoError}</p>}
-            </div>
+  return <form noValidate onSubmit={(event) => { event.preventDefault(); void save() }} className="flex min-h-0 flex-1 flex-col">
+    <DialogHeader className="shrink-0 border-b border-[var(--ossum-line)] bg-white px-4 py-3 sm:px-5">
+      <DialogTitle className="text-base text-[var(--ossum-navy)]">{isEditing ? "Editar contacto" : "Nuevo contacto"}</DialogTitle>
+      <DialogDescription className="text-xs">{isEditing ? <><span className="font-mono">{contacto?.codigoContacto}</span> · el código no se puede modificar.</> : "El código será asignado por el servidor al guardar."}</DialogDescription>
+    </DialogHeader>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tipo persona</Label>
-              <Select value={tipoPersona} onValueChange={(v) => setTipoPersona(v as TipoPersona)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fisica">Física</SelectItem>
-                  <SelectItem value="juridica">Jurídica</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Nombre *</Label>
-              <Input
-                className="h-8 text-sm"
-                value={nombre}
-                onChange={(e) => { setNombre(e.target.value); setNombreError("") }}
-                placeholder="Nombre completo"
-              />
-              {nombreError && <p className="text-[10px] text-red-600">{nombreError}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Nombre Fantasía</Label>
-              <Input
-                className="h-8 text-sm"
-                value={nombreFantasia}
-                onChange={(e) => setNombreFantasia(e.target.value)}
-                placeholder="Nombre de fantasía"
-              />
-            </div>
-
-            {tipoPersona === "juridica" && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Razón Social</Label>
-                <Input
-                  className="h-8 text-sm"
-                  value={razonSocial}
-                  onChange={(e) => setRazonSocial(e.target.value)}
-                  placeholder="Razón social"
-                />
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">CUIT</Label>
-              <Input
-                className="h-8 text-sm"
-                value={cuit}
-                onChange={(e) => setCuit(e.target.value)}
-                placeholder="XX-XXXXXXXX-X"
-              />
-            </div>
-
-            {tipoPersona === "fisica" && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">DNI</Label>
-                <Input
-                  className="h-8 text-sm"
-                  value={dni}
-                  onChange={(e) => setDni(e.target.value)}
-                  placeholder="DNI"
-                />
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Estado</Label>
-              <Select value={estado} onValueChange={(v) => setEstado(v as "activo" | "inactivo")}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="activo">Activo</SelectItem>
-                  <SelectItem value="inactivo">Inactivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">Observaciones</Label>
-              <Textarea
-                className="text-sm min-h-[60px]"
-                value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value)}
-                placeholder="Observaciones generales..."
-                rows={2}
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* ── B. Contacto / Dirección ── */}
-        <section>
-          <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">Contacto / Dirección</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">Domicilio</Label>
-              <Input
-                className="h-8 text-sm"
-                value={domicilio}
-                onChange={(e) => setDomicilio(e.target.value)}
-                placeholder="Domicilio"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Provincia</Label>
-              <Input
-                className="h-8 text-sm"
-                value={provincia}
-                onChange={(e) => setProvincia(e.target.value)}
-                placeholder="Provincia"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Localidad</Label>
-              <Input
-                className="h-8 text-sm"
-                value={localidad}
-                onChange={(e) => setLocalidad(e.target.value)}
-                placeholder="Localidad"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Código Postal</Label>
-              <Input
-                className="h-8 text-sm"
-                value={codigoPostal}
-                onChange={(e) => setCodigoPostal(e.target.value)}
-                placeholder="C.P."
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Teléfono</Label>
-              <Input
-                className="h-8 text-sm"
-                value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
-                placeholder="Teléfono"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Email</Label>
-              <Input
-                className="h-8 text-sm"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="correo@ejemplo.com"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* ── C. Roles generales (DC-CT-015) ── */}
-        <section>
-          <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">Roles generales</h3>
-          <div className="flex flex-wrap gap-3">
-            {ROL_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={cn(
-                  "flex items-center gap-2 rounded-md border px-3 py-1.5 cursor-pointer transition-colors text-sm",
-                  roles.includes(opt.value)
-                    ? "bg-primary/10 border-primary/30 text-primary"
-                    : "bg-muted/30 border-border hover:bg-muted/50"
-                )}
-              >
-                <Checkbox
-                  checked={roles.includes(opt.value)}
-                  onCheckedChange={() => toggleRole(opt.value)}
-                />
-                <span className="text-xs font-medium">{opt.label}</span>
-              </label>
-            ))}
-          </div>
-        </section>
-
-        {/* ── D. Grupos (DC-CT-016) ── */}
-        {roles.length > 0 && (
-          <section>
-            <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">Grupos</h3>
-            <div className="space-y-2">
-              {roles.map((role) => {
-                const groupsForRole = getGroupsForRole(role)
-                if (groupsForRole.length === 0) return null
-                return (
-                  <div key={role} className="space-y-1">
-                    <p className="text-[10px] font-medium text-muted-foreground">
-                      {CONTACT_ROLE_LABELS[role]}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {groupsForRole.map((group) => (
-                        <label
-                          key={group.id}
-                          className={cn(
-                            "flex items-center gap-1.5 rounded-md border px-2.5 py-1 cursor-pointer transition-colors text-sm",
-                            groups.includes(group.id)
-                              ? "bg-primary/10 border-primary/30 text-primary"
-                              : "bg-muted/30 border-border hover:bg-muted/50"
-                          )}
-                        >
-                          <Checkbox
-                            checked={groups.includes(group.id)}
-                            onCheckedChange={() => toggleGroup(group.id)}
-                          />
-                          <span className="text-[11px] font-medium">{group.nombre}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* ── E. Datos según rol/grupo ── */}
-        {roles.length > 0 && (
-          <section>
-            <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">Datos según rol / grupo</h3>
-            <div className="space-y-4">
-              {/* Cliente */}
-              {roles.includes("cliente") && (
-                <div className="rounded-lg border p-3 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[10px]">Cliente</Badge>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="flex items-center gap-2 text-xs font-medium">
-                        <Checkbox
-                          checked={esPagador}
-                          onCheckedChange={(v) => setEsPagador(!!v)}
-                        />
-                        Es Pagador
-                      </label>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Condición IVA</Label>
-                      <Select value={condicionIva} onValueChange={(v) => setCondicionIva(v as CondicionIvaCliente)}>
-                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {CONDICION_IVA_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Condición de pago</Label>
-                      <Input
-                        className="h-8 text-sm"
-                        value={condicionPago}
-                        onChange={(e) => setCondicionPago(e.target.value)}
-                        placeholder="Ej: 30 días"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Lista de precios default</Label>
-                      <Input
-                        className="h-8 text-sm"
-                        value={listaPreciosDefault}
-                        onChange={(e) => setListaPreciosDefault(e.target.value)}
-                        placeholder="Ej: OSDE"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Descuento habitual (%)</Label>
-                      <Input
-                        type="number"
-                        className="h-8 text-sm"
-                        value={descuentoHabitual || ""}
-                        onChange={(e) => setDescuentoHabitual(Number(e.target.value) || 0)}
-                        placeholder="0"
-                        min={0}
-                        max={100}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Médico (group-based) */}
-              {groups.includes("medicos") && (
-                <div className="rounded-lg border p-3 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[10px]">Médico</Badge>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Matrícula</Label>
-                      <Input
-                        className="h-8 text-sm"
-                        value={matricula}
-                        onChange={(e) => setMatricula(e.target.value)}
-                        placeholder="Ej: MN-78432"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Especialidad</Label>
-                      <Input
-                        className="h-8 text-sm"
-                        value={especialidad}
-                        onChange={(e) => setEspecialidad(e.target.value)}
-                        placeholder="Ej: Ortopedia y Traumatología"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Institución (group-based) */}
-              {groups.includes("instituciones") && (
-                <div className="rounded-lg border p-3 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[10px]">Institución</Badge>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Observación de entrega</Label>
-                    <Input
-                      className="h-8 text-sm"
-                      value={observacionEntrega}
-                      onChange={(e) => setObservacionEntrega(e.target.value)}
-                      placeholder="Instrucciones de entrega"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-      </div>
-
-      {saveError && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {saveError}
+    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[var(--ossum-surface)] p-3 sm:p-4">
+      <section className="border border-[var(--ossum-line)] bg-white" aria-labelledby="contact-identification">
+        <h2 id="contact-identification" className="border-b border-[var(--ossum-line)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ossum-navy)]">Identificación</h2>
+        <div className="grid gap-3 p-3 sm:grid-cols-2">
+          {isEditing && <Field name="codigo" label="Código"><Input value={contacto?.codigoContacto ?? ""} readOnly className={`${controlClass} bg-muted/40 font-mono`} /></Field>}
+          <Field name="tipoPersona" label="Tipo de persona"><select value={tipoPersona} onChange={(event) => setTipoPersona(event.target.value as TipoPersona)} className={selectClass}><option value="fisica">Física</option><option value="juridica">Jurídica</option></select></Field>
+          <Field name="nombre" label={tipoPersona === "juridica" ? "Denominación" : "Nombre completo"} required error={errors.nombre}><Input ref={nameRef} value={nombre} onChange={(event) => { setNombre(event.target.value); clearError("nombre") }} className={controlClass} /></Field>
+          <Field name="nombreFantasia" label="Nombre de fantasía"><Input value={nombreFantasia} onChange={(event) => setNombreFantasia(event.target.value)} className={controlClass} /></Field>
+          <Field name="cuit" label="CUIT"><Input value={cuit} onChange={(event) => setCuit(event.target.value)} className={`${controlClass} font-mono`} /></Field>
+          {tipoPersona === "fisica" && <Field name="dni" label="DNI"><Input value={dni} onChange={(event) => setDni(event.target.value)} className={`${controlClass} font-mono`} /></Field>}
+          {isEditing && <Field name="estado" label="Estado"><select value={estado} onChange={(event) => setEstado(event.target.value as typeof estado)} className={selectClass}><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></Field>}
+          <Field name="observaciones" label="Observaciones" className="sm:col-span-2"><Textarea value={observaciones} onChange={(event) => setObservaciones(event.target.value)} className="min-h-20 text-sm sm:text-xs" /></Field>
         </div>
-      )}
+      </section>
 
-      <DialogFooter className="gap-2 sm:gap-0">
-        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-        <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
-          {saving ? (
-            <Loader2 className="size-4 mr-1 animate-spin" />
-          ) : (
-            <Save className="size-4 mr-1" />
-          )}
-          {isEditing ? "Guardar Cambios" : "Crear Contacto"}
-        </Button>
-      </DialogFooter>
-    </>
-  )
+      <section className="border border-[var(--ossum-line)] bg-white" aria-labelledby="contact-details">
+        <h2 id="contact-details" className="border-b border-[var(--ossum-line)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ossum-navy)]">Contacto y dirección principal</h2>
+        <div className="grid gap-3 p-3 sm:grid-cols-2">
+          <Field name="domicilio" label="Domicilio" className="sm:col-span-2"><Input value={domicilio} onChange={(event) => setDomicilio(event.target.value)} className={controlClass} /></Field>
+          <Field name="provincia" label="Provincia"><Input value={provincia} onChange={(event) => setProvincia(event.target.value)} className={controlClass} /></Field>
+          <Field name="localidad" label="Localidad"><Input value={localidad} onChange={(event) => setLocalidad(event.target.value)} className={controlClass} /></Field>
+          <Field name="codigoPostal" label="Código postal"><Input value={codigoPostal} onChange={(event) => setCodigoPostal(event.target.value)} className={controlClass} /></Field>
+          <Field name="telefono" label="Teléfono"><Input type="tel" value={telefono} onChange={(event) => setTelefono(event.target.value)} className={controlClass} /></Field>
+          <Field name="email" label="Email" error={errors.email}><Input ref={emailRef} type="email" value={email} onChange={(event) => { setEmail(event.target.value); clearError("email") }} className={controlClass} /></Field>
+        </div>
+      </section>
+
+      <section className="border border-[var(--ossum-line)] bg-white" aria-labelledby="contact-classification">
+        <h2 id="contact-classification" className="border-b border-[var(--ossum-line)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ossum-navy)]">Roles y grupos</h2>
+        <div className="space-y-4 p-3">
+          <div className="flex flex-wrap gap-2">{ROLE_OPTIONS.map((role) => <label key={role} className="flex h-11 cursor-pointer items-center gap-2 border border-[var(--ossum-line)] px-3 text-sm sm:h-8 sm:text-xs"><Checkbox checked={roles.includes(role)} onCheckedChange={() => toggleRole(role)} /><span>{CONTACT_ROLE_LABELS[role]}</span></label>)}</div>
+          {availableGroups.length > 0 && <div><p className="mb-2 text-xs font-medium text-gray-600">Grupos</p><div className="flex flex-wrap gap-2">{availableGroups.map((group) => <label key={group.id} className="flex h-11 cursor-pointer items-center gap-2 border border-[var(--ossum-line)] px-3 text-sm sm:h-8 sm:text-xs"><Checkbox checked={groups.includes(group.id)} onCheckedChange={() => setGroups((current) => current.includes(group.id) ? current.filter((item) => item !== group.id) : [...current, group.id])} /><span>{group.nombre}</span></label>)}</div></div>}
+        </div>
+      </section>
+
+      {(roles.includes("cliente") || groups.includes("medicos") || groups.includes("instituciones")) && <section className="border border-[var(--ossum-line)] bg-white" aria-labelledby="contact-profile">
+        <h2 id="contact-profile" className="border-b border-[var(--ossum-line)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ossum-navy)]">Datos operativos</h2>
+        <div className="grid gap-3 p-3 sm:grid-cols-2">
+          {roles.includes("cliente") && <>
+            <label className="flex h-11 items-center gap-2 text-sm sm:h-8 sm:text-xs"><Checkbox checked={esPagador} onCheckedChange={(value) => setEsPagador(Boolean(value))} />Es pagador</label>
+            <Field name="condicionIva" label="Condición IVA"><select value={condicionIva} onChange={(event) => setCondicionIva(event.target.value as CondicionIvaCliente)} className={selectClass}>{VAT_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></Field>
+            <Field name="condicionPago" label="Condición de pago"><Input value={condicionPago} onChange={(event) => setCondicionPago(event.target.value)} className={controlClass} /></Field>
+            <Field name="listaPreciosDefault" label="Lista de precios predeterminada"><Input value={listaPreciosDefault} onChange={(event) => setListaPreciosDefault(event.target.value)} className={controlClass} /></Field>
+            <Field name="descuentoHabitual" label="Descuento habitual (%)" error={errors.descuentoHabitual}><Input ref={discountRef} type="number" min={0} max={100} step="0.01" value={descuentoHabitual} onChange={(event) => { setDescuentoHabitual(event.target.value); clearError("descuentoHabitual") }} className={controlClass} /></Field>
+          </>}
+          {groups.includes("medicos") && <><Field name="matricula" label="Matrícula"><Input value={matricula} onChange={(event) => setMatricula(event.target.value)} className={controlClass} /></Field><Field name="especialidad" label="Especialidad"><Input value={especialidad} onChange={(event) => setEspecialidad(event.target.value)} className={controlClass} /></Field></>}
+          {groups.includes("instituciones") && <Field name="observacionEntrega" label="Observación de entrega" className="sm:col-span-2"><Textarea value={observacionEntrega} onChange={(event) => setObservacionEntrega(event.target.value)} className="min-h-16 text-sm sm:text-xs" /></Field>}
+        </div>
+      </section>}
+    </div>
+
+    <footer className="shrink-0 border-t border-[var(--ossum-line)] bg-white px-3 py-3 sm:px-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div aria-live="polite" className="min-h-5 text-xs text-muted-foreground">{saving ? <span className="inline-flex items-center gap-1"><Loader2 className="size-3 animate-spin motion-reduce:animate-none" />Guardando…</span> : saveError ? <span className="inline-flex items-center gap-1 text-destructive"><CircleAlert className="size-3" />{saveError}</span> : !activeCompany?.id ? <span className="text-destructive">No hay una empresa activa.</span> : "Los cambios se guardan en el servidor."}</div>
+        <div className="grid grid-cols-2 gap-2 sm:flex"><Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)} className="h-11 sm:h-8">Cancelar</Button><Button type="submit" disabled={saving || !activeCompany?.id} className="h-11 bg-[var(--ossum-action)] text-white transition-[background-color] motion-reduce:transition-none hover:bg-[#1830a8] sm:h-8">{saving ? "Guardando…" : isEditing ? "Guardar cambios" : "Crear contacto"}</Button></div>
+      </div>
+    </footer>
+  </form>
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Wrapper component — uses key to force remount on contact change
-// ═══════════════════════════════════════════════════════════════
-
-export function ContactoFormDialog({
-  open,
-  onOpenChange,
-  contacto,
-  onSaved,
-  defaultRoles,
-  defaultGroups,
-  initialValues,
-}: ContactoFormDialogProps) {
-  // Use contacto id (or "new") as key so form remounts with fresh state
-  // when switching between create/edit or between different contacts
-  const formKey = contacto?.id ?? "new"
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-        <ContactoFormInner
-          key={formKey}
-          contacto={contacto}
-          onSaved={onSaved}
-          onOpenChange={onOpenChange}
-          defaultRoles={defaultRoles}
-          defaultGroups={defaultGroups}
-          initialValues={initialValues}
-        />
-      </DialogContent>
-    </Dialog>
-  )
+export function ContactoFormDialog(props: ContactoFormDialogProps) {
+  const formKey = `${props.contacto?.id ?? "new"}:${props.open ? "open" : "closed"}`
+  return <Dialog open={props.open} onOpenChange={props.onOpenChange}><DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[52rem] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]"><ContactoFormInner key={formKey} {...props} /></DialogContent></Dialog>
 }

@@ -1,15 +1,11 @@
+import { createAuditEvent } from "../../../../../../lib/audit";
 import { getApiAuthContext } from "../../../../../../lib/api/auth-context";
-import { requireCompanyMutationAccess } from "../../../../../../lib/api/guards";
 import { badRequest, notFound } from "../../../../../../lib/api/errors";
+import { requireCompanyMutationAccess } from "../../../../../../lib/api/guards";
 import { errorResponse, ok } from "../../../../../../lib/api/responses";
 import prisma from "../../../../../../lib/prisma";
-import {
-  updateContact,
-  deactivateContactForCompany,
-  linkContactToCompany,
-  getContactCompanyLink,
-} from "../../../../../../lib/services/contact.service";
-import { createAuditEvent } from "../../../../../../lib/audit";
+import { getContactCompanyLink, updateContact } from "../../../../../../lib/services/contact.service";
+import { contactUpdateSchema } from "../../../../../../lib/validators/contact";
 
 type RouteContext = {
   params: Promise<{ companyId: string; contactId: string }>;
@@ -23,98 +19,41 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const ctx = await getApiAuthContext(request, companyId);
     requireCompanyMutationAccess(ctx, CONTACT_MUTATION_ROLES);
 
-    let body: Record<string, unknown>;
+    let body: unknown;
     try {
-      body = (await request.json()) as Record<string, unknown>;
+      body = await request.json();
     } catch {
       throw badRequest("Invalid JSON body", "invalid_json_body");
     }
 
-    // Verify the contact belongs to this company
+    const parsed = contactUpdateSchema.safeParse(body);
+    if (!parsed.success) throw badRequest(parsed.error.issues[0]?.message, "invalid_contact_payload");
+
     const existingLink = await getContactCompanyLink(prisma, ctx.companyId, contactId);
     if (!existingLink) {
-      throw notFound(
-        `Contact ${contactId} does not belong to company ${ctx.companyId}`,
-        "contact_not_found"
-      );
+      throw notFound(`Contact ${contactId} does not belong to company ${ctx.companyId}`, "contact_not_found");
     }
 
-    // Build update data from request body (only allow known fields)
-    const updateData: Record<string, unknown> = {};
-    const updatableFields = [
-      "firstName",
-      "lastName",
-      "legalName",
-      "isCompany",
-      "email",
-      "phone",
-      "documentType",
-      "documentNumber",
-      "contactType",
-    ] as const;
-
-    for (const field of updatableFields) {
-      if (field in body) {
-        updateData[field] = body[field];
-      }
-    }
-
-    const hasUpdateFields = Object.keys(updateData).length > 0;
-    const hasIsActive = "isActive" in body;
-
-    let result: unknown = null;
-    const auditActions: string[] = [];
-
-    // Handle isActive toggle
-    if (hasIsActive) {
-      const isActive = Boolean(body.isActive);
-
-      if (isActive) {
-        // Re-activate the link
-        result = await linkContactToCompany(prisma, ctx.companyId, contactId);
-        auditActions.push("reactivated");
-      } else {
-        // Deactivate the link
-        result = await deactivateContactForCompany(prisma, ctx.companyId, contactId);
-        auditActions.push("deactivated");
-      }
-    }
-
-    // Handle regular field updates
-    if (hasUpdateFields) {
-      const updatedContact = await updateContact(prisma, ctx.companyId, contactId, updateData as {
-        firstName?: string;
-        lastName?: string;
-        legalName?: string | null;
-        isCompany?: boolean;
-        email?: string | null;
-        phone?: string | null;
-        documentType?: string | null;
-        documentNumber?: string | null;
-        contactType?: string | null;
+    const input = parsed.data;
+    const result = await updateContact(prisma, ctx.companyId, contactId, input);
+    const changedFields = Object.keys(input);
+    const updatedFields = changedFields.filter((field) => field !== "isActive");
+    if (updatedFields.length > 0) {
+      await createAuditEvent({
+        prisma,
+        companyId: ctx.companyId,
+        userId: ctx.actorUserId,
+        entityType: "Contact",
+        entityId: contactId,
+        action: "updated",
+        module: "contacts",
+        detail: `Contact updated: fields ${updatedFields.join(", ")}`,
+        oldValue: { linkRole: existingLink.role, linkIsActive: existingLink.isActive },
+        newValue: Object.fromEntries(Object.entries(input).filter(([field]) => field !== "isActive")),
       });
-
-      // If there was also an isActive change, return the contact (not the link)
-      if (!hasIsActive || result === null) {
-        result = updatedContact;
-      }
-      auditActions.push("updated");
     }
-
-    // If nothing was changed
-    if (!hasIsActive && !hasUpdateFields) {
-      throw badRequest("No valid fields provided for update", "no_fields");
-    }
-
-    // Audit all actions that were performed
-    for (const action of auditActions) {
-      const detail =
-        action === "updated"
-          ? `Contact updated: fields ${Object.keys(updateData).join(", ")}`
-          : action === "deactivated"
-            ? `Contact deactivated in company ${ctx.companyId}`
-            : `Contact reactivated in company ${ctx.companyId}`;
-
+    if (input.isActive !== undefined && input.isActive !== existingLink.isActive) {
+      const action = input.isActive ? "reactivated" : "deactivated";
       await createAuditEvent({
         prisma,
         companyId: ctx.companyId,
@@ -123,9 +62,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         entityId: contactId,
         action,
         module: "contacts",
-        detail,
-        oldValue: action === "updated" ? { linkRole: existingLink.role, linkIsActive: existingLink.isActive } : undefined,
-        newValue: action === "updated" ? updateData : { isActive: action === "reactivated" },
+        detail: `Contact ${action}: field isActive`,
+        oldValue: { linkIsActive: existingLink.isActive },
+        newValue: { isActive: input.isActive },
       });
     }
 

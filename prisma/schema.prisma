@@ -223,6 +223,8 @@ model Contact {
   firstName      String?
   lastName       String?
   legalName      String?
+  tradeName      String?
+  notes          String?  @db.Text
   isCompany      Boolean  @default(false)
   email          String?
   phone          String?
@@ -246,18 +248,30 @@ model Contact {
 // ─── Vínculo Contacto → Empresa ──────────────────────────────────────
 
 model ContactCompanyLink {
-  id        String   @id @default(cuid())
-  contactId String
-  companyId String
-  role      String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  contactId        String
+  companyId        String
+  code             String   @default("")
+  role             String?
+  roles            String[] @default([])
+  isPayer          Boolean?
+  vatCondition     String?
+  paymentTerms     String?
+  defaultPriceList String?
+  usualDiscount    Decimal? @db.Decimal(9, 4)
+  doctorLicense    String?
+  specialty        String?
+  deliveryNotes    String?  @db.Text
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   contact Contact @relation(fields: [contactId], references: [id])
   company Company @relation(fields: [companyId], references: [id])
 
   @@unique([contactId, companyId])
+  @@unique([companyId, code], map: "uq_contact_company_code")
+  @@index([companyId, isActive, createdAt], map: "ix_contact_company_active_created")
 }
 
 // ─── Grupo de Contactos ──────────────────────────────────────────────
@@ -265,6 +279,8 @@ model ContactCompanyLink {
 model ContactGroup {
   id          String   @id @default(cuid())
   companyId   String
+  slug        String
+  role        String
   name        String
   description String?
   isActive    Boolean  @default(true)
@@ -273,6 +289,8 @@ model ContactGroup {
 
   company Company                  @relation(fields: [companyId], references: [id])
   members ContactGroupMembership[]
+
+  @@unique([companyId, slug], map: "uq_contact_group_company_slug")
 }
 
 // ─── Miembro de Grupo ────────────────────────────────────────────────
@@ -306,6 +324,9 @@ model ContactAddress {
   updatedAt   DateTime @updatedAt
 
   contact Contact @relation(fields: [contactId], references: [id])
+
+  @@unique([contactId], map: "uq_contact_address_one_main", where: raw("\"isMain\" = true"))
+  @@index([contactId, isMain], map: "ix_contact_address_main")
 }
 
 // ─── Cirugía (Fase 1 — core expandido) ─────────────────────────────

@@ -3,11 +3,14 @@
 // Every operational read MUST go through ContactCompanyLink filtered by companyId.
 // Services receive prisma as dependency injection.
 
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import type { Contacto } from "@/types";
 
-import { badRequest } from "../api/errors";
+import { badRequest, conflict } from "../api/errors";
+import type { ContactCreateInput, ContactUpdateInput } from "../validators/contact";
+
+type Db = PrismaClient | Prisma.TransactionClient;
 
 export type FrontendContactSnapshot = Pick<
   Contacto,
@@ -166,17 +169,15 @@ export async function resolveCompanyContactReference(
 
   const snapshot = input.snapshot;
 
-  const companyContacts = await listContactsByCompany(prisma, input.companyId, {
-    isActive: true,
-    take: 1000,
-  });
-
-  const matchedContact = companyContacts.find((candidate) =>
-    matchesSnapshot(candidate, snapshot)
-  );
-
-  if (matchedContact) {
-    return matchedContact.id;
+  for (let skip = 0; ; skip += 500) {
+    const companyContacts = await listContactsByCompany(prisma, input.companyId, {
+      isActive: true,
+      take: 500,
+      skip,
+    });
+    const matchedContact = companyContacts.find((candidate) => matchesSnapshot(candidate, snapshot));
+    if (matchedContact) return matchedContact.id;
+    if (companyContacts.length < 500) break;
   }
 
   const createData = buildCreateContactData(snapshot);
@@ -193,6 +194,158 @@ export async function resolveCompanyContactReference(
 
 // ─── Contact base ─────────────────────────────────────────────────────
 
+const contactInclude = (companyId: string) => ({
+  contact: {
+    include: {
+      addresses: { where: { isMain: true }, orderBy: { createdAt: "asc" as const }, take: 1 },
+      groupMemberships: {
+        where: { group: { companyId } },
+        include: { group: true },
+      },
+    },
+  },
+});
+
+type ContactLinkWithDetails = Prisma.ContactCompanyLinkGetPayload<{
+  include: {
+    contact: {
+      include: {
+        addresses: true;
+        groupMemberships: { include: { group: true } };
+      };
+    };
+  };
+}>;
+
+function flattenContact(link: ContactLinkWithDetails) {
+  const { addresses, groupMemberships, ...contact } = link.contact;
+  return {
+    ...contact,
+    code: link.code,
+    codigo: link.code,
+    roles: link.roles,
+    linkRole: link.role,
+    linkIsActive: link.isActive,
+    groupSlugs: groupMemberships.map(({ group }) => group.slug),
+    mainAddress: addresses[0] ?? null,
+    isPayer: link.isPayer,
+    vatCondition: link.vatCondition,
+    paymentTerms: link.paymentTerms,
+    defaultPriceList: link.defaultPriceList,
+    usualDiscount: link.usualDiscount === null ? null : Number(link.usualDiscount),
+    doctorLicense: link.doctorLicense,
+    specialty: link.specialty,
+    deliveryNotes: link.deliveryNotes,
+  };
+}
+
+function clean(value: string | null | undefined) {
+  const cleaned = value?.trim();
+  return cleaned || null;
+}
+
+function generalRole(role: string | null | undefined): "cliente" | "proveedor" | "interno" | null {
+  const normalized = role?.toLowerCase();
+  if (normalized === "proveedor" || normalized === "supplier" || normalized === "instrumentador") return "proveedor";
+  if (["interno", "admin", "operator", "coordinador", "vendedor"].includes(normalized ?? "")) return "interno";
+  if (normalized) return "cliente";
+  return null;
+}
+
+function isUniqueConflict(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError
+    ? error.code === "P2002"
+    : Boolean(error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002");
+}
+
+const canonicalGroupBySlug = {
+  medicos: ["Médicos", "cliente"], pacientes: ["Pacientes", "cliente"], instituciones: ["Instituciones", "cliente"],
+  obras_sociales: ["Obras Sociales", "cliente"], art: ["ART", "cliente"], particulares: ["Particulares", "cliente"],
+  prepagas: ["Prepagas", "cliente"], otros_clientes: ["Otros clientes", "cliente"],
+  instrumentadores: ["Instrumentadores", "proveedor"], prov_implantes: ["Proveedores de implantes", "proveedor"],
+  prov_insumos: ["Proveedores de insumos quirúrgicos", "proveedor"], prov_descartables: ["Proveedores de descartables", "proveedor"],
+  servicios_tecnicos: ["Servicios técnicos", "proveedor"], otros_proveedores: ["Otros proveedores", "proveedor"],
+  coordinadores: ["Coordinadores", "interno"], vendedores: ["Vendedores", "interno"], deposito: ["Depósito", "interno"],
+  administracion: ["Administración", "interno"], logistica: ["Logística", "interno"], direccion: ["Dirección", "interno"],
+  otros_internos: ["Otros internos", "interno"],
+} as const;
+
+async function replaceGroups(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  contactId: string,
+  groupSlugs: ContactCreateInput["groupSlugs"]
+) {
+  if (groupSlugs === undefined) return;
+  const uniqueSlugs = [...new Set(groupSlugs)];
+  const groups = await tx.contactGroup.findMany({
+    where: { companyId, slug: { in: uniqueSlugs }, isActive: true },
+    select: { id: true, slug: true },
+  });
+  const found = new Set(groups.map((group) => group.slug));
+  for (const slug of uniqueSlugs) {
+    if (found.has(slug)) continue;
+    const definition = canonicalGroupBySlug[slug as keyof typeof canonicalGroupBySlug];
+    if (!definition) throw badRequest(`Unknown contact group: ${slug}`, "invalid_contact_group");
+    const [name, role] = definition;
+    const created = await tx.contactGroup.upsert({
+      where: { companyId_slug: { companyId, slug } },
+      create: { companyId, slug, role, name },
+      update: { role, name, isActive: true },
+      select: { id: true, slug: true },
+    });
+    groups.push(created);
+  }
+  await tx.contactGroupMembership.deleteMany({
+    where: { contactId, group: { companyId } },
+  });
+  if (groups.length) {
+    await tx.contactGroupMembership.createMany({
+      data: groups.map((group) => ({ contactId, groupId: group.id })),
+    });
+  }
+}
+
+async function replaceMainAddress(
+  tx: Prisma.TransactionClient,
+  contactId: string,
+  address: ContactCreateInput["mainAddress"]
+) {
+  if (address === undefined) return;
+  const current = await tx.contactAddress.findFirst({ where: { contactId, isMain: true }, orderBy: { createdAt: "asc" } });
+  if (!address) {
+    if (current) await tx.contactAddress.update({ where: { id: current.id }, data: { isMain: false } });
+    return;
+  }
+  const hasValue = Object.values(address).some(Boolean);
+  if (!hasValue) {
+    if (current) await tx.contactAddress.update({ where: { id: current.id }, data: { isMain: false } });
+    return;
+  }
+  const street = clean(address.street);
+  const preservesStructuredNumber = Boolean(current?.number && street === `${current.street ?? ""} ${current.number}`.trim());
+  const data = {
+    street: preservesStructuredNumber ? current?.street : street,
+    number: address.number === undefined && preservesStructuredNumber ? current?.number : clean(address.number),
+    city: clean(address.city),
+    state: clean(address.state),
+    zipCode: clean(address.zipCode),
+    country: address.country ?? "AR",
+    isMain: true,
+    addressType: "main",
+  };
+  if (current) await tx.contactAddress.update({ where: { id: current.id }, data });
+  else await tx.contactAddress.create({ data: { contactId, ...data } });
+}
+
+async function getContactByIdFromDb(db: Db, companyId: string, contactId: string) {
+  const link = await db.contactCompanyLink.findUnique({
+    where: { contactId_companyId: { contactId, companyId } },
+    include: contactInclude(companyId),
+  });
+  return link ? flattenContact(link as ContactLinkWithDetails) : null;
+}
+
 /** List contacts for a company via ContactCompanyLink. */
 export async function listContactsByCompany(
   prisma: PrismaClient,
@@ -204,46 +357,39 @@ export async function listContactsByCompany(
     search?: string;
     take?: number;
     skip?: number;
+    includeInactive?: boolean;
   }
 ) {
-  const where: Record<string, unknown> = {
+  const where: Prisma.ContactCompanyLinkWhereInput = {
     companyId,
-    isActive: options?.isActive ?? true,
   };
-  if (options?.role) where.role = options.role;
+  if (options?.isActive !== undefined) where.isActive = options.isActive;
+  else if (!options?.includeInactive) where.isActive = true;
+  if (options?.role) where.OR = [{ roles: { has: options.role } }, { role: options.role }];
+  if (options?.contactType) where.contact = { contactType: options.contactType };
+  if (options?.search) {
+    where.AND = [{ OR: [
+      { code: { contains: options.search, mode: "insensitive" } },
+      { contact: { OR: [
+        { firstName: { contains: options.search, mode: "insensitive" } },
+        { lastName: { contains: options.search, mode: "insensitive" } },
+        { legalName: { contains: options.search, mode: "insensitive" } },
+        { tradeName: { contains: options.search, mode: "insensitive" } },
+        { email: { contains: options.search, mode: "insensitive" } },
+        { phone: { contains: options.search, mode: "insensitive" } },
+        { documentNumber: { contains: options.search, mode: "insensitive" } },
+      ] } },
+    ] }];
+  }
 
   const links = await prisma.contactCompanyLink.findMany({
     where,
-    orderBy: { createdAt: "desc" },
-    take: options?.take ?? 50,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: Math.min(options?.take ?? 50, 500),
     skip: options?.skip,
-    include: { contact: true },
+    include: contactInclude(companyId),
   });
-
-  // Filter by contactType on the contact level if provided
-  let contacts = links.map((link) => ({
-    ...link.contact,
-    linkRole: link.role,
-    linkIsActive: link.isActive,
-  }));
-
-  if (options?.contactType) {
-    contacts = contacts.filter((c) => c.contactType === options.contactType);
-  }
-
-  // Simple text search across name/email fields
-  if (options?.search) {
-    const q = options.search.toLowerCase();
-    contacts = contacts.filter(
-      (c) =>
-        (c.firstName?.toLowerCase().includes(q) ?? false) ||
-        (c.lastName?.toLowerCase().includes(q) ?? false) ||
-        (c.legalName?.toLowerCase().includes(q) ?? false) ||
-        (c.email?.toLowerCase().includes(q) ?? false)
-    );
-  }
-
-  return contacts;
+  return links.map((link) => flattenContact(link as ContactLinkWithDetails));
 }
 
 /** Get a single contact by ID, verifying it belongs to the company. */
@@ -252,55 +398,46 @@ export async function getContactById(
   companyId: string,
   contactId: string
 ) {
-  const link = await prisma.contactCompanyLink.findUnique({
-    where: { contactId_companyId: { contactId, companyId } },
-    include: { contact: true },
-  });
-  if (!link) return null;
-  return { ...link.contact, linkRole: link.role };
+  return getContactByIdFromDb(prisma, companyId, contactId);
 }
 
 /** Create a new contact and optionally link to a company with a role. */
 export async function createContact(
   prisma: PrismaClient,
   companyId: string,
-  data: {
-    firstName?: string;
-    lastName?: string;
-    legalName?: string;
-    isCompany?: boolean;
-    email?: string;
-    phone?: string;
-    documentType?: string;
-    documentNumber?: string;
-    contactType?: string;
-  },
+  data: ContactCreateInput,
   role?: string
 ) {
-  return prisma.$transaction(async (tx) => {
-    const contact = await tx.contact.create({
-      data: {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        legalName: data.legalName,
-        isCompany: data.isCompany ?? false,
-        email: data.email,
-        phone: data.phone,
-        documentType: data.documentType,
-        documentNumber: data.documentNumber,
-        contactType: data.contactType,
-      },
-    });
-    await tx.contactCompanyLink.create({
-      data: {
-        contactId: contact.id,
-        companyId,
-        role: role ?? data.contactType,
-        isActive: true,
-      },
-    });
-    return contact;
-  });
+  const explicitCode = data.code ?? data.codigo;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const legacyRole = clean(role ?? data.role ?? data.contactType);
+        const fallbackRole = generalRole(legacyRole);
+        const roles = data.roles?.length ? [...new Set(data.roles)] : fallbackRole ? [fallbackRole] : [];
+        const contact = await tx.contact.create({ data: {
+          firstName: clean(data.firstName), lastName: clean(data.lastName), legalName: clean(data.legalName),
+          tradeName: clean(data.tradeName), notes: clean(data.notes), isCompany: data.isCompany ?? false,
+          email: clean(data.email), phone: clean(data.phone), documentType: clean(data.documentType),
+          documentNumber: clean(data.documentNumber), contactType: clean(data.contactType),
+        } });
+        await tx.contactCompanyLink.create({ data: {
+          contactId: contact.id, companyId, code: explicitCode, role: legacyRole, roles, isActive: true,
+          isPayer: data.isPayer, vatCondition: clean(data.vatCondition), paymentTerms: clean(data.paymentTerms),
+          defaultPriceList: clean(data.defaultPriceList), usualDiscount: data.usualDiscount,
+          doctorLicense: clean(data.doctorLicense), specialty: clean(data.specialty), deliveryNotes: clean(data.deliveryNotes),
+        } });
+        await replaceGroups(tx, companyId, contact.id, data.groupSlugs);
+        await replaceMainAddress(tx, contact.id, data.mainAddress);
+        return (await getContactByIdFromDb(tx, companyId, contact.id))!;
+      });
+    } catch (error) {
+      if (!isUniqueConflict(error)) throw error;
+      if (explicitCode) throw conflict("Contact code already exists in this company", "contact_code_conflict");
+      if (attempt === 4) throw conflict("Could not allocate a contact code", "contact_code_allocation_conflict");
+    }
+  }
+  throw conflict("Could not allocate a contact code", "contact_code_allocation_conflict");
 }
 
 /** Update a contact's data. Verifies ownership via ContactCompanyLink. */
@@ -308,29 +445,36 @@ export async function updateContact(
   prisma: PrismaClient,
   companyId: string,
   contactId: string,
-  data: {
-    firstName?: string;
-    lastName?: string;
-    legalName?: string | null;
-    isCompany?: boolean;
-    email?: string | null;
-    phone?: string | null;
-    documentType?: string | null;
-    documentNumber?: string | null;
-    contactType?: string | null;
-  }
+  data: ContactUpdateInput
 ) {
-  const link = await prisma.contactCompanyLink.findUnique({
-    where: { contactId_companyId: { contactId, companyId } },
-  });
-  if (!link) {
-    throw new Error(
-      `Contact ${contactId} does not belong to company ${companyId}`
-    );
-  }
-  return prisma.contact.update({
-    where: { id: contactId },
-    data,
+  return prisma.$transaction(async (tx) => {
+    const link = await tx.contactCompanyLink.findUnique({ where: { contactId_companyId: { contactId, companyId } } });
+    if (!link) throw new Error(`Contact ${contactId} does not belong to company ${companyId}`);
+    await tx.contact.update({ where: { id: contactId }, data: {
+      firstName: data.firstName === undefined ? undefined : clean(data.firstName),
+      lastName: data.lastName === undefined ? undefined : clean(data.lastName),
+      legalName: data.legalName === undefined ? undefined : clean(data.legalName),
+      tradeName: data.tradeName === undefined ? undefined : clean(data.tradeName),
+      notes: data.notes === undefined ? undefined : clean(data.notes),
+      isCompany: data.isCompany, email: data.email === undefined ? undefined : clean(data.email),
+      phone: data.phone === undefined ? undefined : clean(data.phone),
+      documentType: data.documentType === undefined ? undefined : clean(data.documentType),
+      documentNumber: data.documentNumber === undefined ? undefined : clean(data.documentNumber),
+      contactType: data.contactType === undefined ? undefined : clean(data.contactType),
+    } });
+    const legacyRole = data.role === undefined ? undefined : clean(data.role);
+    await tx.contactCompanyLink.update({ where: { id: link.id }, data: {
+      role: legacyRole, roles: data.roles ? [...new Set(data.roles)] : undefined, isActive: data.isActive,
+      isPayer: data.isPayer, vatCondition: data.vatCondition === undefined ? undefined : clean(data.vatCondition),
+      paymentTerms: data.paymentTerms === undefined ? undefined : clean(data.paymentTerms),
+      defaultPriceList: data.defaultPriceList === undefined ? undefined : clean(data.defaultPriceList),
+      usualDiscount: data.usualDiscount, doctorLicense: data.doctorLicense === undefined ? undefined : clean(data.doctorLicense),
+      specialty: data.specialty === undefined ? undefined : clean(data.specialty),
+      deliveryNotes: data.deliveryNotes === undefined ? undefined : clean(data.deliveryNotes),
+    } });
+    await replaceGroups(tx, companyId, contactId, data.groupSlugs);
+    await replaceMainAddress(tx, contactId, data.mainAddress);
+    return getContactByIdFromDb(tx, companyId, contactId);
   });
 }
 
@@ -366,10 +510,17 @@ export async function linkContactToCompany(
   contactId: string,
   role?: string
 ) {
+  const general = generalRole(role);
   return prisma.contactCompanyLink.upsert({
     where: { contactId_companyId: { contactId, companyId } },
-    create: { contactId, companyId, role, isActive: true },
-    update: { role: role ?? undefined, isActive: true },
+    update: { role: role ?? undefined, roles: role === undefined ? undefined : general ? [general] : [], isActive: true },
+    create: {
+        contactId,
+        companyId,
+        role,
+        roles: general ? [general] : [],
+        isActive: true,
+    },
   });
 }
 
@@ -450,11 +601,14 @@ export async function listContactGroups(
 export async function createContactGroup(
   prisma: PrismaClient,
   companyId: string,
-  data: { name: string; description?: string }
+  data: { name: string; description?: string; slug?: string; role?: string }
 ) {
+  const slug = data.slug?.trim() || data.name.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
   return prisma.contactGroup.create({
     data: {
       companyId,
+      slug,
+      role: data.role ?? "cliente",
       name: data.name,
       description: data.description,
     },
@@ -537,17 +691,22 @@ export async function createContactAddress(
   }
 ) {
   await assertContactBelongsToCompany(prisma, companyId, contactId);
-  return prisma.contactAddress.create({
-    data: {
-      contactId,
-      street: data.street,
-      number: data.number,
-      city: data.city,
-      state: data.state,
-      zipCode: data.zipCode,
-      country: data.country ?? "AR",
-      isMain: data.isMain ?? false,
-      addressType: data.addressType,
-    },
+  return prisma.$transaction(async (tx) => {
+    if (data.isMain) {
+      await tx.contactAddress.updateMany({ where: { contactId, isMain: true }, data: { isMain: false } });
+    }
+    return tx.contactAddress.create({
+      data: {
+        contactId,
+        street: data.street,
+        number: data.number,
+        city: data.city,
+        state: data.state,
+        zipCode: data.zipCode,
+        country: data.country ?? "AR",
+        isMain: data.isMain ?? false,
+        addressType: data.addressType,
+      },
+    });
   });
 }

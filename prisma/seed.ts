@@ -222,6 +222,7 @@ async function main() {
       contactId: patient.id,
       companyId: company.id,
       role: "patient",
+      roles: ["cliente"],
       isActive: true,
     },
   });
@@ -240,6 +241,7 @@ async function main() {
       contactId: doctor.id,
       companyId: company.id,
       role: "doctor",
+      roles: ["cliente"],
       isActive: true,
     },
   });
@@ -258,6 +260,7 @@ async function main() {
       contactId: institution.id,
       companyId: company.id,
       role: "institution",
+      roles: ["cliente"],
       isActive: true,
     },
   });
@@ -276,6 +279,7 @@ async function main() {
       contactId: payer.id,
       companyId: company.id,
       role: "payer",
+      roles: ["cliente"],
       isActive: true,
     },
   });
@@ -288,6 +292,8 @@ async function main() {
     create: {
       id: IDS.contactGroup,
       companyId: company.id,
+      slug: "traumatologia_general_dev",
+      role: "cliente",
       name: "Traumatología General DEV",
       description: "Grupo de contactos de traumatología para DEV",
       isActive: true,

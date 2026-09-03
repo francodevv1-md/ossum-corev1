@@ -1,15 +1,7 @@
 "use client"
 
-import React, { useState, useMemo, useCallback } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
-import type { Contacto, ContactRole } from "@/types"
-import {
-  CONTACT_ROLE_LABELS,
-  CONTACT_ROLE_BADGE_COLORS,
-  V1_ROLE_TO_CONTEXT,
-} from "@/lib/contacts.constants"
-import { cn } from "@/lib/utils"
-import { Search, Plus, Check, UserPlus } from "lucide-react"
+import type { Contacto } from "@/types"
+import { V1_ROLE_TO_CONTEXT } from "@/lib/contacts.constants"
 import { ContactSearchModal } from "./ContactSearchModal"
 
 // ═══════════════════════════════════════════════════════════════
