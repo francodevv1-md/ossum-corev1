@@ -6,10 +6,12 @@ import { useAuth } from "@/components/auth/AuthProvider"
 import { ApiClientError } from "@/lib/api/client"
 import {
   createManualInvoiceDraft,
+  createInvoiceDraftFromSource,
   emitInvoice,
   fetchAllInvoices,
   fetchInvoices,
   type CreateManualInvoiceDraftPayload,
+  type CreateInvoiceFromSourcePayload,
   type InvoiceApiRow,
   type ListInvoicesParams,
 } from "@/lib/api/invoices"
@@ -76,7 +78,8 @@ export function useInvoices(filters?: ListInvoicesParams, enabled = true) {
     setError(null)
     try {
       const result = await action(companyId)
-      if (activeScopeRef.current === scope) await refresh()
+      if (activeScopeRef.current !== scope) throw new Error("La empresa activa cambió")
+      await refresh()
       return result
     } catch (cause) {
       if (activeScopeRef.current === scope) setError(cause instanceof ApiClientError ? cause.message : "No se pudo actualizar la factura")
@@ -94,6 +97,7 @@ export function useInvoices(filters?: ListInvoicesParams, enabled = true) {
     mutatingId,
     refresh,
     create: (payload: CreateManualInvoiceDraftPayload) => mutate("__create__", (id) => createManualInvoiceDraft(id, payload)),
+    createFromSource: (payload: CreateInvoiceFromSourcePayload) => mutate("__create_source__", (id) => createInvoiceDraftFromSource(id, payload)),
     emit: (invoiceId: string) => mutate(invoiceId, (id) => emitInvoice(id, invoiceId)),
   }
 }

@@ -8,7 +8,6 @@ import type { PrismaClient, Invoice as PrismaInvoice } from "@prisma/client";
 import { createAuditEvent } from "../audit";
 import { badRequest, notFound } from "../api/errors";
 import { requireCompanyId } from "../tenant";
-import { markConsumoAsFacturado } from "./consumo.service";
 
 export const INVOICE_BASES = ["presupuesto", "consumo", "manual", "mixto"] as const;
 export type InvoiceBase = (typeof INVOICE_BASES)[number];
@@ -23,7 +22,7 @@ export const INVOICE_STATES = [
 export type InvoiceState = (typeof INVOICE_STATES)[number];
 
 export const INVOICE_TRANSITIONS: Record<InvoiceState, InvoiceState[]> = {
-  Borrador: ["Emitida", "Anulada"],
+  Borrador: ["Anulada"],
   Emitida: ["Anulada", "Parcialmente_cobrada", "Cobrada"],
   Parcialmente_cobrada: ["Cobrada", "Anulada", "Emitida"],
   Cobrada: ["Anulada", "Parcialmente_cobrada", "Emitida"],
@@ -59,6 +58,8 @@ function isInvoiceState(value: string): value is InvoiceState {
 function toDecimal(value: number | string | Prisma.Decimal): Prisma.Decimal {
   return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
 }
+
+const quantizeMoney = (value: Prisma.Decimal) => value.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
 
 function optionalUserId(userId: string | undefined): string | null {
   return userId ?? null;
@@ -214,6 +215,14 @@ export interface CreateInvoiceInput {
   prisma: PrismaClient;
 }
 
+export interface CreateInvoiceFromSourceInput {
+  companyId: string;
+  presupuestoId: string;
+  consumoId?: string;
+  createdById?: string;
+  prisma: PrismaClient;
+}
+
 export interface ListInvoicesInput {
   companyId: string;
   surgeryId?: string;
@@ -244,9 +253,9 @@ export interface UpdateInvoiceStateInput extends GetInvoiceInput {
 export interface RecomputeInvoicePaymentStateInput {
   companyId: string;
   invoiceId: string;
-  prisma: PrismaClient | Prisma.TransactionClient;
+  prisma: Prisma.TransactionClient;
 }
-export interface DeleteInvoiceInput extends GetInvoiceInput {}
+export type DeleteInvoiceInput = GetInvoiceInput;
 
 export function calculateInvoiceTotals(items: InvoiceItemInput[]) {
   if (!Array.isArray(items) || items.length === 0) {
@@ -254,10 +263,10 @@ export function calculateInvoiceTotals(items: InvoiceItemInput[]) {
   }
 
   const normalizedItems = items.map((item, index): NormalizedInvoiceItem => {
-    const quantity = toDecimal(item.quantity);
-    const unitPrice = toDecimal(item.unitPrice ?? 0);
-    const discount = toDecimal(item.discount ?? 0);
-    const tax = toDecimal(item.tax ?? 0);
+    const quantity = quantizeMoney(toDecimal(item.quantity));
+    const unitPrice = quantizeMoney(toDecimal(item.unitPrice ?? 0));
+    const discount = quantizeMoney(toDecimal(item.discount ?? 0));
+    const tax = quantizeMoney(toDecimal(item.tax ?? 0));
     if (quantity.lte(0)) {
       throw badRequest(`items[${index}].quantity must be a positive number`, "invalid_invoice_item_quantity");
     }
@@ -267,7 +276,7 @@ export function calculateInvoiceTotals(items: InvoiceItemInput[]) {
     if (typeof item.description !== "string" || item.description.trim().length === 0) {
       throw badRequest(`items[${index}].description is required`, "invalid_invoice_item_description");
     }
-    const total = quantity.mul(unitPrice).minus(discount).plus(tax);
+    const total = quantizeMoney(quantizeMoney(quantity.mul(unitPrice)).minus(discount).plus(tax));
     if (total.lt(0)) {
       throw badRequest(`items[${index}].total cannot be negative`, "invalid_invoice_item_total");
     }
@@ -288,11 +297,253 @@ export function calculateInvoiceTotals(items: InvoiceItemInput[]) {
 
   return {
     items: normalizedItems,
-    subtotal: normalizedItems.reduce((acc, item) => acc.plus(item.quantity.mul(item.unitPrice)), new Prisma.Decimal(0)),
-    discountTotal: normalizedItems.reduce((acc, item) => acc.plus(item.discount), new Prisma.Decimal(0)),
-    taxTotal: normalizedItems.reduce((acc, item) => acc.plus(item.tax), new Prisma.Decimal(0)),
-    total: normalizedItems.reduce((acc, item) => acc.plus(item.total), new Prisma.Decimal(0)),
+    subtotal: normalizedItems.reduce((acc, item) => quantizeMoney(acc.plus(quantizeMoney(item.quantity.mul(item.unitPrice)))), new Prisma.Decimal(0)),
+    discountTotal: normalizedItems.reduce((acc, item) => quantizeMoney(acc.plus(item.discount)), new Prisma.Decimal(0)),
+    taxTotal: normalizedItems.reduce((acc, item) => quantizeMoney(acc.plus(item.tax)), new Prisma.Decimal(0)),
+    total: normalizedItems.reduce((acc, item) => quantizeMoney(acc.plus(item.total)), new Prisma.Decimal(0)),
   };
+}
+
+function normalizedSku(value: string | null | undefined) {
+  return value?.normalize("NFKC").trim().toLocaleUpperCase("es") ?? "";
+}
+
+function normalizedDescription(value: string) {
+  return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+}
+
+async function lockAndAssertSourcesNotInvoiced(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  presupuestoId?: string,
+  consumoId?: string,
+) {
+  const sourceKeys = [presupuestoId ? `presupuesto:${presupuestoId}` : "", consumoId ? `consumo:${consumoId}` : ""].filter(Boolean).sort();
+  for (const sourceKey of sourceKeys) {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${companyId}:${sourceKey}`}, 0))`;
+  }
+  if (!sourceKeys.length) return;
+  const active = await tx.invoice.findFirst({
+    where: {
+      companyId,
+      state: { not: "Anulada" },
+      OR: [
+        ...(presupuestoId ? [{ presupuestoId }] : []),
+        ...(consumoId ? [{ consumoId }] : []),
+      ],
+    },
+    select: { id: true },
+  });
+  if (active) throw new InvoiceError("invoice_source_already_invoiced", `Source already referenced by active invoice ${active.id}`, 409);
+}
+
+async function transitionLinkedConsumoForInvoice(input: {
+  tx: Prisma.TransactionClient;
+  companyId: string;
+  consumoId: string;
+  invoiceId: string;
+  targetState: "Facturado" | "Validado";
+  updatedById: string | null;
+}) {
+  const fromState = input.targetState === "Facturado" ? "Validado" : "Facturado";
+  const updated = await input.tx.consumo.updateMany({
+    where: { id: input.consumoId, companyId: input.companyId, state: fromState },
+    data: {
+      state: input.targetState,
+      facturedAt: input.targetState === "Facturado" ? new Date() : null,
+      updatedById: input.updatedById,
+    },
+  });
+  if (input.targetState === "Facturado" && updated.count !== 1) {
+    throw new InvoiceError("invoice_consumo_not_validado", `Consumo ${input.consumoId} must be Validado before invoice emission`, 409);
+  }
+  if (updated.count === 1 && input.updatedById) {
+    await createAuditEvent({
+      prisma: input.tx as unknown as PrismaClient,
+      companyId: input.companyId,
+      userId: input.updatedById,
+      entityType: "Consumo",
+      entityId: input.consumoId,
+      action: input.targetState === "Facturado" ? "consumo.factured" : "consumo.invoice_cancelled_restore",
+      module: "consumo",
+      oldValue: { state: fromState },
+      newValue: { state: input.targetState, invoiceId: input.invoiceId },
+    });
+  }
+}
+
+async function lockSourceRows(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  presupuestoId: string,
+  consumoId?: string,
+) {
+  await tx.$queryRaw`SELECT "id" FROM "presupuesto" WHERE "id" = ${presupuestoId} AND "companyId" = ${companyId} FOR UPDATE`;
+  if (consumoId) {
+    await tx.$queryRaw`SELECT "id" FROM "consumo" WHERE "id" = ${consumoId} AND "companyId" = ${companyId} FOR UPDATE`;
+  }
+}
+
+interface CreateInvoiceRecordInput {
+  companyId: string;
+  surgeryId?: string;
+  presupuestoId?: string;
+  consumoId?: string;
+  base: InvoiceBase;
+  type?: string;
+  currency?: string;
+  items: InvoiceItemInput[];
+  createdById: string | null;
+  metadata?: Record<string, unknown> | null;
+  expectedTotal?: Prisma.Decimal;
+}
+
+async function createInvoiceRecord(tx: Prisma.TransactionClient, input: CreateInvoiceRecordInput) {
+  const totals = calculateInvoiceTotals(input.items);
+  if (input.expectedTotal && !totals.total.eq(input.expectedTotal)) {
+    throw new InvoiceError(
+      "invoice_presupuesto_total_mismatch",
+      `Calculated Invoice total ${totals.total.toFixed(4)} does not match approved Presupuesto total ${input.expectedTotal.toFixed(4)}`,
+      409,
+    );
+  }
+  const created = await tx.invoice.create({
+    data: {
+      companyId: input.companyId,
+      surgeryId: input.surgeryId ?? null,
+      presupuestoId: input.presupuestoId ?? null,
+      consumoId: input.consumoId ?? null,
+      base: input.base,
+      state: "Borrador",
+      type: input.type ?? "FV",
+      currency: input.currency ?? "ARS",
+      subtotal: totals.subtotal,
+      discountTotal: totals.discountTotal,
+      taxTotal: totals.taxTotal,
+      total: totals.total,
+      paidTotal: new Prisma.Decimal(0),
+      balance: totals.total,
+      createdById: input.createdById,
+      metadata: (input.metadata ?? null) as Prisma.InputJsonValue | undefined,
+      items: { create: totals.items },
+    },
+    select: invoiceReadSelect,
+  });
+  if (input.createdById) {
+    await createAuditEvent({
+      prisma: tx as unknown as PrismaClient,
+      companyId: input.companyId,
+      userId: input.createdById,
+      entityType: "Invoice",
+      entityId: created.id,
+      action: "invoice_created",
+      module: "invoice",
+      oldValue: null,
+      newValue: serializeInvoiceForAudit(created),
+    });
+  }
+  return created;
+}
+
+export async function createInvoiceFromSource(input: CreateInvoiceFromSourceInput) {
+  const companyId = requireCompanyId(input.companyId);
+  const createdById = optionalUserId(input.createdById);
+  return input.prisma.$transaction(async (tx) => {
+    await lockSourceRows(tx, companyId, input.presupuestoId, input.consumoId);
+    await lockAndAssertSourcesNotInvoiced(tx, companyId, input.presupuestoId, input.consumoId);
+    const presupuesto = await tx.presupuesto.findFirst({
+      where: { id: input.presupuestoId, companyId, state: "Aprobado", slot: "CURRENT" },
+      select: {
+        id: true, surgeryId: true, currency: true, generalDiscountRate: true, total: true,
+        items: {
+          select: { id: true, sku: true, description: true, quantity: true, unit: true, unitPrice: true, discountRate: true, discount: true, taxRate: true, tax: true, metadata: true },
+          orderBy: { position: "asc" },
+        },
+      },
+    });
+    if (!presupuesto) throw notFound(`Approved CURRENT Presupuesto ${input.presupuestoId} not found in company ${companyId}`, "invoice_presupuesto_not_eligible");
+    if (!presupuesto.surgeryId) throw badRequest("Presupuesto must reference a surgery", "invoice_source_surgery_required");
+
+    if (!input.consumoId) {
+      return createInvoiceRecord(tx, {
+        companyId,
+        surgeryId: presupuesto.surgeryId,
+        presupuestoId: presupuesto.id,
+        base: "presupuesto",
+        currency: presupuesto.currency,
+        createdById,
+        expectedTotal: quantizeMoney(presupuesto.total),
+        metadata: { source: { presupuestoId: presupuesto.id } },
+        items: presupuesto.items.map((item) => ({
+          sku: item.sku ?? undefined,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit ?? undefined,
+          unitPrice: item.unitPrice,
+          discount: item.discount,
+          tax: item.tax,
+          sourceType: "presupuesto",
+          sourceItemId: item.id,
+          metadata: { presupuestoId: presupuesto.id, presupuestoItemMetadata: item.metadata ?? null },
+        })),
+      });
+    }
+
+    const consumo = await tx.consumo.findFirst({
+      where: { id: input.consumoId, companyId, state: "Validado" },
+      select: {
+        id: true, surgeryId: true,
+        items: {
+          select: { id: true, sku: true, description: true, consumedQuantity: true, unit: true, metadata: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+    if (!consumo) throw notFound(`Validated Consumo ${input.consumoId} not found in company ${companyId}`, "invoice_consumo_not_eligible");
+    if (!consumo.surgeryId || consumo.surgeryId !== presupuesto.surgeryId) throw badRequest("Presupuesto and Consumo must reference the same surgery", "invoice_source_surgery_mismatch");
+
+    const consumedItems = consumo.items.filter((item) => toDecimal(item.consumedQuantity).gt(0));
+    if (!consumedItems.length) throw badRequest("Consumo has no positive consumed lines", "invoice_consumo_empty");
+    const items = consumedItems.map((consumoItem) => {
+      const sku = normalizedSku(consumoItem.sku);
+      const matches = presupuesto.items.filter((budgetItem) => sku
+        ? normalizedSku(budgetItem.sku) === sku
+        : !normalizedSku(budgetItem.sku) && normalizedDescription(budgetItem.description) === normalizedDescription(consumoItem.description));
+      if (matches.length !== 1) throw badRequest(`Consumo item ${consumoItem.id} cannot be matched to exactly one presupuesto item`, "invoice_consumo_item_unpriced");
+      const budgetItem = matches[0];
+      const quantity = quantizeMoney(toDecimal(consumoItem.consumedQuantity));
+      const unitPrice = quantizeMoney(budgetItem.unitPrice);
+      const gross = quantizeMoney(quantity.mul(unitPrice));
+      const lineDiscount = quantizeMoney(gross.mul(budgetItem.discountRate).div(100));
+      const generalDiscount = quantizeMoney(gross.minus(lineDiscount).mul(presupuesto.generalDiscountRate).div(100));
+      const discount = quantizeMoney(lineDiscount.plus(generalDiscount));
+      const taxable = quantizeMoney(gross.minus(discount));
+      const tax = quantizeMoney(taxable.mul(budgetItem.taxRate).div(100));
+      return {
+        sku: consumoItem.sku ?? budgetItem.sku ?? undefined,
+        description: consumoItem.description,
+        quantity,
+        unit: consumoItem.unit ?? budgetItem.unit ?? undefined,
+        unitPrice,
+        discount,
+        tax,
+        sourceType: "consumo",
+        sourceItemId: consumoItem.id,
+        metadata: { presupuestoId: presupuesto.id, presupuestoItemId: budgetItem.id, presupuestoItemMetadata: budgetItem.metadata ?? null, consumoId: consumo.id, consumoItemMetadata: consumoItem.metadata ?? null },
+      } satisfies InvoiceItemInput;
+    });
+    return createInvoiceRecord(tx, {
+      companyId,
+      surgeryId: consumo.surgeryId,
+      presupuestoId: presupuesto.id,
+      consumoId: consumo.id,
+      base: "mixto",
+      currency: presupuesto.currency,
+      createdById,
+      metadata: { source: { presupuestoId: presupuesto.id, consumoId: consumo.id } },
+      items,
+    });
+  });
 }
 
 async function assertRefs(prisma: PrismaClient, companyId: string, input: CreateInvoiceInput) {
@@ -322,51 +573,11 @@ export async function createInvoice(input: CreateInvoiceInput) {
   if (base === "mixto" && !input.presupuestoId && !input.consumoId) throw badRequest("mixto invoices require at least one source id", "invoice_mixto_source_required");
 
   await assertRefs(input.prisma, companyId, input);
-  const totals = calculateInvoiceTotals(input.items);
   const createdById = optionalUserId(input.createdById);
 
   return input.prisma.$transaction(async (tx) => {
-    const created = await tx.invoice.create({
-      data: {
-        companyId,
-        surgeryId: input.surgeryId ?? null,
-        presupuestoId: input.presupuestoId ?? null,
-        consumoId: input.consumoId ?? null,
-        base,
-        state: "Borrador",
-        type: input.type ?? "FV",
-        currency: input.currency ?? "ARS",
-        subtotal: totals.subtotal,
-        discountTotal: totals.discountTotal,
-        taxTotal: totals.taxTotal,
-        total: totals.total,
-        paidTotal: new Prisma.Decimal(0),
-        balance: totals.total,
-        createdById,
-        metadata: (input.metadata ?? null) as Prisma.InputJsonValue | undefined,
-        items: { create: totals.items },
-      },
-      select: invoiceReadSelect,
-    });
-
-    if ((base === "consumo" || base === "mixto") && input.consumoId) {
-      await markConsumoAsFacturado({ companyId, consumoId: input.consumoId, updatedById: createdById ?? undefined, prisma: tx as unknown as PrismaClient });
-    }
-
-    if (createdById) {
-      await createAuditEvent({
-        prisma: tx as unknown as PrismaClient,
-        companyId,
-        userId: createdById,
-        entityType: "Invoice",
-        entityId: created.id,
-        action: "invoice_created",
-        module: "invoice",
-        oldValue: null,
-        newValue: serializeInvoiceForAudit(created),
-      });
-    }
-    return created;
+    await lockAndAssertSourcesNotInvoiced(tx, companyId, input.presupuestoId, input.consumoId);
+    return createInvoiceRecord(tx, { ...input, companyId, base, createdById });
   });
 }
 
@@ -395,10 +606,14 @@ export async function emitInvoice(input: EmitInvoiceInput) {
   for (let attempt = 0; attempt < INVOICE_EMIT_MAX_RETRIES; attempt += 1) {
     try {
       return await input.prisma.$transaction(async (tx) => {
-        const current = await tx.invoice.findFirst({ where: { id: input.invoiceId, companyId }, select: { id: true, state: true, companyId: true } });
+        await lockInvoiceRow(tx, companyId, input.invoiceId);
+        const current = await tx.invoice.findFirst({ where: { id: input.invoiceId, companyId }, select: { id: true, state: true, companyId: true, consumoId: true } });
         requireCompanyMatch(current, companyId, input.invoiceId);
         if (current.state !== "Borrador") throw new InvoiceError("invoice_not_borrador", `Cannot emit invoice in state ${current.state}`, 409);
         const visibleNumber = await getNextVisibleNumber(tx, companyId);
+        if (current.consumoId) {
+          await transitionLinkedConsumoForInvoice({ tx, companyId, consumoId: current.consumoId, invoiceId: current.id, targetState: "Facturado", updatedById });
+        }
         const result = await tx.invoice.update({ where: { id: input.invoiceId }, data: { visibleNumber, state: "Emitida", issuedAt: new Date(), updatedById }, select: invoiceReadSelect });
         if (updatedById) await createAuditEvent({ prisma: tx as unknown as PrismaClient, companyId, userId: updatedById, entityType: "Invoice", entityId: result.id, action: "invoice_issued", module: "invoice", oldValue: { state: current.state }, newValue: { state: result.state, visibleNumber: result.visibleNumber } });
         return result;
@@ -413,18 +628,26 @@ export async function emitInvoice(input: EmitInvoiceInput) {
 
 export const emitirInvoice = emitInvoice;
 
+async function lockInvoiceRow(tx: Prisma.TransactionClient, companyId: string, invoiceId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "invoice" WHERE "id" = ${invoiceId} AND "companyId" = ${companyId} FOR UPDATE`;
+}
+
 export async function updateInvoiceState(input: UpdateInvoiceStateInput) {
   const companyId = requireCompanyId(input.companyId);
   const updatedById = optionalUserId(input.updatedById);
   if (!isInvoiceState(input.newState)) throw badRequest(`newState must be one of: ${(INVOICE_STATES as readonly string[]).join(", ")}`, "invalid_invoice_state");
-  const current = await input.prisma.invoice.findFirst({ where: { id: input.invoiceId, companyId }, select: { id: true, state: true, companyId: true } });
-  requireCompanyMatch(current, companyId, input.invoiceId);
-  const currentState = current.state as InvoiceState;
   const newState = input.newState as InvoiceState;
-  if (currentState === newState) throw new InvoiceError("invoice_state_unchanged", `Invoice state is already ${newState}`, 409);
-  if (!((INVOICE_TRANSITIONS[currentState] ?? []) as readonly string[]).includes(newState)) throw new InvoiceError("invalid_invoice_transition", `Invalid invoice state transition: ${currentState} -> ${newState}`, 409);
   return input.prisma.$transaction(async (tx) => {
+    await lockInvoiceRow(tx, companyId, input.invoiceId);
+    const current = await tx.invoice.findFirst({ where: { id: input.invoiceId, companyId }, select: { id: true, state: true, companyId: true, consumoId: true } });
+    requireCompanyMatch(current, companyId, input.invoiceId);
+    const currentState = current.state as InvoiceState;
+    if (currentState === newState) throw new InvoiceError("invoice_state_unchanged", `Invoice state is already ${newState}`, 409);
+    if (!((INVOICE_TRANSITIONS[currentState] ?? []) as readonly string[]).includes(newState)) throw new InvoiceError("invalid_invoice_transition", `Invalid invoice state transition: ${currentState} -> ${newState}`, 409);
     const result = await tx.invoice.update({ where: { id: input.invoiceId }, data: { state: newState, cancelledAt: newState === "Anulada" ? new Date() : undefined, updatedById }, select: invoiceReadSelect });
+    if (newState === "Anulada" && currentState !== "Borrador" && current.consumoId) {
+      await transitionLinkedConsumoForInvoice({ tx, companyId, consumoId: current.consumoId, invoiceId: current.id, targetState: "Validado", updatedById });
+    }
     if (updatedById) await createAuditEvent({ prisma: tx as unknown as PrismaClient, companyId, userId: updatedById, entityType: "Invoice", entityId: result.id, action: "invoice_state_changed", module: "invoice", oldValue: { state: currentState }, newValue: { state: newState } });
     return result;
   });
@@ -433,6 +656,7 @@ export async function updateInvoiceState(input: UpdateInvoiceStateInput) {
 export async function recomputeInvoicePaymentState(input: RecomputeInvoicePaymentStateInput) {
   const companyId = requireCompanyId(input.companyId);
   const db = input.prisma;
+  await lockInvoiceRow(db, companyId, input.invoiceId);
   const invoice = await db.invoice.findFirst({ where: { id: input.invoiceId, companyId }, select: { id: true, companyId: true, state: true, total: true } });
   requireCompanyMatch(invoice, companyId, input.invoiceId);
   const aggregate = await db.paymentImputation.aggregate({
@@ -447,10 +671,11 @@ export async function recomputeInvoicePaymentState(input: RecomputeInvoicePaymen
 
 export async function deleteInvoice(input: DeleteInvoiceInput) {
   const companyId = requireCompanyId(input.companyId);
-  const current = await input.prisma.invoice.findFirst({ where: { id: input.invoiceId, companyId }, select: { id: true, state: true, companyId: true, createdById: true } });
-  requireCompanyMatch(current, companyId, input.invoiceId);
-  if (current.state !== "Borrador") throw new InvoiceError("invoice_not_deletable", `Cannot delete invoice in state ${current.state} (only Borrador)`, 409);
   return input.prisma.$transaction(async (tx) => {
+    await lockInvoiceRow(tx, companyId, input.invoiceId);
+    const current = await tx.invoice.findFirst({ where: { id: input.invoiceId, companyId }, select: { id: true, state: true, companyId: true, createdById: true } });
+    requireCompanyMatch(current, companyId, input.invoiceId);
+    if (current.state !== "Borrador") throw new InvoiceError("invoice_not_deletable", `Cannot delete invoice in state ${current.state} (only Borrador)`, 409);
     await tx.invoice.delete({ where: { id: input.invoiceId } });
     if (current.createdById) await createAuditEvent({ prisma: tx as unknown as PrismaClient, companyId, userId: current.createdById, entityType: "Invoice", entityId: input.invoiceId, action: "invoice_deleted", module: "invoice", oldValue: { id: input.invoiceId, state: current.state }, newValue: null });
     return { id: input.invoiceId, deleted: true };

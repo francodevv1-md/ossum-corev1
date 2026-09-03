@@ -65,6 +65,11 @@ export type CreateManualInvoiceDraftPayload = {
   reference?: string
 }
 
+export type CreateInvoiceFromSourcePayload = {
+  presupuestoId: string
+  consumoId?: string
+}
+
 function basePath(companyId: string) {
   return `/api/companies/${encodeURIComponent(companyId)}/invoices`
 }
@@ -114,6 +119,14 @@ export function createManualInvoiceDraft(companyId: string, payload: CreateManua
       }],
       metadata: payload.reference ? { reference: payload.reference } : undefined,
     }),
+  })
+}
+
+export function createInvoiceDraftFromSource(companyId: string, payload: CreateInvoiceFromSourcePayload) {
+  return apiFetch<InvoiceApiRow>(basePath(companyId), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   })
 }
 

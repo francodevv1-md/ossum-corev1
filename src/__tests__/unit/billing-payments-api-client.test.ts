@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 vi.mock("@/lib/api/client", () => ({ apiFetch }))
 
-import { createManualInvoiceDraft, emitInvoice, fetchAllInvoices, fetchInvoices } from "@/lib/api/invoices"
+import { createInvoiceDraftFromSource, createManualInvoiceDraft, emitInvoice, fetchAllInvoices, fetchInvoices } from "@/lib/api/invoices"
 import { cancelPayment, createInvoicePayment, fetchAllPayments, fetchPayments } from "@/lib/api/payments"
 
 describe("billing and payment API clients", () => {
@@ -58,6 +58,13 @@ describe("billing and payment API clients", () => {
       metadata: { reference: "TRX-9", notes: "Transferencia confirmada" },
     })
     expect(apiFetch).toHaveBeenNthCalledWith(3, "/api/companies/company-1/payments/payment%20%2F%202/cancel", { method: "POST" })
+  })
+
+  it("creates a source draft without accepting client financial lines", async () => {
+    await createInvoiceDraftFromSource("company-1", { presupuestoId: "budget-real", consumoId: "consumo-real" })
+
+    expect(apiFetch).toHaveBeenCalledWith("/api/companies/company-1/invoices", expect.objectContaining({ method: "POST" }))
+    expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ presupuestoId: "budget-real", consumoId: "consumo-real" })
   })
 
   it("loads every page for authoritative financial totals", async () => {

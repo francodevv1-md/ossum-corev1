@@ -4,8 +4,8 @@ import { badRequest } from "../../../../../lib/api/errors";
 import { getDateParam, getNonNegativeIntegerParam, getStringParam } from "../../../../../lib/api/query";
 import { created, errorResponse, ok } from "../../../../../lib/api/responses";
 import prisma from "../../../../../lib/prisma";
-import { INVOICE_MUTATION_ROLES, createInvoice, listInvoices } from "../../../../../lib/services/invoice.service";
-import { invoiceCreateSchema } from "../../../../../lib/validators/invoice";
+import { INVOICE_MUTATION_ROLES, createInvoice, createInvoiceFromSource, listInvoices } from "../../../../../lib/services/invoice.service";
+import { invoiceCreateSchema, invoiceSourceDraftCreateSchema } from "../../../../../lib/validators/invoice";
 
 type RouteContext = { params: Promise<{ companyId: string }> };
 
@@ -39,22 +39,18 @@ export async function POST(request: Request, { params }: RouteContext) {
     const { companyId } = await params;
     const ctx = await getApiAuthContext(request, companyId);
     requireCompanyMutationAccess(ctx, INVOICE_MUTATION_ROLES);
-    const parsed = invoiceCreateSchema.safeParse(await parseJsonBody(request));
-    if (!parsed.success) throw badRequest(parsed.error.issues[0]?.message ?? "Invalid invoice body", "invalid_invoice_body");
-    const body = parsed.data;
-    const invoice = await createInvoice({
-      companyId: ctx.companyId,
-      prisma,
-      surgeryId: body.surgeryId,
-      presupuestoId: body.presupuestoId,
-      consumoId: body.consumoId,
-      base: body.base,
-      type: body.type,
-      currency: body.currency,
-      items: body.items,
-      createdById: ctx.actorUserId,
-      metadata: body.metadata ?? null,
-    });
+    const rawBody = await parseJsonBody(request);
+    const isSourceDraft = typeof rawBody === "object" && rawBody !== null && ("presupuestoId" in rawBody || "consumoId" in rawBody);
+    let invoice;
+    if (isSourceDraft) {
+      const parsed = invoiceSourceDraftCreateSchema.safeParse(rawBody);
+      if (!parsed.success) throw badRequest(parsed.error.issues[0]?.message ?? "Invalid invoice source body", "invalid_invoice_body");
+      invoice = await createInvoiceFromSource({ companyId: ctx.companyId, prisma, ...parsed.data, createdById: ctx.actorUserId });
+    } else {
+      const parsed = invoiceCreateSchema.safeParse(rawBody);
+      if (!parsed.success) throw badRequest(parsed.error.issues[0]?.message ?? "Invalid invoice body", "invalid_invoice_body");
+      invoice = await createInvoice({ companyId: ctx.companyId, prisma, ...parsed.data, createdById: ctx.actorUserId, metadata: parsed.data.metadata ?? null });
+    }
     return created(invoice);
   } catch (error) { return errorResponse(error); }
 }

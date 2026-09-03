@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Prisma transaction mocks use intentionally partial dynamic clients. */
 // OSSUM COR — Payment service unit tests (Fase 1D)
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,6 +80,7 @@ describe("createPayment", () => {
 describe("cancelPayment", () => {
   it("sets Anulado and recomputes invoice excluding cancelled payment", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       payment: { update: vi.fn(async ({ data }) => buildPayment({ state: data.state })) },
       invoice: {
         findFirst: vi.fn().mockResolvedValue(buildInvoice({ total: new Prisma.Decimal(100), state: "Parcialmente_cobrada" })),

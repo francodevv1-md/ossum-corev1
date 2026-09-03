@@ -24,14 +24,17 @@ export const invoiceItemCreateSchema = z.object({
 
 export const invoiceCreateSchema = z.object({
   surgeryId: z.string().trim().optional(),
-  presupuestoId: z.string().trim().optional(),
-  consumoId: z.string().trim().optional(),
   base: z.enum(INVOICE_BASES as unknown as [string, ...string[]]).default("manual").optional(),
   type: z.string().trim().min(1).default("FV").optional(),
   currency: z.string().trim().min(1).default("ARS").optional(),
   items: z.array(invoiceItemCreateSchema).min(1, "items must not be empty"),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
+
+export const invoiceSourceDraftCreateSchema = z.object({
+  presupuestoId: z.string().trim().min(1, "presupuestoId is required"),
+  consumoId: z.string().trim().min(1, "consumoId is required").optional(),
+}).strict();
 
 export const invoiceStateTransitionSchema = z.object({
   newState: z.enum(INVOICE_STATES as unknown as [string, ...string[]]),
@@ -51,4 +54,5 @@ export const invoiceListQuerySchema = z
   .partial();
 
 export type InvoiceCreateInput = z.infer<typeof invoiceCreateSchema>;
+export type InvoiceSourceDraftCreateInput = z.infer<typeof invoiceSourceDraftCreateSchema>;
 export type InvoiceListQueryInput = z.infer<typeof invoiceListQuerySchema>;
