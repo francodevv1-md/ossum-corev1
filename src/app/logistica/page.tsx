@@ -19,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useExpedienteDrawer } from "@/components/layout/app-shell"
+import { LogisticsMapPanel } from "@/components/logistica/LogisticsMapPanel"
+import { useLogisticsMap } from "@/hooks/useLogisticsMap"
 import { toast } from "sonner"
 import {
   Truck, PackageCheck, RotateCcw, Warehouse,
@@ -46,6 +48,7 @@ const VUELTA_OPTIONS = [
 export default function LogisticaPage() {
   const store = useOrtoTrackStore()
   const { openExpediente } = useExpedienteDrawer()
+  const map = useLogisticsMap()
 
   const [search, setSearch] = useState("")
   const [idaFilter, setIdaFilter] = useState("")
@@ -104,6 +107,8 @@ export default function LogisticaPage() {
         <StatsCard title="Devueltos" value={stats.devueltos} icon={RotateCcw} />
         <StatsCard title="En preparación" value={stats.enPreparacion} icon={Warehouse} />
       </div>
+
+      {map.error ? <section role="alert" className="border border-amber-200 bg-amber-50 p-3 text-sm">El mapa no está disponible: {map.error}</section> : map.data && <LogisticsMapPanel markers={map.data.markers} excluded={map.data.excluded} vehicles={map.data.vehicles} feed={map.data.feed} route={map.route} routeLoading={map.routeLoading} routeError={map.routeError} onShowRoute={map.showRoute} onHideRoute={map.hideRoute} onOpen={openExpediente} />}
 
       {/* Filters */}
       <Card>

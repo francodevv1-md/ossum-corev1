@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import type { GeoCandidate, GeorefAddressLookup } from "@/lib/georef/georef-address.adapter";
 
 export type ApiContact = Record<string, unknown>;
 
@@ -39,4 +40,9 @@ export function updateContactApi(companyId: string, contactId: string, payload: 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export type ContactGeorefLookupResponse = { candidates: GeoCandidate[] };
+export function lookupContactAddressGeoref(companyId: string, payload: GeorefAddressLookup, signal?: AbortSignal) {
+  return apiFetch<ContactGeorefLookupResponse>(`${basePath(companyId)}/georef/lookup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal });
 }

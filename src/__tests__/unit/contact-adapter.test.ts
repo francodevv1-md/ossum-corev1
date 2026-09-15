@@ -43,4 +43,15 @@ describe("mapContactoToApiPayload", () => {
     })
     expect(payload).not.toHaveProperty("legalName")
   })
+
+  it("does not synthesize an address for a group-only update", () => {
+    expect(mapContactoToApiPayload({ groups: ["medicos"] })).not.toHaveProperty("mainAddress")
+  })
+
+  it("omits geography unless a form action explicitly changes it", () => {
+    const payload = mapContactoToApiPayload({ domicilio: "Calle 1" })
+
+    expect(payload.mainAddress).not.toHaveProperty("geo")
+    expect(mapContactoToApiPayload({ domicilio: "Calle 1" }, null).mainAddress).toMatchObject({ geo: null })
+  })
 })

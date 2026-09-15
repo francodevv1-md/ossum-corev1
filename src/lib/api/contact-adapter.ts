@@ -12,6 +12,7 @@
  */
 
 import type { CondicionIvaCliente, Contacto, ContactRole } from "@/types"
+import type { ContactAddressGeoInput } from "@/lib/validators/contact"
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -51,6 +52,14 @@ function resolveContactRole(linkRole: unknown): ContactRole {
   if (r === "admin" || r === "operator") return "interno"
   // doctor, patient, institution, payer, and anything else → cliente
   return "cliente"
+}
+
+function mapPersistedAddressGeo(address: Record<string, unknown> | undefined): ContactAddressGeoInput | undefined {
+  if (!address || address.latitude == null || address.longitude == null) return undefined
+  const latitude = Number(address.latitude), longitude = Number(address.longitude), coordinateType = address.coordinateType, source = address.source
+  const validationStatus = ({ CANDIDATE: "candidate", MISSING: "missing", CONFLICT: "conflict", VERIFIED: "verified", MANUAL_VERIFIED: "manual_verified", DEPRECATED: "deprecated" } as const)[String(address.validationStatus) as "CANDIDATE" | "MISSING" | "CONFLICT" | "VERIFIED" | "MANUAL_VERIFIED" | "DEPRECATED"]
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !["ADDRESS", "CENTROID", "MANUAL"].includes(String(coordinateType)) || (source !== "Georef Argentina" && source !== "Manual") || !validationStatus) return undefined
+  return { georefId: typeof address.georefId === "string" ? address.georefId : null, entityType: address.entityType === "ADDRESS" || address.entityType === "LOCALITY" ? address.entityType : null, provinceGeorefId: typeof address.provinceGeorefId === "string" ? address.provinceGeorefId : null, provinceName: typeof address.provinceName === "string" ? address.provinceName : null, latitude, longitude, coordinateType: coordinateType as "ADDRESS" | "CENTROID" | "MANUAL", crs: address.crs === "EPSG_4326" || address.crs === "EPSG:4326" ? "EPSG:4326" : null, source, sourceVersion: typeof address.sourceVersion === "string" ? address.sourceVersion : null, sourceRetrievedAt: typeof address.sourceRetrievedAt === "string" ? address.sourceRetrievedAt : address.sourceRetrievedAt instanceof Date ? address.sourceRetrievedAt.toISOString() : null, validationStatus, validationNotes: typeof address.validationNotes === "string" ? address.validationNotes : null }
 }
 
 // ─── Single-contact mapper ────────────────────────────────────────────
@@ -108,6 +117,7 @@ export function mapApiContactToContacto(
     provincia: (mainAddress?.state as string | undefined) || undefined,
     localidad: (mainAddress?.city as string | undefined) || undefined,
     codigoPostal: (mainAddress?.zipCode as string | undefined) || undefined,
+    mainAddressGeo: mapPersistedAddressGeo(mainAddress),
     datosClientePagador: roles.includes("cliente") ? {
       esPagador: typeof apiContact.isPayer === "boolean" ? apiContact.isPayer : true,
       condicionIva: (apiContact.vatCondition as CondicionIvaCliente | undefined) || "Consumidor Final",
@@ -145,7 +155,7 @@ export function mapApiContactListToContactos(
  * All persisted Contacto form fields are flattened into the API contract.
  */
 export function mapContactoToApiPayload(
-  formData: Partial<Contacto>
+  formData: Partial<Contacto>, mainAddressGeo?: ContactAddressGeoInput | null
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {}
 
@@ -197,13 +207,14 @@ export function mapContactoToApiPayload(
   }
   if ("groups" in formData) payload.groupSlugs = formData.groups ?? []
 
-  if (["domicilio", "provincia", "localidad", "codigoPostal"].some((key) => key in formData)) {
+  if (["domicilio", "provincia", "localidad", "codigoPostal"].some((key) => key in formData) || mainAddressGeo !== undefined) {
     payload.mainAddress = {
       street: formData.domicilio?.trim() || null,
       city: formData.localidad?.trim() || null,
       state: formData.provincia?.trim() || null,
       zipCode: formData.codigoPostal?.trim() || null,
       country: "AR",
+      ...(mainAddressGeo !== undefined ? { geo: mainAddressGeo } : {}),
     }
   }
 

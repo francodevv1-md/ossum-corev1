@@ -497,3 +497,13 @@ Franco aprobó explícitamente el paquete DEV `CONTACTS-BACKEND-AUTHORITY-UI-DEV
 Alcance autorizado: schema y migración aditiva de Contactos, persistencia multiempresa de código/roles/grupos/dirección/perfiles, servicios/validadores/API, UI de Contactos, selectores reutilizables por Nueva Cirugía sin modificar su núcleo, pruebas, Diagnose, revisión GGA y commit local.
 
 Exclusiones: Auth/roles/permisos, cambios del circuito núcleo de Cirugías, datos reales, producción/staging, deploy, push y PR. Evidencia operativa: Engram #6346/#6355 y `knowledge/specs/CONTACTS-BACKEND-AUTHORITY-UI-DEV-001/TASK_BRIEF.md`.
+
+---
+
+## 19. Aprobación activa — Recuperación GPS/geolocalización DEV 2026-09-14
+
+Franco autorizó recuperar en `ossum-clean` los paquetes existentes de geolocalización institucional y GPS sin reconstruir sus funciones: dependencias `maplibre-gl` y `react-map-gl`, cambios mínimos de schema, migraciones, API, servicios, UI, pruebas, validación Prisma sin ejecución de migraciones, revisión GGA y commits locales. Ante el hallazgo de GGA de aislamiento multiempresa, respondió `AUTORIZO` a ajustar la migración geográfica recuperada y su contrato Prisma/API para asociar `ContactAddress` con `companyId`. Para resolver el backfill multiempresa, autorizó explícitamente duplicar cada `ContactAddress` histórico para cada `ContactCompanyLink` de su contacto.
+
+Alcance autorizado: únicamente los artefactos inventariados en `knowledge/specs/CONTROLLED-GEO-GPS-TRANSFER-20260914/TASK_BRIEF.md`, incluidas correcciones mínimas solicitadas por GGA dentro de geolocalización/GPS y aislamiento multiempresa.
+
+Exclusiones: ejecución de migraciones, escrituras en DB, datos reales, Auth/roles/permisos ajenos al aislamiento de direcciones, provider/product changes, secretos, producción/staging, deploy, push y PR. Evidencia operativa: conversación del 2026-09-14 y Engram #6808.

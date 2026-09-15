@@ -101,7 +101,7 @@ integrationDescribe("Contact company code allocation on PostgreSQL", () => {
         data: { contactId: contact.id, companyId: company.id, role: "patient", roles: ["cliente"] },
       })
       await prisma.contactAddress.create({
-        data: { contactId: contact.id, street: "Av. Norte", number: "42", city: "Resistencia", isMain: true },
+        data: { contactId: contact.id, companyId: company.id, street: "Av. Norte", number: "42", city: "Resistencia", isMain: true },
       })
 
       await updateContact(prisma, company.id, contact.id, {
@@ -109,7 +109,7 @@ integrationDescribe("Contact company code allocation on PostgreSQL", () => {
         mainAddress: { street: "Av. Norte 42", city: "Resistencia" },
       })
 
-      await expect(prisma.contactAddress.findFirst({ where: { contactId: contact.id, isMain: true } })).resolves.toMatchObject({
+      await expect(prisma.contactAddress.findFirst({ where: { companyId: company.id, contactId: contact.id, isMain: true } })).resolves.toMatchObject({
         street: "Av. Norte",
         number: "42",
       })

@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+
+vi.mock("@/components/contactos/ContactAddressMapPreview", () => ({ ContactAddressMapPreview: () => null }))
 
 import { sanitizeContactoSaveError } from "@/components/contactos/ContactoFormDialog"
 

@@ -900,6 +900,13 @@ export interface DatosInstitucion {
   observacionEntrega?: string
 }
 
+export type ContactAddressGeo = {
+  georefId?: string | null; entityType?: "ADDRESS" | "LOCALITY" | null; provinceGeorefId?: string | null; provinceName?: string | null
+  latitude?: number | null; longitude?: number | null; coordinateType?: "ADDRESS" | "CENTROID" | "MANUAL" | null; crs?: "EPSG:4326" | null
+  source?: "Georef Argentina" | "Manual" | null; sourceVersion?: string | null; sourceRetrievedAt?: string | null
+  validationStatus?: "candidate" | "missing" | "conflict" | "verified" | "manual_verified" | "deprecated" | null; validationNotes?: string | null
+}
+
 /**
  * Contacto — entidad unificada del Maestro de Contactos.
  * DC-CT-018: Un contacto tiene código único, puede tener múltiples roles generales
@@ -935,6 +942,7 @@ export interface Contacto {
   provincia?: string
   localidad?: string
   codigoPostal?: string
+  mainAddressGeo?: ContactAddressGeo
   /** Datos específicos del rol cliente (solo si el rol está activo) */
   datosClientePagador?: DatosClientePagador
   /** Datos específicos del grupo médicos (solo si pertenece al grupo) */

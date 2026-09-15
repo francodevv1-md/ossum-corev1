@@ -51,7 +51,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const contact = await createContact(prisma, ctx.companyId, {
       ...input,
       isCompany: input.isCompany ?? (!input.firstName && !input.lastName && !!input.legalName),
-    }, input.role ?? undefined);
+    }, input.role ?? undefined, { userId: ctx.actorUserId, role: ctx.role });
 
     await createAuditEvent({
       prisma,

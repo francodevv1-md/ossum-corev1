@@ -8,9 +8,11 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import type { Contacto } from "@/types";
 
 import { badRequest, conflict } from "../api/errors";
-import type { ContactCreateInput, ContactUpdateInput } from "../validators/contact";
+import { assertContactGeoPolicy, type ContactCreateInput, type ContactUpdateInput } from "../validators/contact";
+import { createAuditEvent } from "../audit";
 
 type Db = PrismaClient | Prisma.TransactionClient;
+type GeographyActor = { userId: string; role: string };
 
 export type FrontendContactSnapshot = Pick<
   Contacto,
@@ -197,7 +199,7 @@ export async function resolveCompanyContactReference(
 const contactInclude = (companyId: string) => ({
   contact: {
     include: {
-      addresses: { where: { isMain: true }, orderBy: { createdAt: "asc" as const }, take: 1 },
+      addresses: { where: { companyId, isMain: true }, orderBy: { createdAt: "asc" as const }, take: 1 },
       groupMemberships: {
         where: { group: { companyId } },
         include: { group: true },
@@ -242,6 +244,12 @@ function flattenContact(link: ContactLinkWithDetails) {
 function clean(value: string | null | undefined) {
   const cleaned = value?.trim();
   return cleaned || null;
+}
+
+const databaseGeographyStatus = (status: string | null | undefined) => !status ? null : ({ candidate: "CANDIDATE", missing: "MISSING", conflict: "CONFLICT", verified: "VERIFIED", manual_verified: "MANUAL_VERIFIED", deprecated: "DEPRECATED" } as const)[status as "candidate" | "missing" | "conflict" | "verified" | "manual_verified" | "deprecated"] ?? null;
+const apiGeographyStatus = (status: unknown) => ({ CANDIDATE: "candidate", MISSING: "missing", CONFLICT: "conflict", VERIFIED: "verified", MANUAL_VERIFIED: "manual_verified", DEPRECATED: "deprecated" } as const)[String(status) as "CANDIDATE" | "MISSING" | "CONFLICT" | "VERIFIED" | "MANUAL_VERIFIED" | "DEPRECATED"] ?? null;
+function geographyMatches(current: { georefId: string | null; entityType: string | null; provinceGeorefId: string | null; provinceName: string | null; latitude: { toString(): string } | number | null; longitude: { toString(): string } | number | null; coordinateType: string | null; crs: string | null; source: string | null; sourceVersion: string | null; sourceRetrievedAt: Date | null; validationStatus: string | null; validationNotes: string | null }, geo: NonNullable<ContactCreateInput["mainAddress"]>["geo"]) {
+  return current.georefId === (geo?.georefId ?? null) && current.entityType === (geo?.entityType ?? null) && current.provinceGeorefId === (geo?.provinceGeorefId ?? null) && current.provinceName === (geo?.provinceName ?? null) && Number(current.latitude) === (geo?.latitude ?? null) && Number(current.longitude) === (geo?.longitude ?? null) && current.coordinateType === (geo?.coordinateType ?? null) && current.crs === (geo?.crs === "EPSG:4326" ? "EPSG_4326" : null) && current.source === (geo?.source ?? null) && current.sourceVersion === (geo?.sourceVersion ?? null) && (current.sourceRetrievedAt?.toISOString() ?? null) === (geo?.sourceRetrievedAt ?? null) && current.validationStatus === databaseGeographyStatus(geo?.validationStatus) && current.validationNotes === (geo?.validationNotes ?? null);
 }
 
 function generalRole(role: string | null | undefined): "cliente" | "proveedor" | "interno" | null {
@@ -309,33 +317,59 @@ async function replaceGroups(
 async function replaceMainAddress(
   tx: Prisma.TransactionClient,
   contactId: string,
-  address: ContactCreateInput["mainAddress"]
+  address: ContactCreateInput["mainAddress"], companyId: string, groupSlugs: readonly string[] | undefined, actor?: GeographyActor
 ) {
   if (address === undefined) return;
-  const current = await tx.contactAddress.findFirst({ where: { contactId, isMain: true }, orderBy: { createdAt: "asc" } });
+  const current = await tx.contactAddress.findFirst({ where: { companyId, contactId, isMain: true }, orderBy: { createdAt: "asc" } });
+  const currentStatus = current ? apiGeographyStatus(current.validationStatus) : null;
+  const protectedGeography = currentStatus === "verified" || currentStatus === "manual_verified";
+  const clearMainAddress = async () => {
+    const explicitAdminClear = actor?.role === "admin" && address?.geo === null;
+    if (protectedGeography && !explicitAdminClear) throw conflict("Validated geographic data requires explicit administrator resolution", "contact_geo_validated_data_protected");
+    if (!current) return;
+    await tx.contactAddress.update({ where: { id: current.id }, data: { isMain: false } });
+    if (currentStatus && actor) await createAuditEvent({ prisma: tx, companyId, userId: actor.userId, entityType: "ContactAddress", entityId: current.id, action: "geography_status_changed", module: "contacts", newValue: { geo: null }, metadata: { contactId, actorRole: actor.role } });
+  };
   if (!address) {
-    if (current) await tx.contactAddress.update({ where: { id: current.id }, data: { isMain: false } });
+    await clearMainAddress();
     return;
   }
-  const hasValue = Object.values(address).some(Boolean);
-  if (!hasValue) {
-    if (current) await tx.contactAddress.update({ where: { id: current.id }, data: { isMain: false } });
-    return;
-  }
-  const street = clean(address.street);
+  const street = address.street === undefined ? current?.street ?? null : clean(address.street);
   const preservesStructuredNumber = Boolean(current?.number && street === `${current.street ?? ""} ${current.number}`.trim());
+  const addressChanged = Boolean(current) && ["street", "number", "city", "state", "zipCode", "country"].some((key) => key === "street" && preservesStructuredNumber ? false : address[key as keyof typeof address] !== undefined && clean(address[key as keyof typeof address] as string | null | undefined) !== current![key as "street" | "number" | "city" | "state" | "zipCode" | "country"]);
+  const geoChanged = address.geo !== undefined && (!current || addressChanged || !geographyMatches(current, address.geo));
+  const clearsGeo = address.geo === undefined && addressChanged;
+  if ((currentStatus === "verified" || currentStatus === "manual_verified") && (geoChanged || clearsGeo)) {
+    const explicitAdminClear = actor?.role === "admin" && address.geo === null;
+    const explicitAdminResolution = actor?.role === "admin" && !!address.geo && ["verified", "manual_verified"].includes(address.geo.validationStatus ?? "") && !!current && !geographyMatches(current, address.geo);
+    if (!explicitAdminClear && !explicitAdminResolution) throw conflict("Validated geographic data requires explicit administrator resolution", "contact_geo_validated_data_protected");
+  }
+  const hasValue = Object.entries(address).some(([key, value]) => key !== "geo" && Boolean(value)) || address.geo !== undefined;
+  if (!hasValue) {
+    await clearMainAddress();
+    return;
+  }
   const data = {
     street: preservesStructuredNumber ? current?.street : street,
-    number: address.number === undefined && preservesStructuredNumber ? current?.number : clean(address.number),
-    city: clean(address.city),
-    state: clean(address.state),
-    zipCode: clean(address.zipCode),
-    country: address.country ?? "AR",
+    number: address.number === undefined ? address.street !== undefined && !preservesStructuredNumber ? null : current?.number ?? null : clean(address.number),
+    city: address.city === undefined ? current?.city ?? null : clean(address.city),
+    state: address.state === undefined ? current?.state ?? null : clean(address.state),
+    zipCode: address.zipCode === undefined ? current?.zipCode ?? null : clean(address.zipCode),
+    country: address.country === undefined ? current?.country ?? "AR" : address.country,
     isMain: true,
     addressType: "main",
+    georefId: clearsGeo ? null : address.geo === undefined ? undefined : clean(address.geo?.georefId), entityType: clearsGeo ? null : address.geo === undefined ? undefined : address.geo?.entityType ?? null,
+    provinceGeorefId: clearsGeo ? null : address.geo === undefined ? undefined : clean(address.geo?.provinceGeorefId), provinceName: clearsGeo ? null : address.geo === undefined ? undefined : clean(address.geo?.provinceName),
+    latitude: clearsGeo ? null : address.geo === undefined ? undefined : address.geo?.latitude ?? null, longitude: clearsGeo ? null : address.geo === undefined ? undefined : address.geo?.longitude ?? null,
+    coordinateType: clearsGeo ? null : address.geo === undefined ? undefined : address.geo?.coordinateType ?? null, crs: clearsGeo ? null : address.geo === undefined ? undefined : address.geo?.crs === "EPSG:4326" ? "EPSG_4326" as const : null,
+    source: clearsGeo ? null : address.geo === undefined ? undefined : address.geo?.source ?? null, sourceVersion: clearsGeo ? null : address.geo === undefined ? undefined : clean(address.geo?.sourceVersion), sourceRetrievedAt: clearsGeo ? null : address.geo === undefined ? undefined : address.geo?.sourceRetrievedAt ? new Date(address.geo.sourceRetrievedAt) : null,
+    validationStatus: clearsGeo ? null : address.geo === undefined ? undefined : databaseGeographyStatus(address.geo?.validationStatus), validationNotes: clearsGeo ? null : address.geo === undefined ? undefined : clean(address.geo?.validationNotes),
   };
-  if (current) await tx.contactAddress.update({ where: { id: current.id }, data });
-  else await tx.contactAddress.create({ data: { contactId, ...data } });
+  if (address.geo && geoChanged) {
+    assertContactGeoPolicy(address.geo, groupSlugs, actor?.role ?? "");
+  }
+  const saved = current ? await tx.contactAddress.update({ where: { id: current.id }, data }) : await tx.contactAddress.create({ data: { companyId, contactId, ...data } });
+  if (address.geo !== undefined && geoChanged && actor) await createAuditEvent({ prisma: tx, companyId, userId: actor.userId, entityType: "ContactAddress", entityId: saved.id, action: address.geo === null || ["verified", "manual_verified"].includes(address.geo.validationStatus ?? "") ? "geography_status_changed" : "geography_candidate_saved", module: "contacts", newValue: { geo: address.geo }, metadata: { contactId, actorRole: actor.role } });
 }
 
 async function getContactByIdFromDb(db: Db, companyId: string, contactId: string) {
@@ -406,7 +440,7 @@ export async function createContact(
   prisma: PrismaClient,
   companyId: string,
   data: ContactCreateInput,
-  role?: string
+  role?: string, actor?: GeographyActor
 ) {
   const explicitCode = data.code ?? data.codigo;
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -428,7 +462,7 @@ export async function createContact(
           doctorLicense: clean(data.doctorLicense), specialty: clean(data.specialty), deliveryNotes: clean(data.deliveryNotes),
         } });
         await replaceGroups(tx, companyId, contact.id, data.groupSlugs);
-        await replaceMainAddress(tx, contact.id, data.mainAddress);
+        await replaceMainAddress(tx, contact.id, data.mainAddress, companyId, data.groupSlugs, actor);
         return (await getContactByIdFromDb(tx, companyId, contact.id))!;
       });
     } catch (error) {
@@ -445,7 +479,7 @@ export async function updateContact(
   prisma: PrismaClient,
   companyId: string,
   contactId: string,
-  data: ContactUpdateInput
+  data: ContactUpdateInput, actor?: GeographyActor
 ) {
   return prisma.$transaction(async (tx) => {
     const link = await tx.contactCompanyLink.findUnique({ where: { contactId_companyId: { contactId, companyId } } });
@@ -473,7 +507,14 @@ export async function updateContact(
       deliveryNotes: data.deliveryNotes === undefined ? undefined : clean(data.deliveryNotes),
     } });
     await replaceGroups(tx, companyId, contactId, data.groupSlugs);
-    await replaceMainAddress(tx, contactId, data.mainAddress);
+    const existing = await getContactByIdFromDb(tx, companyId, contactId);
+    if (data.groupSlugs && !data.groupSlugs.includes("instituciones")) {
+      const currentAddress = await tx.contactAddress.findFirst({ where: { companyId, contactId, isMain: true }, orderBy: { createdAt: "asc" } });
+      if (currentAddress && [currentAddress.georefId, currentAddress.latitude, currentAddress.longitude, currentAddress.validationStatus].some((value) => value != null)) {
+        await replaceMainAddress(tx, contactId, { street: currentAddress.street, number: currentAddress.number, city: currentAddress.city, state: currentAddress.state, zipCode: currentAddress.zipCode, country: currentAddress.country, geo: null }, companyId, data.groupSlugs, actor);
+      }
+    }
+    await replaceMainAddress(tx, contactId, data.mainAddress, companyId, data.groupSlugs ?? existing?.groupSlugs, actor);
     return getContactByIdFromDb(tx, companyId, contactId);
   });
 }
@@ -669,7 +710,7 @@ export async function listContactAddresses(
 ) {
   await assertContactBelongsToCompany(prisma, companyId, contactId);
   return prisma.contactAddress.findMany({
-    where: { contactId },
+    where: { companyId, contactId },
     orderBy: { isMain: "desc" },
   });
 }
@@ -693,11 +734,12 @@ export async function createContactAddress(
   await assertContactBelongsToCompany(prisma, companyId, contactId);
   return prisma.$transaction(async (tx) => {
     if (data.isMain) {
-      await tx.contactAddress.updateMany({ where: { contactId, isMain: true }, data: { isMain: false } });
+      await tx.contactAddress.updateMany({ where: { companyId, contactId, isMain: true }, data: { isMain: false } });
     }
     return tx.contactAddress.create({
       data: {
         contactId,
+        companyId,
         street: data.street,
         number: data.number,
         city: data.city,
