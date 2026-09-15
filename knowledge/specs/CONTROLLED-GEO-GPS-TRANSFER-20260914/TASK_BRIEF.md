@@ -11,10 +11,21 @@ Approval record — Franco, 2026-09-14: explicitly authorized the controlled GPS
 ## Scope and ownership
 
 - Owner: `sdd-apply / openai/gpt-5.6-terra`
+- Mode: `implementation`
 - Destination-only writes. Source is read-only.
 - Preserve `.gga` and `knowledge/workflow/GGA_COMMIT_ROUTINE.md`.
 - Never copy secrets, storage state, `node_modules`, generated output, screenshots, logs, or unrelated dirty source changes.
 - No migration/database execution, push, or deploy.
+
+## Execution declaration
+
+- Allowed files: only the artifacts enumerated in Authorized scope, their focused tests, this Task Brief, `AGENTS.md`, and the existing ownership lock.
+- Forbidden files: original source worktree files, secrets, storage state, generated output, unrelated application code, and GGA configuration except preservation of its existing policy.
+- Allowed commands: Prisma `format`/`generate`, focused tests, `typecheck`, `build`, staged GGA review, Git staging and local commits.
+- Forbidden commands: Prisma migration/DB commands, database writes, push, deploy, destructive Git commands, and source-worktree writes.
+- Output: Caveman handoff with validation evidence and baseline-only failures.
+- Expected handoff: update lock status, report committed hashes, risks, and next action.
+- Stop/escalate: scope expansion, conflicting ownership, unapproved migration/database execution, unclear business policy, or any external validation blocker.
 
 ## Authorized scope
 
