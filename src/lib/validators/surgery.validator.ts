@@ -262,7 +262,7 @@ export function parseIsoTimestamp(value: unknown, fieldName: string): Date {
   const match = typeof value === "string"
     ? /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-](\d{2}):(\d{2}))$/.exec(value)
     : null;
-  if (!match) {
+  if (typeof value !== "string" || !match) {
     throw badRequest(`${fieldName} must be an ISO timestamp with an explicit offset`, "invalid_date_field");
   }
   const parsed = new Date(value);
