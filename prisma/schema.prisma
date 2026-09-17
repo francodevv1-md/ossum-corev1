@@ -47,6 +47,7 @@ model Company {
   consumos                         Consumo[]
   devoluciones                     Devolucion[]
   presupuestos                     Presupuesto[]
+  presupuestoFamilies              PresupuestoFamily[]
   invoices                         Invoice[]
   payments                         Payment[]
   digitalReceipts                  DigitalReceipt[]
@@ -138,10 +139,13 @@ model Branch {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  company       Company   @relation(fields: [companyId], references: [id])
+  company       Company       @relation(fields: [companyId], references: [id])
   surgeries     Surgery[]
-  remitos       Remito[]  @relation("RemitoBranch")
-  issuedRemitos Remito[]  @relation("RemitoIssuedBranch")
+  remitos       Remito[]      @relation("RemitoBranch")
+  issuedRemitos Remito[]      @relation("RemitoIssuedBranch")
+  presupuestos  Presupuesto[]
+
+  @@unique([companyId, id], map: "uq_branch_company_id")
 }
 
 // ─── Usuario ─────────────────────────────────────────────────────────
@@ -298,9 +302,11 @@ model ContactCompanyLink {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  contact   Contact          @relation(fields: [contactId], references: [id])
-  company   Company          @relation(fields: [companyId], references: [id])
-  addresses ContactAddress[] @relation("ContactAddressCompanyLink")
+  contact            Contact          @relation(fields: [contactId], references: [id])
+  company            Company          @relation(fields: [companyId], references: [id])
+  addresses          ContactAddress[] @relation("ContactAddressCompanyLink")
+  clientPresupuestos Presupuesto[]    @relation("PresupuestoClientCompany")
+  payerPresupuestos  Presupuesto[]    @relation("PresupuestoPayerCompany")
 
   @@unique([contactId, companyId])
   @@unique([companyId, code], map: "uq_contact_company_code")
@@ -468,6 +474,7 @@ model Surgery {
   consumos              Consumo[]
   devoluciones          Devolucion[]
   presupuestos          Presupuesto[]
+  presupuestoFamily     PresupuestoFamily?
   invoices              Invoice[]
   payments              Payment[]
   cajasAssignments      CajasAssignment[]          @relation("CajasSurgeryAssignments")
@@ -531,42 +538,85 @@ model SurgeryDocumentItem {
 // state ∈ Borrador | Emitido | Aprobado | Rechazado | Vencido | Reemplazado | Anulado
 // Un presupuesto puede existir independiente o vinculado a cirugía.
 
+model PresupuestoFamily {
+  id        String   @id @default(cuid())
+  companyId String
+  surgeryId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  surgery      Surgery?      @relation(fields: [companyId, surgeryId], references: [companyId, id], onDelete: Restrict)
+  presupuestos Presupuesto[]
+
+  @@unique([companyId, id], map: "uq_presupuesto_family_company_id")
+  @@unique([companyId, id, surgeryId], map: "uq_presupuesto_family_surgery_lineage")
+  @@unique([companyId, surgeryId], map: "uq_presupuesto_family_surgery")
+  @@index([companyId], map: "ix_presupuesto_family_company")
+  @@map("presupuesto_family")
+}
+
 model Presupuesto {
-  id                  String            @id @default(cuid())
+  id                  String             @id @default(cuid())
   visibleNumber       Int?
   companyId           String
-  company             Company           @relation(fields: [companyId], references: [id])
+  company             Company            @relation(fields: [companyId], references: [id])
+  familyId            String
+  family              PresupuestoFamily  @relation(fields: [companyId, familyId], references: [companyId, id], onDelete: Restrict)
   surgeryId           String?
-  surgery             Surgery?          @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
+  surgery             Surgery?           @relation(fields: [companyId, surgeryId], references: [companyId, id], onDelete: Restrict)
+  branchId            String
+  branch              Branch             @relation(fields: [companyId, branchId], references: [companyId, id], onDelete: Restrict)
+  clientContactId     String
+  clientCompanyLink   ContactCompanyLink @relation("PresupuestoClientCompany", fields: [clientContactId, companyId], references: [contactId, companyId], onDelete: Restrict)
+  payerContactId      String
+  payerCompanyLink    ContactCompanyLink @relation("PresupuestoPayerCompany", fields: [payerContactId, companyId], references: [contactId, companyId], onDelete: Restrict)
   parentPresupuestoId String?
-  parentPresupuesto   Presupuesto?      @relation("PresupuestoVersions", fields: [parentPresupuestoId], references: [id], onDelete: SetNull)
-  versions            Presupuesto[]     @relation("PresupuestoVersions")
-  versionNumber       Int               @default(1)
-  state               String            @default("Borrador")
+  parentPresupuesto   Presupuesto?       @relation("PresupuestoVersions", fields: [familyId, parentPresupuestoId], references: [familyId, id], onDelete: Restrict)
+  versions            Presupuesto[]      @relation("PresupuestoVersions")
+  sourcePresupuestoId String?
+  sourcePresupuesto   Presupuesto?       @relation("PresupuestoSource", fields: [familyId, sourcePresupuestoId], references: [familyId, id], onDelete: Restrict)
+  derivedPresupuestos Presupuesto[]      @relation("PresupuestoSource")
+  versionNumber       Int                @default(1)
+  slot                String             @default("DRAFT")
+  revision            Int                @default(1)
+  state               String             @default("Borrador")
   title               String?
-  currency            String            @default("ARS")
-  subtotal            Decimal           @default(0) @db.Decimal(18, 4)
-  discountTotal       Decimal           @default(0) @db.Decimal(18, 4)
-  taxTotal            Decimal           @default(0) @db.Decimal(18, 4)
-  total               Decimal           @default(0) @db.Decimal(18, 4)
+  currency            String             @default("ARS")
+  documentDate        DateTime           @db.Date
+  paymentTerms        String
+  priceListCode       String
+  legend              String             @db.Text
+  notes               String?            @db.Text
+  generalDiscountRate Decimal            @default(0) @db.Decimal(9, 4)
+  commercialSnapshot  Json
+  subtotal            Decimal            @default(0) @db.Decimal(18, 4)
+  discountTotal       Decimal            @default(0) @db.Decimal(18, 4)
+  taxTotal            Decimal            @default(0) @db.Decimal(18, 4)
+  total               Decimal            @default(0) @db.Decimal(18, 4)
   validUntil          DateTime?
   issuedAt            DateTime?
   approvedAt          DateTime?
   rejectedAt          DateTime?
   createdById         String?
-  createdBy           User?             @relation("PresupuestoCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy           User?              @relation("PresupuestoCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedById         String?
-  updatedBy           User?             @relation("PresupuestoUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy           User?              @relation("PresupuestoUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   metadata            Json?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
   items               PresupuestoItem[]
   invoices            Invoice[]
 
   @@unique([companyId, visibleNumber])
+  @@unique([familyId, versionNumber], map: "uq_presupuesto_family_version")
+  @@unique([familyId, id], map: "uq_presupuesto_family_id")
+  @@unique([companyId, id], map: "uq_presupuesto_company_id")
   @@index([companyId, surgeryId, state])
   @@index([companyId, state])
+  @@index([companyId, familyId, slot], map: "ix_presupuesto_company_family_slot")
   @@index([parentPresupuestoId])
+  @@index([sourcePresupuestoId], map: "ix_presupuesto_source")
   @@map("presupuesto")
 }
 
@@ -690,16 +740,20 @@ model PresupuestoItem {
   presupuesto   Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
   sku           String?
   description   String
+  position      Int
   quantity      Decimal     @db.Decimal(18, 4)
   unit          String?
   unitPrice     Decimal     @default(0) @db.Decimal(18, 4)
   discount      Decimal     @default(0) @db.Decimal(18, 4)
+  discountRate  Decimal     @default(0) @db.Decimal(9, 4)
   tax           Decimal     @default(0) @db.Decimal(18, 4)
+  taxRate       Decimal     @default(0) @db.Decimal(9, 4)
   total         Decimal     @default(0) @db.Decimal(18, 4)
   metadata      Json?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
+  @@unique([presupuestoId, position], map: "uq_presupuesto_item_position")
   @@index([presupuestoId])
   @@index([sku])
   @@map("presupuesto_item")

@@ -1,14 +1,9 @@
-// OSSUM COR — Presupuesto service (Fase 1C)
-// Every operational query MUST filter by companyId.
-// Services receive prisma as dependency injection.
-// Catálogos (state / transitions) viven acá para single source of truth.
-
 import { Prisma } from "@prisma/client";
-import type { PrismaClient, Presupuesto as PrismaPresupuesto } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 import { createAuditEvent } from "../audit";
+import { ApiError, badRequest, notFound } from "../api/errors";
 import { requireCompanyId } from "../tenant";
-import { badRequest, notFound } from "../api/errors";
 
 export const PRESUPUESTO_STATES = [
   "Borrador",
@@ -20,16 +15,7 @@ export const PRESUPUESTO_STATES = [
   "Anulado",
 ] as const;
 export type PresupuestoState = (typeof PRESUPUESTO_STATES)[number];
-
-export const PRESUPUESTO_TRANSITIONS: Record<PresupuestoState, PresupuestoState[]> = {
-  Borrador: ["Emitido", "Anulado"],
-  Emitido: ["Aprobado", "Rechazado", "Vencido", "Anulado"],
-  Aprobado: ["Reemplazado", "Anulado"],
-  Rechazado: [],
-  Vencido: [],
-  Reemplazado: [],
-  Anulado: [],
-};
+export type PresupuestoCommand = "approve" | "reject" | "expire" | "annul";
 
 export const PRESUPUESTO_MUTATION_ROLES = ["admin", "coordinador", "vendedor"] as const;
 export const PRESUPUESTO_READ_ROLES = [
@@ -41,91 +27,122 @@ export const PRESUPUESTO_READ_ROLES = [
   "instrumentador",
 ] as const;
 
-const PRESUPUESTO_EMIT_MAX_RETRIES = 3;
+export const DISTRICORR_ESTIMATIVE_LEGEND =
+  "El presente presupuesto es estimativo y se emite para orientación inicial del paciente. Queda sujeto a confirmación de disponibilidad de implantes, definición final del acto quirúrgico, institución, fecha de cirugía, logística y validación operativa correspondiente.";
+
+const MAX_TRANSACTION_RETRIES = 3;
 const DEFAULT_LIST_TAKE = 50;
 
-export class PresupuestoError extends Error {
-  readonly code: string;
-  readonly status?: number;
-
-  constructor(code: string, message: string, status?: number) {
-    super(message);
+export class PresupuestoError extends ApiError {
+  constructor(code: string, message: string, status = 409) {
+    super(status, code, message);
     this.name = "PresupuestoError";
-    this.code = code;
-    this.status = status;
   }
 }
 
-function isPresupuestoState(value: string): value is PresupuestoState {
-  return (PRESUPUESTO_STATES as readonly string[]).includes(value);
-}
-
-function toDecimal(value: number | string | Prisma.Decimal): Prisma.Decimal {
-  return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
-}
-
-function serializeDate(value: Date | null): string | null {
-  return value ? value.toISOString() : null;
-}
-
-function serializePresupuestoForAudit(presupuesto: {
-  id: string;
-  visibleNumber: number | null;
-  companyId: string;
-  surgeryId: string | null;
-  parentPresupuestoId: string | null;
-  versionNumber: number;
-  state: string;
-  title: string | null;
-  currency: string;
-  subtotal: Prisma.Decimal;
-  discountTotal: Prisma.Decimal;
-  taxTotal: Prisma.Decimal;
-  total: Prisma.Decimal;
-  validUntil: Date | null;
-  issuedAt: Date | null;
-  approvedAt: Date | null;
-  rejectedAt: Date | null;
-  createdById: string | null;
-  updatedById: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
-  return {
-    id: presupuesto.id,
-    visibleNumber: presupuesto.visibleNumber,
-    companyId: presupuesto.companyId,
-    surgeryId: presupuesto.surgeryId,
-    parentPresupuestoId: presupuesto.parentPresupuestoId,
-    versionNumber: presupuesto.versionNumber,
-    state: presupuesto.state,
-    title: presupuesto.title,
-    currency: presupuesto.currency,
-    subtotal: presupuesto.subtotal.toString(),
-    discountTotal: presupuesto.discountTotal.toString(),
-    taxTotal: presupuesto.taxTotal.toString(),
-    total: presupuesto.total.toString(),
-    validUntil: serializeDate(presupuesto.validUntil),
-    issuedAt: serializeDate(presupuesto.issuedAt),
-    approvedAt: serializeDate(presupuesto.approvedAt),
-    rejectedAt: serializeDate(presupuesto.rejectedAt),
-    createdById: presupuesto.createdById,
-    updatedById: presupuesto.updatedById,
-    createdAt: presupuesto.createdAt.toISOString(),
-    updatedAt: presupuesto.updatedAt.toISOString(),
+export interface PresupuestoCommercialInput {
+  pricingMode: "ESTIMATIVE" | "FIRM";
+  firmPrice?: {
+    coordinator: string;
+    quotationContact: string;
+    includedMaterials: string[];
+    excludedMaterials: string[];
+    availability: string;
+    operationalClarifications: string;
+    surgicalAssumptions: string;
   };
+}
+
+export interface PresupuestoItemInput {
+  sku?: string;
+  description: string;
+  quantity: string | number | Prisma.Decimal;
+  unit?: string;
+  unitPrice: string | number | Prisma.Decimal;
+  discountRate?: string | number | Prisma.Decimal;
+  taxRate?: string | number | Prisma.Decimal;
+  metadata?: Record<string, unknown>;
+}
+
+interface DraftFieldsInput {
+  branchId: string;
+  clientContactId: string;
+  payerContactId: string;
+  title?: string;
+  currency?: string;
+  documentDate: Date;
+  paymentTerms: string;
+  priceListCode: string;
+  legend: string;
+  notes?: string;
+  validUntil: Date;
+  generalDiscountRate?: string | number | Prisma.Decimal;
+  commercial: PresupuestoCommercialInput;
+  items: PresupuestoItemInput[];
+}
+
+export interface CreateFamilyDraftInput extends DraftFieldsInput {
+  companyId: string;
+  surgeryId?: string;
+  actorUserId: string;
+  prisma: PrismaClient;
+}
+
+export interface ReplaceDraftInput extends DraftFieldsInput {
+  companyId: string;
+  presupuestoId: string;
+  expectedRevision: number;
+  actorUserId: string;
+  prisma: PrismaClient;
+}
+
+interface ExpectedRevisionInput {
+  companyId: string;
+  presupuestoId: string;
+  expectedRevision: number;
+  actorUserId: string;
+  prisma: PrismaClient;
+}
+
+export interface ListPresupuestosInput {
+  companyId: string;
+  surgeryId?: string;
+  state?: PresupuestoState;
+  take?: number;
+  skip?: number;
+  prisma: PrismaClient;
+}
+
+export interface GetPresupuestoInput {
+  companyId: string;
+  presupuestoId: string;
+  prisma: PrismaClient;
 }
 
 const presupuestoReadSelect = {
   id: true,
   visibleNumber: true,
   companyId: true,
+  familyId: true,
   surgeryId: true,
+  branchId: true,
+  clientContactId: true,
+  payerContactId: true,
   parentPresupuestoId: true,
+  sourcePresupuestoId: true,
   versionNumber: true,
+  slot: true,
+  revision: true,
   state: true,
   title: true,
   currency: true,
+  documentDate: true,
+  paymentTerms: true,
+  priceListCode: true,
+  legend: true,
+  notes: true,
+  generalDiscountRate: true,
+  commercialSnapshot: true,
   subtotal: true,
   discountTotal: true,
   taxTotal: true,
@@ -142,552 +159,512 @@ const presupuestoReadSelect = {
   items: {
     select: {
       id: true,
+      position: true,
       sku: true,
       description: true,
       quantity: true,
       unit: true,
       unitPrice: true,
+      discountRate: true,
       discount: true,
+      taxRate: true,
       tax: true,
       total: true,
       metadata: true,
-      createdAt: true,
-      updatedAt: true,
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { position: "asc" as const },
   },
 } satisfies Prisma.PresupuestoSelect;
 
-function requireCompanyMatch(
-  presupuesto: { companyId: string } | null,
-  companyId: string,
-  presupuestoId: string
-): asserts presupuesto {
-  if (!presupuesto || presupuesto.companyId !== companyId) {
-    throw notFound(
-      `Presupuesto ${presupuestoId} not found in company ${companyId}`,
-      "presupuesto_not_found"
-    );
+type PresupuestoRecord = Prisma.PresupuestoGetPayload<{ select: typeof presupuestoReadSelect }>;
+
+function decimal(value: string | number | Prisma.Decimal | undefined, fallback = 0) {
+  try {
+    const result = value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value ?? fallback);
+    if (!result.isFinite()) throw new Error("Non-finite decimal");
+    return result;
+  } catch {
+    throw badRequest("Invalid decimal value", "invalid_presupuesto_decimal");
   }
 }
 
-function optionalUserId(userId: string | undefined): string | null {
-  return userId ?? null;
-}
+const quantize = (value: Prisma.Decimal) => value.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
 
-async function getNextVisibleNumber(
-  tx: Prisma.TransactionClient,
-  companyId: string
-): Promise<number> {
-  await tx.$executeRaw`LOCK TABLE "presupuesto" IN SHARE ROW EXCLUSIVE MODE`;
-
-  const rows = await tx.$queryRaw<Array<{ next: bigint | number | null }>>`
-    SELECT COALESCE(MAX("visibleNumber"), 0) + 1 AS "next"
-    FROM "presupuesto"
-    WHERE "companyId" = ${companyId}
-  `;
-
-  const raw = rows[0]?.next;
-  const next = raw == null ? 1 : Number(raw);
-  if (!Number.isFinite(next) || next <= 0) {
-    throw new PresupuestoError(
-      "presupuesto_visible_number_failed",
-      "Failed to allocate next visible number"
-    );
+function percentage(value: string | number | Prisma.Decimal | undefined) {
+  const result = decimal(value);
+  if (result.lt(0) || result.gt(100)) {
+    throw badRequest("Percentage must be between 0 and 100", "invalid_presupuesto_percentage");
   }
-  return next;
+  return quantize(result);
 }
 
-export interface PresupuestoItemInput {
-  sku?: string;
-  description: string;
-  quantity: number | string | Prisma.Decimal;
-  unit?: string;
-  unitPrice?: number | string | Prisma.Decimal;
-  discount?: number | string | Prisma.Decimal;
-  tax?: number | string | Prisma.Decimal;
-  metadata?: Record<string, unknown>;
-}
-
-export interface NormalizedPresupuestoItem extends Required<Pick<PresupuestoItemInput, "description">> {
-  sku: string | null;
-  quantity: Prisma.Decimal;
-  unit: string | null;
-  unitPrice: Prisma.Decimal;
-  discount: Prisma.Decimal;
-  tax: Prisma.Decimal;
-  total: Prisma.Decimal;
-  metadata?: Prisma.InputJsonValue;
-}
-
-export interface CreatePresupuestoInput {
-  companyId: string;
-  surgeryId?: string;
-  title?: string;
-  currency?: string;
-  validUntil?: Date;
-  items: PresupuestoItemInput[];
-  createdById?: string;
-  metadata?: Record<string, unknown> | null;
-  prisma: PrismaClient;
-}
-
-export interface ListPresupuestosInput {
-  companyId: string;
-  surgeryId?: string;
-  state?: string;
-  fromDate?: Date;
-  toDate?: Date;
-  take?: number;
-  skip?: number;
-  prisma: PrismaClient;
-}
-
-export interface GetPresupuestoInput {
-  companyId: string;
-  presupuestoId: string;
-  prisma: PrismaClient;
-}
-
-export interface EmitPresupuestoInput extends GetPresupuestoInput {
-  updatedById?: string;
-}
-
-export interface UpdatePresupuestoStateInput extends GetPresupuestoInput {
-  newState: string;
-  updatedById?: string;
-}
-
-export interface CreatePresupuestoVersionInput {
-  companyId: string;
-  sourcePresupuestoId: string;
-  items?: PresupuestoItemInput[];
-  updatedById?: string;
-  prisma: PrismaClient;
-}
-
-export interface DeletePresupuestoInput extends GetPresupuestoInput {}
-
-export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
-  if (!Array.isArray(items) || items.length === 0) {
-    throw badRequest("items must be a non-empty array", "presupuesto_empty_items");
-  }
-
-  const normalizedItems = items.map((item, index): NormalizedPresupuestoItem => {
-    const quantity = toDecimal(item.quantity);
-    const unitPrice = toDecimal(item.unitPrice ?? 0);
-    const discount = toDecimal(item.discount ?? 0);
-    const tax = toDecimal(item.tax ?? 0);
-
-    if (quantity.lte(0)) {
-      throw badRequest(
-        `items[${index}].quantity must be a positive number`,
-        "invalid_presupuesto_item_quantity"
-      );
+export function recalculatePresupuestoTotals(
+  items: PresupuestoItemInput[],
+  generalDiscountRateInput: string | number | Prisma.Decimal = 0
+) {
+  if (!items.length) throw badRequest("items must not be empty", "presupuesto_empty_items");
+  const generalDiscountRate = percentage(generalDiscountRateInput);
+  const normalizedItems = items.map((item, position) => {
+    const quantity = quantize(decimal(item.quantity));
+    const unitPrice = quantize(decimal(item.unitPrice));
+    const discountRate = percentage(item.discountRate);
+    const taxRate = percentage(item.taxRate);
+    if (quantity.lte(0) || unitPrice.lt(0) || !item.description.trim()) {
+      throw badRequest(`Invalid item at position ${position}`, "invalid_presupuesto_item");
     }
-    if (unitPrice.lt(0) || discount.lt(0) || tax.lt(0)) {
-      throw badRequest(
-        `items[${index}] prices, discounts and taxes must be non-negative`,
-        "invalid_presupuesto_item_amount"
-      );
-    }
-    if (typeof item.description !== "string" || item.description.trim().length === 0) {
-      throw badRequest(
-        `items[${index}].description is required`,
-        "invalid_presupuesto_item_description"
-      );
-    }
-
-    const gross = quantity.mul(unitPrice);
-    const total = gross.minus(discount).plus(tax);
-    if (total.lt(0)) {
-      throw badRequest(`items[${index}].total cannot be negative`, "invalid_presupuesto_item_total");
-    }
-
+    const gross = quantize(quantity.mul(unitPrice));
+    const lineDiscount = quantize(gross.mul(discountRate).div(100));
+    const generalDiscount = quantize(gross.minus(lineDiscount).mul(generalDiscountRate).div(100));
+    const discount = quantize(lineDiscount.plus(generalDiscount));
+    const taxable = quantize(gross.minus(discount));
+    const tax = quantize(taxable.mul(taxRate).div(100));
     return {
+      position,
       sku: item.sku ?? null,
-      description: item.description,
+      description: item.description.trim(),
       quantity,
       unit: item.unit ?? null,
       unitPrice,
+      discountRate,
       discount,
+      taxRate,
       tax,
-      total,
-      metadata: (item.metadata ?? null) as Prisma.InputJsonValue | undefined,
+      total: quantize(taxable.plus(tax)),
+      metadata: (item.metadata ?? null) as Prisma.InputJsonValue,
     };
   });
-
-  const subtotal = normalizedItems.reduce(
-    (acc, item) => acc.plus(item.quantity.mul(item.unitPrice)),
-    new Prisma.Decimal(0)
-  );
-  const discountTotal = normalizedItems.reduce(
-    (acc, item) => acc.plus(item.discount),
-    new Prisma.Decimal(0)
-  );
-  const taxTotal = normalizedItems.reduce((acc, item) => acc.plus(item.tax), new Prisma.Decimal(0));
-  const total = normalizedItems.reduce((acc, item) => acc.plus(item.total), new Prisma.Decimal(0));
-
-  return { items: normalizedItems, subtotal, discountTotal, taxTotal, total };
+  const sum = (field: "discount" | "tax" | "total") =>
+    normalizedItems.reduce((total, item) => quantize(total.plus(item[field])), new Prisma.Decimal(0));
+  return {
+    items: normalizedItems,
+    generalDiscountRate,
+    subtotal: normalizedItems.reduce(
+      (total, item) => quantize(total.plus(quantize(item.quantity.mul(item.unitPrice)))),
+      new Prisma.Decimal(0)
+    ),
+    discountTotal: sum("discount"),
+    taxTotal: sum("tax"),
+    total: sum("total"),
+  };
 }
 
-async function assertSurgeryBelongsToCompany(prisma: PrismaClient, companyId: string, surgeryId?: string) {
-  if (!surgeryId) return;
-  const surgery = await prisma.surgery.findFirst({
-    where: { id: surgeryId, companyId },
-    select: { id: true },
+function iso(value: Date | null) {
+  return value?.toISOString() ?? null;
+}
+
+export function toPresupuestoDto(row: PresupuestoRecord) {
+  const state = row.state as PresupuestoState;
+  const actions = row.slot === "DRAFT"
+    ? ["edit", "delete", "emit"]
+    : row.slot === "HISTORY"
+      ? []
+      : [
+          ...(state === "Emitido" ? ["approve", "reject", "expire", "annul"] : []),
+          ...(state === "Aprobado" ? ["annul"] : []),
+          ...(state !== "Anulado" ? ["revise"] : []),
+        ];
+  return {
+    ...row,
+    documentDate: iso(row.documentDate),
+    validUntil: iso(row.validUntil),
+    issuedAt: iso(row.issuedAt),
+    approvedAt: iso(row.approvedAt),
+    rejectedAt: iso(row.rejectedAt),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    generalDiscountRate: row.generalDiscountRate.toString(),
+    subtotal: row.subtotal.toString(),
+    discountTotal: row.discountTotal.toString(),
+    taxTotal: row.taxTotal.toString(),
+    total: row.total.toString(),
+    items: row.items.map((item) => ({
+      ...item,
+      quantity: item.quantity.toString(),
+      unitPrice: item.unitPrice.toString(),
+      discountRate: item.discountRate.toString(),
+      discount: item.discount.toString(),
+      taxRate: item.taxRate.toString(),
+      tax: item.tax.toString(),
+      total: item.total.toString(),
+    })),
+    actions,
+  };
+}
+
+function conflict(message: string): never {
+  throw new PresupuestoError("presupuesto_conflict", message);
+}
+
+function isRace(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2004", "P2034"].includes(error.code);
+}
+
+async function serializable<T>(prisma: PrismaClient, work: (tx: Prisma.TransactionClient) => Promise<T>) {
+  for (let attempt = 0; attempt < MAX_TRANSACTION_RETRIES; attempt += 1) {
+    try {
+      return await prisma.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (isRace(error) && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034" && attempt < MAX_TRANSACTION_RETRIES - 1) continue;
+      if (isRace(error)) conflict("Presupuesto changed concurrently");
+      throw error;
+    }
+  }
+  conflict("Presupuesto changed concurrently");
+}
+
+async function lockFamily(tx: Prisma.TransactionClient, companyId: string, familyId: string) {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "presupuesto_family"
+    WHERE "id" = ${familyId} AND "companyId" = ${companyId}
+    FOR UPDATE
+  `;
+  if (rows.length !== 1) throw notFound("Presupuesto family not found", "presupuesto_not_found");
+}
+
+async function audit(
+  tx: Prisma.TransactionClient,
+  input: { companyId: string; actorUserId: string; entityId: string; action: string; oldValue: unknown; newValue: unknown }
+) {
+  await createAuditEvent({
+    prisma: tx as unknown as PrismaClient,
+    companyId: input.companyId,
+    userId: input.actorUserId,
+    entityType: "Presupuesto",
+    entityId: input.entityId,
+    action: input.action,
+    module: "presupuesto",
+    oldValue: input.oldValue as Prisma.InputJsonValue | null,
+    newValue: input.newValue as Prisma.InputJsonValue | null,
   });
-  if (!surgery) {
-    throw notFound(`Surgery ${surgeryId} not found in company ${companyId}`, "surgery_not_found");
+}
+
+async function recordConflict(input: ExpectedRevisionInput, command: string) {
+  await createAuditEvent({
+    prisma: input.prisma,
+    companyId: input.companyId,
+    userId: input.actorUserId,
+    entityType: "Presupuesto",
+    entityId: input.presupuestoId,
+    action: "presupuesto_conflict",
+    module: "presupuesto",
+    metadata: { command, expectedRevision: input.expectedRevision },
+  });
+}
+
+async function withConflictAudit<T>(input: ExpectedRevisionInput, command: string, work: () => Promise<T>) {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof PresupuestoError && error.code === "presupuesto_conflict") {
+      await recordConflict(input, command);
+    }
+    throw error;
   }
 }
 
-export async function createPresupuesto(input: CreatePresupuestoInput) {
+async function commercialSnapshot(tx: Prisma.TransactionClient, input: CreateFamilyDraftInput | ReplaceDraftInput) {
+  if (input.commercial.pricingMode === "ESTIMATIVE" && input.legend !== DISTRICORR_ESTIMATIVE_LEGEND) {
+    throw badRequest("Estimative budgets require the canonical legend", "invalid_presupuesto_legend");
+  }
+  if (input.commercial.pricingMode === "FIRM" && !input.commercial.firmPrice) {
+    throw badRequest("Firm-price details are required", "invalid_presupuesto_firm_price");
+  }
+  const [company, branch, clientLink, payerLink, responsible] = await Promise.all([
+    tx.company.findUnique({ where: { id: input.companyId }, select: { id: true, name: true } }),
+    tx.branch.findFirst({ where: { id: input.branchId, companyId: input.companyId }, select: { id: true, name: true } }),
+    tx.contactCompanyLink.findUnique({
+      where: { contactId_companyId: { contactId: input.clientContactId, companyId: input.companyId } },
+      select: { isActive: true, contact: { select: { id: true, firstName: true, lastName: true, legalName: true, documentType: true, documentNumber: true } } },
+    }),
+    tx.contactCompanyLink.findUnique({
+      where: { contactId_companyId: { contactId: input.payerContactId, companyId: input.companyId } },
+      select: { isActive: true, contact: { select: { id: true, firstName: true, lastName: true, legalName: true, documentType: true, documentNumber: true } } },
+    }),
+    tx.user.findUnique({ where: { id: input.actorUserId }, select: { id: true, firstName: true, lastName: true } }),
+  ]);
+  if (!company || !branch || !clientLink?.isActive || !payerLink?.isActive || !responsible) {
+    throw badRequest("Invalid company commercial references", "invalid_presupuesto_commercial_references");
+  }
+  return {
+    company,
+    branch,
+    client: clientLink.contact,
+    payer: payerLink.contact,
+    responsible,
+    ...input.commercial,
+  } as Prisma.InputJsonValue;
+}
+
+function draftData(input: DraftFieldsInput, snapshot: Prisma.InputJsonValue) {
+  const totals = recalculatePresupuestoTotals(input.items, input.generalDiscountRate);
+  return {
+    header: {
+      branchId: input.branchId,
+      clientContactId: input.clientContactId,
+      payerContactId: input.payerContactId,
+      title: input.title ?? null,
+      currency: input.currency ?? "ARS",
+      documentDate: input.documentDate,
+      paymentTerms: input.paymentTerms,
+      priceListCode: input.priceListCode,
+      legend: input.legend,
+      notes: input.notes ?? null,
+      validUntil: input.validUntil,
+      generalDiscountRate: totals.generalDiscountRate,
+      commercialSnapshot: snapshot,
+      subtotal: totals.subtotal,
+      discountTotal: totals.discountTotal,
+      taxTotal: totals.taxTotal,
+      total: totals.total,
+    },
+    items: totals.items,
+  };
+}
+
+async function getRecord(tx: Prisma.TransactionClient, companyId: string, presupuestoId: string) {
+  const row = await tx.presupuesto.findFirst({ where: { id: presupuestoId, companyId }, select: presupuestoReadSelect });
+  if (!row) throw notFound("Presupuesto not found", "presupuesto_not_found");
+  return row;
+}
+
+export async function createFamilyDraft(input: CreateFamilyDraftInput) {
   const companyId = requireCompanyId(input.companyId);
-  const prisma = input.prisma;
-  await assertSurgeryBelongsToCompany(prisma, companyId, input.surgeryId);
+  try {
+    return await serializable(input.prisma, async (tx) => {
+      if (input.surgeryId) {
+        const surgery = await tx.surgery.findFirst({ where: { id: input.surgeryId, companyId }, select: { id: true } });
+        if (!surgery) throw notFound("Surgery not found", "surgery_not_found");
+      }
+      const snapshot = await commercialSnapshot(tx, input);
+      const data = draftData(input, snapshot);
+      const family = await tx.presupuestoFamily.create({ data: { companyId, surgeryId: input.surgeryId ?? null } });
+      const created = await tx.presupuesto.create({
+        data: {
+          companyId,
+          familyId: family.id,
+          surgeryId: input.surgeryId ?? null,
+          versionNumber: 1,
+          slot: "DRAFT",
+          revision: 1,
+          state: "Borrador",
+          ...data.header,
+          createdById: input.actorUserId,
+          updatedById: input.actorUserId,
+          items: { create: data.items },
+        },
+        select: presupuestoReadSelect,
+      });
+      const dto = toPresupuestoDto(created);
+      await audit(tx, { companyId, actorUserId: input.actorUserId, entityId: created.id, action: "presupuesto_draft_created", oldValue: null, newValue: dto });
+      return dto;
+    });
+  } catch (error) {
+    if (error instanceof PresupuestoError && error.code === "presupuesto_conflict" && input.surgeryId) {
+      await createAuditEvent({
+        prisma: input.prisma,
+        companyId,
+        userId: input.actorUserId,
+        entityType: "Presupuesto",
+        entityId: input.surgeryId,
+        action: "presupuesto_conflict",
+        module: "presupuesto",
+        metadata: { command: "createFamilyDraft", surgeryId: input.surgeryId },
+      });
+    }
+    throw error;
+  }
+}
 
-  const totals = recalculatePresupuestoTotals(input.items);
-  const createdById = optionalUserId(input.createdById);
+export async function replaceDraft(input: ReplaceDraftInput) {
+  const companyId = requireCompanyId(input.companyId);
+  return withConflictAudit(input, "replaceDraft", () => serializable(input.prisma, async (tx) => {
+    const current = await getRecord(tx, companyId, input.presupuestoId);
+    await lockFamily(tx, companyId, current.familyId);
+    if (current.slot !== "DRAFT" || current.state !== "Borrador" || current.revision !== input.expectedRevision) conflict("Draft revision is stale");
+    const snapshot = await commercialSnapshot(tx, input);
+    const data = draftData(input, snapshot);
+    const claimed = await tx.presupuesto.updateMany({
+      where: { id: current.id, companyId, slot: "DRAFT", state: "Borrador", revision: input.expectedRevision },
+      data: { ...data.header, revision: { increment: 1 }, updatedById: input.actorUserId },
+    });
+    if (claimed.count !== 1) conflict("Draft revision is stale");
+    await tx.presupuestoItem.deleteMany({ where: { presupuestoId: current.id } });
+    await tx.presupuestoItem.createMany({ data: data.items.map((item) => ({ ...item, presupuestoId: current.id })) });
+    const updated = await getRecord(tx, companyId, current.id);
+    const dto = toPresupuestoDto(updated);
+    await audit(tx, { companyId, actorUserId: input.actorUserId, entityId: current.id, action: "presupuesto_draft_replaced", oldValue: toPresupuestoDto(current), newValue: dto });
+    return dto;
+  }));
+}
 
-  return prisma.$transaction(async (tx) => {
+export async function deleteDraft(input: ExpectedRevisionInput) {
+  const companyId = requireCompanyId(input.companyId);
+  return withConflictAudit(input, "deleteDraft", () => serializable(input.prisma, async (tx) => {
+    const current = await getRecord(tx, companyId, input.presupuestoId);
+    await lockFamily(tx, companyId, current.familyId);
+    if (current.slot !== "DRAFT" || current.state !== "Borrador" || current.revision !== input.expectedRevision) conflict("Draft revision is stale");
+    const deleted = await tx.presupuesto.deleteMany({ where: { id: current.id, companyId, revision: input.expectedRevision, slot: "DRAFT" } });
+    if (deleted.count !== 1) conflict("Draft revision is stale");
+    await audit(tx, { companyId, actorUserId: input.actorUserId, entityId: current.id, action: "presupuesto_draft_deleted", oldValue: toPresupuestoDto(current), newValue: null });
+    const remaining = await tx.presupuesto.count({ where: { familyId: current.familyId } });
+    if (remaining === 0) await tx.presupuestoFamily.delete({ where: { id: current.familyId } });
+    return { id: current.id, deleted: true };
+  }));
+}
+
+export async function createRevisionDraft(input: ExpectedRevisionInput) {
+  const companyId = requireCompanyId(input.companyId);
+  return withConflictAudit(input, "createRevisionDraft", () => serializable(input.prisma, async (tx) => {
+    const source = await getRecord(tx, companyId, input.presupuestoId);
+    await lockFamily(tx, companyId, source.familyId);
+    if (source.slot !== "CURRENT" || source.state === "Anulado" || source.revision !== input.expectedRevision) conflict("Current version cannot be revised or is stale");
+    const max = await tx.presupuesto.aggregate({ where: { familyId: source.familyId }, _max: { versionNumber: true } });
     const created = await tx.presupuesto.create({
       data: {
         companyId,
-        surgeryId: input.surgeryId ?? null,
-        versionNumber: 1,
+        familyId: source.familyId,
+        surgeryId: source.surgeryId,
+        branchId: source.branchId,
+        clientContactId: source.clientContactId,
+        payerContactId: source.payerContactId,
+        parentPresupuestoId: source.parentPresupuestoId ?? source.id,
+        sourcePresupuestoId: source.id,
+        versionNumber: (max._max.versionNumber ?? source.versionNumber) + 1,
+        slot: "DRAFT",
+        revision: 1,
         state: "Borrador",
-        title: input.title ?? null,
-        currency: input.currency ?? "ARS",
-        subtotal: totals.subtotal,
-        discountTotal: totals.discountTotal,
-        taxTotal: totals.taxTotal,
-        total: totals.total,
-        validUntil: input.validUntil ?? null,
-        createdById,
-        metadata: (input.metadata ?? null) as Prisma.InputJsonValue | undefined,
-        items: { create: totals.items },
+        title: source.title,
+        currency: source.currency,
+        documentDate: source.documentDate,
+        paymentTerms: source.paymentTerms,
+        priceListCode: source.priceListCode,
+        legend: source.legend,
+        notes: source.notes,
+        generalDiscountRate: source.generalDiscountRate,
+        commercialSnapshot: source.commercialSnapshot as Prisma.InputJsonValue,
+        subtotal: source.subtotal,
+        discountTotal: source.discountTotal,
+        taxTotal: source.taxTotal,
+        total: source.total,
+        validUntil: source.validUntil,
+        createdById: input.actorUserId,
+        updatedById: input.actorUserId,
+        items: { create: source.items.map((item) => ({
+          position: item.position,
+          sku: item.sku,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          discountRate: item.discountRate,
+          discount: item.discount,
+          taxRate: item.taxRate,
+          tax: item.tax,
+          total: item.total,
+          metadata: item.metadata as Prisma.InputJsonValue,
+        })) },
       },
-      select: { ...presupuestoReadSelect, items: { select: { id: true, description: true, quantity: true, total: true } } },
+      select: presupuestoReadSelect,
     });
-
-    if (createdById) {
-      await createAuditEvent({
-        prisma: tx as unknown as PrismaClient,
-        companyId,
-        userId: createdById,
-        entityType: "Presupuesto",
-        entityId: created.id,
-        action: "presupuesto_created",
-        module: "presupuesto",
-        oldValue: null,
-        newValue: serializePresupuestoForAudit(created),
-      });
-    }
-
-    return created;
-  });
+    const dto = toPresupuestoDto(created);
+    await audit(tx, { companyId, actorUserId: input.actorUserId, entityId: created.id, action: "presupuesto_revision_draft_created", oldValue: toPresupuestoDto(source), newValue: dto });
+    return dto;
+  }));
 }
+
+async function nextVisibleNumber(tx: Prisma.TransactionClient, companyId: string) {
+  await tx.$executeRaw`LOCK TABLE "presupuesto" IN SHARE ROW EXCLUSIVE MODE`;
+  const rows = await tx.$queryRaw<Array<{ next: bigint }>>`
+    SELECT COALESCE(MAX("visibleNumber"), 0) + 1 AS "next" FROM "presupuesto" WHERE "companyId" = ${companyId}
+  `;
+  return Number(rows[0]?.next ?? 1);
+}
+
+export async function emitDraft(input: ExpectedRevisionInput) {
+  const companyId = requireCompanyId(input.companyId);
+  return withConflictAudit(input, "emitDraft", () => serializable(input.prisma, async (tx) => {
+    const draft = await getRecord(tx, companyId, input.presupuestoId);
+    await lockFamily(tx, companyId, draft.familyId);
+    if (draft.slot !== "DRAFT" || draft.state !== "Borrador" || draft.revision !== input.expectedRevision) conflict("Draft revision is stale");
+    const current = await tx.presupuesto.findFirst({ where: { familyId: draft.familyId, slot: "CURRENT" }, select: presupuestoReadSelect });
+    const replaced = current
+      ? await tx.presupuesto.update({ where: { id: current.id }, data: { state: "Reemplazado", slot: "HISTORY", revision: { increment: 1 }, updatedById: input.actorUserId }, select: presupuestoReadSelect })
+      : null;
+    const visibleNumber = draft.visibleNumber ?? await nextVisibleNumber(tx, companyId);
+    const claimed = await tx.presupuesto.updateMany({
+      where: { id: draft.id, companyId, revision: input.expectedRevision, slot: "DRAFT", state: "Borrador" },
+      data: { state: "Emitido", slot: "CURRENT", visibleNumber, issuedAt: new Date(), revision: { increment: 1 }, updatedById: input.actorUserId },
+    });
+    if (claimed.count !== 1) conflict("Draft revision is stale");
+    const emitted = await getRecord(tx, companyId, draft.id);
+    const dto = toPresupuestoDto(emitted);
+    await audit(tx, {
+      companyId,
+      actorUserId: input.actorUserId,
+      entityId: emitted.id,
+      action: "presupuesto_emitted",
+      oldValue: { draft: toPresupuestoDto(draft), priorCurrent: current ? toPresupuestoDto(current) : null },
+      newValue: { emitted: dto, priorCurrent: replaced ? toPresupuestoDto(replaced) : null, replacedPresupuestoId: replaced?.id ?? null },
+    });
+    return dto;
+  }));
+}
+
+const commandRules: Record<PresupuestoCommand, { from: PresupuestoState[]; to: PresupuestoState }> = {
+  approve: { from: ["Emitido"], to: "Aprobado" },
+  reject: { from: ["Emitido"], to: "Rechazado" },
+  expire: { from: ["Emitido"], to: "Vencido" },
+  annul: { from: ["Emitido", "Aprobado"], to: "Anulado" },
+};
+
+export async function applyStateCommand(input: ExpectedRevisionInput & { command: PresupuestoCommand }) {
+  const companyId = requireCompanyId(input.companyId);
+  return withConflictAudit(input, input.command, () => serializable(input.prisma, async (tx) => {
+    const current = await getRecord(tx, companyId, input.presupuestoId);
+    await lockFamily(tx, companyId, current.familyId);
+    const rule = commandRules[input.command];
+    if (current.slot !== "CURRENT" || current.revision !== input.expectedRevision || !rule.from.includes(current.state as PresupuestoState)) {
+      conflict("State command is invalid or stale");
+    }
+    const claimed = await tx.presupuesto.updateMany({
+      where: { id: current.id, companyId, slot: "CURRENT", revision: input.expectedRevision, state: current.state },
+      data: {
+        state: rule.to,
+        revision: { increment: 1 },
+        updatedById: input.actorUserId,
+        ...(rule.to === "Aprobado" ? { approvedAt: new Date() } : {}),
+        ...(rule.to === "Rechazado" ? { rejectedAt: new Date() } : {}),
+      },
+    });
+    if (claimed.count !== 1) conflict("State command is stale");
+    const updated = await getRecord(tx, companyId, current.id);
+    const dto = toPresupuestoDto(updated);
+    await audit(tx, { companyId, actorUserId: input.actorUserId, entityId: current.id, action: `presupuesto_${input.command}`, oldValue: toPresupuestoDto(current), newValue: dto });
+    return dto;
+  }));
+}
+
+export const approve = (input: ExpectedRevisionInput) => applyStateCommand({ ...input, command: "approve" });
+export const reject = (input: ExpectedRevisionInput) => applyStateCommand({ ...input, command: "reject" });
+export const expire = (input: ExpectedRevisionInput) => applyStateCommand({ ...input, command: "expire" });
+export const annul = (input: ExpectedRevisionInput) => applyStateCommand({ ...input, command: "annul" });
 
 export async function listPresupuestos(input: ListPresupuestosInput) {
   const companyId = requireCompanyId(input.companyId);
-  if (input.state !== undefined && !isPresupuestoState(input.state)) {
-    throw badRequest(
-      `state must be one of: ${(PRESUPUESTO_STATES as readonly string[]).join(", ")}`,
-      "invalid_presupuesto_state_filter"
-    );
-  }
-
-  const where: Prisma.PresupuestoWhereInput = { companyId };
-  if (input.surgeryId) where.surgeryId = input.surgeryId;
-  if (input.state) where.state = input.state;
-  if (input.fromDate || input.toDate) {
-    where.createdAt = {
-      ...(input.fromDate ? { gte: input.fromDate } : {}),
-      ...(input.toDate ? { lte: input.toDate } : {}),
-    };
-  }
-
-  return input.prisma.presupuesto.findMany({
+  const rows = await input.prisma.presupuesto.findMany({
+    where: { companyId, ...(input.surgeryId ? { surgeryId: input.surgeryId } : {}), ...(input.state ? { state: input.state } : {}) },
     select: presupuestoReadSelect,
-    where,
-    orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ familyId: "asc" }, { slot: "desc" }, { versionNumber: "desc" }],
     take: input.take ?? DEFAULT_LIST_TAKE,
     skip: input.skip ?? 0,
   });
+  const order = { CURRENT: 0, DRAFT: 1, HISTORY: 2 } as const;
+  return rows.map(toPresupuestoDto).sort((a, b) => order[a.slot as keyof typeof order] - order[b.slot as keyof typeof order] || b.versionNumber - a.versionNumber);
 }
 
 export async function getPresupuesto(input: GetPresupuestoInput) {
   const companyId = requireCompanyId(input.companyId);
-  const presupuesto = await input.prisma.presupuesto.findFirst({
-    select: presupuestoReadSelect,
-    where: { id: input.presupuestoId, companyId },
-  });
-  if (!presupuesto) {
-    throw notFound(
-      `Presupuesto ${input.presupuestoId} not found in company ${companyId}`,
-      "presupuesto_not_found"
-    );
-  }
-  return presupuesto;
+  const row = await input.prisma.presupuesto.findFirst({ where: { id: input.presupuestoId, companyId }, select: presupuestoReadSelect });
+  if (!row) throw notFound("Presupuesto not found", "presupuesto_not_found");
+  return toPresupuestoDto(row);
 }
-
-export async function emitPresupuesto(input: EmitPresupuestoInput) {
-  const companyId = requireCompanyId(input.companyId);
-  const updatedById = optionalUserId(input.updatedById);
-
-  for (let attempt = 0; attempt < PRESUPUESTO_EMIT_MAX_RETRIES; attempt += 1) {
-    try {
-      return await input.prisma.$transaction(
-        async (tx) => {
-          const current = await tx.presupuesto.findFirst({
-            where: { id: input.presupuestoId, companyId },
-            select: {
-              id: true,
-              visibleNumber: true,
-              companyId: true,
-              surgeryId: true,
-              parentPresupuestoId: true,
-              versionNumber: true,
-              state: true,
-              title: true,
-              currency: true,
-              subtotal: true,
-              discountTotal: true,
-              taxTotal: true,
-              total: true,
-              validUntil: true,
-              issuedAt: true,
-              approvedAt: true,
-              rejectedAt: true,
-              createdById: true,
-              updatedById: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          });
-          requireCompanyMatch(current, companyId, input.presupuestoId);
-          if (current.state !== "Borrador") {
-            throw new PresupuestoError(
-              "presupuesto_not_borrador",
-              `Cannot emit presupuesto in state ${current.state}`,
-              409
-            );
-          }
-
-          const visibleNumber = await getNextVisibleNumber(tx, companyId);
-          const result = await tx.presupuesto.update({
-            where: { id: input.presupuestoId },
-            data: { visibleNumber, state: "Emitido", issuedAt: new Date(), updatedById },
-            select: presupuestoReadSelect,
-          });
-
-          if (updatedById) {
-            await createAuditEvent({
-              prisma: tx as unknown as PrismaClient,
-              companyId,
-              userId: updatedById,
-              entityType: "Presupuesto",
-              entityId: result.id,
-              action: "presupuesto_issued",
-              module: "presupuesto",
-              oldValue: { state: current.state },
-              newValue: { state: result.state, visibleNumber: result.visibleNumber },
-            });
-          }
-          return result;
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-      );
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2034" &&
-        attempt < PRESUPUESTO_EMIT_MAX_RETRIES - 1
-      ) {
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  throw new PresupuestoError(
-    "presupuesto_emit_failed",
-    "Failed to emit presupuesto after retrying transactional visible number allocation"
-  );
-}
-
-export const emitirPresupuesto = emitPresupuesto;
-
-export async function updatePresupuestoState(input: UpdatePresupuestoStateInput) {
-  const companyId = requireCompanyId(input.companyId);
-  const updatedById = optionalUserId(input.updatedById);
-
-  if (!isPresupuestoState(input.newState)) {
-    throw badRequest(
-      `newState must be one of: ${(PRESUPUESTO_STATES as readonly string[]).join(", ")}`,
-      "invalid_presupuesto_state"
-    );
-  }
-
-  const current = await input.prisma.presupuesto.findFirst({
-    where: { id: input.presupuestoId, companyId },
-    select: { id: true, state: true, companyId: true },
-  });
-  requireCompanyMatch(current, companyId, input.presupuestoId);
-
-  const currentState = current.state as PresupuestoState;
-  const newState = input.newState as PresupuestoState;
-  if (currentState === newState) {
-    throw new PresupuestoError("presupuesto_state_unchanged", `Presupuesto state is already ${newState}`, 409);
-  }
-  if (!((PRESUPUESTO_TRANSITIONS[currentState] ?? []) as readonly string[]).includes(newState)) {
-    throw new PresupuestoError(
-      "invalid_presupuesto_transition",
-      `Invalid presupuesto state transition: ${currentState} -> ${newState}`,
-      409
-    );
-  }
-
-  const dateFields: { approvedAt?: Date; rejectedAt?: Date } = {};
-  if (newState === "Aprobado") dateFields.approvedAt = new Date();
-  if (newState === "Rechazado") dateFields.rejectedAt = new Date();
-
-  return input.prisma.$transaction(async (tx) => {
-    const result = await tx.presupuesto.update({
-      where: { id: input.presupuestoId },
-      data: { state: newState, updatedById, ...dateFields },
-      select: presupuestoReadSelect,
-    });
-    if (updatedById) {
-      await createAuditEvent({
-        prisma: tx as unknown as PrismaClient,
-        companyId,
-        userId: updatedById,
-        entityType: "Presupuesto",
-        entityId: result.id,
-        action: "presupuesto_state_changed",
-        module: "presupuesto",
-        oldValue: { state: currentState },
-        newValue: { state: newState },
-      });
-    }
-    return result;
-  });
-}
-
-export async function createPresupuestoVersion(input: CreatePresupuestoVersionInput) {
-  const companyId = requireCompanyId(input.companyId);
-  const updatedById = optionalUserId(input.updatedById);
-
-  return input.prisma.$transaction(async (tx) => {
-    const source = await tx.presupuesto.findFirst({
-      where: { id: input.sourcePresupuestoId, companyId },
-      include: { items: true },
-    });
-    requireCompanyMatch(source, companyId, input.sourcePresupuestoId);
-    if (source.state === "Anulado" || source.state === "Reemplazado") {
-      throw new PresupuestoError(
-        "presupuesto_version_not_allowed",
-        `Cannot create version from presupuesto in state ${source.state}`,
-        409
-      );
-    }
-
-    const rootId = source.parentPresupuestoId ?? source.id;
-    const maxVersion = await tx.presupuesto.aggregate({
-      where: { companyId, OR: [{ id: rootId }, { parentPresupuestoId: rootId }] },
-      _max: { versionNumber: true },
-    });
-    const nextVersionNumber = (maxVersion._max.versionNumber ?? source.versionNumber) + 1;
-    const sourceItems: PresupuestoItemInput[] = source.items.map((item) => ({
-      sku: item.sku ?? undefined,
-      description: item.description,
-      quantity: item.quantity,
-      unit: item.unit ?? undefined,
-      unitPrice: item.unitPrice,
-      discount: item.discount,
-      tax: item.tax,
-      metadata: (item.metadata as Record<string, unknown> | null) ?? undefined,
-    }));
-    const totals = recalculatePresupuestoTotals(input.items ?? sourceItems);
-
-    await tx.presupuesto.update({
-      where: { id: source.id },
-      data: { state: "Reemplazado", updatedById },
-    });
-
-    const created = await tx.presupuesto.create({
-      data: {
-        companyId,
-        surgeryId: source.surgeryId,
-        parentPresupuestoId: rootId,
-        versionNumber: nextVersionNumber,
-        state: "Borrador",
-        title: source.title,
-        currency: source.currency,
-        subtotal: totals.subtotal,
-        discountTotal: totals.discountTotal,
-        taxTotal: totals.taxTotal,
-        total: totals.total,
-        validUntil: source.validUntil,
-        createdById: updatedById,
-        metadata: (source.metadata ?? null) as Prisma.InputJsonValue | undefined,
-        items: { create: totals.items },
-      },
-      select: presupuestoReadSelect,
-    });
-
-    if (updatedById) {
-      await createAuditEvent({
-        prisma: tx as unknown as PrismaClient,
-        companyId,
-        userId: updatedById,
-        entityType: "Presupuesto",
-        entityId: created.id,
-        action: "presupuesto_version_created",
-        module: "presupuesto",
-        oldValue: { sourcePresupuestoId: source.id, sourceState: source.state },
-        newValue: { id: created.id, parentPresupuestoId: rootId, versionNumber: nextVersionNumber },
-      });
-    }
-
-    return created;
-  });
-}
-
-export async function deletePresupuesto(input: DeletePresupuestoInput) {
-  const companyId = requireCompanyId(input.companyId);
-  const current = await input.prisma.presupuesto.findFirst({
-    where: { id: input.presupuestoId, companyId },
-    select: { id: true, state: true, companyId: true, createdById: true },
-  });
-  requireCompanyMatch(current, companyId, input.presupuestoId);
-  if (current.state !== "Borrador") {
-    throw new PresupuestoError(
-      "presupuesto_not_deletable",
-      `Cannot delete presupuesto in state ${current.state} (only Borrador)`,
-      409
-    );
-  }
-
-  return input.prisma.$transaction(async (tx) => {
-    await tx.presupuesto.delete({ where: { id: input.presupuestoId } });
-    if (current.createdById) {
-      await createAuditEvent({
-        prisma: tx as unknown as PrismaClient,
-        companyId,
-        userId: current.createdById,
-        entityType: "Presupuesto",
-        entityId: input.presupuestoId,
-        action: "presupuesto_deleted",
-        module: "presupuesto",
-        oldValue: { id: input.presupuestoId, state: current.state },
-        newValue: null,
-      });
-    }
-    return { id: input.presupuestoId, deleted: true };
-  });
-}
-
-export type PresupuestoRead = PrismaPresupuesto;

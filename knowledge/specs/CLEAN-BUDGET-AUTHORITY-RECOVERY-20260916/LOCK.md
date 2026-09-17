@@ -1,0 +1,12 @@
+# Ownership Lock
+- task: `CLEAN-BUDGET-AUTHORITY-RECOVERY-20260916`
+- agent role: sole SDD apply backend implementation/testing/docs executor
+- selected model: `openai/gpt-5.6-sol` (developer runtime declaration)
+- status: `released`
+- owned files/folders: the current bounded Presupuesto candidate allowlist supplied by the parent, including this four-file recovery package; no worklog ownership
+- justification: legacy producer omits family/commercial fields and CURRENT lifecycle/rates consumed by existing Invoice; recover canonical approved source rather than weaken Invoice.
+- preflight: previous compile and geography locks released; parent assigns sole owner. Original authority brief application lock released. Source remains read-only; unrelated dirty changes were retained except the explicitly excluded pending Article/stock schema cluster.
+- release gate: parent independent review; no parallel writer on owned chain/schema.
+- prior final evidence: 111/111 offline tests, tsc 0, Prisma format/generate pass, exact SQL/source stability pins verified; HANDOFF.md inventories the historical recovery. Build/UI/live compatibility remain parent gates.
+- prior release evidence: parent-authorized docs-only finalization after independent reviewer `condemned-yellow-lobster` ACCEPT / Engram #6942; no introduced blockers. Independently 46/46 tests in five files, full tsc 0/diff-check pass, all 13 source hashes and HEAD unchanged. The 111-test suite was not wholly rerun by reviewer.
+- current release: bounded candidate review on HEAD `cc0cabb461ac42a1d55f08fb3b4965741654cd6c` confirmed the unrelated Article/stock schema cluster is absent, the Presupuesto schema is valid and relation-closed, both SQL artifacts retain exact bytes, the static migration contract passes, only owned files were edited, and no blocker remains. No migration was executed during this recovery; historical verification evidence #6145 remains authoritative.

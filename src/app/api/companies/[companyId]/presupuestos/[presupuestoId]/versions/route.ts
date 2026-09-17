@@ -5,9 +5,9 @@ import { created, errorResponse } from "../../../../../../../lib/api/responses";
 import prisma from "../../../../../../../lib/prisma";
 import {
   PRESUPUESTO_MUTATION_ROLES,
-  createPresupuestoVersion,
+  createRevisionDraft,
 } from "../../../../../../../lib/services/presupuesto.service";
-import { presupuestoCreateVersionSchema } from "../../../../../../../lib/validators/presupuesto";
+import { presupuestoExpectedRevisionSchema } from "../../../../../../../lib/validators/presupuesto";
 
 type RouteContext = {
   params: Promise<{ companyId: string; presupuestoId: string }>;
@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const ctx = await getApiAuthContext(request, companyId);
     requireCompanyMutationAccess(ctx, PRESUPUESTO_MUTATION_ROLES);
 
-    const parsed = presupuestoCreateVersionSchema.safeParse(await parseJsonBody(request));
+    const parsed = presupuestoExpectedRevisionSchema.safeParse(await parseJsonBody(request));
     if (!parsed.success) {
       throw badRequest(
         parsed.error.issues[0]?.message ?? "Invalid presupuesto version body",
@@ -38,11 +38,11 @@ export async function POST(request: Request, { params }: RouteContext) {
       );
     }
 
-    const result = await createPresupuestoVersion({
+    const result = await createRevisionDraft({
       companyId: ctx.companyId,
-      sourcePresupuestoId: presupuestoId,
-      items: parsed.data.items,
-      updatedById: ctx.actorUserId,
+      presupuestoId,
+      expectedRevision: parsed.data.expectedRevision,
+      actorUserId: ctx.actorUserId,
       prisma,
     });
     return created(result);
