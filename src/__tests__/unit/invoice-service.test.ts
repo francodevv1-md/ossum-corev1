@@ -137,6 +137,37 @@ describe("createInvoiceFromSource", () => {
     };
   }
 
+  it.each([
+    ["source", "presupuesto"], ["source", "mixto"],
+    ["generic", "presupuesto"], ["generic", "consumo"], ["generic", "mixto"],
+  ])("returns a Prisma-supported advisory-lock type for %s %s creation", async (caller, base) => {
+    const consumo = { id: "consumo-real", surgeryId: "surgery-real", items: [{ id: "consumo-line", sku: "SKU-1", description: "Synthetic", consumedQuantity: new Prisma.Decimal(1) }] };
+    const { prisma, tx } = sourcePrisma(budget(), consumo);
+    const refs = {
+      ...(base !== "consumo" ? { presupuestoId: "budget-real" } : {}),
+      ...(base !== "presupuesto" ? { consumoId: "consumo-real" } : {}),
+    };
+    const input = { companyId: "company-1", createdById: "user-1", prisma, ...refs };
+    if (caller === "source") await createInvoiceFromSource({ ...input, presupuestoId: "budget-real" });
+    else await createInvoice({ ...input, base, items: [{ description: "Synthetic", quantity: "1", unitPrice: "100" }] });
+
+    const locks = tx.$queryRaw.mock.calls.flatMap(([strings, ...values], index) => {
+      const sql = Array.from(strings as TemplateStringsArray).join("?");
+      if (!sql.includes("pg_advisory_xact_lock")) return [];
+      // PrismaPg cannot deserialize PostgreSQL void; casting the result retains the lock.
+      expect(sql).toContain("pg_advisory_xact_lock(hashtextextended(?, 0))::text");
+      expect(tx.$queryRaw.mock.invocationCallOrder[index]).toBeLessThan(tx.invoice.findFirst.mock.invocationCallOrder[0]);
+      return values;
+    });
+    expect(locks).toEqual([
+      ...(refs.consumoId ? ["company-1:consumo:consumo-real"] : []),
+      ...(refs.presupuestoId ? ["company-1:presupuesto:budget-real"] : []),
+    ]);
+    expect(tx.invoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ companyId: "company-1", state: { not: "Anulada" } }) }));
+    expect(tx.invoice.create).toHaveBeenCalledTimes(1);
+    expect(createAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "invoice_created", companyId: "company-1" }));
+  });
+
   it("creates a presupuesto draft from real backend ids and server-owned lines", async () => {
     const { prisma, tx } = sourcePrisma(budget());
     const result = await createInvoiceFromSource({ companyId: "company-1", presupuestoId: "budget-real", createdById: "user-1", prisma });

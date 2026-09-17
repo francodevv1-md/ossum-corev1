@@ -320,7 +320,7 @@ async function lockAndAssertSourcesNotInvoiced(
 ) {
   const sourceKeys = [presupuestoId ? `presupuesto:${presupuestoId}` : "", consumoId ? `consumo:${consumoId}` : ""].filter(Boolean).sort();
   for (const sourceKey of sourceKeys) {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${companyId}:${sourceKey}`}, 0))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${companyId}:${sourceKey}`}, 0))::text`;
   }
   if (!sourceKeys.length) return;
   const active = await tx.invoice.findFirst({
