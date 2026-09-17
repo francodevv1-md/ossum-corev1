@@ -21,7 +21,7 @@ import {
   type RemitoProveedorExtracted,
   type FacturaCompraExtracted,
 } from "@/lib/validators/compras-document-ai"
-import type { Proveedor, StockItem } from "@/types"
+import type { FacturaCompra, Proveedor, RemitoProveedor, StockItem } from "@/types"
 
 export type ComprasOcrTipo = "remito-proveedor" | "factura-compra"
 
@@ -51,10 +51,13 @@ function confidenceLevel(c: number): "low" | "medium" | "high" {
 
 export interface UseComprasOcrFormOptions {
   tipo: ComprasOcrTipo
-  onSuccess?: () => void
+  persistToStore?: boolean
+  onSuccess?: (payload?: Omit<RemitoProveedor, "id"> | Omit<FacturaCompra, "id">) => void | Promise<void>
+  onBackendPersisted?: (payload: Omit<RemitoProveedor, "id"> | Omit<FacturaCompra, "id">) => void | Promise<void>
+  onCompleted?: () => void
 }
 
-export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions) {
+export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBackendPersisted, onCompleted }: UseComprasOcrFormOptions) {
   const { activeCompany } = useAuth()
   const store = useOrtoTrackStore()
   const proveedores = store.proveedores.filter((p) => p.active)
@@ -321,7 +324,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
     setProveedorName(prov.name)
   }, [])
 
-  const handleConfirm = React.useCallback(() => {
+  const handleConfirm = React.useCallback(async () => {
     // Allow saving in both IA mode (result exists) and manual mode (no result)
     const proveedor = proveedores.find((p) => p.id === proveedorId)
     const resolvedProveedorName = proveedor?.name || proveedorName.trim()
@@ -336,6 +339,10 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
     }
     if (!fecha.trim()) {
       toast.error("Indicá la fecha del documento antes de guardar.")
+      return
+    }
+    if (!persistToStore && !onBackendPersisted) {
+      setError("Se requiere una confirmación de persistencia backend.")
       return
     }
     if (items.length === 0) {
@@ -380,7 +387,24 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
         stockItemId: linkedStockIds[idx] || undefined,
       }))
 
-      store.createRemitoProveedor(payload)
+      setIsProcessing(true)
+      try {
+        if (persistToStore) {
+          store.createRemitoProveedor(payload)
+          try {
+            await onSuccess?.(payload)
+          } catch {
+            toast.warning("El remito se guardó, pero la acción posterior falló.")
+          }
+        } else {
+          await onBackendPersisted?.(payload)
+        }
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "No se pudo guardar el remito.")
+        return
+      } finally {
+        setIsProcessing(false)
+      }
       toast.success(
         `Remito de proveedor guardado.${warnings.length > 0 ? " Revisá las advertencias." : ""}`
       )
@@ -388,7 +412,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
         warnings.forEach((w) => toast.warning(w))
       }
       resetState()
-      onSuccess?.()
+      onCompleted?.()
     } else {
       const extracted: FacturaCompraExtracted = {
         proveedor_name: resolvedProveedorName,
@@ -418,7 +442,24 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
         stockItemId: linkedStockIds[idx] || undefined,
       }))
 
-      store.createFacturaCompra(payload)
+      setIsProcessing(true)
+      try {
+        if (persistToStore) {
+          store.createFacturaCompra(payload)
+          try {
+            await onSuccess?.(payload)
+          } catch {
+            toast.warning("La factura se guardó, pero la acción posterior falló.")
+          }
+        } else {
+          await onBackendPersisted?.(payload)
+        }
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "No se pudo guardar la factura.")
+        return
+      } finally {
+        setIsProcessing(false)
+      }
       toast.success(
         `Factura de compra guardada.${warnings.length > 0 ? " Revisá las advertencias." : ""}`
       )
@@ -426,7 +467,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
         warnings.forEach((w) => toast.warning(w))
       }
       resetState()
-      onSuccess?.()
+      onCompleted?.()
     }
   }, [
     proveedores,
@@ -445,6 +486,9 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
     linkedStockIds,
     resetState,
     onSuccess,
+    onBackendPersisted,
+    onCompleted,
+    persistToStore,
   ])
 
   const looksLike = result

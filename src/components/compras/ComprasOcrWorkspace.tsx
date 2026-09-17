@@ -31,7 +31,7 @@ import { CreateProveedorModal } from "@/components/compras/CreateProveedorModal"
 import { ArticleSearchInput } from "@/components/compras/ArticleSearchInput"
 import { useComprasOcrForm, type ComprasOcrTipo } from "@/hooks/useComprasOcrForm"
 import { cn } from "@/lib/utils"
-import type { Proveedor } from "@/types"
+import type { FacturaCompra, Proveedor, RemitoProveedor } from "@/types"
 
 // ─── OSSUM brand surface (scoped) ────────────────────────────────────────────
 const NAVY = "bg-[var(--ossum-navy)] text-white"
@@ -62,14 +62,30 @@ type Mode = "ia" | "manual"
 export function ComprasOcrWorkspace({
   tipo,
   backHref,
+  persistToStore = true,
+  onDocumentConfirmed,
+  onRemitoConfirmed,
 }: {
   tipo: ComprasOcrTipo
   backHref: string
+  persistToStore?: boolean
+  onDocumentConfirmed?: (payload: Omit<RemitoProveedor, "id"> | Omit<FacturaCompra, "id">) => void | Promise<void>
+  onRemitoConfirmed?: (payload: Omit<RemitoProveedor, "id">) => void | Promise<void>
 }) {
   const router = useRouter()
   const form = useComprasOcrForm({
     tipo,
-    onSuccess: () => router.push(backHref),
+    persistToStore,
+    onCompleted: () => router.push(backHref),
+    onBackendPersisted: async (payload) => {
+      if (!persistToStore && onDocumentConfirmed && payload) {
+        await onDocumentConfirmed(payload)
+      } else if (!persistToStore && onRemitoConfirmed && tipo === "remito-proveedor" && payload) {
+        await onRemitoConfirmed(payload as Omit<RemitoProveedor, "id">)
+      } else if (!persistToStore) {
+        throw new Error("A backend document persistence callback is required")
+      }
+    },
   })
 
   const [mode, setMode] = React.useState<Mode>("ia")
