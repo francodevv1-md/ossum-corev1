@@ -118,6 +118,32 @@ describe("createSurgery visible number allocation", () => {
     expect(surgery.visibleNumber).toBe("CX-1000000000000000000000000")
   })
 
+  it.each(["cirugias-ui:new-surgery-dialog", "QA-synthetic"])(
+    "uses a positional integer offset, not the regex overload, for %s",
+    async (source) => {
+      tx.$queryRaw.mockImplementation(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        // PrismaPg resolves the uncast bound 4 as regex '4': CX-0009 then yields max 0.
+        expect(strings[0]).toMatch(/SUBSTRING\("visibleNumber" FROM CAST\($/)
+        expect(strings[1]).toMatch(/^ AS INTEGER\)/)
+        expect(values).toEqual([4, "company-1"])
+        expect(strings.join("?")).toContain('WHERE "companyId" = ?')
+        expect(strings.join("?")).toContain('"visibleNumber" ~ \'^CX-[0-9]+$\'')
+        return [{ maxNumber: "9" }]
+      })
+      tx.surgery.create.mockImplementation(async ({ data }: { data: { visibleNumber: string | null } }) => buildCreatedSurgery(data.visibleNumber))
+
+      const surgery = await createSurgery(
+        prismaMock as never,
+        { actorUserId: "user-1", companyId: "company-1", module: "surgery" },
+        { patientId: "patient-1", source }
+      )
+
+      expect(surgery.visibleNumber).toBe("CX-0010")
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+      expect(createAuditEvent).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it("preserves explicit visible numbers for legacy sync callers", async () => {
     tx.surgery.create.mockImplementation(async ({ data }: { data: { visibleNumber: string | null } }) => buildCreatedSurgery(data.visibleNumber))
 

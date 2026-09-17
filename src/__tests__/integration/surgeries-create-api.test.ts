@@ -11,6 +11,7 @@ const prismaMock = vi.hoisted(() => {
     },
     contactCompanyLink: {
       create: vi.fn(),
+      findUnique: vi.fn(),
     },
   }
 
@@ -68,6 +69,7 @@ describe("POST /api/companies/[companyId]/surgeries", () => {
     prismaMock.contactCompanyLink.findMany.mockReset()
     prismaMock.__tx.contact.create.mockReset()
     prismaMock.__tx.contactCompanyLink.create.mockReset()
+    prismaMock.__tx.contactCompanyLink.findUnique.mockReset()
     prismaMock.$transaction.mockClear()
 
     getApiAuthContext.mockResolvedValue(ADMIN_AUTH)
@@ -99,12 +101,18 @@ describe("POST /api/companies/[companyId]/surgeries", () => {
           documentType: "DNI",
           documentNumber: "30123456",
           contactType: "patient",
+          groupMemberships: [],
+          addresses: [],
         },
       },
     ])
 
     prismaMock.__tx.contact.create.mockResolvedValue({ id: "db-doctor-new" })
     prismaMock.__tx.contactCompanyLink.create.mockResolvedValue({ id: "link-doctor" })
+    prismaMock.__tx.contactCompanyLink.findUnique.mockResolvedValue({
+      id: "link-doctor", companyId: "company-1", contactId: "db-doctor-new", role: "doctor", isActive: true,
+      contact: { id: "db-doctor-new", firstName: "Dr", lastName: "House", groupMemberships: [], addresses: [] },
+    })
 
     const response = await POST(
       new Request("http://localhost/api/companies/company-1/surgeries", {

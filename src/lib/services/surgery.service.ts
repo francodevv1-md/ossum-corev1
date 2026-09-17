@@ -370,7 +370,7 @@ async function getNextSurgeryVisibleNumber(
 ): Promise<string> {
   const rows = await tx.$queryRaw<Array<{ maxNumber: string | bigint | number | null }>>`
     SELECT COALESCE(
-      MAX(CAST(SUBSTRING("visibleNumber" FROM ${SURGERY_VISIBLE_NUMBER_PREFIX.length + 1}) AS NUMERIC)),
+      MAX(CAST(SUBSTRING("visibleNumber" FROM CAST(${SURGERY_VISIBLE_NUMBER_PREFIX.length + 1} AS INTEGER)) AS NUMERIC)),
       0
     )::TEXT AS "maxNumber"
     FROM "Surgery"
