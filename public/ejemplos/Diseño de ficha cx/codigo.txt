@@ -1,0 +1,480 @@
+<!DOCTYPE html><html class="light" lang="es" style=""><head></head><body class="bg-background text-on-surface font-body-md overflow-hidden h-screen flex">```html
+
+
+    <meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>OSSUM COR | Detalle de Expediente CX-9006</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-tab-indicator {
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c2c6d4;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #727784;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#e6eff8",
+                        "on-surface-variant": "#424752",
+                        "surface-container-highest": "#dbe4ed",
+                        "on-tertiary-fixed": "#351000",
+                        "background": "#f6faff",
+                        "surface-container-low": "#ecf5fe",
+                        "outline-variant": "#c2c6d4",
+                        "primary-fixed-dim": "#acc7ff",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#f6faff",
+                        "inverse-primary": "#acc7ff",
+                        "on-tertiary-fixed-variant": "#7b2f00",
+                        "on-tertiary": "#ffffff",
+                        "primary-fixed": "#d7e2ff",
+                        "tertiary": "#722b00",
+                        "secondary-container": "#80f98b",
+                        "on-primary-fixed-variant": "#004491",
+                        "secondary": "#006e25",
+                        "primary-container": "#0056b3",
+                        "inverse-on-surface": "#e9f2fb",
+                        "surface-variant": "#dbe4ed",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#002106",
+                        "primary": "#003f87",
+                        "on-background": "#141d23",
+                        "error": "#ba1a1a",
+                        "on-tertiary-container": "#ffc2a7",
+                        "outline": "#727784",
+                        "secondary-fixed": "#83fc8e",
+                        "on-primary-container": "#bbd0ff",
+                        "tertiary-fixed-dim": "#ffb694",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed": "#001a40",
+                        "tertiary-fixed": "#ffdbcc",
+                        "surface-container-high": "#e0e9f2",
+                        "surface": "#f6faff",
+                        "inverse-surface": "#293138",
+                        "on-secondary-container": "#007327",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#d2dbe4",
+                        "on-secondary-fixed-variant": "#00531a",
+                        "tertiary-container": "#983c00",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#141d23",
+                        "surface-tint": "#115cb9",
+                        "secondary-fixed-dim": "#66df75"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "drawer-width": "480px",
+                        "base": "4px",
+                        "sidebar-collapsed": "64px",
+                        "sidebar-width": "260px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "md": "16px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "h3": ["Inter"],
+                        "table-data": ["Inter"],
+                        "h2": ["Inter"],
+                        "h1": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "h3": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "table-data": ["13px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "h2": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "h1": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<!-- Sidebar Navigation -->
+<aside class="w-sidebar-width h-screen bg-surface-container-lowest border-r border-outline-variant flex flex-col py-lg shrink-0">
+<div class="px-lg mb-xl">
+<h1 class="font-h1 text-h1 text-primary tracking-tight"><div><br></div>OSSUM COR</h1>
+<p class="text-body-sm text-on-surface-variant">Surgical ERP</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center px-lg py-sm text-primary bg-primary-container/10 border-r-4 border-primary transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-md">surgical</span>
+<span class="font-body-md">Cirugías</span>
+</a>
+<a class="flex items-center px-lg py-sm text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-md">inventory_2</span>
+<span class="font-body-md">Inventario</span>
+</a>
+<a class="flex items-center px-lg py-sm text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-md">receipt_long</span>
+<span class="font-body-md">Presupuestos</span>
+</a>
+<a class="flex items-center px-lg py-sm text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-md">account_balance_wallet</span>
+<span class="font-body-md">Facturación</span>
+</a>
+<a class="flex items-center px-lg py-sm text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-md">analytics</span>
+<span class="font-body-md">Reportes</span>
+</a>
+</nav>
+<div class="mt-auto pt-lg border-t border-outline-variant">
+<div class="px-lg mb-md">
+<button class="w-full py-sm bg-primary text-on-primary font-h3 rounded-lg flex items-center justify-center gap-xs active:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-body-sm">add</span>
+                Nueva Cirugía
+            </button>
+</div>
+<a class="flex items-center px-lg py-sm text-on-surface-variant hover:bg-surface-container-high" href="#">
+<span class="material-symbols-outlined mr-md">settings</span>
+<span class="font-body-md">Configuración</span>
+</a>
+<a class="flex items-center px-lg py-sm text-on-surface-variant hover:bg-surface-container-high" href="#">
+<span class="material-symbols-outlined mr-md">help</span>
+<span class="font-body-md">Ayuda</span>
+</a>
+</div>
+</aside>
+<!-- Main Workspace -->
+<main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+<!-- Top Nav Bar -->
+<header class="h-16 flex justify-between items-center px-lg bg-surface border-b border-outline-variant sticky top-0 z-50">
+<div class="flex items-center gap-md">
+<div class="bg-surface-container-highest px-md py-xs rounded flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary text-body-sm">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-sm w-64 p-0" placeholder="Buscar por paciente o CX..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-sm">
+<button class="p-xs hover:text-primary transition-all relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-xs hover:text-primary transition-all">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<div class="flex items-center gap-md pl-lg border-l border-outline-variant">
+<div class="text-right">
+<p class="font-h3 text-primary text-body-sm">Dr. Navatto</p>
+<p class="text-body-sm text-on-surface-variant opacity-70">Cirujano</p>
+</div>
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_0urKNfmsNu2HAaoDT0a-XH97P9qZ9X2LN5VwqwxgfCI38fbVWNWVmkVCml48vxCyjoRW-mMKB4uT7K8IEYLI1WASryqWbrThWEb1ykBk9X1f3zLKUhs2tEM4RFrVjS4emCsGuIz1LPFgCAoLJllm47zb1pQgvc1g-Z5_keWFvnBUGeyelHGPz3QXOppd_h6Fi4tiZBhwvs3PrBj9medyMjfD280DZcQpuleM0UYayzLXyMucbs8tdSqGlsM9OShi5bR4cB5IXqMd">
+</div>
+</div>
+</div>
+</header>
+<!-- Content Area -->
+<div class="flex-1 overflow-y-auto px-lg py-md space-y-sm">
+<!-- Case Header -->
+<div class="bg-surface-container-lowest p-lg rounded-xl border border-outline-variant flex flex-col gap-md shadow-sm">
+<div class="flex justify-between items-center">
+<div class="space-y-xs">
+<div class="flex items-center gap-md">
+<h2 class="font-h1 text-[28px] md:text-[32px] text-on-surface leading-tight">Angel Ariel Garcia</h2>
+<span class="bg-primary text-on-primary px-sm py-xs text-[10px] md:text-label-caps rounded font-bold">CX-9006</span>
+<span class="hidden md:inline text-on-surface-variant text-body-md opacity-30">|</span>
+<span class="hidden md:inline text-on-surface-variant font-body-md opacity-70">DNI 20363165762</span>
+</div>
+<div class="md:hidden text-on-surface-variant font-body-md opacity-70">DNI 20363165762</div>
+</div>
+<div class="flex gap-sm">
+<button class="px-md py-sm border border-outline text-on-surface hover:bg-surface-container transition-colors rounded-lg font-h3 text-body-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-body-sm">edit</span>
+<span class="hidden sm:inline">Editar ficha</span>
+</button>
+<button class="px-md py-sm bg-primary text-on-primary hover:opacity-90 transition-opacity rounded-lg font-h3 text-body-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-body-sm">assignment_add</span>
+<span class="hidden sm:inline">Generar PR</span>
+</button>
+<button class="px-sm py-sm border border-outline text-on-surface hover:bg-surface-container transition-colors rounded-lg font-h3 text-body-sm">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Operational Status Bar -->
+<div class="flex flex-col gap-sm">
+<div class="flex items-center gap-md px-md overflow-x-auto no-scrollbar">
+<span class="px-sm py-xs bg-error/10 text-error text-[10px] md:text-label-caps border border-error/20 rounded-full flex items-center gap-xs whitespace-nowrap">
+<span class="w-1.5 h-1.5 bg-error rounded-full animate-pulse"></span>
+                    Sin autorizar
+                </span>
+<span class="px-sm py-xs bg-outline-variant/20 text-on-surface-variant text-[10px] md:text-label-caps border border-outline-variant/30 rounded-full whitespace-nowrap">
+                    Sin preparar
+                </span>
+<span class="px-sm py-xs bg-tertiary/10 text-tertiary text-[10px] md:text-label-caps border border-tertiary/20 rounded-full whitespace-nowrap">
+                    Incompleta
+                </span>
+<span class="px-sm py-xs bg-outline-variant/20 text-on-surface-variant text-[10px] md:text-label-caps border border-outline-variant/30 rounded-full whitespace-nowrap">
+                    No facturada
+                </span>
+</div>
+<div class="bg-error-container text-on-error-container p-3 rounded-lg flex items-start gap-md mx-md text-body-sm border border-error/20">
+<span class="material-symbols-outlined text-error shrink-0">warning</span>
+<p class="font-semibold leading-normal">Sin autorización — <span class="font-normal opacity-90">La cirugía sigue bloqueada a la espera de autorización administrativa.</span></p>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<div class="border-b border-outline-variant mt-sm">
+<div class="flex items-center gap-md md:gap-xl px-lg overflow-x-auto no-scrollbar">
+<button class="relative py-sm text-primary font-bold transition-all whitespace-nowrap">
+                    Ficha
+                    <div class="active-tab-indicator bg-primary"></div>
+</button>
+<button class="py-sm text-on-surface-variant hover:text-primary transition-all whitespace-nowrap">Comercial</button>
+<button class="py-sm text-on-surface-variant hover:text-primary transition-all whitespace-nowrap">Consumo</button>
+<button class="py-sm text-on-surface-variant hover:text-primary transition-all whitespace-nowrap">Doc. y trazab.</button>
+<button class="py-sm text-on-surface-variant hover:text-primary transition-all whitespace-nowrap">Logística</button>
+<button class="py-sm text-on-surface-variant hover:text-primary transition-all whitespace-nowrap">Correo</button>
+<button class="py-sm text-on-surface-variant hover:text-primary transition-all whitespace-nowrap">Novedades</button>
+</div>
+</div>
+<!-- Content Details -->
+<div class="space-y-md">
+<!-- Section 1: Datos de la cirugía -->
+<section class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm w-full p-md">
+<div class="flex items-center gap-sm border-b border-surface-container pb-2 mb-4">
+<span class="material-symbols-outlined text-primary text-[20px]">calendar_month</span>
+<h3 class="font-h3 text-[14px] uppercase tracking-wider text-primary">Datos de la cirugía</h3>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-5 gap-y-6 gap-x-4 mb-4"><div class="col-span-2 md:col-span-2 space-y-6">
+    <div class="space-y-4">
+        <div>
+            <label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Fecha CX</label>
+            <p class="font-bold text-primary text-[20px] leading-none">25/06/2026</p>
+        </div>
+        <div class="grid grid-cols-3 gap-4 pt-2 border-t border-surface-container/50">
+            <div>
+                <label class="text-[10px] uppercase tracking-wider text-on-surface-variant/60 font-bold block mb-0.5">Envío</label>
+                <p class="font-semibold text-on-surface text-body-sm">24/06/2026</p>
+            </div>
+            <div>
+                <label class="text-[10px] uppercase tracking-wider text-on-surface-variant/60 font-bold block mb-0.5">Probable</label>
+                <p class="font-semibold text-on-surface text-body-sm">25/06/2026</p>
+            </div>
+            <div>
+                <label class="text-[10px] uppercase tracking-wider text-on-surface-variant/60 font-bold block mb-0.5">Logística</label>
+                <p class="font-semibold text-on-surface text-body-sm">24/06/2026</p>
+            </div>
+        </div>
+    </div>
+    <div class="pt-4 border-t border-surface-container/50 space-y-4">
+        <div>
+            <label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Disponibilidad del material</label>
+            <div class="flex items-center gap-xs">
+                <span class="w-2 h-2 bg-secondary rounded-full"></span>
+                <p class="font-semibold text-on-surface">Disponible</p>
+            </div>
+        </div>
+        <div>
+            <label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Notas internas</label>
+            <p class="font-semibold text-on-surface">Material autorizado</p>
+        </div>
+    </div>
+</div>
+<div class="col-span-2 md:col-span-3 grid grid-cols-2 gap-y-6 gap-x-4 text-[13px]">
+    <div>
+        <label class="text-[10px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Clasificación</label>
+        <p class="font-semibold text-on-surface text-[13px]">Osteosíntesis</p>
+    </div>
+    <div>
+        <label class="text-[10px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Cirujano</label>
+        <p class="font-semibold text-on-surface text-[13px]">NAVATTO GARCIA</p>
+    </div>
+    <div>
+        <label class="text-[10px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Institución</label>
+        <p class="font-semibold text-on-surface text-[13px]">SANATORIO DEL NORTE</p>
+    </div>
+    <div>
+        <label class="text-[10px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1" style="opacity: 0;">Cliente</label>
+        <p class="font-semibold text-on-surface text-[13px]">ASOCIART ART</p>
+    </div>
+</div></div>
+</section>
+<!-- Section 2: Gestión -->
+<section class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm w-full p-md">
+<div class="flex items-center gap-sm border-b border-surface-container pb-2 mb-4">
+<span class="material-symbols-outlined text-primary text-[20px]">engineering</span>
+<h3 class="font-h3 text-[14px] uppercase tracking-wider text-primary">Gestión operativa</h3>
+</div>
+<!-- Subgroup: Equipo -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4 mb-8 mb-4">
+<div>
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Urgente</label>
+<div class="flex items-center gap-xs">
+<span class="font-semibold text-on-surface">No</span>
+<span class="material-symbols-outlined text-on-surface-variant/40 text-[14px]">close</span>
+</div>
+</div>
+<div>
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Coordinador</label>
+<p class="font-medium text-on-surface-variant/50 italic text-sm">Sin asignar</p>
+</div>
+<div>
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Vendedor</label>
+<p class="font-medium text-on-surface-variant/50 italic text-sm">Sin asignar</p>
+</div>
+<div>
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Instrumentista</label>
+<p class="font-medium text-on-surface-variant/50 italic text-sm">Sin asignar</p>
+</div>
+</div>
+<!-- Subgroup: Documentación -->
+<div class="pt-6 border-t border-surface-container/50 mb-4">
+<h4 class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest mb-4">Documentación y Referencias</h4>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-y-6 gap-x-8">
+<div class="col-span-1">
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-2">Comprobante</label>
+<div class="flex items-center gap-3 p-3 bg-surface-container-low rounded-lg border border-outline-variant/40 hover:border-primary/40 transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">description</span>
+<div>
+<p class="font-bold text-[14px] leading-none text-on-surface">PR-2026-0020</p>
+<p class="text-[10px] text-primary uppercase font-bold tracking-tight mt-1">Presupuesto</p>
+</div>
+</div>
+</div>
+<div class="col-span-1 md:col-span-3 grid grid-cols-2 md:grid-cols-3 gap-6">
+<div>
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Ref. Interna</label>
+<p class="font-semibold text-on-surface">DISTRICORR SRL</p>
+</div>
+<div>
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">N° Autorización</label>
+<p class="font-bold text-primary">928347-1</p>
+</div>
+<div>
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold block mb-1">Siniestro</label>
+<p class="font-semibold text-on-surface">6-229322</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 3: Destino y facturación -->
+<section class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm w-full p-md"><div class="flex items-center gap-sm border-b border-surface-container pb-2 mb-4">
+<span class="material-symbols-outlined text-primary text-[20px]">location_on</span>
+<h3 class="font-h3 text-[14px] uppercase tracking-wider text-primary">Destino y facturación</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-y-8 md:gap-x-12 mb-4">
+<div class="bg-surface-container-low/30 p-6 rounded-lg">
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant font-medium block mb-2">Remitir a</label>
+<p class="font-semibold text-on-surface text-[16px]">Sanatorio del Norte - Central de Materiales</p>
+<p class="text-body-sm text-on-surface-variant/70 mt-1 leading-relaxed">Av. Mitre 540, San Miguel de Tucumán</p>
+</div>
+<div class="bg-surface-container-low/30 p-6 rounded-lg">
+<label class="text-[11px] uppercase tracking-wider text-on-surface-variant font-medium block mb-2">Facturar a</label>
+<p class="font-semibold text-on-surface text-[16px]">ASOCIART S.A. ASEGURADORA</p>
+<p class="text-body-sm text-on-surface-variant/70 mt-1 leading-relaxed">CUIT: 30-68732560-1</p>
+</div>
+</div></section>
+<!-- Section 4: Últimas novedades / Historial -->
+<section class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm w-full p-md">
+<div class="flex justify-between items-center border-b border-surface-container pb-2 mb-4">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">history</span>
+<h3 class="font-h3 text-[14px] uppercase tracking-wider text-primary">Novedades e Historial</h3>
+</div>
+<button class="flex items-center gap-xs text-primary text-body-sm font-bold hover:bg-surface-container px-sm py-xs rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">add_comment</span>
+<span class="hidden sm:inline">Agregar nota</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-y-8 md:gap-x-12 mb-4">
+<!-- Column 1: Notas -->
+<div class="md:border-r md:border-surface-container md:pr-12">
+<h4 class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold mb-4">Últimas notas</h4>
+<div class="flex flex-col items-center justify-center py-10 bg-surface/30 rounded-lg border border-dashed border-outline-variant/50 text-on-surface-variant/40">
+<span class="material-symbols-outlined text-[32px] mb-2 opacity-50">speaker_notes_off</span>
+<p class="text-body-sm text-center">No hay observaciones registradas</p>
+</div>
+</div>
+<!-- Column 2: Historial de cambios -->
+<div>
+<h4 class="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold mb-4">Actividad reciente</h4>
+<div class="relative pl-6 border-l-2 border-surface-container space-y-6">
+<div class="relative">
+<div class="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-primary border-2 border-surface-container-lowest shadow-sm"></div>
+<div>
+<p class="font-bold text-[13px] text-on-surface">Cambio de estado</p>
+<p class="text-body-sm text-on-surface-variant">Estado actualizado a <span class="text-error font-bold">Sin autorizar</span></p>
+<span class="text-[11px] text-on-surface-variant/60 font-medium block mt-1">Hoy, 10:45 AM • Admin</span>
+</div>
+</div>
+<div class="relative">
+<div class="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-outline-variant border-2 border-surface-container-lowest shadow-sm"></div>
+<div>
+<p class="font-bold text-[13px] text-on-surface">PR Generado</p>
+<p class="text-body-sm text-on-surface-variant">Se emitió el presupuesto PR-2026-0020</p>
+<span class="text-[11px] text-on-surface-variant/60 font-medium block mt-1">Ayer, 16:20 PM • Sistema</span>
+</div>
+</div>
+</div>
+<button class="mt-6 text-primary text-[13px] font-bold hover:underline transition-all flex items-center gap-xs">
+                            Ver historial completo
+                            <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<script>
+    document.querySelectorAll('button').forEach(button => {
+        button.addEventListener('mousedown', () => {
+            button.classList.add('scale-95');
+        });
+        button.addEventListener('mouseup', () => {
+            button.classList.remove('scale-95');
+        });
+        button.addEventListener('mouseleave',</script>
+
+
+
+</body></html>

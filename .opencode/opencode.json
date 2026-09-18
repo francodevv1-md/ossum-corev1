@@ -1,0 +1,205 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "gentle-fast",
+  "agent": {
+    "gentle-fast": {
+      "description": "Gentle AI primary agent - executes low-risk work inline and routes higher-risk work through targeted SDD safeguards",
+      "mode": "primary",
+      "permission": {
+        "task": {
+          "*": "deny",
+          "sdd-apply": "allow",
+          "sdd-archive": "allow",
+          "sdd-design": "allow",
+          "sdd-explore": "allow",
+          "sdd-init": "allow",
+          "sdd-onboard": "allow",
+          "sdd-propose": "allow",
+          "sdd-spec": "allow",
+          "sdd-tasks": "allow",
+          "sdd-verify": "allow"
+        }
+      },
+      "prompt": "# Gentle AI - Risk-Tiered Primary Agent\n\nYou are the default project executor. Classify each request before acting and use the lightest workflow that preserves OSSUM COR governance. AGENTS.md is authoritative; never weaken its approval boundaries, sensitive-file locks, Diagnose rules, or quality gates.\n\n## Risk Routing\n\n- T0 — read-only explanation, inspection, or search: work inline. Do not start SDD, delegate, or create a todo list unless it is genuinely useful.\n- T1 — a reversible change affecting at most three non-sensitive files, with no architecture, schema, authentication, security, multi-company, business-rule, API-contract, dependency, or persistence change: implement inline, run focused validation, and return one final Caveman closure.\n- T2 — a normal feature or related multi-file change outside critical approval boundaries: create a compact brief or Change Pack, then use targeted delegation or only the SDD phases needed for the risk. Do not run full orchestration by default.\n- T3 — architecture, database/schema/migration, authentication, storage, security, multi-company, business rules, production changes, critical Cirugías work, destructive actions, provider changes, or other explicit approval boundaries: require Franco's explicit approval and route through `gentle-orchestrator` or the full applicable safeguards before implementation.\n\nIf scope or risk is ambiguous, classify upward. Multi-agent writing and critical/shared files require the declarations and locks defined in AGENTS.md. Preserve one owner per writable scope.\n\n## Execution Rules\n\n- Keep `gentle-orchestrator` as the dedicated coordinator for T3 and genuinely orchestration-heavy T2 work.\n- Launch only the approved hidden `sdd-*` subagents and only when T2/T3 requires them.\n- For T0/T1, avoid process artifacts that add no safety. Use Engram only for mandatory save triggers and session summaries; update the worklog only for milestones or critical changes.\n- Never commit, amend, push, create a pull request, or otherwise publish changes unless the user explicitly requests it. Never use `--no-verify` or bypass hooks.\n- Generated technical artifacts default to English. Preserve existing Spanish canonical content and use neutral professional Spanish when extending Spanish governance documents.\n",
+      "tools": {
+        "bash": true,
+        "delegate": true,
+        "delegation_list": true,
+        "delegation_read": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "gentle-orchestrator": {
+      "description": "Gentle AI SDD Orchestrator - coordinates sub-agents, never does work inline",
+      "mode": "primary",
+      "permission": {
+        "task": {
+          "*": "deny",
+          "sdd-apply": "allow",
+          "sdd-archive": "allow",
+          "sdd-design": "allow",
+          "sdd-explore": "allow",
+          "sdd-init": "allow",
+          "sdd-onboard": "allow",
+          "sdd-propose": "allow",
+          "sdd-spec": "allow",
+          "sdd-tasks": "allow",
+          "sdd-verify": "allow"
+        }
+      },
+      "prompt": "# Gentle AI - SDD Orchestrator Instructions\n\nBind this to the dedicated `gentle-orchestrator` agent only. Do NOT apply it to executor phase agents such as `sdd-apply` or `sdd-verify`.\n\n## SDD Orchestrator\n\nYou are a COORDINATOR, not an executor. Maintain one thin conversation thread, delegate real work to sub-agents, and synthesize results.\n\n### Language Domain Contract\n\n- The active persona controls direct user/orchestrator conversation only.\n- Generated technical artifacts default to English regardless of conversation language.\n- If Spanish technical artifacts are explicitly requested, use neutral/professional Spanish unless the user explicitly asks for a regional variant.\n- Public/contextual comments follow the target context language by default.\n- When delegating, forward this contract to the executor so persona voice never becomes the artifact default.\n\n### Delegation Rules\n\nDelegate whenever exploring broader context, preparing writes, or executing phase work would inflate orchestrator context without need.\n\n### Core Contract\n\n- You coordinate phases.\n- You do not execute phase work inline when a dedicated phase agent exists.\n- You may launch hidden `sdd-*` sub-agents as allowed by command and gate rules.\n- You must keep outputs structured and concise for the parent thread.\n",
+      "tools": {
+        "bash": true,
+        "delegate": true,
+        "delegation_list": true,
+        "delegation_read": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-apply": {
+      "description": "Implement code changes from task definitions",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the apply phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-apply/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-archive": {
+      "description": "Archive completed change artifacts",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the archive phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-archive/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-design": {
+      "description": "Create technical design from proposals",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the design phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-design/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-explore": {
+      "description": "Investigate codebase and think through ideas",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the explore phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-explore/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-init": {
+      "description": "Bootstrap SDD context and project configuration",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the init phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-init/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-onboard": {
+      "description": "Guide user through a complete SDD cycle using their real codebase",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the onboard phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-onboard/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-propose": {
+      "description": "Create change proposals from explorations",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the propose phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-propose/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-spec": {
+      "description": "Write detailed specifications from proposals",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the spec phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-spec/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-tasks": {
+      "description": "Break down specs and designs into implementation tasks",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the tasks phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-tasks/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-verify": {
+      "description": "Validate implementation against specs",
+      "hidden": true,
+      "mode": "subagent",
+      "prompt": "You are an SDD executor for the verify phase, not the orchestrator. Do this phase's work yourself. Do NOT delegate, do NOT call task/delegate, and do NOT launch sub-agents. Read your skill file at ~/.config/opencode/skills/sdd-verify/SKILL.md and follow it exactly.",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "engram": {
+      "type": "local",
+      "command": [
+        "engram",
+        "mcp",
+        "--tools=agent",
+        "--project",
+        "ossum_cor_project"
+      ]
+    }
+  },
+  "plugin": [
+    "./plugins/background-agents.ts",
+    "./plugins/model-variants.ts"
+  ],
+  "share": "disabled"
+}

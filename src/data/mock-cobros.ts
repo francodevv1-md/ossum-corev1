@@ -1,0 +1,48 @@
+import type { CobroV2 } from "@/types"
+
+export const mockCobros: CobroV2[] = [
+  {
+    id: "COB-0001",
+    clienteId: "FV-2026-0045",
+    clienteNombre: "PAMI",
+    importe: 2330000,
+    medioCobro: "transferencia",
+    referencia: "TRF-2026-05-001",
+    observaciones: "Pago completo PAMI - Ref: TRF-2026-05-001",
+    fechaRegistro: "2026-05-15",
+    fecha: "2026-05-15",
+  },
+  {
+    id: "COB-0002",
+    clienteId: "FV-2026-0089",
+    clienteNombre: "Galeno",
+    importe: 625000,
+    medioCobro: "transferencia",
+    referencia: "TRF-2026-05-020",
+    observaciones: "Primer cobro parcial - 50% del total. Pendiente saldo restante.",
+    fechaRegistro: "2026-05-20",
+    fecha: "2026-05-20",
+  },
+  {
+    id: "COB-0003",
+    clienteId: "FV-2026-0089",
+    clienteNombre: "Galeno",
+    importe: 625000,
+    medioCobro: "cheque",
+    referencia: "CH-456789",
+    observaciones: "Segundo cobro - saldo completo. Cheque Nº 456789",
+    fechaRegistro: "2026-05-28",
+    fecha: "2026-05-28",
+  },
+  {
+    id: "COB-0004",
+    clienteId: "FV-2026-0091",
+    clienteNombre: "OSDE Binario",
+    importe: 4120000,
+    medioCobro: "transferencia",
+    referencia: "TRF-2026-06-012",
+    observaciones: "Vencimiento 30 días desde facturación",
+    fechaRegistro: "2026-06-12",
+    fecha: "2026-06-12",
+  },
+]

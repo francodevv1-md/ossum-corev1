@@ -1,0 +1,101 @@
+import { act, renderHook } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+const mocks = vi.hoisted(() => ({ createFacturaCompra: vi.fn(), createRemitoProveedor: vi.fn(), success: vi.fn() }))
+vi.mock("@/components/auth/AuthProvider", () => ({ useAuth: () => ({ activeCompany: { id: "company" } }) }))
+vi.mock("@/lib/api/client", () => ({ apiFetch: vi.fn(), ApiClientError: class extends Error {} }))
+vi.mock("@/lib/store", () => ({ useOrtoTrackStore: () => ({ proveedores: [], stock: [], createFacturaCompra: mocks.createFacturaCompra, createRemitoProveedor: mocks.createRemitoProveedor }) }))
+vi.mock("sonner", () => ({ toast: { success: mocks.success, error: vi.fn(), warning: vi.fn() } }))
+import { useComprasOcrForm } from "@/hooks/useComprasOcrForm"
+
+describe("recovered receipt confirmation contract", () => {
+  beforeEach(() => vi.clearAllMocks())
+  function form(onBackendPersisted: () => Promise<void>, persistToStore = false) {
+    const hook = renderHook(() => useComprasOcrForm({ tipo: "remito-proveedor", persistToStore, onBackendPersisted }))
+    act(() => {
+      hook.result.current.setProveedorName("Supplier")
+      hook.result.current.setNumero("R-001")
+      hook.result.current.setFecha("2026-09-16")
+      hook.result.current.setItems([{ codigo: "A", descripcion: "Article", cantidad: "2" }])
+    })
+    return hook
+  }
+  it("awaits confirmation and does not write the local store in backend mode", async () => {
+    const confirmed = vi.fn().mockResolvedValue(undefined)
+    const hook = form(confirmed)
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ number: "R-001" }))
+    expect(mocks.createRemitoProveedor).not.toHaveBeenCalled()
+    expect(hook.result.current.numero).toBe("")
+    expect(mocks.success).toHaveBeenCalledTimes(1)
+  })
+  it("retains input and reports failure instead of falsely announcing success", async () => {
+    const hook = form(vi.fn().mockRejectedValue(new Error("Receipt rejected")))
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(hook.result.current.numero).toBe("R-001")
+    expect(hook.result.current.error).toBe("Receipt rejected")
+    expect(mocks.createRemitoProveedor).not.toHaveBeenCalled()
+    expect(mocks.success).not.toHaveBeenCalled()
+  })
+  it("preserves the legacy local-store default", async () => {
+    const confirmed = vi.fn().mockResolvedValue(undefined)
+    const hook = form(confirmed, true)
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(mocks.createRemitoProveedor).toHaveBeenCalledTimes(1)
+    expect(confirmed).not.toHaveBeenCalled()
+  })
+  it("does not report a local persistence failure when its post-save callback rejects", async () => {
+    const onSuccess = vi.fn().mockRejectedValue(new Error("Post-save rejected"))
+    const hook = renderHook(() => useComprasOcrForm({ tipo: "remito-proveedor", onSuccess }))
+    act(() => {
+      hook.result.current.setProveedorName("Supplier")
+      hook.result.current.setNumero("R-002")
+      hook.result.current.setFecha("2026-09-16")
+      hook.result.current.setItems([{ codigo: "A", descripcion: "Article", cantidad: "2" }])
+    })
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(mocks.createRemitoProveedor).toHaveBeenCalledTimes(1)
+    expect(hook.result.current.numero).toBe("")
+    expect(hook.result.current.error).toBeNull()
+  })
+  it("retains invoice input when asynchronous confirmation fails", async () => {
+    const onBackendPersisted = vi.fn().mockRejectedValue(new Error("Invoice rejected"))
+    const hook = renderHook(() => useComprasOcrForm({ tipo: "factura-compra", persistToStore: false, onBackendPersisted }))
+    act(() => {
+      hook.result.current.setProveedorName("Supplier")
+      hook.result.current.setNumero("F-001")
+      hook.result.current.setFecha("2026-09-16")
+      hook.result.current.setItems([{ codigo: "A", descripcion: "Article", cantidad: "2", precio_unitario: "10", subtotal: "20" }])
+    })
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(hook.result.current.numero).toBe("F-001")
+    expect(hook.result.current.error).toBe("Invoice rejected")
+    expect(mocks.createFacturaCompra).not.toHaveBeenCalled()
+    expect(mocks.success).not.toHaveBeenCalled()
+  })
+  it("does not write invoices to the local store in backend mode", async () => {
+    const onBackendPersisted = vi.fn().mockResolvedValue(undefined)
+    const hook = renderHook(() => useComprasOcrForm({ tipo: "factura-compra", persistToStore: false, onBackendPersisted }))
+    act(() => {
+      hook.result.current.setProveedorName("Supplier")
+      hook.result.current.setNumero("F-001")
+      hook.result.current.setFecha("2026-09-16")
+      hook.result.current.setItems([{ codigo: "A", descripcion: "Article", cantidad: "2", precio_unitario: "10", subtotal: "20" }])
+    })
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(onBackendPersisted).toHaveBeenCalledWith(expect.objectContaining({ number: "F-001" }))
+    expect(mocks.createFacturaCompra).not.toHaveBeenCalled()
+  })
+  it("requires a backend confirmation callback when local persistence is disabled", async () => {
+    const hook = renderHook(() => useComprasOcrForm({ tipo: "factura-compra", persistToStore: false }))
+    act(() => {
+      hook.result.current.setProveedorName("Supplier")
+      hook.result.current.setNumero("F-001")
+      hook.result.current.setFecha("2026-09-16")
+      hook.result.current.setItems([{ codigo: "A", descripcion: "Article", cantidad: "2", precio_unitario: "10", subtotal: "20" }])
+    })
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(hook.result.current.error).toBe("Se requiere una confirmación de persistencia backend.")
+    expect(mocks.createFacturaCompra).not.toHaveBeenCalled()
+    expect(mocks.success).not.toHaveBeenCalled()
+  })
+})

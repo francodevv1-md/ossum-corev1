@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nueva Cirugía - Paso 1</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-tertiary-container": "#ffc2a7",
+                        "secondary-fixed-dim": "#66df75",
+                        "on-primary-container": "#bbd0ff",
+                        "on-secondary-fixed-variant": "#00531a",
+                        "surface": "#f6faff",
+                        "on-tertiary-fixed": "#351000",
+                        "on-primary-fixed": "#001a40",
+                        "tertiary-fixed": "#ffdbcc",
+                        "on-secondary-container": "#007327",
+                        "secondary-fixed": "#83fc8e",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#002106",
+                        "error-container": "#ffdad6",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#d2dbe4",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#293138",
+                        "tertiary-fixed-dim": "#ffb694",
+                        "surface-bright": "#f6faff",
+                        "secondary": "#006e25",
+                        "surface-container-low": "#ecf5fe",
+                        "secondary-container": "#80f98b",
+                        "on-error": "#ffffff",
+                        "surface-tint": "#115cb9",
+                        "outline-variant": "#c2c6d4",
+                        "on-surface-variant": "#424752",
+                        "primary-fixed": "#d7e2ff",
+                        "on-surface": "#141d23",
+                        "surface-container": "#e6eff8",
+                        "surface-container-highest": "#dbe4ed",
+                        "inverse-primary": "#acc7ff",
+                        "background": "#f6faff",
+                        "primary-container": "#0056b3",
+                        "outline": "#727784",
+                        "tertiary-container": "#983c00",
+                        "inverse-on-surface": "#e9f2fb",
+                        "primary": "#003f87",
+                        "on-background": "#141d23",
+                        "surface-variant": "#dbe4ed",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed-variant": "#7b2f00",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#e0e9f2",
+                        "primary-fixed-dim": "#acc7ff",
+                        "tertiary": "#722b00",
+                        "on-primary-fixed-variant": "#004491"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem",
+                        "modal": "12px"
+                    },
+                    spacing: {
+                        "sm": "8px",
+                        "lg": "24px",
+                        "drawer-width": "480px",
+                        "md": "16px",
+                        "sidebar-collapsed": "64px",
+                        "base": "4px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "sidebar-width": "260px"
+                    },
+                    fontFamily: {
+                        "table-data": ["Inter", "sans-serif"],
+                        "body-md": ["Inter", "sans-serif"],
+                        "h3": ["Inter", "sans-serif"],
+                        "label-caps": ["Inter", "sans-serif"],
+                        "body-sm": ["Inter", "sans-serif"],
+                        "h2": ["Inter", "sans-serif"],
+                        "h1": ["Inter", "sans-serif"]
+                    },
+                    fontSize: {
+                        "table-data": ["13px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "h3": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "h2": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "h1": ["24px", { "lineHeight": "32px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Custom Scrollbar for compact feel */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #c2c6d4;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-surface-variant flex items-center justify-center min-h-screen p-4 font-body-md text-on-surface">
+<!-- Modal Backdrop -->
+<div class="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm z-40"></div>
+<!-- Modal Container -->
+<div class="relative bg-surface-container-lowest rounded-modal shadow-xl w-full max-w-6xl max-h-[95vh] flex flex-col z-50 overflow-hidden border border-outline-variant">
+<!-- 1. Header Fijo -->
+<header class="flex-none px-6 py-4 border-b border-outline-variant bg-surface-container-lowest flex items-center justify-between">
+<div>
+<h1 class="font-h2 text-h2 text-on-surface mb-1">Nueva Cirugía</h1>
+<div class="flex items-center gap-2">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Paso 1 de 3 — Datos del caso</span>
+<div class="flex items-center gap-1 ml-4">
+<div class="w-6 h-1 rounded-full bg-primary"></div>
+<div class="w-6 h-1 rounded-full bg-surface-container-highest"></div>
+<div class="w-6 h-1 rounded-full bg-surface-container-highest"></div>
+</div>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface rounded-full p-1 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</header>
+<!-- 2. IA Block (Top) -->
+<div class="flex-none bg-surface-container-low border-b border-outline-variant px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-4 flex-wrap">
+<div class="flex items-center gap-2 text-primary">
+<span class="material-symbols-outlined">psychiatry</span>
+<span class="font-h3 text-[15px]">Reconocimiento con IA</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 bg-surface-container-lowest border border-outline-variant rounded text-[11px] font-label-caps text-on-surface-variant tracking-normal">Provider: openai</span>
+<span class="px-2 py-0.5 bg-primary-fixed border border-primary-fixed-dim rounded text-[11px] font-label-caps text-primary tracking-normal">90% Confianza</span>
+<span class="px-2 py-0.5 bg-secondary-container/30 border border-secondary-container rounded text-[11px] font-label-caps text-secondary tracking-normal flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">verified</span> Autorización
+                    </span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="px-3 py-1.5 border border-outline-variant rounded-md font-body-sm text-body-sm text-on-surface hover:bg-surface-container-highest transition-colors">Ver detalle</button>
+<button class="px-3 py-1.5 bg-primary text-on-primary rounded-md font-body-sm text-body-sm hover:bg-primary/90 flex items-center gap-1.5 transition-colors"><span class="material-symbols-outlined text-[16px]">auto_fix_high</span> Aplicar datos seguros (5)</button>
+</div>
+</div>
+<!-- 3. Critical Missing Bar -->
+<div class="flex-none bg-[#fff8e6] border-b border-[#ffeebb] px-6 py-2 flex items-center gap-2 text-[#b07b00]">
+<span class="material-symbols-outlined text-[18px]">warning</span>
+<div class="flex items-center gap-2 font-body-sm text-[13px] font-medium">Faltan datos para continuar: <button class="px-2 py-0.5 bg-surface-container-lowest border border-[#ffeebb] rounded text-[11px] text-[#b07b00] hover:bg-white transition-colors cursor-pointer" onclick="document.querySelector('input[placeholder=\'Buscar cliente...\']').focus()">Cliente / Pagador</button> <button class="px-2 py-0.5 bg-surface-container-lowest border border-[#ffeebb] rounded text-[11px] text-[#b07b00] hover:bg-white transition-colors cursor-pointer" onclick="document.querySelector('input[type=\'date\']').focus()">Fecha CX</button> <button class="px-2 py-0.5 bg-surface-container-lowest border border-[#ffeebb] rounded text-[11px] text-[#b07b00] hover:bg-white transition-colors cursor-pointer" onclick="document.querySelector('input[placeholder=\'Seleccionar patología...\']').focus()">Patología</button></div>
+</div>
+<!-- 4. Cuerpo Principal Scrollable -->
+<div class="flex-1 overflow-y-auto p-6 bg-surface-container-lowest custom-scrollbar">
+<!-- Row 1: Datos Principales -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-4 mb-6">
+<!-- Cliente / Pagador -->
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Cliente / Pagador *</label>
+<div class="relative bg-primary-fixed/5 border-2 border-primary/20 rounded-md">
+<span class="material-symbols-outlined absolute left-2.5 top-1.5 text-error text-[18px]">search</span>
+<input class="w-full pl-9 pr-3 py-1.5 bg-error-container/10 border border-error rounded-md font-body-sm text-body-sm focus:outline-none focus:ring-1 focus:ring-error placeholder-error/60" placeholder="Buscar cliente..." type="text"/>
+</div><div class="mt-1.5 flex items-center gap-1.5 px-2 py-1 bg-primary-fixed/10 border border-primary-fixed-dim rounded text-[11px] text-primary"><span class="material-symbols-outlined text-[14px]">lightbulb</span> Sugerencia: <strong>OSDE (Siniestro 1360449)</strong></div>
+</div>
+<!-- Paciente (IA) -->
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Paciente *</label>
+<div class="bg-primary-fixed/10 border border-primary-fixed-dim rounded-md p-2 flex flex-col gap-2">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[16px]">auto_awesome</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate" title="ENCINA MARISOL ITATI">ENCINA MARISOL ITATI</span>
+<span class="ml-auto px-1.5 py-0.5 bg-secondary-container/30 text-secondary rounded text-[9px] font-bold uppercase tracking-tighter">Vinculado</span></div>
+<div class="flex gap-1"><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Buscar</button><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Crear</button><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Usar texto</button></div>
+</div>
+</div>
+<!-- Médico (IA) -->
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Médico *</label>
+<div class="bg-primary-fixed/10 border border-primary-fixed-dim rounded-md p-2 flex flex-col gap-2">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[16px]">auto_awesome</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate" title="DR. LOPEZ MARIO">DR. LOPEZ MARIO</span>
+<span class="ml-auto px-1.5 py-0.5 bg-secondary-container/30 text-secondary rounded text-[9px] font-bold uppercase tracking-tighter">Vinculado</span></div>
+<div class="flex gap-1"><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Buscar</button><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Crear</button><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Usar texto</button></div>
+</div>
+</div>
+<!-- Institución (IA) -->
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Institución *</label>
+<div class="bg-primary-fixed/10 border border-primary-fixed-dim rounded-md p-2 flex flex-col gap-2">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[16px]">auto_awesome</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface truncate" title="HOSPITAL SAN MARTIN">HOSPITAL SAN MARTIN</span>
+<span class="ml-auto px-1.5 py-0.5 bg-secondary-container/30 text-secondary rounded text-[9px] font-bold uppercase tracking-tighter">Vinculado</span></div>
+<div class="flex gap-1"><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Buscar</button><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Crear</button><button class="flex-1 py-0.5 px-1 bg-surface-container-lowest border border-outline-variant rounded text-[10px] font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors">Usar texto</button></div>
+</div>
+</div>
+</div>
+<!-- Row 2: Diagnóstico y Fechas -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4 mb-8">
+<!-- Patología -->
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Patología *</label>
+<input class="w-full px-3 py-1.5 bg-error-container/10 border border-error rounded-md font-body-sm text-body-sm focus:outline-none focus:ring-1 focus:ring-error placeholder-error/60" placeholder="Seleccionar patología..." type="text"/><div class="mt-1.5 flex items-center gap-1.5 px-2 py-1 bg-primary-fixed/10 border border-primary-fixed-dim rounded text-[11px] text-primary cursor-pointer hover:bg-primary-fixed/20 transition-colors"><span class="material-symbols-outlined text-[14px]">psychiatry</span> Sugerida: <strong>Fractura de Tibia Proximal</strong></div>
+</div>
+<!-- Clasificación & Urgente -->
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Clasificación</label>
+<div class="flex items-center gap-3">
+<select class="flex-1 px-2 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-primary text-on-surface">
+<option>Cirugía Programada</option>
+<option>Trauma</option>
+</select>
+<label class="flex items-center gap-1.5 cursor-pointer">
+<input class="w-4 h-4 text-error rounded border-outline-variant focus:ring-error" type="checkbox"/>
+<span class="font-body-sm text-[13px] text-on-surface font-medium">Urgente</span>
+</label>
+</div>
+</div>
+<!-- Fechas & Helper IA -->
+<div class="col-span-1 lg:col-span-2">
+<div class="flex items-start gap-4">
+<div class="flex-1">
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Fecha CX *</label>
+<input class="w-full px-3 py-1.5 bg-error-container/10 border border-error rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-error text-error/60" type="date"/>
+<!-- Date Helper -->
+<div class="mt-2 bg-[#fff8e6] px-2 py-1.5 rounded border border-[#ffeebb] flex items-center justify-between"><div class="flex items-center gap-1.5 flex-1"><span class="material-symbols-outlined text-[#b07b00] text-[16px]">event_note</span><span class="font-body-sm text-[12px] text-on-surface">Fecha detectada en documento: <strong>28/05/2026</strong> — Confirmar uso</span><span class="ml-2 px-1.5 py-0.5 bg-primary-fixed text-primary rounded text-[9px] font-bold uppercase tracking-tighter">Detectada</span></div><button class="px-2 py-1 bg-[#b07b00] text-white rounded text-[11px] font-medium hover:bg-[#906000] transition-colors">Aplicar a Fecha CX</button></div>
+</div>
+<div class="w-1/3">
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Hora CX</label>
+<input class="w-full px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-primary text-on-surface" type="time"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 3: Ubicación y Personal -->
+<h3 class="font-label-caps text-[11px] text-on-surface-variant border-b border-outline-variant pb-1 mb-3">Ubicación y Personal</h3>
+<div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Provincia</label>
+<select class="w-full px-2 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-primary text-on-surface">
+<option>Corrientes (Sugerida) (IA)</option>
+<option>Chaco</option>
+</select>
+</div>
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Localidad</label>
+<input class="w-full px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-primary text-on-surface" placeholder="Buscar..." type="text"/>
+<p class="mt-1 text-[10px] text-error flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">error</span> Falta localidad para Corrientes</p></div>
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Coordinador</label>
+<input class="w-full px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-primary text-on-surface" placeholder="Asignar..." type="text"/>
+</div>
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Vendedor</label>
+<input class="w-full px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-primary text-on-surface" placeholder="Asignar..." type="text"/>
+</div>
+<div>
+<label class="block font-label-caps text-[11px] text-on-surface-variant mb-1">Instrumentador</label>
+<input class="w-full px-3 py-1.5 bg-surface-container-lowest border border-outline-variant rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-primary text-on-surface" placeholder="Asignar..." type="text"/>
+</div>
+</div>
+<!-- Referencias Administrativas -->
+<h3 class="font-label-caps text-[11px] text-on-surface-variant border-b border-outline-variant pb-1 mb-3">Referencias Administrativas</h3>
+<div class="flex flex-wrap items-center gap-3 mb-8">
+<div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-1.5">
+<span class="material-symbols-outlined text-on-surface-variant text-[16px]">assignment</span>
+<span class="font-body-sm text-[13px] text-on-surface">Siniestro: <strong>1360449</strong></span>
+<button class="text-primary hover:text-primary-container ml-1 transition-colors"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+</div>
+<button class="px-3 py-1.5 border border-dashed border-outline-variant rounded-md font-body-sm text-[13px] text-on-surface-variant hover:bg-surface-container-lowest hover:text-on-surface flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span> Agregar
+                </button>
+</div>
+<!-- Material Autorizado & Observaciones -->
+<div class="space-y-3">
+<!-- Material Autorizado (Collapsed) -->
+<details class="group bg-secondary-container/10 rounded-lg border border-secondary-container">
+<summary class="cursor-pointer px-4 py-2.5 font-body-sm text-[13px] font-medium text-secondary flex items-center justify-between hover:bg-secondary-container/20 transition-colors">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">inventory_2</span>
+                            Material autorizado (5 ítems detectados)
+                        </div>
+<div class="flex items-center gap-3">
+<span class="px-2 py-1 bg-surface-container-lowest border border-secondary-container/50 rounded text-[11px] text-secondary">Ver detalle</span>
+<span class="material-symbols-outlined transition-transform group-open:rotate-180">expand_more</span>
+</div>
+</summary>
+<div class="p-4 bg-surface-container-lowest border-t border-secondary-container/30 font-body-sm text-[13px] text-on-surface-variant space-y-2"><div class="space-y-3"><div class="space-y-1"><h4 class="text-[10px] font-bold text-secondary uppercase tracking-wider">Implantes</h4><div class="flex justify-between border-b border-outline-variant/30 pb-1"><span>Placa LCP Tibia Prox</span> <span>x1</span></div><div class="flex justify-between border-b border-outline-variant/30 pb-1"><span>Tornillo Cortical 4.5mm</span> <span>x4</span></div><div class="flex justify-between border-b border-outline-variant/30 pb-1"><span>Tornillo Bloqueo 5.0mm</span> <span>x3</span></div></div><div class="space-y-1"><h4 class="text-[10px] font-bold text-secondary uppercase tracking-wider">Instrumental</h4><div class="flex justify-between border-b border-outline-variant/30 pb-1"><span>Caja Instrumental Tibia</span> <span>x1</span></div><div class="flex justify-between"><span>Motor Quirúrgico</span> <span>x1</span></div></div></div></div>
+</details>
+<!-- Observaciones -->
+<details class="group bg-surface-container-low rounded-lg border border-outline-variant">
+<summary class="cursor-pointer px-4 py-2.5 font-body-sm text-[13px] font-medium text-on-surface flex items-center justify-between hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">notes</span>
+                            Observaciones / Notas internas
+                        </div>
+<span class="material-symbols-outlined transition-transform group-open:rotate-180">expand_more</span>
+</summary>
+<div class="p-3 bg-surface-container-lowest border-t border-outline-variant">
+<textarea class="w-full p-2 border border-outline-variant rounded-md font-body-sm text-[13px] focus:outline-none focus:ring-1 focus:ring-primary resize-none" placeholder="Agregar notas para el equipo interno..." rows="2"></textarea>
+</div>
+</details>
+</div>
+</div>
+<!-- 5. Footer Fijo -->
+<footer class="flex-none px-6 py-4 border-t border-outline-variant bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-2 text-error">
+<span class="material-symbols-outlined text-[20px]">warning</span>
+<span class="font-body-sm text-[13px] font-medium">Faltan 3 datos obligatorios: Cliente / Pagador, Fecha CX y Patología</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-4 py-2 text-on-surface-variant hover:text-on-surface font-body-sm text-[14px] font-medium transition-colors">Cancelar</button>
+<button class="px-4 py-2 border border-outline-variant rounded-md text-on-surface hover:bg-surface-container-low font-body-sm text-[14px] font-medium transition-colors">Guardar borrador</button>
+<button class="px-6 py-2 bg-secondary text-on-secondary rounded-md font-body-sm text-[14px] font-medium hover:bg-secondary/90 flex items-center gap-2 opacity-50 cursor-not-allowed transition-colors">
+                    Siguiente <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</footer>
+</div>
+</body></html>

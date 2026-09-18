@@ -1,0 +1,2752 @@
+// OSSUM COR — Schema inicial V1
+// Prisma 7 — datasource configurado en prisma.config.ts
+// Multiempresa desde inicio. Auditoría preparada.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Organización / Tenant ───────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  taxId     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companies Company[]
+  articles  Article[] @relation("OrganizationArticles")
+}
+
+// ─── Empresa ─────────────────────────────────────────────────────────
+
+model Company {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  taxId          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization                     Organization                             @relation(fields: [organizationId], references: [id])
+  branches                         Branch[]
+  users                            UserCompanyAccess[]
+  contacts                         ContactCompanyLink[]
+  contactAddresses                 ContactAddress[]
+  groups                           ContactGroup[]
+  surgeries                        Surgery[]
+  remitos                          Remito[]
+  consumos                         Consumo[]
+  devoluciones                     Devolucion[]
+  presupuestos                     Presupuesto[]
+  presupuestoFamilies              PresupuestoFamily[]
+  invoices                         Invoice[]
+  payments                         Payment[]
+  digitalReceipts                  DigitalReceipt[]
+  auditEvents                      AuditEvent[]
+  seguimientoEntries               SeguimientoEntry[]
+  internalNotifications            InternalNotification[]
+  operationalAssignees             CompanyOperationalAssignee[]             @relation("AvailabilityCompanyOperationalAssignees")
+  availabilityRequests             AvailabilityRequest[]                    @relation("AvailabilityCompanyRequests")
+  availabilityRecipientAssignments AvailabilityRequestRecipientAssignment[] @relation("AvailabilityCompanyRecipientAssignments")
+  availabilityCommands             AvailabilityCommand[]                    @relation("AvailabilityCompanyCommands")
+  availabilityCapabilityGrants     AvailabilityCapabilityGrant[]            @relation("AvailabilityCapabilityCompany")
+  viewPreferences                  UserModuleViewPreference[]
+  cajasArticleReferences           CajasArticleReference[]                  @relation("CajasCompanyArticleReferences")
+  cajasStockScopeReferences        CajasStockScopeReference[]               @relation("CajasCompanyStockScopeReferences")
+  cajasStockRecordReferences       CajasStockRecordReference[]              @relation("CajasCompanyStockRecordReferences")
+  cajasBoxFormulas                 CajasBoxFormula[]                        @relation("CajasCompanyBoxFormulas")
+  cajasFormulaCurrents             CajasFormulaCurrent[]                    @relation("CajasCompanyFormulaCurrents")
+  cajasFormulaVersions             CajasFormulaVersion[]                    @relation("CajasCompanyFormulaVersions")
+  cajasFormulaLines                CajasFormulaLine[]                       @relation("CajasCompanyFormulaLines")
+  cajasAssignments                 CajasAssignment[]                        @relation("CajasCompanyAssignments")
+  cajasPreparations                CajasPreparation[]                       @relation("CajasCompanyPreparations")
+  cajasPreparationLines            CajasPreparationLine[]                   @relation("CajasCompanyPreparationLines")
+  cajasReservationCorrelations     CajasReservationCorrelation[]            @relation("CajasCompanyReservationCorrelations")
+  cajasControls                    CajasControl[]                           @relation("CajasCompanyControls")
+  cajasControlLines                CajasControlLine[]                       @relation("CajasCompanyControlLines")
+  cajasCompositionChanges          CajasCompositionChange[]                 @relation("CajasCompanyCompositionChanges")
+  cajasCompositionChangeLines      CajasCompositionChangeLine[]             @relation("CajasCompanyCompositionChangeLines")
+  cajasDifferences                 CajasDifference[]                        @relation("CajasCompanyDifferences")
+  cajasDifferenceResolutions       CajasDifferenceResolution[]              @relation("CajasCompanyDifferenceResolutions")
+  cajasDispatches                  CajasDispatch[]                          @relation("CajasCompanyDispatches")
+  cajasDispatchLines               CajasDispatchLine[]                      @relation("CajasCompanyDispatchLines")
+  cajasDispatchAccountings         CajasDispatchAccounting[]                @relation("CajasCompanyDispatchAccountings")
+  cajasDispatchLineAccountings     CajasDispatchLineAccounting[]            @relation("CajasCompanyDispatchLineAccountings")
+  cajasDispositions                CajasDisposition[]                       @relation("CajasCompanyDispositions")
+  cajasReturnConfirmations         CajasReturnConfirmation[]                @relation("CajasCompanyReturnConfirmations")
+  cajasReturnLines                 CajasReturnLine[]                        @relation("CajasCompanyReturnLines")
+  cajasReplacementPairs            CajasReplacementPair[]                   @relation("CajasCompanyReplacementPairs")
+  cajasConsumptionConfirmations    CajasConsumptionConfirmation[]           @relation("CajasCompanyConsumptionConfirmations")
+  cajasConsumptionLines            CajasConsumptionLine[]                   @relation("CajasCompanyConsumptionLines")
+  cajasConditionProjections        CajasConditionProjection[]               @relation("CajasCompanyConditionProjections")
+  cajasCommandAcceptances          CajasCommandAcceptance[]                 @relation("CajasCompanyCommandAcceptances")
+  cajasCommandEffects              CajasCommandEffect[]                     @relation("CajasCompanyCommandEffects")
+  cajasCommandAttempts             CajasCommandAttempt[]                    @relation("CajasCompanyCommandAttempts")
+  cajasProjectionReconciliations   CajasProjectionReconciliation[]          @relation("CajasCompanyProjectionReconciliations")
+  stockArticleEligibilities        StockArticleEligibility[]                @relation("CompanyStockArticleEligibilities")
+  articleIdentifiers               ArticleIdentifier[]                      @relation("ArticleIdentifierCompany")
+  articleSupplierMappings          ArticleSupplierMapping[]                 @relation("ArticleSupplierMappingCompany")
+  surgeryDocumentChecklists        SurgeryDocumentChecklist[]               @relation("CompanyDocumentChecklists")
+  surgeryDocumentItems             SurgeryDocumentItem[]                    @relation("CompanyDocumentItems")
+  vehicles                         Vehicle[]
+
+  @@unique([organizationId, id], map: "uq_company_organization_id")
+}
+
+model Vehicle {
+  id               String   @id @default(cuid())
+  companyId        String
+  name             String
+  provider         String   @default("rastreo_satelital")
+  trackingDeviceId String?  @unique(map: "uq_vehicle_tracking_device")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  company        Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  latestPosition VehicleLatestPosition?
+
+  @@unique([companyId, id], map: "uq_vehicle_company_id")
+  @@index([companyId, provider], map: "ix_vehicle_company_provider")
+}
+
+model VehicleLatestPosition {
+  vehicleId  String   @id
+  companyId  String
+  latitude   Decimal  @db.Decimal(10, 7)
+  longitude  Decimal  @db.Decimal(10, 7)
+  recordedAt DateTime
+  receivedAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Cascade)
+
+  @@unique([companyId, vehicleId], map: "uq_vehicle_latest_position_company_vehicle")
+  @@index([companyId, recordedAt], map: "ix_vehicle_latest_position_company_recorded")
+}
+
+// ─── Sucursal ────────────────────────────────────────────────────────
+
+model Branch {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company       Company       @relation(fields: [companyId], references: [id])
+  surgeries     Surgery[]
+  remitos       Remito[]      @relation("RemitoBranch")
+  issuedRemitos Remito[]      @relation("RemitoIssuedBranch")
+  presupuestos  Presupuesto[]
+
+  @@unique([companyId, id], map: "uq_branch_company_id")
+}
+
+// ─── Usuario ─────────────────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(cuid())
+  supabaseAuthId String?  @unique
+  email          String   @unique
+  firstName      String
+  lastName       String
+  phone          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  companyAccess                         UserCompanyAccess[]
+  auditEvents                           AuditEvent[]
+  seguimientoEntries                    SeguimientoEntry[]
+  receivedInternalNotifications         InternalNotification[]                   @relation("InternalNotificationRecipient")
+  sentInternalNotifications             InternalNotification[]                   @relation("InternalNotificationActor")
+  createdSurgeries                      Surgery[]                                @relation("SurgeryCreatedBy")
+  createdOperationalAssignees           CompanyOperationalAssignee[]             @relation("CompanyOperationalAssigneeCreatedBy")
+  updatedOperationalAssignees           CompanyOperationalAssignee[]             @relation("CompanyOperationalAssigneeUpdatedBy")
+  requestedAvailabilityRequests         AvailabilityRequest[]                    @relation("AvailabilityRequester")
+  completedAvailabilityRequests         AvailabilityRequest[]                    @relation("AvailabilityCompleter")
+  creatorSnapshotAvailabilityRequests   AvailabilityRequest[]                    @relation("AvailabilityCreatorUserSnapshot")
+  pivotSnapshotAvailabilityRequests     AvailabilityRequest[]                    @relation("AvailabilityPivotUserSnapshot")
+  assignedAvailabilityRecipients        AvailabilityRequestRecipientAssignment[] @relation("AvailabilityAssignmentAssignedBy")
+  revokedAvailabilityRecipients         AvailabilityRequestRecipientAssignment[] @relation("AvailabilityAssignmentRevokedBy")
+  availabilityCommands                  AvailabilityCommand[]                    @relation("AvailabilityCommandActor")
+  grantedAvailabilityCapabilities       AvailabilityCapabilityGrant[]            @relation("AvailabilityCapabilityGrantedBy")
+  revokedAvailabilityCapabilities       AvailabilityCapabilityGrant[]            @relation("AvailabilityCapabilityRevokedBy")
+  viewPreferences                       UserModuleViewPreference[]
+  createdRemitos                        Remito[]                                 @relation("RemitoCreatedBy")
+  updatedRemitos                        Remito[]                                 @relation("RemitoUpdatedBy")
+  createdConsumos                       Consumo[]                                @relation("ConsumoCreatedBy")
+  updatedConsumos                       Consumo[]                                @relation("ConsumoUpdatedBy")
+  createdDevoluciones                   Devolucion[]                             @relation("DevolucionCreatedBy")
+  updatedDevoluciones                   Devolucion[]                             @relation("DevolucionUpdatedBy")
+  createdPresupuestos                   Presupuesto[]                            @relation("PresupuestoCreatedBy")
+  updatedPresupuestos                   Presupuesto[]                            @relation("PresupuestoUpdatedBy")
+  createdInvoices                       Invoice[]                                @relation("InvoiceCreatedBy")
+  updatedInvoices                       Invoice[]                                @relation("InvoiceUpdatedBy")
+  createdPayments                       Payment[]                                @relation("PaymentCreatedBy")
+  updatedPayments                       Payment[]                                @relation("PaymentUpdatedBy")
+  verifiedCajasArticleReferences        CajasArticleReference[]                  @relation("CajasArticleReferenceVerifiedBy")
+  verifiedCajasStockScopeReferences     CajasStockScopeReference[]               @relation("CajasStockScopeVerifiedBy")
+  verifiedCajasStockRecordReferences    CajasStockRecordReference[]              @relation("CajasStockRecordVerifiedBy")
+  acceptedCajasFormulaVersions          CajasFormulaVersion[]                    @relation("CajasFormulaVersionAcceptedBy")
+  startedCajasAssignments               CajasAssignment[]                        @relation("CajasAssignmentStartedBy")
+  endedCajasAssignments                 CajasAssignment[]                        @relation("CajasAssignmentEndedBy")
+  acceptedCajasControls                 CajasControl[]                           @relation("CajasControlAcceptedBy")
+  acceptedCajasCompositionChanges       CajasCompositionChange[]                 @relation("CajasCompositionChangeAcceptedBy")
+  openedCajasDifferences                CajasDifference[]                        @relation("CajasDifferenceOpenedBy")
+  acceptedCajasDifferenceResolutions    CajasDifferenceResolution[]              @relation("CajasDifferenceResolutionAcceptedBy")
+  acceptedCajasDispatches               CajasDispatch[]                          @relation("CajasDispatchAcceptedBy")
+  acceptedCajasReturnConfirmations      CajasReturnConfirmation[]                @relation("CajasReturnConfirmationAcceptedBy")
+  acceptedCajasConsumptionConfirmations CajasConsumptionConfirmation[]           @relation("CajasConsumptionConfirmationAcceptedBy")
+  acceptedCajasCommands                 CajasCommandAcceptance[]                 @relation("CajasCommandAcceptedBy")
+  cajasCommandAttempts                  CajasCommandAttempt[]                    @relation("CajasAttemptActor")
+  cajasProjectionReconciliations        CajasProjectionReconciliation[]          @relation("CajasReconciliationComparedBy")
+}
+
+// ─── Preferencias de Vista por Módulo ───────────────────────────────
+
+model UserModuleViewPreference {
+  id          String   @id @default(cuid())
+  companyId   String
+  userId      String
+  moduleKey   String
+  preferences Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([companyId, userId, moduleKey])
+  @@index([companyId, moduleKey])
+  @@index([userId, moduleKey])
+}
+
+// ─── Acceso Usuario → Empresa ────────────────────────────────────────
+
+model UserCompanyAccess {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  role      String   @default("operator")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user                         User                                     @relation(fields: [userId], references: [id])
+  company                      Company                                  @relation(fields: [companyId], references: [id])
+  operationalAssignees         CompanyOperationalAssignee[]             @relation("CompanyOperationalAssigneeUserAccess")
+  availabilityRecipientReasons AvailabilityRequestRecipientAssignment[] @relation("AvailabilityAssignmentUserAccess")
+  availabilityCapabilityGrants AvailabilityCapabilityGrant[]            @relation("AvailabilityCapabilityUserAccess")
+  createdDocumentChecklists    SurgeryDocumentChecklist[]               @relation("SurgeryDocumentChecklistCreatedByAccess")
+  updatedDocumentChecklists    SurgeryDocumentChecklist[]               @relation("SurgeryDocumentChecklistUpdatedByAccess")
+  createdDocumentItems         SurgeryDocumentItem[]                    @relation("SurgeryDocumentItemCreatedByAccess")
+  updatedDocumentItems         SurgeryDocumentItem[]                    @relation("SurgeryDocumentItemUpdatedByAccess")
+
+  @@unique([userId, companyId])
+}
+
+// ─── Contacto ────────────────────────────────────────────────────────
+
+model Contact {
+  id             String   @id @default(cuid())
+  firstName      String?
+  lastName       String?
+  legalName      String?
+  tradeName      String?
+  notes          String?  @db.Text
+  isCompany      Boolean  @default(false)
+  email          String?
+  phone          String?
+  documentType   String?
+  documentNumber String?
+  contactType    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  companyLinks         ContactCompanyLink[]
+  groupMemberships     ContactGroupMembership[]
+  addresses            ContactAddress[]
+  patientSurgeries     Surgery[]                  @relation("PatientSurgeries")
+  doctorSurgeries      Surgery[]                  @relation("DoctorSurgeries")
+  institutionSurgeries Surgery[]                  @relation("InstitutionSurgeries")
+  payerSurgeries       Surgery[]                  @relation("PayerSurgeries")
+  surgeryAssignments   SurgeryContactAssignment[]
+}
+
+// ─── Vínculo Contacto → Empresa ──────────────────────────────────────
+
+model ContactCompanyLink {
+  id               String   @id @default(cuid())
+  contactId        String
+  companyId        String
+  code             String   @default("")
+  role             String?
+  roles            String[] @default([])
+  isPayer          Boolean?
+  vatCondition     String?
+  paymentTerms     String?
+  defaultPriceList String?
+  usualDiscount    Decimal? @db.Decimal(9, 4)
+  doctorLicense    String?
+  specialty        String?
+  deliveryNotes    String?  @db.Text
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  contact            Contact                  @relation(fields: [contactId], references: [id])
+  company            Company                  @relation(fields: [companyId], references: [id])
+  addresses          ContactAddress[]         @relation("ContactAddressCompanyLink")
+  clientPresupuestos Presupuesto[]            @relation("PresupuestoClientCompany")
+  payerPresupuestos  Presupuesto[]            @relation("PresupuestoPayerCompany")
+  articleIdentifiers ArticleIdentifier[]      @relation("ArticleIdentifierSupplierLink")
+  articleMappings    ArticleSupplierMapping[] @relation("ArticleSupplierMappingSupplierLink")
+
+  @@unique([contactId, companyId])
+  @@unique([companyId, code], map: "uq_contact_company_code")
+  @@index([companyId, isActive, createdAt], map: "ix_contact_company_active_created")
+}
+
+// ─── Grupo de Contactos ──────────────────────────────────────────────
+
+model ContactGroup {
+  id          String   @id @default(cuid())
+  companyId   String
+  slug        String
+  role        String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company                  @relation(fields: [companyId], references: [id])
+  members ContactGroupMembership[]
+
+  @@unique([companyId, slug], map: "uq_contact_group_company_slug")
+}
+
+// ─── Miembro de Grupo ────────────────────────────────────────────────
+
+model ContactGroupMembership {
+  id        String   @id @default(cuid())
+  groupId   String
+  contactId String
+  createdAt DateTime @default(now())
+
+  group   ContactGroup @relation(fields: [groupId], references: [id])
+  contact Contact      @relation(fields: [contactId], references: [id])
+
+  @@unique([groupId, contactId])
+}
+
+// ─── Dirección de Contacto ───────────────────────────────────────────
+
+enum GeographicEntityType {
+  PROVINCE
+  DEPARTMENT
+  MUNICIPALITY
+  LOCALITY
+  ADDRESS
+}
+
+enum GeographicCoordinateType {
+  CENTROID
+  ADDRESS
+  GPS
+  SURVEY
+  MANUAL
+  UNKNOWN
+}
+
+enum GeographicCrs {
+  EPSG_4326 @map("EPSG:4326")
+}
+
+enum GeographicValidationStatus {
+  VERIFIED        @map("verified")
+  CANDIDATE       @map("candidate")
+  CONFLICT        @map("conflict")
+  MISSING         @map("missing")
+  MANUAL_VERIFIED @map("manual_verified")
+  DEPRECATED      @map("deprecated")
+}
+
+model ContactAddress {
+  id                   String                      @id @default(cuid())
+  contactId            String
+  companyId            String
+  street               String?
+  number               String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  country              String                      @default("AR")
+  isMain               Boolean                     @default(false)
+  addressType          String?
+  georefId             String?
+  entityType           GeographicEntityType?
+  provinceGeorefId     String?
+  provinceName         String?
+  departmentGeorefId   String?
+  departmentName       String?
+  municipalityGeorefId String?
+  municipalityName     String?
+  latitude             Decimal?                    @db.Decimal(10, 7)
+  longitude            Decimal?                    @db.Decimal(10, 7)
+  coordinateType       GeographicCoordinateType?
+  crs                  GeographicCrs?
+  source               String?
+  sourceVersion        String?
+  sourceRetrievedAt    DateTime?                   @db.Timestamptz(6)
+  validationStatus     GeographicValidationStatus?
+  validationNotes      String?                     @db.Text
+  geometry             Json?
+  geometrySource       String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  contact            Contact            @relation(fields: [contactId], references: [id])
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  contactCompanyLink ContactCompanyLink @relation("ContactAddressCompanyLink", fields: [contactId, companyId], references: [contactId, companyId], onDelete: Restrict)
+
+  @@unique([companyId, contactId], map: "uq_contact_address_one_main", where: raw("\"isMain\" = true"))
+  @@index([companyId, contactId, isMain], map: "ix_contact_address_main")
+  @@index([georefId], map: "ix_contact_address_georef_id")
+  @@index([validationStatus], map: "ix_contact_address_geo_validation")
+}
+
+// ─── Cirugía (Fase 1 — core expandido) ─────────────────────────────
+
+model Surgery {
+  id                       String    @id @default(cuid())
+  companyId                String
+  branchId                 String?
+  visibleNumber            String?
+  patientId                String
+  doctorId                 String?
+  institutionId            String?
+  payerContactId           String?
+  classification           String?
+  description              String?
+  priority                 String?
+  cxStatus                 String    @default("pending")
+  prepStatus               String?
+  probableDate             DateTime?
+  scheduledDate            DateTime?
+  surgeryDate              DateTime?
+  performedDate            DateTime?
+  cancelledDate            DateTime?
+  source                   String?
+  notes                    String?
+  archivedAt               DateTime?
+  archivedById             String?
+  archiveReason            String?
+  archivePolicySnapshot    Json?
+  createdById              String?
+  materialAvailabilityDate DateTime? @db.Date
+  materialShippingDate     DateTime? @db.Date
+  materialTransport        String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  patient     Contact  @relation("PatientSurgeries", fields: [patientId], references: [id])
+  doctor      Contact? @relation("DoctorSurgeries", fields: [doctorId], references: [id])
+  institution Contact? @relation("InstitutionSurgeries", fields: [institutionId], references: [id])
+  payer       Contact? @relation("PayerSurgeries", fields: [payerContactId], references: [id])
+  createdBy   User?    @relation("SurgeryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_surgery_created_by")
+
+  contactAssignments    SurgeryContactAssignment[]
+  digitalReceipts       DigitalReceipt[]
+  internalNotifications InternalNotification[]
+  availabilityRequests  AvailabilityRequest[]      @relation("AvailabilityRequestSurgery")
+  availabilityCommands  AvailabilityCommand[]      @relation("AvailabilityCommandSurgery")
+  seguimientoEntries    SeguimientoEntry[]
+  remitos               Remito[]
+  consumos              Consumo[]
+  devoluciones          Devolucion[]
+  presupuestos          Presupuesto[]
+  presupuestoFamily     PresupuestoFamily?
+  invoices              Invoice[]
+  payments              Payment[]
+  cajasAssignments      CajasAssignment[]          @relation("CajasSurgeryAssignments")
+  documentChecklist     SurgeryDocumentChecklist?  @relation("SurgeryDocumentChecklistSurgery")
+
+  @@unique([companyId, id], map: "uq_surgery_company_id")
+  @@unique([companyId, visibleNumber], map: "Surgery_companyId_visibleNumber_key")
+  @@index([companyId, archivedAt])
+  @@index([companyId, materialAvailabilityDate], map: "ix_surgery_company_material_availability")
+  @@index([companyId, createdById], map: "ix_surgery_company_created_by")
+}
+
+model SurgeryDocumentChecklist {
+  id              String   @id @default(cuid())
+  companyId       String
+  surgeryId       String
+  templateVersion String   @default("documentation-v0.1")
+  createdById     String
+  updatedById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         Company               @relation("CompanyDocumentChecklists", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdc_company")
+  surgery         Surgery               @relation("SurgeryDocumentChecklistSurgery", fields: [companyId, surgeryId], references: [companyId, id], onDelete: Cascade, onUpdate: Cascade, map: "fk_sdc_surgery_tenant")
+  createdByAccess UserCompanyAccess     @relation("SurgeryDocumentChecklistCreatedByAccess", fields: [createdById, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdc_created_by_access")
+  updatedByAccess UserCompanyAccess     @relation("SurgeryDocumentChecklistUpdatedByAccess", fields: [updatedById, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdc_updated_by_access")
+  items           SurgeryDocumentItem[] @relation("SurgeryDocumentChecklistItems")
+
+  @@unique([companyId, surgeryId], map: "uq_sdc_company_surgery")
+  @@unique([companyId, id], map: "uq_sdc_company_id")
+  @@index([companyId, updatedAt], map: "ix_sdc_company_updated_at")
+}
+
+model SurgeryDocumentItem {
+  id          String   @id @default(cuid())
+  companyId   String
+  checklistId String
+  type        String
+  label       String
+  required    Boolean
+  sortOrder   Int
+  state       String   @default("pending")
+  observation String?  @db.Text
+  createdById String
+  updatedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company         Company                  @relation("CompanyDocumentItems", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdi_company")
+  checklist       SurgeryDocumentChecklist @relation("SurgeryDocumentChecklistItems", fields: [companyId, checklistId], references: [companyId, id], onDelete: Cascade, onUpdate: Cascade, map: "fk_sdi_checklist_tenant")
+  createdByAccess UserCompanyAccess        @relation("SurgeryDocumentItemCreatedByAccess", fields: [createdById, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdi_created_by_access")
+  updatedByAccess UserCompanyAccess        @relation("SurgeryDocumentItemUpdatedByAccess", fields: [updatedById, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_sdi_updated_by_access")
+
+  @@unique([checklistId, type], map: "uq_sdi_checklist_type")
+  @@unique([companyId, id], map: "uq_sdi_company_id")
+  @@index([companyId, checklistId, sortOrder], map: "ix_sdi_company_checklist_order")
+}
+
+// ─── Presupuesto versionable (Fase 1C) ─────────────────────────────────────
+// Catálogos controlados en src/lib/validators/presupuesto.ts (NO enums Prisma).
+// state ∈ Borrador | Emitido | Aprobado | Rechazado | Vencido | Reemplazado | Anulado
+// Un presupuesto puede existir independiente o vinculado a cirugía.
+
+model PresupuestoFamily {
+  id        String   @id @default(cuid())
+  companyId String
+  surgeryId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  surgery      Surgery?      @relation(fields: [companyId, surgeryId], references: [companyId, id], onDelete: Restrict)
+  presupuestos Presupuesto[]
+
+  @@unique([companyId, id], map: "uq_presupuesto_family_company_id")
+  @@unique([companyId, id, surgeryId], map: "uq_presupuesto_family_surgery_lineage")
+  @@unique([companyId, surgeryId], map: "uq_presupuesto_family_surgery")
+  @@index([companyId], map: "ix_presupuesto_family_company")
+  @@map("presupuesto_family")
+}
+
+model Presupuesto {
+  id                  String             @id @default(cuid())
+  visibleNumber       Int?
+  companyId           String
+  company             Company            @relation(fields: [companyId], references: [id])
+  familyId            String
+  family              PresupuestoFamily  @relation(fields: [companyId, familyId], references: [companyId, id], onDelete: Restrict)
+  surgeryId           String?
+  surgery             Surgery?           @relation(fields: [companyId, surgeryId], references: [companyId, id], onDelete: Restrict)
+  branchId            String
+  branch              Branch             @relation(fields: [companyId, branchId], references: [companyId, id], onDelete: Restrict)
+  clientContactId     String
+  clientCompanyLink   ContactCompanyLink @relation("PresupuestoClientCompany", fields: [clientContactId, companyId], references: [contactId, companyId], onDelete: Restrict)
+  payerContactId      String
+  payerCompanyLink    ContactCompanyLink @relation("PresupuestoPayerCompany", fields: [payerContactId, companyId], references: [contactId, companyId], onDelete: Restrict)
+  parentPresupuestoId String?
+  parentPresupuesto   Presupuesto?       @relation("PresupuestoVersions", fields: [familyId, parentPresupuestoId], references: [familyId, id], onDelete: Restrict)
+  versions            Presupuesto[]      @relation("PresupuestoVersions")
+  sourcePresupuestoId String?
+  sourcePresupuesto   Presupuesto?       @relation("PresupuestoSource", fields: [familyId, sourcePresupuestoId], references: [familyId, id], onDelete: Restrict)
+  derivedPresupuestos Presupuesto[]      @relation("PresupuestoSource")
+  versionNumber       Int                @default(1)
+  slot                String             @default("DRAFT")
+  revision            Int                @default(1)
+  state               String             @default("Borrador")
+  title               String?
+  currency            String             @default("ARS")
+  documentDate        DateTime           @db.Date
+  paymentTerms        String
+  priceListCode       String
+  legend              String             @db.Text
+  notes               String?            @db.Text
+  generalDiscountRate Decimal            @default(0) @db.Decimal(9, 4)
+  commercialSnapshot  Json
+  subtotal            Decimal            @default(0) @db.Decimal(18, 4)
+  discountTotal       Decimal            @default(0) @db.Decimal(18, 4)
+  taxTotal            Decimal            @default(0) @db.Decimal(18, 4)
+  total               Decimal            @default(0) @db.Decimal(18, 4)
+  validUntil          DateTime?
+  issuedAt            DateTime?
+  approvedAt          DateTime?
+  rejectedAt          DateTime?
+  createdById         String?
+  createdBy           User?              @relation("PresupuestoCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById         String?
+  updatedBy           User?              @relation("PresupuestoUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  metadata            Json?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  items               PresupuestoItem[]
+  invoices            Invoice[]
+
+  @@unique([companyId, visibleNumber])
+  @@unique([familyId, versionNumber], map: "uq_presupuesto_family_version")
+  @@unique([familyId, id], map: "uq_presupuesto_family_id")
+  @@unique([companyId, id], map: "uq_presupuesto_company_id")
+  @@index([companyId, surgeryId, state])
+  @@index([companyId, state])
+  @@index([companyId, familyId, slot], map: "ix_presupuesto_company_family_slot")
+  @@index([parentPresupuestoId])
+  @@index([sourcePresupuestoId], map: "ix_presupuesto_source")
+  @@map("presupuesto")
+}
+
+// ─── Facturación operacional y cobros (Fase 1D) ─────────────────────────────
+// Catálogos controlados en services/validators (NO enums Prisma).
+// Invoice.base ∈ presupuesto | consumo | manual | mixto.
+// Invoice es operacional: sin CAE/AFIP/TusFacturasAPP productivo.
+// PaymentImputation.invoiceId es FK real obligatoria (no matching por número visible/string).
+
+model Invoice {
+  id            String              @id @default(cuid())
+  visibleNumber Int?
+  companyId     String
+  company       Company             @relation(fields: [companyId], references: [id])
+  surgeryId     String?
+  surgery       Surgery?            @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
+  presupuestoId String?
+  presupuesto   Presupuesto?        @relation(fields: [presupuestoId], references: [id], onDelete: SetNull)
+  consumoId     String?
+  consumo       Consumo?            @relation(fields: [consumoId], references: [id], onDelete: SetNull)
+  base          String              @default("manual")
+  state         String              @default("Borrador")
+  type          String              @default("FV")
+  currency      String              @default("ARS")
+  subtotal      Decimal             @default(0) @db.Decimal(18, 4)
+  discountTotal Decimal             @default(0) @db.Decimal(18, 4)
+  taxTotal      Decimal             @default(0) @db.Decimal(18, 4)
+  total         Decimal             @default(0) @db.Decimal(18, 4)
+  paidTotal     Decimal             @default(0) @db.Decimal(18, 4)
+  balance       Decimal             @default(0) @db.Decimal(18, 4)
+  issuedAt      DateTime?
+  cancelledAt   DateTime?
+  createdById   String?
+  createdBy     User?               @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById   String?
+  updatedBy     User?               @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  items         InvoiceItem[]
+  imputations   PaymentImputation[]
+
+  @@unique([companyId, visibleNumber])
+  @@index([companyId, surgeryId, state])
+  @@index([companyId, state])
+  @@index([presupuestoId])
+  @@index([consumoId])
+  @@map("invoice")
+}
+
+model InvoiceItem {
+  id           String   @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sku          String?
+  description  String
+  quantity     Decimal  @db.Decimal(18, 4)
+  unit         String?
+  unitPrice    Decimal  @default(0) @db.Decimal(18, 4)
+  discount     Decimal  @default(0) @db.Decimal(18, 4)
+  tax          Decimal  @default(0) @db.Decimal(18, 4)
+  total        Decimal  @default(0) @db.Decimal(18, 4)
+  sourceType   String?
+  sourceItemId String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([sku])
+  @@index([sourceType, sourceItemId])
+  @@map("invoice_item")
+}
+
+model Payment {
+  id            String              @id @default(cuid())
+  visibleNumber Int?
+  companyId     String
+  company       Company             @relation(fields: [companyId], references: [id])
+  surgeryId     String?
+  surgery       Surgery?            @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
+  state         String              @default("Registrado")
+  method        String?
+  currency      String              @default("ARS")
+  amount        Decimal             @db.Decimal(18, 4)
+  receivedAt    DateTime            @default(now())
+  createdById   String?
+  createdBy     User?               @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById   String?
+  updatedBy     User?               @relation("PaymentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  imputations   PaymentImputation[]
+
+  @@unique([companyId, visibleNumber])
+  @@index([companyId, surgeryId, state])
+  @@index([companyId, receivedAt])
+  @@map("payment")
+}
+
+model PaymentImputation {
+  id        String   @id @default(cuid())
+  paymentId String
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  amount    Decimal  @db.Decimal(18, 4)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([paymentId, invoiceId])
+  @@index([invoiceId])
+  @@map("payment_imputation")
+}
+
+model PresupuestoItem {
+  id            String      @id @default(cuid())
+  presupuestoId String
+  presupuesto   Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+  sku           String?
+  description   String
+  position      Int
+  quantity      Decimal     @db.Decimal(18, 4)
+  unit          String?
+  unitPrice     Decimal     @default(0) @db.Decimal(18, 4)
+  discount      Decimal     @default(0) @db.Decimal(18, 4)
+  discountRate  Decimal     @default(0) @db.Decimal(9, 4)
+  tax           Decimal     @default(0) @db.Decimal(18, 4)
+  taxRate       Decimal     @default(0) @db.Decimal(9, 4)
+  total         Decimal     @default(0) @db.Decimal(18, 4)
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([presupuestoId, position], map: "uq_presupuesto_item_position")
+  @@index([presupuestoId])
+  @@index([sku])
+  @@map("presupuesto_item")
+}
+
+enum CompanyOperationalDesignation {
+  PIVOT
+}
+
+enum AvailabilityRequestStatus {
+  OPEN
+  COMPLETED
+}
+
+enum AvailabilityCreatorResolution {
+  IDENTIFIED_ELIGIBLE
+  NOT_IDENTIFIED
+  IDENTIFIED_INACTIVE
+  IDENTIFIED_NO_COMPANY_ACCESS
+}
+
+enum AvailabilityRecipientReason {
+  CREATOR
+  PIVOT
+}
+
+enum AvailabilityCommandType {
+  REQUEST
+  COMPLETE
+  CORRECT
+  REASSIGN_PIVOT
+}
+
+model CompanyOperationalAssignee {
+  id          String                        @id @default(cuid())
+  companyId   String
+  userId      String
+  designation CompanyOperationalDesignation
+  version     Int                           @default(1)
+  createdById String
+  updatedById String
+  createdAt   DateTime                      @default(now())
+  updatedAt   DateTime                      @updatedAt
+
+  company    Company           @relation("AvailabilityCompanyOperationalAssignees", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_company_operational_assignee_company")
+  userAccess UserCompanyAccess @relation("CompanyOperationalAssigneeUserAccess", fields: [userId, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_company_operational_assignee_user_access")
+  createdBy  User              @relation("CompanyOperationalAssigneeCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_company_operational_assignee_created_by")
+  updatedBy  User              @relation("CompanyOperationalAssigneeUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_company_operational_assignee_updated_by")
+
+  @@unique([companyId, designation], map: "uq_company_operational_assignee_designation")
+  @@index([userId, companyId], map: "ix_company_operational_assignee_user_company")
+}
+
+model AvailabilityCapabilityGrant {
+  id           String    @id @default(cuid())
+  companyId    String
+  userId       String
+  capability   String    @db.VarChar(64)
+  isActive     Boolean   @default(true)
+  grantedById  String
+  grantedAt    DateTime  @default(now())
+  revokedById  String?
+  revokedAt    DateTime?
+  revokeReason String?   @db.VarChar(500)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company    Company           @relation("AvailabilityCapabilityCompany", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_capability_company")
+  userAccess UserCompanyAccess @relation("AvailabilityCapabilityUserAccess", fields: [userId, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_capability_user_access")
+  grantedBy  User              @relation("AvailabilityCapabilityGrantedBy", fields: [grantedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_capability_granted_by")
+  revokedBy  User?             @relation("AvailabilityCapabilityRevokedBy", fields: [revokedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_capability_revoked_by")
+
+  @@unique([companyId, userId, capability], map: "uq_availability_capability_grant_scope")
+  @@index([companyId, capability, isActive], map: "ix_availability_capability_grant_lookup")
+  @@index([userId, companyId], map: "ix_availability_capability_grant_user_company")
+}
+
+model AvailabilityRequest {
+  id                    String                        @id @default(cuid())
+  companyId             String
+  surgeryId             String
+  requesterUserId       String
+  status                AvailabilityRequestStatus     @default(OPEN)
+  creatorResolution     AvailabilityCreatorResolution
+  creatorUserIdSnapshot String?
+  creatorAuditEventId   String?
+  pivotUserIdAtCreation String
+  pivotMappingVersion   Int
+  requestedAt           DateTime                      @default(now())
+  completedAt           DateTime?
+  completedByUserId     String?
+  submittedDate         DateTime?                     @db.Date
+  completionCommandId   String?
+  correlationId         String
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
+
+  company             Company                                  @relation("AvailabilityCompanyRequests", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_request_company")
+  surgery             Surgery                                  @relation("AvailabilityRequestSurgery", fields: [companyId, surgeryId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_request_surgery")
+  requester           User                                     @relation("AvailabilityRequester", fields: [requesterUserId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_request_requester")
+  completedBy         User?                                    @relation("AvailabilityCompleter", fields: [completedByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_request_completer")
+  creatorUserSnapshot User?                                    @relation("AvailabilityCreatorUserSnapshot", fields: [creatorUserIdSnapshot], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_request_creator_snapshot_user")
+  pivotUserAtCreation User                                     @relation("AvailabilityPivotUserSnapshot", fields: [pivotUserIdAtCreation], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_request_pivot_snapshot_user")
+  creatorAuditEvent   AuditEvent?                              @relation("AvailabilityCreatorAuditEvidence", fields: [companyId, creatorAuditEventId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_request_creator_audit")
+  completionCommand   AvailabilityCommand?                     @relation("AvailabilityRequestCompletionCommand", fields: [companyId, completionCommandId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_request_completion_command")
+  assignments         AvailabilityRequestRecipientAssignment[] @relation("AvailabilityRequestAssignments")
+  notifications       InternalNotification[]                   @relation("InternalNotificationAvailabilityRequest")
+  commands            AvailabilityCommand[]                    @relation("AvailabilityCommandRequest")
+
+  @@unique([companyId, id], map: "uq_availability_request_company_id")
+  @@unique([companyId, surgeryId, id], map: "uq_availability_request_company_surgery_id")
+  @@unique([companyId, completionCommandId], map: "uq_availability_request_completion_command")
+  @@unique([correlationId], map: "uq_availability_request_correlation")
+  @@unique([companyId, surgeryId], map: "availability_request_one_open_per_surgery", where: raw("\"status\" = 'OPEN'"))
+  @@index([companyId, surgeryId, status], map: "ix_availability_request_company_surgery_status")
+  @@index([companyId, requesterUserId, requestedAt], map: "ix_availability_request_company_requester_requested")
+  @@index([companyId, status, requestedAt], map: "ix_availability_request_company_status_requested")
+}
+
+model AvailabilityRequestRecipientAssignment {
+  id                    String                      @id @default(cuid())
+  availabilityRequestId String
+  companyId             String
+  userId                String
+  reason                AvailabilityRecipientReason
+  assignedAt            DateTime                    @default(now())
+  assignedByUserId      String
+  revokedAt             DateTime?
+  revokedByUserId       String?
+  revokeReason          String?
+  correlationId         String
+
+  company    Company             @relation("AvailabilityCompanyRecipientAssignments", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_assignment_company")
+  request    AvailabilityRequest @relation("AvailabilityRequestAssignments", fields: [companyId, availabilityRequestId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_assignment_request")
+  userAccess UserCompanyAccess   @relation("AvailabilityAssignmentUserAccess", fields: [userId, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_assignment_user_access")
+  assignedBy User                @relation("AvailabilityAssignmentAssignedBy", fields: [assignedByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_assignment_assigned_by")
+  revokedBy  User?               @relation("AvailabilityAssignmentRevokedBy", fields: [revokedByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_assignment_revoked_by")
+
+  @@unique([companyId, id], map: "uq_availability_assignment_company_id")
+  @@unique([availabilityRequestId, reason], map: "availability_request_one_active_reason", where: raw("\"revokedAt\" IS NULL"))
+  @@unique([availabilityRequestId, reason, userId, assignedAt], map: "availability_request_assignment_episode")
+  @@index([companyId, userId, revokedAt], map: "ix_availability_assignment_company_user_revoked")
+  @@index([availabilityRequestId, reason, revokedAt], map: "ix_availability_assignment_request_reason_revoked")
+}
+
+model AvailabilityCommand {
+  id             String                  @id @default(cuid())
+  companyId      String
+  actorUserId    String
+  type           AvailabilityCommandType
+  idempotencyKey String                  @db.VarChar(128)
+  payloadHash    String                  @db.Char(64)
+  requestId      String?
+  surgeryId      String?
+  completedAt    DateTime?
+  resultCode     String?                 @db.VarChar(100)
+  createdAt      DateTime                @default(now())
+
+  company          Company              @relation("AvailabilityCompanyCommands", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_command_company")
+  actor            User                 @relation("AvailabilityCommandActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_command_actor")
+  request          AvailabilityRequest? @relation("AvailabilityCommandRequest", fields: [companyId, surgeryId, requestId], references: [companyId, surgeryId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_command_request")
+  surgery          Surgery?             @relation("AvailabilityCommandSurgery", fields: [companyId, surgeryId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_availability_command_surgery")
+  completedRequest AvailabilityRequest? @relation("AvailabilityRequestCompletionCommand")
+
+  @@unique([companyId, id], map: "uq_availability_command_company_id")
+  @@unique([companyId, actorUserId, type, idempotencyKey], map: "uq_availability_command_idempotency")
+  @@index([companyId, requestId], map: "ix_availability_command_company_request")
+  @@index([companyId, surgeryId], map: "ix_availability_command_company_surgery")
+}
+
+enum InternalNotificationType {
+  seguimiento_mention
+  availability_request_actionable
+  availability_request_completed
+  availability_pivot_reassigned
+}
+
+model InternalNotification {
+  id                    String                   @id @default(cuid())
+  companyId             String
+  recipientUserId       String
+  actorUserId           String
+  surgeryId             String
+  sourceEntityId        String
+  // DB CHECK requires this link for all three availability notification types; unrelated types remain nullable.
+  availabilityRequestId String?
+  type                  InternalNotificationType
+  eventKey              String
+  title                 String
+  body                  String?                  @db.Text
+  metadata              Json?
+  readAt                DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  company             Company              @relation(fields: [companyId], references: [id])
+  recipient           User                 @relation("InternalNotificationRecipient", fields: [recipientUserId], references: [id])
+  actor               User                 @relation("InternalNotificationActor", fields: [actorUserId], references: [id])
+  surgery             Surgery              @relation(fields: [surgeryId], references: [id], onDelete: Cascade)
+  availabilityRequest AvailabilityRequest? @relation("InternalNotificationAvailabilityRequest", fields: [companyId, surgeryId, availabilityRequestId], references: [companyId, surgeryId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_internal_notification_availability_request")
+
+  @@unique([companyId, eventKey])
+  @@index([companyId, recipientUserId, readAt, createdAt])
+  @@index([recipientUserId, createdAt])
+  @@index([surgeryId, createdAt])
+  @@index([sourceEntityId])
+  @@index([companyId, availabilityRequestId, createdAt], map: "ix_internal_notification_company_availability_request")
+}
+
+enum DigitalReceiptStatus {
+  draft
+  issued
+  signed
+  expired
+  revoked
+}
+
+enum DigitalReceiptAccessStatus {
+  active
+  consumed
+  expired
+  revoked
+}
+
+enum DigitalReceiptSignerRole {
+  patient
+  authorized_payer
+}
+
+enum DigitalReceiptEventType {
+  created
+  issued
+  access_created
+  access_opened
+  access_consumed
+  signed
+  snapshot_created
+  artifact_created
+  expired
+  revoked
+}
+
+enum DigitalReceiptArtifactType {
+  receipt_html
+  receipt_pdf
+  audit_trail
+  snapshot_payload
+  signature_evidence
+}
+
+enum DigitalReceiptDeliveryChannel {
+  whatsapp
+  email
+  sms
+  internal
+}
+
+model DigitalReceipt {
+  id                  String                   @id @default(cuid())
+  companyId           String
+  surgeryId           String
+  receiptNumber       String
+  status              DigitalReceiptStatus
+  issuedAt            DateTime
+  issuedBy            Json?
+  signedAt            DateTime?
+  expiredAt           DateTime?
+  revokedAt           DateTime?
+  latestAccessVersion Int?
+  activeAccessId      String?                  @unique
+  currentSignerRole   DigitalReceiptSignerRole
+  signers             Json
+  latestSnapshotId    String?                  @unique
+  metadata            Json?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  company        Company                  @relation(fields: [companyId], references: [id])
+  surgery        Surgery                  @relation(fields: [surgeryId], references: [id], onDelete: Cascade)
+  activeAccess   DigitalReceiptAccess?    @relation("DigitalReceiptActiveAccess", fields: [activeAccessId], references: [id])
+  latestSnapshot DigitalReceiptSnapshot?  @relation("DigitalReceiptLatestSnapshot", fields: [latestSnapshotId], references: [id])
+  accesses       DigitalReceiptAccess[]
+  events         DigitalReceiptEvent[]
+  snapshots      DigitalReceiptSnapshot[]
+  artifacts      DigitalReceiptArtifact[]
+
+  @@unique([companyId, receiptNumber])
+  @@index([companyId, surgeryId])
+  @@index([companyId, status])
+  @@index([surgeryId, issuedAt])
+}
+
+model DigitalReceiptAccess {
+  id                   String                         @id @default(cuid())
+  receiptId            String
+  version              Int
+  status               DigitalReceiptAccessStatus
+  tokenHash            String                         @unique
+  tokenLastFour        String?
+  channel              DigitalReceiptDeliveryChannel?
+  recipientEmail       String?
+  recipientPhone       String?
+  signerRole           DigitalReceiptSignerRole
+  signerId             String?
+  issuedAt             DateTime
+  activatedAt          DateTime?
+  firstOpenedAt        DateTime?
+  lastOpenedAt         DateTime?
+  consumedAt           DateTime?
+  expiredAt            DateTime?
+  revokedAt            DateTime?
+  supersededByAccessId String?
+  metadata             Json?
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+
+  receipt          DigitalReceipt           @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  supersededBy     DigitalReceiptAccess?    @relation("DigitalReceiptAccessSupersession", fields: [supersededByAccessId], references: [id])
+  supersedes       DigitalReceiptAccess[]   @relation("DigitalReceiptAccessSupersession")
+  events           DigitalReceiptEvent[]
+  artifacts        DigitalReceiptArtifact[]
+  activeForReceipt DigitalReceipt[]         @relation("DigitalReceiptActiveAccess")
+
+  @@unique([receiptId, version])
+  @@index([receiptId, status])
+  @@index([status, issuedAt])
+}
+
+model DigitalReceiptEvent {
+  id         String                  @id @default(cuid())
+  receiptId  String
+  accessId   String?
+  snapshotId String?
+  artifactId String?
+  type       DigitalReceiptEventType
+  happenedAt DateTime
+  actor      Json?
+  detail     String?
+  metadata   Json?
+  createdAt  DateTime                @default(now())
+
+  receipt  DigitalReceipt          @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  access   DigitalReceiptAccess?   @relation(fields: [accessId], references: [id], onDelete: SetNull)
+  snapshot DigitalReceiptSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  artifact DigitalReceiptArtifact? @relation(fields: [artifactId], references: [id], onDelete: SetNull)
+
+  @@index([receiptId, happenedAt])
+  @@index([type, happenedAt])
+  @@index([accessId])
+  @@index([snapshotId])
+  @@index([artifactId])
+}
+
+model DigitalReceiptSnapshot {
+  id         String   @id @default(cuid())
+  receiptId  String
+  version    Int
+  capturedAt DateTime
+  capturedBy Json?
+  checksum   String?
+  payload    Json
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  receipt          DigitalReceipt           @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  events           DigitalReceiptEvent[]
+  artifacts        DigitalReceiptArtifact[]
+  latestForReceipt DigitalReceipt[]         @relation("DigitalReceiptLatestSnapshot")
+
+  @@unique([receiptId, version])
+  @@index([receiptId, capturedAt])
+}
+
+model DigitalReceiptArtifact {
+  id         String                     @id @default(cuid())
+  receiptId  String
+  snapshotId String?
+  accessId   String?
+  type       DigitalReceiptArtifactType
+  createdAt  DateTime                   @default(now())
+  createdBy  Json?
+  fileName   String?
+  mimeType   String?
+  storageKey String?
+  checksum   String?
+  metadata   Json?
+
+  receipt  DigitalReceipt          @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  snapshot DigitalReceiptSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  access   DigitalReceiptAccess?   @relation(fields: [accessId], references: [id], onDelete: SetNull)
+  events   DigitalReceiptEvent[]
+
+  @@index([receiptId, createdAt])
+  @@index([snapshotId])
+  @@index([accessId])
+  @@index([type])
+}
+
+// ─── Asignación de Contacto a Cirugía ──────────────────────────────
+
+model SurgeryContactAssignment {
+  id        String   @id @default(cuid())
+  surgeryId String
+  contactId String
+  role      String
+  isPrimary Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+
+  surgery Surgery @relation(fields: [surgeryId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@unique([surgeryId, contactId, role])
+  @@index([surgeryId])
+  @@index([contactId])
+}
+
+// ─── Seguimiento de Cirugía ────────────────────────────────────────
+
+model SeguimientoEntry {
+  id          String   @id @default(cuid())
+  surgeryId   String
+  surgery     Surgery  @relation(fields: [surgeryId], references: [id], onDelete: Cascade)
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  entryType   String // 'note' | 'authorization_evidence' | 'file_photo_evidence' | 'mail_evidence'
+  content     String   @db.Text
+  summary     String?
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  evidenceRef Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([surgeryId, createdAt])
+  @@index([companyId])
+  @@index([entryType])
+}
+
+// ─── Auditoría ───────────────────────────────────────────────────────
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  companyId  String
+  userId     String
+  entityType String
+  entityId   String
+  action     String
+  detail     String?
+  oldValue   Json?
+  newValue   Json?
+  module     String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  company                                Company                 @relation(fields: [companyId], references: [id])
+  user                                   User                    @relation(fields: [userId], references: [id])
+  cajasAcceptedCommand                   CajasCommandAcceptance? @relation("CajasCommandAudit")
+  cajasCommandAttempts                   CajasCommandAttempt[]   @relation("CajasAttemptAudit")
+  creatorEvidenceForAvailabilityRequests AvailabilityRequest[]   @relation("AvailabilityCreatorAuditEvidence")
+
+  @@unique([companyId, id], map: "uq_audit_event_company_id")
+  @@index([entityType, entityId])
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+}
+
+// ─── Remito unificado (Fase 1A / V1 salida) ───────────────────────────
+// Catálogos controlados en src/lib/validators/remito.ts (NO enums Prisma).
+// origin ∈ box | presupuesto | manual | mixto
+// salidaReason ∈ cirugia | venta | prestamo | traslado | ajuste | otro
+// state  ∈ Borrador | Emitido | En_transito | Entregado | Parcialmente_devuelto | Devuelto | Anulado
+// boxId / presupuestoId son stubs planos sin FK en V0 (FK blanda validada en service).
+// branchId es nullable a nivel DB para backfill no destructivo; service/API lo exige para nuevos V1.
+
+model Remito {
+  id                      String          @id @default(cuid())
+  visibleNumber           Int? // número visible por empresa; nullable en V0, autocalculado en service
+  companyId               String
+  company                 Company         @relation(fields: [companyId], references: [id])
+  branchId                String?
+  branch                  Branch?         @relation("RemitoBranch", fields: [branchId], references: [id], onDelete: SetNull)
+  issuedBranchId          String?
+  issuedBranch            Branch?         @relation("RemitoIssuedBranch", fields: [issuedBranchId], references: [id], onDelete: SetNull)
+  documentType            String          @default("REMITO_SALIDA")
+  surgeryId               String? // FK blanda; Remito logístico puede no tener cirugía
+  surgery                 Surgery?        @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
+  origin                  String // catálogo validator: box | presupuesto | manual | mixto
+  salidaReason            String          @default("cirugia")
+  boxId                   String? // stub blando; FK real cuando Box lands (Fase 3)
+  presupuestoId           String? // stub blando; FK real cuando Presupuesto lands (Fase 1C)
+  destinatarioContactId   String?
+  destinatarioSnapshot    Json? // snapshot inmutable del receptor legal
+  shippingAddressSnapshot Json? // dirección final usada para el envío; editable por remito
+  transportSnapshot       Json? // transporte simple opcional V1
+  packageCount            Int?
+  declaredValue           Decimal?        @db.Decimal(18, 4)
+  state                   String          @default("Borrador")
+  items                   RemitoItem[]    @relation("RemitoItemsTenant")
+  consumos                Consumo[]
+  devoluciones            Devolucion[]
+  cajasDispatches         CajasDispatch[] @relation("CajasDispatchRemito")
+  issuedAt                DateTime?
+  deliveredAt             DateTime?
+  returnedAt              DateTime?
+  createdById             String? // FK a User; nullable para system-created remitos en V0
+  createdBy               User?           @relation("RemitoCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById             String? // último mutador; nullable
+  updatedBy               User?           @relation("RemitoUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  metadata                Json?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  @@unique([companyId, branchId, documentType, visibleNumber])
+  @@unique([companyId, id], map: "uq_remito_company_id")
+  @@index([companyId, surgeryId, state])
+  @@index([companyId, branchId, state])
+  @@index([companyId, state])
+  @@index([companyId, origin])
+  @@index([companyId, salidaReason])
+  @@index([companyId, issuedAt])
+  @@index([surgeryId])
+}
+
+model RemitoItem {
+  id                String    @id @default(cuid())
+  companyId         String    @map("company_id")
+  remitoId          String
+  remito            Remito    @relation("RemitoItemsTenant", fields: [companyId, remitoId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_remito_item_owner")
+  itemId            String? // stockItemId | presupuestoItemId | catalogItemId — stub plano
+  sku               String?
+  description       String
+  quantity          Decimal   @db.Decimal(18, 4)
+  unit              String?
+  boxId             String? // stub blando (item suelto distinto del remito.boxId)
+  presupuestoItemId String? // stub blando para trazabilidad comparativa V1.5
+  lotNumber         String?
+  serialNumber      String?
+  expirationDate    DateTime?
+  returnedQuantity  Decimal   @default(0) @db.Decimal(18, 4)
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  consumoItems       ConsumoItem[]
+  devolucionItems    DevolucionItem[]
+  cajasDispatchLines CajasDispatchLine[] @relation("CajasDispatchLineRemitoItem")
+
+  @@unique([companyId, id], map: "uq_remito_item_company_id")
+  @@unique([companyId, remitoId, id], map: "uq_remito_item_owner_id")
+  @@index([remitoId])
+  @@index([companyId, remitoId], map: "ix_remito_item_company_owner")
+  @@index([itemId])
+  @@index([presupuestoItemId])
+  @@index([lotNumber])
+  @@index([expirationDate])
+}
+
+// ─── Consumo (Fase 1B) ───────────────────────────────────────────────
+// Catálogos controlados en src/lib/validators/consumo.ts (NO enums Prisma).
+// state ∈ Borrador | Pendiente | Validado | Facturado | Anulado
+// remitoId es FK OBLIGATORIA — repara conflicto C6 (consumo.remitoId no guardado en store viejo).
+
+model Consumo {
+  id                            String                         @id @default(cuid())
+  visibleNumber                 Int?
+  companyId                     String
+  company                       Company                        @relation(fields: [companyId], references: [id])
+  surgeryId                     String?
+  surgery                       Surgery?                       @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
+  remitoId                      String // FK OBLIGATORIA — repara conflicto C6
+  remito                        Remito                         @relation(fields: [remitoId], references: [id], onDelete: Restrict)
+  state                         String                         @default("Borrador") // Borrador|Pendiente|Validado|Facturado|Anulado
+  items                         ConsumoItem[]                  @relation("ConsumoItemsTenant")
+  validatedAt                   DateTime?
+  facturedAt                    DateTime?
+  createdById                   String?
+  createdBy                     User?                          @relation("ConsumoCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById                   String?
+  updatedBy                     User?                          @relation("ConsumoUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  metadata                      Json?
+  createdAt                     DateTime                       @default(now())
+  updatedAt                     DateTime                       @updatedAt
+  devolucions                   Devolucion[]
+  invoices                      Invoice[]
+  cajasConsumptionConfirmations CajasConsumptionConfirmation[] @relation("CajasConsumptionConsumo")
+
+  @@unique([companyId, visibleNumber])
+  @@unique([companyId, id], map: "uq_consumo_company_id")
+  @@unique([companyId, id, remitoId], map: "uq_consumo_id_remito")
+  @@index([companyId, surgeryId, state])
+  @@index([companyId, remitoId])
+  @@index([companyId, state])
+  @@map("consumo")
+}
+
+model ConsumoItem {
+  id                String      @id @default(cuid())
+  companyId         String      @map("company_id")
+  consumoId         String
+  consumo           Consumo     @relation("ConsumoItemsTenant", fields: [companyId, consumoId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_consumo_item_owner")
+  remitoItemId      String? // FK blanda al item del remito (V0 stub; FK real cuando migrate)
+  remitoItem        RemitoItem? @relation(fields: [remitoItemId], references: [id])
+  sku               String?
+  description       String
+  requestedQuantity Decimal     @db.Decimal(18, 4) // lo que el remito decía que salía
+  consumedQuantity  Decimal     @default(0) @db.Decimal(18, 4) // lo que efectivamente se usó
+  unit              String?
+  lotNumber         String?
+  serialNumber      String?
+  expirationDate    DateTime?
+  metadata          Json?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  devolucionItems       DevolucionItem[]
+  cajasConsumptionLines CajasConsumptionLine[] @relation("CajasConsumptionLineConsumoItem")
+
+  @@unique([companyId, id], map: "uq_consumo_item_company_id")
+  @@unique([companyId, consumoId, id], map: "uq_consumo_item_owner_id")
+  @@index([consumoId])
+  @@index([companyId, consumoId], map: "ix_consumo_item_company_owner")
+  @@index([remitoItemId])
+  @@index([lotNumber])
+  @@index([expirationDate])
+  @@map("consumo_item")
+}
+
+// ─── Devolución (Fase 1B) ────────────────────────────────────────────
+// Catálogos controlados en src/lib/validators/devolucion.ts (NO enums Prisma).
+// state ∈ Borrador | Pendiente | Confirmada | Rechazada | Anulada
+// ENTIDAD PROPIA — NO muta Remito items aquí (separation of concerns); integra en Fase 1A.2.
+
+model Devolucion {
+  id                       String                    @id @default(cuid())
+  visibleNumber            Int?
+  companyId                String
+  company                  Company                   @relation(fields: [companyId], references: [id])
+  surgeryId                String?
+  surgery                  Surgery?                  @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
+  remitoId                 String // FK obligatoria: la devolución siempre referencia un remito
+  remito                   Remito                    @relation(fields: [remitoId], references: [id], onDelete: Restrict)
+  consumoId                String? // FK opcional: la devolución puede venir del consumo o directa
+  consumo                  Consumo?                  @relation(fields: [consumoId], references: [id], onDelete: SetNull)
+  state                    String                    @default("Borrador") // Borrador|Pendiente|Confirmada|Rechazada|Anulada
+  items                    DevolucionItem[]          @relation("DevolucionItemsTenant")
+  reason                   String? // motivo de la devolución
+  validatedAt              DateTime? // cuándo un humano valida
+  createdById              String?
+  createdBy                User?                     @relation("DevolucionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById              String?
+  updatedBy                User?                     @relation("DevolucionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  metadata                 Json?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  cajasReturnConfirmations CajasReturnConfirmation[] @relation("CajasReturnDevolucion")
+
+  @@unique([companyId, visibleNumber])
+  @@unique([companyId, id], map: "uq_devolucion_company_id")
+  @@unique([companyId, id, remitoId], map: "uq_devolucion_id_remito")
+  @@index([companyId, surgeryId, state])
+  @@index([companyId, remitoId])
+  @@index([companyId, consumoId])
+  @@map("devolucion")
+}
+
+model DevolucionItem {
+  id               String            @id @default(cuid())
+  companyId        String            @map("company_id")
+  devolucionId     String
+  devolucion       Devolucion        @relation("DevolucionItemsTenant", fields: [companyId, devolucionId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_devolucion_item_owner")
+  remitoItemId     String? // FK blanda
+  remitoItem       RemitoItem?       @relation(fields: [remitoItemId], references: [id])
+  consumoItemId    String? // FK blanda
+  consumoItem      ConsumoItem?      @relation(fields: [consumoItemId], references: [id])
+  sku              String?
+  description      String
+  returnedQuantity Decimal           @db.Decimal(18, 4)
+  unit             String?
+  lotNumber        String?
+  serialNumber     String?
+  expirationDate   DateTime?
+  metadata         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  cajasReturnLines CajasReturnLine[] @relation("CajasReturnLineDevolucionItem")
+
+  @@unique([companyId, id], map: "uq_devolucion_item_company_id")
+  @@unique([companyId, devolucionId, id], map: "uq_devolucion_item_owner_id")
+  @@index([devolucionId])
+  @@index([companyId, devolucionId], map: "ix_devolucion_item_company_owner")
+  @@index([remitoItemId])
+  @@index([consumoItemId])
+  @@index([lotNumber])
+  @@index([expirationDate])
+  @@map("devolucion_item")
+}
+
+enum CajasStockScopeKind {
+  fungiblePosition @map("fungible_position")
+  lot
+  identifiedUnit   @map("identified_unit")
+
+  @@map("cajas_stock_scope_kind")
+}
+
+enum CajasStockRecordKind {
+  reservation
+  effect
+
+  @@map("cajas_stock_record_kind")
+}
+
+enum CajasLineRole {
+  expected
+  unexpected
+  substitution
+
+  @@map("cajas_line_role")
+}
+
+enum CajasControlKind {
+  control
+  recontrol
+
+  @@map("cajas_control_kind")
+}
+
+enum CajasControlResult {
+  clean
+  withDifferences @map("with_differences")
+
+  @@map("cajas_control_result")
+}
+
+enum CajasChangeKind {
+  add
+  remove
+  replace
+  quantity
+  traceability
+
+  @@map("cajas_change_kind")
+}
+
+enum CajasEvidenceRecordKind {
+  original
+  correction
+  reversal
+  annulment
+
+  @@map("cajas_evidence_record_kind")
+}
+
+enum CajasDispositionKind {
+  returned
+  consumed
+  missing
+  damaged
+  underReview @map("under_review")
+
+  @@map("cajas_disposition_kind")
+}
+
+enum CajasReturnLineKind {
+  unchanged
+  consumed
+  missing
+  damaged
+  added
+  replacement
+  underReview @map("under_review")
+
+  @@map("cajas_return_line_kind")
+}
+
+enum CajasCurrentCondition {
+  available
+  withDifferences @map("with_differences")
+
+  @@map("cajas_current_condition")
+}
+
+enum CajasCheckpoint {
+  formulaVersion          @map("formula_version")
+  assignment
+  preparationChange       @map("preparation_change")
+  control
+  recontrol
+  dispatch
+  returnConfirmation      @map("return_confirmation")
+  consumptionConfirmation @map("consumption_confirmation")
+  differenceResolution    @map("difference_resolution")
+  projectionRepair        @map("projection_repair")
+
+  @@map("cajas_checkpoint")
+}
+
+enum CajasAttemptOutcome {
+  accepted
+  denied
+  validationFailed @map("validation_failed")
+  conflict
+  failed
+  unknown
+
+  @@map("cajas_attempt_outcome")
+}
+
+enum CajasProjectionKind {
+  preparation
+  dispatchAccounting @map("dispatch_accounting")
+  condition
+
+  @@map("cajas_projection_kind")
+}
+
+enum CajasReconciliationResult {
+  match
+  mismatch
+
+  @@map("cajas_reconciliation_result")
+}
+
+model CajasArticleReference {
+  id                  String   @id(map: "cajas_article_reference_pkey") @default(cuid()) @map("id")
+  companyId           String   @map("company_id")
+  sourceArticleId     String   @map("source_article_id")
+  skuSnapshot         String?  @map("sku_snapshot")
+  descriptionSnapshot String?  @map("description_snapshot") @db.Text
+  unit                String   @map("unit")
+  verifiedAt          DateTime @map("verified_at") @db.Timestamptz(6)
+  verifiedById        String   @map("verified_by_id")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                  Company                      @relation("CajasCompanyArticleReferences", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_car_company")
+  verifiedBy               User                         @relation("CajasArticleReferenceVerifiedBy", fields: [verifiedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_car_verified_by")
+  stockScopeReferences     CajasStockScopeReference[]   @relation("CajasStockScopeArticle")
+  boxFormulas              CajasBoxFormula[]            @relation("CajasFormulaBoxArticle")
+  formulaLines             CajasFormulaLine[]           @relation("CajasFormulaLineArticle")
+  preparationLines         CajasPreparationLine[]       @relation("CajasPreparationLineArticle")
+  controlLines             CajasControlLine[]           @relation("CajasControlLineArticle")
+  priorChangeLines         CajasCompositionChangeLine[] @relation("CajasChangePriorArticle")
+  resultingChangeLines     CajasCompositionChangeLine[] @relation("CajasChangeResultArticle")
+  dispatchLines            CajasDispatchLine[]          @relation("CajasDispatchLineArticle")
+  returnLines              CajasReturnLine[]            @relation("CajasReturnLineArticle")
+  receivedReplacementPairs CajasReplacementPair[]       @relation("CajasReplacementReceivedArticle")
+  consumptionLines         CajasConsumptionLine[]       @relation("CajasConsumptionLineArticle")
+
+  @@unique([companyId, id], map: "uq_car_company_id")
+  @@unique([companyId, sourceArticleId], map: "uq_car_company_source")
+  @@index([companyId, skuSnapshot], map: "ix_car_company_sku")
+  @@index([verifiedById, verifiedAt], map: "ix_car_verifier_time")
+  @@map("cajas_article_reference")
+}
+
+model CajasStockScopeReference {
+  id                     String              @id(map: "cajas_stock_scope_reference_pkey") @default(cuid()) @map("id")
+  companyId              String              @map("company_id")
+  articleReferenceId     String              @map("article_reference_id")
+  sourceStockScopeId     String              @map("source_stock_scope_id")
+  kind                   CajasStockScopeKind @map("kind")
+  identifiedCodeSnapshot String?             @map("identified_code_snapshot")
+  serialNumberSnapshot   String?             @map("serial_number_snapshot")
+  lotNumberSnapshot      String?             @map("lot_number_snapshot")
+  expirationDateSnapshot DateTime?           @map("expiration_date_snapshot") @db.Date
+  verifiedAt             DateTime            @map("verified_at") @db.Timestamptz(6)
+  verifiedById           String              @map("verified_by_id")
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                  Company                       @relation("CajasCompanyStockScopeReferences", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cssr_company")
+  articleReference         CajasArticleReference         @relation("CajasStockScopeArticle", fields: [companyId, articleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cssr_article")
+  verifiedBy               User                          @relation("CajasStockScopeVerifiedBy", fields: [verifiedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cssr_verified_by")
+  boxAssignments           CajasAssignment[]             @relation("CajasBoxAssignments")
+  preparationLines         CajasPreparationLine[]        @relation("CajasPreparationLineStockScope")
+  reservationCorrelations  CajasReservationCorrelation[] @relation("CajasReservationStockScope")
+  controlLines             CajasControlLine[]            @relation("CajasControlLineStockScope")
+  priorChangeLines         CajasCompositionChangeLine[]  @relation("CajasChangePriorStockScope")
+  resultingChangeLines     CajasCompositionChangeLine[]  @relation("CajasChangeResultStockScope")
+  dispatchLines            CajasDispatchLine[]           @relation("CajasDispatchLineStockScope")
+  dispositions             CajasDisposition[]            @relation("CajasDispositionStockScope")
+  returnLines              CajasReturnLine[]             @relation("CajasReturnLineStockScope")
+  receivedReplacementPairs CajasReplacementPair[]        @relation("CajasReplacementReceivedScope")
+  consumptionLines         CajasConsumptionLine[]        @relation("CajasConsumptionLineStockScope")
+  conditionProjection      CajasConditionProjection?     @relation("CajasStockScopeCondition")
+
+  @@unique([companyId, id], map: "uq_cssr_company_id")
+  @@unique([companyId, sourceStockScopeId], map: "uq_cssr_company_source")
+  @@index([companyId, articleReferenceId, kind], map: "ix_cssr_company_article_kind")
+  @@index([companyId, identifiedCodeSnapshot], map: "ix_cssr_company_code")
+  @@index([companyId, serialNumberSnapshot], map: "ix_cssr_company_serial")
+  @@index([companyId, lotNumberSnapshot, expirationDateSnapshot], map: "ix_cssr_company_lot_exp")
+  @@map("cajas_stock_scope_reference")
+}
+
+model CajasStockRecordReference {
+  id                  String               @id(map: "cajas_stock_record_reference_pkey") @default(cuid()) @map("id")
+  companyId           String               @map("company_id")
+  kind                CajasStockRecordKind @map("kind")
+  sourceStockRecordId String               @map("source_stock_record_id")
+  sourceCheckpoint    String               @map("source_checkpoint")
+  verifiedAt          DateTime             @map("verified_at") @db.Timestamptz(6)
+  verifiedById        String               @map("verified_by_id")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                 Company                       @relation("CajasCompanyStockRecordReferences", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_csrr_company")
+  verifiedBy              User                          @relation("CajasStockRecordVerifiedBy", fields: [verifiedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_csrr_verified_by")
+  reservationCorrelations CajasReservationCorrelation[] @relation("CajasReservationStockRecord")
+  dispatchLines           CajasDispatchLine[]           @relation("CajasDispatchLineStockEffect")
+  dispositions            CajasDisposition[]            @relation("CajasDispositionStockEffect")
+  commandEffects          CajasCommandEffect[]          @relation("CajasCommandEffectStockRecord")
+
+  @@unique([companyId, id], map: "uq_csrr_company_id")
+  @@unique([companyId, kind, sourceStockRecordId], map: "uq_csrr_company_kind_source")
+  @@index([companyId, sourceCheckpoint, createdAt], map: "ix_csrr_company_checkpoint_time")
+  @@index([verifiedById, verifiedAt], map: "ix_csrr_verifier_time")
+  @@map("cajas_stock_record_reference")
+}
+
+model CajasBoxFormula {
+  id                    String   @id(map: "cajas_box_formula_pkey") @default(cuid()) @map("id")
+  companyId             String   @map("company_id")
+  boxArticleReferenceId String   @map("box_article_reference_id")
+  nextVersion           Int      @default(1) @map("next_version")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company             Company               @relation("CajasCompanyBoxFormulas", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cbf_company")
+  boxArticleReference CajasArticleReference @relation("CajasFormulaBoxArticle", fields: [companyId, boxArticleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cbf_article")
+  currentSelector     CajasFormulaCurrent?  @relation("CajasFormulaCurrentFormula")
+  versions            CajasFormulaVersion[] @relation("CajasFormulaVersions")
+
+  @@unique([companyId, id], map: "uq_cbf_company_id")
+  @@unique([companyId, boxArticleReferenceId], map: "uq_cbf_company_article")
+  @@index([companyId, updatedAt], map: "ix_cbf_company_updated")
+  @@map("cajas_box_formula")
+}
+
+model CajasFormulaCurrent {
+  id                      String   @id(map: "cajas_formula_current_pkey") @default(cuid()) @map("id")
+  companyId               String   @map("company_id")
+  formulaId               String   @map("formula_id")
+  currentFormulaVersionId String   @map("current_formula_version_id")
+  version                 Int      @default(1) @map("version")
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company               Company             @relation("CajasCompanyFormulaCurrents", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfc_company")
+  formula               CajasBoxFormula     @relation("CajasFormulaCurrentFormula", fields: [companyId, formulaId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfc_formula")
+  currentFormulaVersion CajasFormulaVersion @relation("CajasFormulaCurrentVersion", fields: [companyId, currentFormulaVersionId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfc_version")
+
+  @@unique([companyId, id], map: "uq_cfc_company_id")
+  @@unique([companyId, formulaId], map: "uq_cfc_formula")
+  @@unique([companyId, currentFormulaVersionId], map: "uq_cfc_current_version")
+  @@index([companyId, updatedAt], map: "ix_cfc_company_updated")
+  @@map("cajas_formula_current")
+}
+
+model CajasFormulaVersion {
+  id                  String   @id(map: "cajas_formula_version_pkey") @default(cuid()) @map("id")
+  companyId           String   @map("company_id")
+  formulaId           String   @map("formula_id")
+  versionNumber       Int      @map("version_number")
+  previousVersionId   String?  @map("previous_version_id")
+  acceptedAt          DateTime @map("accepted_at") @db.Timestamptz(6)
+  acceptedById        String   @map("accepted_by_id")
+  cause               String?  @map("cause") @db.Text
+  commandAcceptanceId String   @map("command_acceptance_id")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company           Company                @relation("CajasCompanyFormulaVersions", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfv_company")
+  formula           CajasBoxFormula        @relation("CajasFormulaVersions", fields: [companyId, formulaId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfv_formula")
+  previousVersion   CajasFormulaVersion?   @relation("CajasFormulaVersionChain", fields: [companyId, previousVersionId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfv_previous")
+  nextVersions      CajasFormulaVersion[]  @relation("CajasFormulaVersionChain")
+  acceptedBy        User                   @relation("CajasFormulaVersionAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfv_accepted_by")
+  commandAcceptance CajasCommandAcceptance @relation("CajasCommandFormulaVersion", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfv_command")
+  currentSelector   CajasFormulaCurrent?   @relation("CajasFormulaCurrentVersion")
+  lines             CajasFormulaLine[]     @relation("CajasFormulaVersionLines")
+  preparations      CajasPreparation[]     @relation("CajasPreparationFormulaVersion")
+  controls          CajasControl[]         @relation("CajasControlFormulaVersion")
+
+  @@unique([companyId, id], map: "uq_cfv_company_id")
+  @@unique([formulaId, versionNumber], map: "uq_cfv_formula_number")
+  @@unique([companyId, commandAcceptanceId], map: "uq_cfv_command")
+  @@index([companyId, acceptedAt], map: "ix_cfv_company_accepted")
+  @@index([previousVersionId], map: "ix_cfv_previous")
+  @@map("cajas_formula_version")
+}
+
+model CajasFormulaLine {
+  id                  String   @id(map: "cajas_formula_line_pkey") @default(cuid()) @map("id")
+  companyId           String   @map("company_id")
+  formulaVersionId    String   @map("formula_version_id")
+  lineNumber          Int      @map("line_number")
+  articleReferenceId  String   @map("article_reference_id")
+  expectedQuantity    Decimal  @map("expected_quantity") @db.Decimal(18, 4)
+  unit                String   @map("unit")
+  skuSnapshot         String?  @map("sku_snapshot")
+  descriptionSnapshot String?  @map("description_snapshot") @db.Text
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company          Company                @relation("CajasCompanyFormulaLines", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfl_company")
+  formulaVersion   CajasFormulaVersion    @relation("CajasFormulaVersionLines", fields: [companyId, formulaVersionId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfl_version")
+  articleReference CajasArticleReference  @relation("CajasFormulaLineArticle", fields: [companyId, articleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cfl_article")
+  preparationLines CajasPreparationLine[] @relation("CajasPreparationExpectedLine")
+  controlLines     CajasControlLine[]     @relation("CajasControlExpectedLine")
+
+  @@unique([companyId, id], map: "uq_cfl_company_id")
+  @@unique([formulaVersionId, lineNumber], map: "uq_cfl_version_line")
+  @@index([formulaVersionId, articleReferenceId], map: "ix_cfl_version_article")
+  @@index([companyId, articleReferenceId], map: "ix_cfl_company_article")
+  @@map("cajas_formula_line")
+}
+
+model CajasAssignment {
+  id                            String    @id(map: "cajas_assignment_pkey") @default(cuid()) @map("id")
+  companyId                     String    @map("company_id")
+  surgeryId                     String    @map("surgery_id")
+  boxStockScopeReferenceId      String    @map("box_stock_scope_reference_id")
+  activeSlot                    Int?      @default(1) @map("active_slot")
+  assignedAt                    DateTime  @map("assigned_at") @db.Timestamptz(6)
+  assignedById                  String    @map("assigned_by_id")
+  endedAt                       DateTime? @map("ended_at") @db.Timestamptz(6)
+  endedById                     String?   @map("ended_by_id")
+  endCause                      String?   @map("end_cause") @db.Text
+  assignmentCommandAcceptanceId String    @map("assignment_command_acceptance_id")
+  endCommandAcceptanceId        String?   @map("end_command_acceptance_id")
+  createdAt                     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                     Company                       @relation("CajasCompanyAssignments", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ca_company")
+  surgery                     Surgery                       @relation("CajasSurgeryAssignments", fields: [companyId, surgeryId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ca_surgery")
+  boxStockScopeReference      CajasStockScopeReference      @relation("CajasBoxAssignments", fields: [companyId, boxStockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ca_box_scope")
+  assignedBy                  User                          @relation("CajasAssignmentStartedBy", fields: [assignedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ca_assigned_by")
+  endedBy                     User?                         @relation("CajasAssignmentEndedBy", fields: [endedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ca_ended_by")
+  assignmentCommandAcceptance CajasCommandAcceptance        @relation("CajasCommandAssignmentStart", fields: [companyId, assignmentCommandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ca_start_command")
+  endCommandAcceptance        CajasCommandAcceptance?       @relation("CajasCommandAssignmentEnd", fields: [companyId, endCommandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ca_end_command")
+  preparation                 CajasPreparation?             @relation("CajasAssignmentPreparation")
+  reservationCorrelations     CajasReservationCorrelation[] @relation("CajasAssignmentReservations")
+  controls                    CajasControl[]                @relation("CajasAssignmentControls")
+  compositionChanges          CajasCompositionChange[]      @relation("CajasAssignmentChanges")
+  differences                 CajasDifference[]             @relation("CajasAssignmentDifferences")
+  dispatches                  CajasDispatch[]               @relation("CajasAssignmentDispatches")
+  conditionProjection         CajasConditionProjection?     @relation("CajasAssignmentCondition")
+
+  @@unique([companyId, id], map: "uq_ca_company_id")
+  @@unique([companyId, boxStockScopeReferenceId, activeSlot], map: "uq_ca_active_box")
+  @@unique([companyId, assignmentCommandAcceptanceId], map: "uq_ca_start_command")
+  @@unique([companyId, endCommandAcceptanceId], map: "uq_ca_end_command")
+  @@index([companyId, surgeryId, activeSlot], map: "ix_ca_company_surgery_active")
+  @@index([companyId, assignedAt], map: "ix_ca_company_assigned")
+  @@map("cajas_assignment")
+}
+
+model CajasPreparation {
+  id                   String   @id(map: "cajas_preparation_pkey") @default(cuid()) @map("id")
+  companyId            String   @map("company_id")
+  assignmentId         String   @map("assignment_id")
+  formulaVersionId     String   @map("formula_version_id")
+  version              Int      @default(1) @map("version")
+  latestControlId      String?  @map("latest_control_id")
+  requiresRecontrol    Boolean  @default(false) @map("requires_recontrol")
+  lastAcceptedChangeId String?  @map("last_accepted_change_id")
+  evidenceWatermark    String?  @map("evidence_watermark")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company            Company                 @relation("CajasCompanyPreparations", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cp_company")
+  assignment         CajasAssignment         @relation("CajasAssignmentPreparation", fields: [companyId, assignmentId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cp_assignment")
+  formulaVersion     CajasFormulaVersion     @relation("CajasPreparationFormulaVersion", fields: [companyId, formulaVersionId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cp_formula_version")
+  latestControl      CajasControl?           @relation("CajasPreparationLatestControl", fields: [companyId, latestControlId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cp_latest_control")
+  lastAcceptedChange CajasCompositionChange? @relation("CajasPreparationLastChange", fields: [companyId, lastAcceptedChangeId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cp_last_change")
+  lines              CajasPreparationLine[]  @relation("CajasPreparationLines")
+
+  @@unique([companyId, id], map: "uq_cp_company_id")
+  @@unique([companyId, assignmentId], map: "uq_cp_assignment")
+  @@unique([companyId, latestControlId], map: "uq_cp_latest_control")
+  @@unique([companyId, lastAcceptedChangeId], map: "uq_cp_last_change")
+  @@index([companyId, assignmentId], map: "ix_cp_company_assignment")
+  @@index([companyId, requiresRecontrol, updatedAt], map: "ix_cp_company_recontrol_updated")
+  @@index([formulaVersionId], map: "ix_cp_formula_version")
+  @@map("cajas_preparation")
+}
+
+model CajasPreparationLine {
+  id                     String        @id(map: "cajas_preparation_line_pkey") @default(cuid()) @map("id")
+  companyId              String        @map("company_id")
+  preparationId          String        @map("preparation_id")
+  lineKey                String        @map("line_key")
+  expectedFormulaLineId  String?       @map("expected_formula_line_id")
+  role                   CajasLineRole @map("role")
+  articleReferenceId     String        @map("article_reference_id")
+  stockScopeReferenceId  String?       @map("stock_scope_reference_id")
+  quantity               Decimal       @map("quantity") @db.Decimal(18, 4)
+  unit                   String        @map("unit")
+  lotNumberSnapshot      String?       @map("lot_number_snapshot")
+  serialNumberSnapshot   String?       @map("serial_number_snapshot")
+  expirationDateSnapshot DateTime?     @map("expiration_date_snapshot") @db.Date
+  traceabilitySnapshot   Json?         @map("traceability_snapshot")
+  differenceAcknowledged Boolean       @default(false) @map("difference_acknowledged")
+  dispatchedQuantity     Decimal       @default(0) @map("dispatched_quantity") @db.Decimal(18, 4)
+  version                Int           @default(1) @map("version")
+  isActive               Boolean       @default(true) @map("is_active")
+  createdAt              DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company                 Company                       @relation("CajasCompanyPreparationLines", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cpl_company")
+  preparation             CajasPreparation              @relation("CajasPreparationLines", fields: [companyId, preparationId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cpl_preparation")
+  expectedFormulaLine     CajasFormulaLine?             @relation("CajasPreparationExpectedLine", fields: [companyId, expectedFormulaLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cpl_expected_line")
+  articleReference        CajasArticleReference         @relation("CajasPreparationLineArticle", fields: [companyId, articleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cpl_article")
+  stockScopeReference     CajasStockScopeReference?     @relation("CajasPreparationLineStockScope", fields: [companyId, stockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cpl_stock_scope")
+  reservationCorrelations CajasReservationCorrelation[] @relation("CajasPreparationLineReservation")
+  controlLines            CajasControlLine[]            @relation("CajasControlSourceLine")
+  priorChangeLines        CajasCompositionChangeLine[]  @relation("CajasChangePriorPreparationLine")
+  resultingChangeLines    CajasCompositionChangeLine[]  @relation("CajasChangeResultPreparationLine")
+  dispatchLines           CajasDispatchLine[]           @relation("CajasDispatchLinePreparation")
+
+  @@unique([companyId, id], map: "uq_cpl_company_id")
+  @@unique([preparationId, lineKey], map: "uq_cpl_preparation_key")
+  @@index([companyId, preparationId, isActive], map: "ix_cpl_company_active")
+  @@index([companyId, stockScopeReferenceId], map: "ix_cpl_company_scope")
+  @@index([expectedFormulaLineId], map: "ix_cpl_expected_line")
+  @@map("cajas_preparation_line")
+}
+
+model CajasReservationCorrelation {
+  id                          String   @id(map: "cajas_reservation_correlation_pkey") @default(cuid()) @map("id")
+  companyId                   String   @map("company_id")
+  assignmentId                String   @map("assignment_id")
+  preparationLineId           String?  @map("preparation_line_id")
+  stockScopeReferenceId       String   @map("stock_scope_reference_id")
+  stockReservationReferenceId String   @map("stock_reservation_reference_id")
+  sourceCheckpoint            String   @map("source_checkpoint")
+  semanticKey                 String   @map("semantic_key")
+  quantity                    Decimal? @map("quantity") @db.Decimal(18, 4)
+  unit                        String?  @map("unit")
+  replacesCorrelationId       String?  @map("replaces_correlation_id")
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                   Company                       @relation("CajasCompanyReservationCorrelations", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crc_company")
+  assignment                CajasAssignment               @relation("CajasAssignmentReservations", fields: [companyId, assignmentId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crc_assignment")
+  preparationLine           CajasPreparationLine?         @relation("CajasPreparationLineReservation", fields: [companyId, preparationLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crc_prep_line")
+  stockScopeReference       CajasStockScopeReference      @relation("CajasReservationStockScope", fields: [companyId, stockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crc_stock_scope")
+  stockReservationReference CajasStockRecordReference     @relation("CajasReservationStockRecord", fields: [companyId, stockReservationReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crc_stock_record")
+  replacesCorrelation       CajasReservationCorrelation?  @relation("CajasReservationChain", fields: [companyId, replacesCorrelationId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crc_replaces")
+  followingCorrelations     CajasReservationCorrelation[] @relation("CajasReservationChain")
+
+  @@unique([companyId, id], map: "uq_crc_company_id")
+  @@unique([companyId, semanticKey], map: "uq_crc_company_semantic")
+  @@index([companyId, sourceCheckpoint, stockScopeReferenceId], map: "ix_crc_checkpoint_scope")
+  @@index([companyId, assignmentId, createdAt], map: "ix_crc_assignment_time")
+  @@index([preparationLineId], map: "ix_crc_prep_line")
+  @@index([stockReservationReferenceId], map: "ix_crc_stock_record")
+  @@index([replacesCorrelationId], map: "ix_crc_replaces")
+  @@map("cajas_reservation_correlation")
+}
+
+model CajasControl {
+  id                       String             @id(map: "cajas_control_pkey") @default(cuid()) @map("id")
+  companyId                String             @map("company_id")
+  assignmentId             String             @map("assignment_id")
+  formulaVersionId         String             @map("formula_version_id")
+  kind                     CajasControlKind   @map("kind")
+  sequence                 Int                @map("sequence")
+  sourcePreparationVersion Int                @map("source_preparation_version")
+  result                   CajasControlResult @map("result")
+  priorControlId           String?            @map("prior_control_id")
+  acknowledgementSummary   String?            @map("acknowledgement_summary") @db.Text
+  acceptedAt               DateTime           @map("accepted_at") @db.Timestamptz(6)
+  acceptedById             String             @map("accepted_by_id")
+  cause                    String?            @map("cause") @db.Text
+  commandAcceptanceId      String             @map("command_acceptance_id")
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company              Company                @relation("CajasCompanyControls", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cc_company")
+  assignment           CajasAssignment        @relation("CajasAssignmentControls", fields: [companyId, assignmentId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cc_assignment")
+  formulaVersion       CajasFormulaVersion    @relation("CajasControlFormulaVersion", fields: [companyId, formulaVersionId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cc_formula_version")
+  priorControl         CajasControl?          @relation("CajasControlChain", fields: [companyId, priorControlId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cc_prior")
+  followingControls    CajasControl[]         @relation("CajasControlChain")
+  acceptedBy           User                   @relation("CajasControlAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cc_accepted_by")
+  commandAcceptance    CajasCommandAcceptance @relation("CajasCommandControl", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cc_command")
+  latestForPreparation CajasPreparation?      @relation("CajasPreparationLatestControl")
+  lines                CajasControlLine[]     @relation("CajasControlLines")
+  dispatches           CajasDispatch[]        @relation("CajasDispatchSourceControl")
+
+  @@unique([companyId, id], map: "uq_cc_company_id")
+  @@unique([assignmentId, sequence], map: "uq_cc_assignment_sequence")
+  @@unique([companyId, commandAcceptanceId], map: "uq_cc_command")
+  @@index([companyId, assignmentId, acceptedAt], map: "ix_cc_assignment_time")
+  @@index([priorControlId], map: "ix_cc_prior")
+  @@index([companyId, result, acceptedAt], map: "ix_cc_result_time")
+  @@map("cajas_control")
+}
+
+model CajasControlLine {
+  id                      String        @id(map: "cajas_control_line_pkey") @default(cuid()) @map("id")
+  companyId               String        @map("company_id")
+  controlId               String        @map("control_id")
+  lineNumber              Int           @map("line_number")
+  sourcePreparationLineId String        @map("source_preparation_line_id")
+  expectedFormulaLineId   String?       @map("expected_formula_line_id")
+  role                    CajasLineRole @map("role")
+  articleReferenceId      String        @map("article_reference_id")
+  stockScopeReferenceId   String?       @map("stock_scope_reference_id")
+  quantity                Decimal       @map("quantity") @db.Decimal(18, 4)
+  unit                    String        @map("unit")
+  skuSnapshot             String?       @map("sku_snapshot")
+  descriptionSnapshot     String?       @map("description_snapshot") @db.Text
+  lotNumberSnapshot       String?       @map("lot_number_snapshot")
+  serialNumberSnapshot    String?       @map("serial_number_snapshot")
+  expirationDateSnapshot  DateTime?     @map("expiration_date_snapshot") @db.Date
+  traceabilitySnapshot    Json?         @map("traceability_snapshot")
+  differenceAcknowledged  Boolean       @default(false) @map("difference_acknowledged")
+  createdAt               DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company               Company                   @relation("CajasCompanyControlLines", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccl_company")
+  control               CajasControl              @relation("CajasControlLines", fields: [companyId, controlId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccl_control")
+  sourcePreparationLine CajasPreparationLine      @relation("CajasControlSourceLine", fields: [companyId, sourcePreparationLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccl_source_line")
+  expectedFormulaLine   CajasFormulaLine?         @relation("CajasControlExpectedLine", fields: [companyId, expectedFormulaLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccl_expected_line")
+  articleReference      CajasArticleReference     @relation("CajasControlLineArticle", fields: [companyId, articleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccl_article")
+  stockScopeReference   CajasStockScopeReference? @relation("CajasControlLineStockScope", fields: [companyId, stockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccl_stock_scope")
+  differences           CajasDifference[]         @relation("CajasDifferenceControlOrigin")
+  dispatchLines         CajasDispatchLine[]       @relation("CajasDispatchLineControl")
+
+  @@unique([companyId, id], map: "uq_ccl_company_id")
+  @@unique([controlId, lineNumber], map: "uq_ccl_control_line")
+  @@index([companyId, articleReferenceId], map: "ix_ccl_company_article")
+  @@index([stockScopeReferenceId], map: "ix_ccl_stock_scope")
+  @@index([sourcePreparationLineId], map: "ix_ccl_source_line")
+  @@map("cajas_control_line")
+}
+
+model CajasCompositionChange {
+  id                          String   @id(map: "cajas_composition_change_pkey") @default(cuid()) @map("id")
+  companyId                   String   @map("company_id")
+  assignmentId                String   @map("assignment_id")
+  priorPreparationVersion     Int      @map("prior_preparation_version")
+  resultingPreparationVersion Int      @map("resulting_preparation_version")
+  acceptedAt                  DateTime @map("accepted_at") @db.Timestamptz(6)
+  acceptedById                String   @map("accepted_by_id")
+  cause                       String?  @map("cause") @db.Text
+  commandAcceptanceId         String   @map("command_acceptance_id")
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company              Company                      @relation("CajasCompanyCompositionChanges", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchg_company")
+  assignment           CajasAssignment              @relation("CajasAssignmentChanges", fields: [companyId, assignmentId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchg_assignment")
+  acceptedBy           User                         @relation("CajasCompositionChangeAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchg_accepted_by")
+  commandAcceptance    CajasCommandAcceptance       @relation("CajasCommandCompositionChange", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchg_command")
+  latestForPreparation CajasPreparation?            @relation("CajasPreparationLastChange")
+  lines                CajasCompositionChangeLine[] @relation("CajasCompositionChangeLines")
+
+  @@unique([companyId, id], map: "uq_cchg_company_id")
+  @@unique([assignmentId, resultingPreparationVersion], map: "uq_cchg_assignment_version")
+  @@unique([companyId, commandAcceptanceId], map: "uq_cchg_command")
+  @@index([companyId, assignmentId, acceptedAt], map: "ix_cchg_assignment_time")
+  @@map("cajas_composition_change")
+}
+
+model CajasCompositionChangeLine {
+  id                             String          @id(map: "cajas_composition_change_line_pkey") @default(cuid()) @map("id")
+  companyId                      String          @map("company_id")
+  changeId                       String          @map("change_id")
+  lineNumber                     Int             @map("line_number")
+  kind                           CajasChangeKind @map("kind")
+  priorPreparationLineId         String?         @map("prior_preparation_line_id")
+  resultingPreparationLineId     String?         @map("resulting_preparation_line_id")
+  priorArticleReferenceId        String?         @map("prior_article_reference_id")
+  resultingArticleReferenceId    String?         @map("resulting_article_reference_id")
+  priorStockScopeReferenceId     String?         @map("prior_stock_scope_reference_id")
+  resultingStockScopeReferenceId String?         @map("resulting_stock_scope_reference_id")
+  priorQuantity                  Decimal?        @map("prior_quantity") @db.Decimal(18, 4)
+  resultingQuantity              Decimal?        @map("resulting_quantity") @db.Decimal(18, 4)
+  unit                           String          @map("unit")
+  priorTraceabilitySnapshot      Json?           @map("prior_traceability_snapshot")
+  resultingTraceabilitySnapshot  Json?           @map("resulting_traceability_snapshot")
+  createdAt                      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                      Company                   @relation("CajasCompanyCompositionChangeLines", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchl_company")
+  change                       CajasCompositionChange    @relation("CajasCompositionChangeLines", fields: [companyId, changeId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchl_change")
+  priorPreparationLine         CajasPreparationLine?     @relation("CajasChangePriorPreparationLine", fields: [companyId, priorPreparationLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchl_prior_line")
+  resultingPreparationLine     CajasPreparationLine?     @relation("CajasChangeResultPreparationLine", fields: [companyId, resultingPreparationLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchl_result_line")
+  priorArticleReference        CajasArticleReference?    @relation("CajasChangePriorArticle", fields: [companyId, priorArticleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchl_prior_article")
+  resultingArticleReference    CajasArticleReference?    @relation("CajasChangeResultArticle", fields: [companyId, resultingArticleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchl_result_article")
+  priorStockScopeReference     CajasStockScopeReference? @relation("CajasChangePriorStockScope", fields: [companyId, priorStockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchl_prior_scope")
+  resultingStockScopeReference CajasStockScopeReference? @relation("CajasChangeResultStockScope", fields: [companyId, resultingStockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cchl_result_scope")
+
+  @@unique([companyId, id], map: "uq_cchl_company_id")
+  @@unique([changeId, lineNumber], map: "uq_cchl_change_line")
+  @@index([companyId, changeId], map: "ix_cchl_company_change")
+  @@index([priorPreparationLineId], map: "ix_cchl_prior_line")
+  @@index([resultingPreparationLineId], map: "ix_cchl_result_line")
+  @@map("cajas_composition_change_line")
+}
+
+model CajasDifference {
+  id             String   @id(map: "cajas_difference_pkey") @default(cuid()) @map("id")
+  companyId      String   @map("company_id")
+  assignmentId   String   @map("assignment_id")
+  controlLineId  String?  @map("control_line_id")
+  dispatchLineId String?  @map("dispatch_line_id")
+  returnLineId   String?  @map("return_line_id")
+  kind           String   @map("kind")
+  observedFacts  String   @map("observed_facts") @db.Text
+  openedAt       DateTime @map("opened_at") @db.Timestamptz(6)
+  openedById     String   @map("opened_by_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company      Company                     @relation("CajasCompanyDifferences", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cd_company")
+  assignment   CajasAssignment             @relation("CajasAssignmentDifferences", fields: [companyId, assignmentId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cd_assignment")
+  controlLine  CajasControlLine?           @relation("CajasDifferenceControlOrigin", fields: [companyId, controlLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cd_control_line")
+  dispatchLine CajasDispatchLine?          @relation("CajasDifferenceDispatchOrigin", fields: [companyId, dispatchLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cd_dispatch_line")
+  returnLine   CajasReturnLine?            @relation("CajasDifferenceReturnOrigin", fields: [companyId, returnLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cd_return_line")
+  openedBy     User                        @relation("CajasDifferenceOpenedBy", fields: [openedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cd_opened_by")
+  resolutions  CajasDifferenceResolution[] @relation("CajasDifferenceResolutions")
+
+  @@unique([companyId, id], map: "uq_cd_company_id")
+  @@index([companyId, assignmentId, openedAt], map: "ix_cd_assignment_opened")
+  @@index([controlLineId], map: "ix_cd_control_line")
+  @@index([dispatchLineId], map: "ix_cd_dispatch_line")
+  @@index([returnLineId], map: "ix_cd_return_line")
+  @@map("cajas_difference")
+}
+
+model CajasDifferenceResolution {
+  id                  String   @id(map: "cajas_difference_resolution_pkey") @default(cuid()) @map("id")
+  companyId           String   @map("company_id")
+  differenceId        String   @map("difference_id")
+  sequence            Int      @map("sequence")
+  closesDifference    Boolean  @map("closes_difference")
+  explanation         String   @map("explanation") @db.Text
+  supportingReference String?  @map("supporting_reference")
+  acceptedAt          DateTime @map("accepted_at") @db.Timestamptz(6)
+  acceptedById        String   @map("accepted_by_id")
+  cause               String?  @map("cause") @db.Text
+  commandAcceptanceId String   @map("command_acceptance_id")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company           Company                @relation("CajasCompanyDifferenceResolutions", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdr_company")
+  difference        CajasDifference        @relation("CajasDifferenceResolutions", fields: [companyId, differenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdr_difference")
+  acceptedBy        User                   @relation("CajasDifferenceResolutionAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdr_accepted_by")
+  commandAcceptance CajasCommandAcceptance @relation("CajasCommandDifferenceResolution", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdr_command")
+
+  @@unique([companyId, id], map: "uq_cdr_company_id")
+  @@unique([differenceId, sequence], map: "uq_cdr_difference_sequence")
+  @@unique([companyId, commandAcceptanceId], map: "uq_cdr_command")
+  @@index([companyId, differenceId, acceptedAt], map: "ix_cdr_difference_time")
+  @@index([acceptedById, acceptedAt], map: "ix_cdr_actor_time")
+  @@map("cajas_difference_resolution")
+}
+
+model CajasDispatch {
+  id                  String                  @id(map: "cajas_dispatch_pkey") @default(cuid()) @map("id")
+  companyId           String                  @map("company_id")
+  assignmentId        String                  @map("assignment_id")
+  remitoId            String                  @map("remito_id")
+  sourceControlId     String                  @map("source_control_id")
+  sequence            Int                     @map("sequence")
+  recordKind          CajasEvidenceRecordKind @default(original) @map("record_kind")
+  correctsDispatchId  String?                 @map("corrects_dispatch_id")
+  acceptedAt          DateTime                @map("accepted_at") @db.Timestamptz(6)
+  acceptedById        String                  @map("accepted_by_id")
+  cause               String?                 @map("cause") @db.Text
+  commandAcceptanceId String                  @map("command_acceptance_id")
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                  Company                        @relation("CajasCompanyDispatches", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdp_company")
+  assignment               CajasAssignment                @relation("CajasAssignmentDispatches", fields: [companyId, assignmentId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdp_assignment")
+  remito                   Remito                         @relation("CajasDispatchRemito", fields: [companyId, remitoId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdp_remito")
+  sourceControl            CajasControl                   @relation("CajasDispatchSourceControl", fields: [companyId, sourceControlId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdp_control")
+  correctsDispatch         CajasDispatch?                 @relation("CajasDispatchCorrectionChain", fields: [companyId, correctsDispatchId, remitoId], references: [companyId, id, remitoId], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdp_corrects")
+  corrections              CajasDispatch[]                @relation("CajasDispatchCorrectionChain")
+  acceptedBy               User                           @relation("CajasDispatchAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdp_accepted_by")
+  commandAcceptance        CajasCommandAcceptance         @relation("CajasCommandDispatch", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdp_command")
+  lines                    CajasDispatchLine[]            @relation("CajasDispatchLines")
+  accounting               CajasDispatchAccounting?       @relation("CajasDispatchAccounting")
+  returnConfirmations      CajasReturnConfirmation[]      @relation("CajasDispatchReturns")
+  consumptionConfirmations CajasConsumptionConfirmation[] @relation("CajasDispatchConsumptions")
+
+  @@unique([companyId, id], map: "uq_cdp_company_id")
+  @@unique([companyId, id, remitoId], map: "uq_cdp_owner_lineage")
+  @@unique([assignmentId, sequence], map: "uq_cdp_assignment_sequence")
+  @@unique([companyId, commandAcceptanceId], map: "uq_cdp_command")
+  @@index([companyId, remitoId, recordKind], map: "ix_cdp_remito_kind")
+  @@index([companyId, assignmentId, acceptedAt], map: "ix_cdp_assignment_time")
+  @@index([sourceControlId], map: "ix_cdp_control")
+  @@index([correctsDispatchId], map: "ix_cdp_corrects")
+  @@map("cajas_dispatch")
+}
+
+model CajasDispatchLine {
+  id                        String                  @id(map: "cajas_dispatch_line_pkey") @default(cuid()) @map("id")
+  companyId                 String                  @map("company_id")
+  dispatchId                String                  @map("dispatch_id")
+  remitoId                  String                  @map("remito_id")
+  lineNumber                Int                     @map("line_number")
+  recordKind                CajasEvidenceRecordKind @default(original) @map("record_kind")
+  accountingSign            Int                     @default(1) @map("accounting_sign")
+  neutralizesDispatchLineId String?                 @map("neutralizes_dispatch_line_id")
+  remitoItemId              String                  @map("remito_item_id")
+  sourceControlLineId       String                  @map("source_control_line_id")
+  sourcePreparationLineId   String                  @map("source_preparation_line_id")
+  articleReferenceId        String                  @map("article_reference_id")
+  stockScopeReferenceId     String?                 @map("stock_scope_reference_id")
+  quantity                  Decimal                 @map("quantity") @db.Decimal(18, 4)
+  unit                      String                  @map("unit")
+  skuSnapshot               String?                 @map("sku_snapshot")
+  descriptionSnapshot       String                  @map("description_snapshot") @db.Text
+  lotNumberSnapshot         String?                 @map("lot_number_snapshot")
+  serialNumberSnapshot      String?                 @map("serial_number_snapshot")
+  expirationDateSnapshot    DateTime?               @map("expiration_date_snapshot") @db.Date
+  traceabilitySnapshot      Json?                   @map("traceability_snapshot")
+  stockEffectReferenceId    String                  @map("stock_effect_reference_id")
+  createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                 Company                      @relation("CajasCompanyDispatchLines", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_company")
+  dispatch                CajasDispatch                @relation("CajasDispatchLines", fields: [companyId, dispatchId, remitoId], references: [companyId, id, remitoId], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_dispatch")
+  neutralizesDispatchLine CajasDispatchLine?           @relation("CajasDispatchLineNeutralization", fields: [companyId, neutralizesDispatchLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_neutralizes")
+  neutralizedBy           CajasDispatchLine?           @relation("CajasDispatchLineNeutralization")
+  remitoItem              RemitoItem                   @relation("CajasDispatchLineRemitoItem", fields: [companyId, remitoId, remitoItemId], references: [companyId, remitoId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_remito_item")
+  sourceControlLine       CajasControlLine             @relation("CajasDispatchLineControl", fields: [companyId, sourceControlLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_control_line")
+  sourcePreparationLine   CajasPreparationLine         @relation("CajasDispatchLinePreparation", fields: [companyId, sourcePreparationLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_prep_line")
+  articleReference        CajasArticleReference        @relation("CajasDispatchLineArticle", fields: [companyId, articleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_article")
+  stockScopeReference     CajasStockScopeReference?    @relation("CajasDispatchLineStockScope", fields: [companyId, stockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_stock_scope")
+  stockEffectReference    CajasStockRecordReference    @relation("CajasDispatchLineStockEffect", fields: [companyId, stockEffectReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdl_stock_effect")
+  differences             CajasDifference[]            @relation("CajasDifferenceDispatchOrigin")
+  accounting              CajasDispatchLineAccounting? @relation("CajasDispatchLineAccounting")
+  dispositions            CajasDisposition[]           @relation("CajasDispositionDispatchLine")
+  returnLines             CajasReturnLine[]            @relation("CajasReturnLineDispatchLine")
+  replacementPairs        CajasReplacementPair[]       @relation("CajasReplacementOriginalDispatch")
+  consumptionLines        CajasConsumptionLine[]       @relation("CajasConsumptionLineDispatchLine")
+
+  @@unique([companyId, id], map: "uq_cdl_company_id")
+  @@unique([companyId, dispatchId, id], map: "uq_cdl_dispatch_id")
+  @@unique([dispatchId, lineNumber], map: "uq_cdl_dispatch_line")
+  @@unique([dispatchId, remitoItemId, sourceControlLineId], map: "uq_cdl_source_scope")
+  @@unique([companyId, neutralizesDispatchLineId], map: "uq_cdl_neutralizes")
+  @@index([companyId, remitoId, remitoItemId], map: "ix_cdl_remito_item")
+  @@index([companyId, sourceControlLineId], map: "ix_cdl_company_control")
+  @@index([sourcePreparationLineId], map: "ix_cdl_prep_line")
+  @@index([stockScopeReferenceId], map: "ix_cdl_stock_scope")
+  @@index([stockEffectReferenceId], map: "ix_cdl_stock_effect")
+  @@map("cajas_dispatch_line")
+}
+
+model CajasDispatchAccounting {
+  id                String    @id(map: "cajas_dispatch_accounting_pkey") @default(cuid()) @map("id")
+  companyId         String    @map("company_id")
+  dispatchId        String    @map("dispatch_id")
+  version           Int       @default(1) @map("version")
+  evidenceWatermark String    @map("evidence_watermark")
+  reconciledAt      DateTime? @map("reconciled_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company  Company                       @relation("CajasCompanyDispatchAccountings", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cda_company")
+  dispatch CajasDispatch                 @relation("CajasDispatchAccounting", fields: [companyId, dispatchId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cda_dispatch")
+  lines    CajasDispatchLineAccounting[] @relation("CajasAccountingLines")
+
+  @@unique([companyId, id], map: "uq_cda_company_id")
+  @@unique([companyId, dispatchId], map: "uq_cda_dispatch")
+  @@index([companyId, updatedAt], map: "ix_cda_company_updated")
+  @@index([companyId, evidenceWatermark], map: "ix_cda_company_watermark")
+  @@map("cajas_dispatch_accounting")
+}
+
+model CajasDispatchLineAccounting {
+  id                 String   @id(map: "cajas_dispatch_line_accounting_pkey") @default(cuid()) @map("id")
+  companyId          String   @map("company_id")
+  accountingId       String   @map("accounting_id")
+  dispatchLineId     String   @map("dispatch_line_id")
+  dispatchedQuantity Decimal  @map("dispatched_quantity") @db.Decimal(18, 4)
+  disposedQuantity   Decimal  @default(0) @map("disposed_quantity") @db.Decimal(18, 4)
+  pendingQuantity    Decimal  @map("pending_quantity") @db.Decimal(18, 4)
+  unit               String   @map("unit")
+  version            Int      @default(1) @map("version")
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company      Company                 @relation("CajasCompanyDispatchLineAccountings", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdla_company")
+  accounting   CajasDispatchAccounting @relation("CajasAccountingLines", fields: [companyId, accountingId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdla_accounting")
+  dispatchLine CajasDispatchLine       @relation("CajasDispatchLineAccounting", fields: [companyId, dispatchLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdla_dispatch_line")
+
+  @@unique([companyId, id], map: "uq_cdla_company_id")
+  @@unique([companyId, dispatchLineId], map: "uq_cdla_dispatch_line")
+  @@unique([accountingId, dispatchLineId], map: "uq_cdla_accounting_line")
+  @@index([companyId, accountingId, pendingQuantity], map: "ix_cdla_pending")
+  @@map("cajas_dispatch_line_accounting")
+}
+
+model CajasDisposition {
+  id                        String                  @id(map: "cajas_disposition_pkey") @default(cuid()) @map("id")
+  companyId                 String                  @map("company_id")
+  dispatchLineId            String                  @map("dispatch_line_id")
+  sliceKey                  String                  @map("slice_key")
+  recordKind                CajasEvidenceRecordKind @default(original) @map("record_kind")
+  accountingSign            Int                     @default(1) @map("accounting_sign")
+  kind                      CajasDispositionKind    @map("kind")
+  quantity                  Decimal                 @map("quantity") @db.Decimal(18, 4)
+  unit                      String                  @map("unit")
+  stockScopeReferenceId     String?                 @map("stock_scope_reference_id")
+  returnConfirmationId      String?                 @map("return_confirmation_id")
+  consumptionConfirmationId String?                 @map("consumption_confirmation_id")
+  returnLineId              String?                 @map("return_line_id")
+  consumptionLineId         String?                 @map("consumption_line_id")
+  neutralizesDispositionId  String?                 @map("neutralizes_disposition_id")
+  stockEffectReferenceId    String                  @map("stock_effect_reference_id")
+  acceptedAt                DateTime                @map("accepted_at") @db.Timestamptz(6)
+  commandAcceptanceId       String                  @map("command_acceptance_id")
+  createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                     Company                       @relation("CajasCompanyDispositions", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_company")
+  dispatchLine                CajasDispatchLine             @relation("CajasDispositionDispatchLine", fields: [companyId, dispatchLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_dispatch_line")
+  stockScopeReference         CajasStockScopeReference?     @relation("CajasDispositionStockScope", fields: [companyId, stockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_stock_scope")
+  returnConfirmation          CajasReturnConfirmation?      @relation("CajasDispositionReturnConfirmation", fields: [companyId, returnConfirmationId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_return_confirmation")
+  consumptionConfirmation     CajasConsumptionConfirmation? @relation("CajasDispositionConsumptionConfirmation", fields: [companyId, consumptionConfirmationId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_consumption_confirmation")
+  returnLine                  CajasReturnLine?              @relation("CajasDispositionReturnLine", fields: [companyId, returnLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_return_line")
+  consumptionLine             CajasConsumptionLine?         @relation("CajasDispositionConsumptionLine", fields: [companyId, consumptionLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_consumption_line")
+  neutralizesDisposition      CajasDisposition?             @relation("CajasDispositionNeutralization", fields: [companyId, neutralizesDispositionId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_neutralizes")
+  neutralizedBy               CajasDisposition?             @relation("CajasDispositionNeutralization")
+  stockEffectReference        CajasStockRecordReference     @relation("CajasDispositionStockEffect", fields: [companyId, stockEffectReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_stock_effect")
+  commandAcceptance           CajasCommandAcceptance        @relation("CajasCommandDispositions", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cdis_command")
+  recognizedByConsumptionLine CajasConsumptionLine?         @relation("CajasConsumptionRecognizedDisposition")
+
+  @@unique([companyId, id], map: "uq_cdis_company_id")
+  @@unique([companyId, dispatchLineId, id], map: "uq_cdis_dispatch_id")
+  @@unique([companyId, dispatchLineId, sliceKey], map: "uq_cdis_slice")
+  @@unique([companyId, neutralizesDispositionId], map: "uq_cdis_neutralizes")
+  @@index([companyId, dispatchLineId, acceptedAt], map: "ix_cdis_dispatch_time")
+  @@index([returnConfirmationId], map: "ix_cdis_return_confirmation")
+  @@index([consumptionConfirmationId], map: "ix_cdis_consumption_confirmation")
+  @@index([returnLineId], map: "ix_cdis_return_line")
+  @@index([consumptionLineId], map: "ix_cdis_consumption_line")
+  @@index([stockEffectReferenceId], map: "ix_cdis_stock_effect")
+  @@index([commandAcceptanceId], map: "ix_cdis_command")
+  @@map("cajas_disposition")
+}
+
+model CajasReturnConfirmation {
+  id                        String                  @id(map: "cajas_return_confirmation_pkey") @default(cuid()) @map("id")
+  companyId                 String                  @map("company_id")
+  dispatchId                String                  @map("dispatch_id")
+  remitoId                  String                  @map("remito_id")
+  devolucionId              String                  @map("devolucion_id")
+  sequence                  Int                     @map("sequence")
+  recordKind                CajasEvidenceRecordKind @default(original) @map("record_kind")
+  originalSlot              Int?                    @default(1) @map("original_slot")
+  correctsConfirmationId    String?                 @map("corrects_confirmation_id")
+  observedAccountingVersion Int                     @map("observed_accounting_version")
+  result                    CajasControlResult      @map("result")
+  note                      String?                 @map("note") @db.Text
+  acceptedAt                DateTime                @map("accepted_at") @db.Timestamptz(6)
+  acceptedById              String                  @map("accepted_by_id")
+  cause                     String?                 @map("cause") @db.Text
+  commandAcceptanceId       String                  @map("command_acceptance_id")
+  createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company              Company                   @relation("CajasCompanyReturnConfirmations", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crcfn_company")
+  dispatch             CajasDispatch             @relation("CajasDispatchReturns", fields: [companyId, dispatchId, remitoId], references: [companyId, id, remitoId], onDelete: Restrict, onUpdate: Cascade, map: "fk_crcfn_dispatch")
+  devolucion           Devolucion                @relation("CajasReturnDevolucion", fields: [companyId, devolucionId, remitoId], references: [companyId, id, remitoId], onDelete: Restrict, onUpdate: Cascade, map: "fk_crcfn_devolucion")
+  correctsConfirmation CajasReturnConfirmation?  @relation("CajasReturnCorrectionChain", fields: [companyId, correctsConfirmationId, devolucionId, dispatchId], references: [companyId, id, devolucionId, dispatchId], onDelete: Restrict, onUpdate: Cascade, map: "fk_crcfn_corrects")
+  corrections          CajasReturnConfirmation[] @relation("CajasReturnCorrectionChain")
+  acceptedBy           User                      @relation("CajasReturnConfirmationAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crcfn_accepted_by")
+  commandAcceptance    CajasCommandAcceptance    @relation("CajasCommandReturnConfirmation", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crcfn_command")
+  dispositions         CajasDisposition[]        @relation("CajasDispositionReturnConfirmation")
+  lines                CajasReturnLine[]         @relation("CajasReturnLines")
+
+  @@unique([companyId, id], map: "uq_crcfn_company_id")
+  @@unique([companyId, id, devolucionId, dispatchId], map: "uq_crcfn_owner_lineage")
+  @@unique([dispatchId, devolucionId, sequence], map: "uq_crcfn_dispatch_source_seq")
+  @@unique([companyId, devolucionId, dispatchId, originalSlot], map: "uq_crcfn_source_dispatch_original")
+  @@unique([companyId, commandAcceptanceId], map: "uq_crcfn_command")
+  @@index([companyId, dispatchId, acceptedAt], map: "ix_crcfn_dispatch_time")
+  @@index([devolucionId], map: "ix_crcfn_source")
+  @@index([correctsConfirmationId], map: "ix_crcfn_corrects")
+  @@map("cajas_return_confirmation")
+}
+
+model CajasReturnLine {
+  id                     String              @id(map: "cajas_return_line_pkey") @default(cuid()) @map("id")
+  companyId              String              @map("company_id")
+  returnConfirmationId   String              @map("return_confirmation_id")
+  devolucionId           String              @map("devolucion_id")
+  dispatchId             String              @map("dispatch_id")
+  lineNumber             Int                 @map("line_number")
+  devolucionItemId       String              @map("devolucion_item_id")
+  dispatchLineId         String?             @map("dispatch_line_id")
+  kind                   CajasReturnLineKind @map("kind")
+  articleReferenceId     String              @map("article_reference_id")
+  stockScopeReferenceId  String?             @map("stock_scope_reference_id")
+  quantity               Decimal             @map("quantity") @db.Decimal(18, 4)
+  unit                   String              @map("unit")
+  skuSnapshot            String?             @map("sku_snapshot")
+  descriptionSnapshot    String?             @map("description_snapshot") @db.Text
+  lotNumberSnapshot      String?             @map("lot_number_snapshot")
+  serialNumberSnapshot   String?             @map("serial_number_snapshot")
+  expirationDateSnapshot DateTime?           @map("expiration_date_snapshot") @db.Date
+  traceabilitySnapshot   Json?               @map("traceability_snapshot")
+  humanValidated         Boolean             @map("human_validated")
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company             Company                   @relation("CajasCompanyReturnLines", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crl_company")
+  returnConfirmation  CajasReturnConfirmation   @relation("CajasReturnLines", fields: [companyId, returnConfirmationId, devolucionId, dispatchId], references: [companyId, id, devolucionId, dispatchId], onDelete: Restrict, onUpdate: Cascade, map: "fk_crl_confirmation")
+  devolucionItem      DevolucionItem            @relation("CajasReturnLineDevolucionItem", fields: [companyId, devolucionId, devolucionItemId], references: [companyId, devolucionId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crl_devolucion_item")
+  dispatchLine        CajasDispatchLine?        @relation("CajasReturnLineDispatchLine", fields: [companyId, dispatchId, dispatchLineId], references: [companyId, dispatchId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crl_dispatch_line")
+  articleReference    CajasArticleReference     @relation("CajasReturnLineArticle", fields: [companyId, articleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crl_article")
+  stockScopeReference CajasStockScopeReference? @relation("CajasReturnLineStockScope", fields: [companyId, stockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crl_stock_scope")
+  differences         CajasDifference[]         @relation("CajasDifferenceReturnOrigin")
+  dispositions        CajasDisposition[]        @relation("CajasDispositionReturnLine")
+  replacementPair     CajasReplacementPair?     @relation("CajasReplacementReturnLine")
+
+  @@unique([companyId, id], map: "uq_crl_company_id")
+  @@unique([companyId, returnConfirmationId, dispatchId, id], map: "uq_crl_dispatch_id")
+  @@unique([returnConfirmationId, lineNumber], map: "uq_crl_confirmation_line")
+  @@index([companyId, dispatchId, dispatchLineId], map: "ix_crl_company_dispatch")
+  @@index([companyId, devolucionId, devolucionItemId], map: "ix_crl_source_item")
+  @@index([stockScopeReferenceId], map: "ix_crl_stock_scope")
+  @@map("cajas_return_line")
+}
+
+model CajasReplacementPair {
+  id                            String   @id(map: "cajas_replacement_pair_pkey") @default(cuid()) @map("id")
+  companyId                     String   @map("company_id")
+  returnConfirmationId          String   @map("return_confirmation_id")
+  dispatchId                    String   @map("dispatch_id")
+  returnLineId                  String   @map("return_line_id")
+  originalDispatchLineId        String   @map("original_dispatch_line_id")
+  receivedArticleReferenceId    String   @map("received_article_reference_id")
+  receivedStockScopeReferenceId String?  @map("received_stock_scope_reference_id")
+  explanation                   String?  @map("explanation") @db.Text
+  createdAt                     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                     Company                   @relation("CajasCompanyReplacementPairs", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crp_company")
+  returnLine                  CajasReturnLine           @relation("CajasReplacementReturnLine", fields: [companyId, returnConfirmationId, dispatchId, returnLineId], references: [companyId, returnConfirmationId, dispatchId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crp_return_line")
+  originalDispatchLine        CajasDispatchLine         @relation("CajasReplacementOriginalDispatch", fields: [companyId, dispatchId, originalDispatchLineId], references: [companyId, dispatchId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crp_original_line")
+  receivedArticleReference    CajasArticleReference     @relation("CajasReplacementReceivedArticle", fields: [companyId, receivedArticleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crp_received_article")
+  receivedStockScopeReference CajasStockScopeReference? @relation("CajasReplacementReceivedScope", fields: [companyId, receivedStockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_crp_received_scope")
+
+  @@unique([companyId, id], map: "uq_crp_company_id")
+  @@unique([companyId, returnConfirmationId, dispatchId, returnLineId], map: "uq_crp_return_line")
+  @@index([companyId, returnConfirmationId, dispatchId, returnLineId], map: "ix_crp_return_lineage")
+  @@index([companyId, dispatchId, originalDispatchLineId], map: "ix_crp_original_line")
+  @@index([receivedStockScopeReferenceId], map: "ix_crp_received_scope")
+  @@map("cajas_replacement_pair")
+}
+
+model CajasConsumptionConfirmation {
+  id                        String                  @id(map: "cajas_consumption_confirmation_pkey") @default(cuid()) @map("id")
+  companyId                 String                  @map("company_id")
+  dispatchId                String                  @map("dispatch_id")
+  remitoId                  String                  @map("remito_id")
+  consumoId                 String                  @map("consumo_id")
+  sequence                  Int                     @map("sequence")
+  recordKind                CajasEvidenceRecordKind @default(original) @map("record_kind")
+  originalSlot              Int?                    @default(1) @map("original_slot")
+  correctsConfirmationId    String?                 @map("corrects_confirmation_id")
+  observedAccountingVersion Int                     @map("observed_accounting_version")
+  acceptedAt                DateTime                @map("accepted_at") @db.Timestamptz(6)
+  acceptedById              String                  @map("accepted_by_id")
+  cause                     String?                 @map("cause") @db.Text
+  commandAcceptanceId       String                  @map("command_acceptance_id")
+  createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company              Company                        @relation("CajasCompanyConsumptionConfirmations", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccc_company")
+  dispatch             CajasDispatch                  @relation("CajasDispatchConsumptions", fields: [companyId, dispatchId, remitoId], references: [companyId, id, remitoId], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccc_dispatch")
+  consumo              Consumo                        @relation("CajasConsumptionConsumo", fields: [companyId, consumoId, remitoId], references: [companyId, id, remitoId], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccc_consumo")
+  correctsConfirmation CajasConsumptionConfirmation?  @relation("CajasConsumptionCorrectionChain", fields: [companyId, correctsConfirmationId, consumoId, dispatchId], references: [companyId, id, consumoId, dispatchId], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccc_corrects")
+  corrections          CajasConsumptionConfirmation[] @relation("CajasConsumptionCorrectionChain")
+  acceptedBy           User                           @relation("CajasConsumptionConfirmationAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccc_accepted_by")
+  commandAcceptance    CajasCommandAcceptance         @relation("CajasCommandConsumptionConfirmation", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccc_command")
+  dispositions         CajasDisposition[]             @relation("CajasDispositionConsumptionConfirmation")
+  lines                CajasConsumptionLine[]         @relation("CajasConsumptionLines")
+
+  @@unique([companyId, id], map: "uq_ccc_company_id")
+  @@unique([companyId, id, consumoId, dispatchId], map: "uq_ccc_owner_lineage")
+  @@unique([dispatchId, consumoId, sequence], map: "uq_ccc_dispatch_source_seq")
+  @@unique([companyId, consumoId, dispatchId, originalSlot], map: "uq_ccc_source_dispatch_original")
+  @@unique([companyId, commandAcceptanceId], map: "uq_ccc_command")
+  @@index([companyId, dispatchId, acceptedAt], map: "ix_ccc_dispatch_time")
+  @@index([consumoId], map: "ix_ccc_source")
+  @@index([correctsConfirmationId], map: "ix_ccc_corrects")
+  @@map("cajas_consumption_confirmation")
+}
+
+model CajasConsumptionLine {
+  id                            String    @id(map: "cajas_consumption_line_pkey") @default(cuid()) @map("id")
+  companyId                     String    @map("company_id")
+  consumptionConfirmationId     String    @map("consumption_confirmation_id")
+  consumoId                     String    @map("consumo_id")
+  dispatchId                    String    @map("dispatch_id")
+  lineNumber                    Int       @map("line_number")
+  consumoItemId                 String    @map("consumo_item_id")
+  dispatchLineId                String    @map("dispatch_line_id")
+  articleReferenceId            String    @map("article_reference_id")
+  stockScopeReferenceId         String?   @map("stock_scope_reference_id")
+  quantity                      Decimal   @map("quantity") @db.Decimal(18, 4)
+  unit                          String    @map("unit")
+  lotNumberSnapshot             String?   @map("lot_number_snapshot")
+  serialNumberSnapshot          String?   @map("serial_number_snapshot")
+  expirationDateSnapshot        DateTime? @map("expiration_date_snapshot") @db.Date
+  traceabilitySnapshot          Json?     @map("traceability_snapshot")
+  recognizedReturnDispositionId String?   @map("recognized_return_disposition_id")
+  createdAt                     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                     Company                      @relation("CajasCompanyConsumptionLines", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccln_company")
+  consumptionConfirmation     CajasConsumptionConfirmation @relation("CajasConsumptionLines", fields: [companyId, consumptionConfirmationId, consumoId, dispatchId], references: [companyId, id, consumoId, dispatchId], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccln_confirmation")
+  consumoItem                 ConsumoItem                  @relation("CajasConsumptionLineConsumoItem", fields: [companyId, consumoId, consumoItemId], references: [companyId, consumoId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccln_consumo_item")
+  dispatchLine                CajasDispatchLine            @relation("CajasConsumptionLineDispatchLine", fields: [companyId, dispatchId, dispatchLineId], references: [companyId, dispatchId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccln_dispatch_line")
+  articleReference            CajasArticleReference        @relation("CajasConsumptionLineArticle", fields: [companyId, articleReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccln_article")
+  stockScopeReference         CajasStockScopeReference?    @relation("CajasConsumptionLineStockScope", fields: [companyId, stockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccln_stock_scope")
+  recognizedReturnDisposition CajasDisposition?            @relation("CajasConsumptionRecognizedDisposition", fields: [companyId, dispatchLineId, recognizedReturnDispositionId], references: [companyId, dispatchLineId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccln_recognized_disp")
+  dispositions                CajasDisposition[]           @relation("CajasDispositionConsumptionLine")
+
+  @@unique([companyId, id], map: "uq_ccln_company_id")
+  @@unique([consumptionConfirmationId, lineNumber], map: "uq_ccln_confirmation_line")
+  @@unique([companyId, dispatchLineId, recognizedReturnDispositionId], map: "uq_ccln_recognized_disposition")
+  @@index([companyId, dispatchId, dispatchLineId], map: "ix_ccln_company_dispatch")
+  @@index([companyId, consumoId, consumoItemId], map: "ix_ccln_source_item")
+  @@index([stockScopeReferenceId], map: "ix_ccln_stock_scope")
+  @@map("cajas_consumption_line")
+}
+
+model CajasConditionProjection {
+  id                        String                 @id(map: "cajas_condition_projection_pkey") @default(cuid()) @map("id")
+  companyId                 String                 @map("company_id")
+  boxStockScopeReferenceId  String                 @map("box_stock_scope_reference_id")
+  assignmentId              String?                @map("assignment_id")
+  version                   Int                    @default(1) @map("version")
+  condition                 CajasCurrentCondition? @map("condition")
+  openDifferenceCount       Int                    @default(0) @map("open_difference_count")
+  pendingDispatchScopeCount Int                    @default(0) @map("pending_dispatch_scope_count")
+  requiresRecontrol         Boolean                @default(false) @map("requires_recontrol")
+  operationEndedAt          DateTime?              @map("operation_ended_at") @db.Timestamptz(6)
+  dispatchEligible          Boolean                @default(false) @map("dispatch_eligible")
+  reuseEligible             Boolean                @default(false) @map("reuse_eligible")
+  eligibilityReasons        Json                   @map("eligibility_reasons")
+  evidenceWatermark         String                 @map("evidence_watermark")
+  createdAt                 DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company                Company                  @relation("CajasCompanyConditionProjections", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccp_company")
+  boxStockScopeReference CajasStockScopeReference @relation("CajasStockScopeCondition", fields: [companyId, boxStockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccp_box_scope")
+  assignment             CajasAssignment?         @relation("CajasAssignmentCondition", fields: [companyId, assignmentId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccp_assignment")
+
+  @@unique([companyId, id], map: "uq_ccp_company_id")
+  @@unique([companyId, boxStockScopeReferenceId], map: "uq_ccp_box_scope")
+  @@unique([companyId, assignmentId], map: "uq_ccp_assignment")
+  @@index([companyId, condition], map: "ix_ccp_company_condition")
+  @@index([companyId, dispatchEligible], map: "ix_ccp_company_dispatch")
+  @@index([companyId, reuseEligible], map: "ix_ccp_company_reuse")
+  @@index([companyId, evidenceWatermark], map: "ix_ccp_company_watermark")
+  @@map("cajas_condition_projection")
+}
+
+model CajasCommandAcceptance {
+  id                String          @id(map: "cajas_command_acceptance_pkey") @default(cuid()) @map("id")
+  companyId         String          @map("company_id")
+  sourceOperationId String          @map("source_operation_id")
+  checkpoint        CajasCheckpoint @map("checkpoint")
+  semanticKey       String          @map("semantic_key")
+  intentHash        String          @map("intent_hash")
+  acceptedAt        DateTime        @map("accepted_at") @db.Timestamptz(6)
+  acceptedById      String          @map("accepted_by_id")
+  resultEntityType  String          @map("result_entity_type")
+  resultEntityId    String          @map("result_entity_id")
+  auditEventId      String          @map("audit_event_id")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                       Company                         @relation("CajasCompanyCommandAcceptances", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cca_company")
+  acceptedBy                    User                            @relation("CajasCommandAcceptedBy", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cca_accepted_by")
+  auditEvent                    AuditEvent                      @relation("CajasCommandAudit", fields: [companyId, auditEventId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cca_audit")
+  formulaVersionResult          CajasFormulaVersion?            @relation("CajasCommandFormulaVersion")
+  assignmentStartResult         CajasAssignment?                @relation("CajasCommandAssignmentStart")
+  assignmentEndResult           CajasAssignment?                @relation("CajasCommandAssignmentEnd")
+  controlResult                 CajasControl?                   @relation("CajasCommandControl")
+  compositionChangeResult       CajasCompositionChange?         @relation("CajasCommandCompositionChange")
+  differenceResolutionResult    CajasDifferenceResolution?      @relation("CajasCommandDifferenceResolution")
+  dispatchResult                CajasDispatch?                  @relation("CajasCommandDispatch")
+  dispositions                  CajasDisposition[]              @relation("CajasCommandDispositions")
+  returnConfirmationResult      CajasReturnConfirmation?        @relation("CajasCommandReturnConfirmation")
+  consumptionConfirmationResult CajasConsumptionConfirmation?   @relation("CajasCommandConsumptionConfirmation")
+  effects                       CajasCommandEffect[]            @relation("CajasCommandEffects")
+  attempts                      CajasCommandAttempt[]           @relation("CajasCommandAttempts")
+  projectionRepairs             CajasProjectionReconciliation[] @relation("CajasReconciliationRepairCommand")
+
+  @@unique([companyId, id], map: "uq_cca_company_id")
+  @@unique([companyId, sourceOperationId, checkpoint, semanticKey], map: "uq_cca_semantic")
+  @@unique([companyId, auditEventId], map: "uq_cca_audit")
+  @@index([companyId, acceptedAt], map: "ix_cca_company_accepted")
+  @@index([resultEntityType, resultEntityId], map: "ix_cca_result")
+  @@index([intentHash], map: "ix_cca_intent")
+  @@map("cajas_command_acceptance")
+}
+
+model CajasCommandEffect {
+  id                     String   @id(map: "cajas_command_effect_pkey") @default(cuid()) @map("id")
+  companyId              String   @map("company_id")
+  commandAcceptanceId    String   @map("command_acceptance_id")
+  effectKey              String   @map("effect_key")
+  effectType             String   @map("effect_type")
+  resultEntityType       String   @map("result_entity_type")
+  resultEntityId         String   @map("result_entity_id")
+  stockRecordReferenceId String?  @map("stock_record_reference_id")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company              Company                    @relation("CajasCompanyCommandEffects", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cce_company")
+  commandAcceptance    CajasCommandAcceptance     @relation("CajasCommandEffects", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cce_command")
+  stockRecordReference CajasStockRecordReference? @relation("CajasCommandEffectStockRecord", fields: [companyId, stockRecordReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cce_stock_record")
+
+  @@unique([companyId, id], map: "uq_cce_company_id")
+  @@unique([commandAcceptanceId, effectKey], map: "uq_cce_command_effect")
+  @@index([companyId, effectType, createdAt], map: "ix_cce_company_type_time")
+  @@index([stockRecordReferenceId], map: "ix_cce_stock_record")
+  @@index([resultEntityType, resultEntityId], map: "ix_cce_result")
+  @@map("cajas_command_effect")
+}
+
+model CajasCommandAttempt {
+  id                     String              @id(map: "cajas_command_attempt_pkey") @default(cuid()) @map("id")
+  companyId              String              @map("company_id")
+  commandAcceptanceId    String?             @map("command_acceptance_id")
+  transportCorrelationId String              @map("transport_correlation_id")
+  intentHash             String              @map("intent_hash")
+  outcome                CajasAttemptOutcome @map("outcome")
+  attemptedAt            DateTime            @map("attempted_at") @db.Timestamptz(6)
+  actorId                String              @map("actor_id")
+  auditEventId           String?             @map("audit_event_id")
+  detail                 String?             @map("detail") @db.Text
+  expiresAt              DateTime?           @map("expires_at") @db.Timestamptz(6)
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company           Company                 @relation("CajasCompanyCommandAttempts", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccat_company")
+  commandAcceptance CajasCommandAcceptance? @relation("CajasCommandAttempts", fields: [companyId, commandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccat_command")
+  actor             User                    @relation("CajasAttemptActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccat_actor")
+  auditEvent        AuditEvent?             @relation("CajasAttemptAudit", fields: [companyId, auditEventId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_ccat_audit")
+
+  @@unique([companyId, id], map: "uq_ccat_company_id")
+  @@unique([companyId, transportCorrelationId], map: "uq_ccat_transport")
+  @@index([companyId, intentHash, attemptedAt], map: "ix_ccat_intent_time")
+  @@index([commandAcceptanceId, attemptedAt], map: "ix_ccat_command_time")
+  @@index([companyId, auditEventId, attemptedAt], map: "ix_ccat_audit_time")
+  @@index([expiresAt], map: "ix_ccat_expires")
+  @@map("cajas_command_attempt")
+}
+
+model CajasProjectionReconciliation {
+  id                        String                    @id(map: "cajas_projection_reconciliation_pkey") @default(cuid()) @map("id")
+  companyId                 String                    @map("company_id")
+  projectionKind            CajasProjectionKind       @map("projection_kind")
+  scopeId                   String                    @map("scope_id")
+  observedVersion           Int                       @map("observed_version")
+  evidenceWatermark         String                    @map("evidence_watermark")
+  result                    CajasReconciliationResult @map("result")
+  comparedAt                DateTime                  @map("compared_at") @db.Timestamptz(6)
+  comparedById              String?                   @map("compared_by_id")
+  detail                    String?                   @map("detail") @db.Text
+  repairCommandAcceptanceId String?                   @map("repair_command_acceptance_id")
+  createdAt                 DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company                 Company                 @relation("CajasCompanyProjectionReconciliations", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cpr_company")
+  comparedBy              User?                   @relation("CajasReconciliationComparedBy", fields: [comparedById], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cpr_compared_by")
+  repairCommandAcceptance CajasCommandAcceptance? @relation("CajasReconciliationRepairCommand", fields: [companyId, repairCommandAcceptanceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_cpr_repair_command")
+
+  @@unique([companyId, id], map: "uq_cpr_company_id")
+  @@index([companyId, projectionKind, scopeId, comparedAt], map: "ix_cpr_scope_time")
+  @@index([companyId, result, comparedAt], map: "ix_cpr_result_time")
+  @@index([repairCommandAcceptanceId], map: "ix_cpr_repair_command")
+  @@map("cajas_projection_reconciliation")
+}
+
+enum ArticleIdentifierType {
+  MANUFACTURER_REF
+  GTIN_EAN
+  GS1_AI_22
+  SUPPLIER_CODE
+  ALTERNATIVE_CODE
+  OSSUM_CODE
+}
+
+enum ArticleTraceabilityPolicyKind {
+  NONE
+  LOT
+  LOT_EXPIRY
+  SERIAL
+  SERIAL_EXPIRY
+  LOT_SERIAL_EXPIRY
+}
+
+model Article {
+  id             String   @id @default(cuid())
+  organizationId String
+  sku            String
+  description    String   @db.Text
+  articleType    String?
+  brand          String?
+  manufacturer   String?
+  family         String?
+  modelVariant   String?
+  measure        String?
+  unit           String   @default("u")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization       Organization                @relation("OrganizationArticles", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_organization")
+  stockEligibilities StockArticleEligibility[]   @relation("StockEligibilityArticle")
+  identifiers        ArticleIdentifier[]         @relation("ArticleIdentifiers")
+  supplierMappings   ArticleSupplierMapping[]    @relation("ArticleSupplierMappings")
+  tracePolicies      ArticleTraceabilityPolicy[] @relation("ArticleTracePolicies")
+
+  @@unique([organizationId, sku], map: "uq_article_org_sku")
+  @@unique([organizationId, id], map: "uq_article_org_id")
+}
+
+model ArticleIdentifier {
+  id                  String                @id @default(cuid())
+  organizationId      String
+  articleId           String
+  type                ArticleIdentifierType
+  value               String
+  normalizedValue     String
+  sourcePayload       String?
+  scopeKey            String                @default("")
+  manufacturerContext String?
+  supplierId          String?
+  companyId           String?
+  isActive            Boolean               @default(true)
+  deactivatedAt       DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  article      Article             @relation("ArticleIdentifiers", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_identifier_article")
+  supplierLink ContactCompanyLink? @relation("ArticleIdentifierSupplierLink", fields: [supplierId, companyId], references: [contactId, companyId], onDelete: Restrict, onUpdate: Restrict, map: "fk_article_identifier_supplier_link")
+  company      Company?            @relation("ArticleIdentifierCompany", fields: [organizationId, companyId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "fk_article_identifier_company")
+
+  @@unique([organizationId, type, normalizedValue, scopeKey], map: "uq_article_identifier_global_active", where: raw("\"isActive\" = true AND \"companyId\" IS NULL"))
+  @@unique([organizationId, companyId, type, normalizedValue, scopeKey], map: "uq_article_identifier_company_active", where: raw("\"isActive\" = true AND \"companyId\" IS NOT NULL"))
+  @@index([organizationId, companyId, normalizedValue, isActive], map: "ix_article_identifier_search")
+  @@index([organizationId, companyId, type, normalizedValue, isActive], map: "ix_article_identifier_resolution")
+}
+
+model ArticleSupplierMapping {
+  id             String    @id @default(cuid())
+  organizationId String
+  articleId      String
+  supplierId     String
+  companyId      String
+  supplierCode   String
+  normalizedCode String
+  isActive       Boolean   @default(true)
+  deactivatedAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  article      Article            @relation("ArticleSupplierMappings", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_supplier_mapping_article")
+  supplierLink ContactCompanyLink @relation("ArticleSupplierMappingSupplierLink", fields: [supplierId, companyId], references: [contactId, companyId], onDelete: Restrict, onUpdate: Restrict, map: "fk_article_supplier_mapping_supplier_link")
+  company      Company            @relation("ArticleSupplierMappingCompany", fields: [organizationId, companyId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "fk_article_supplier_mapping_company")
+
+  @@unique([organizationId, companyId, supplierId, normalizedCode], map: "uq_article_supplier_mapping_active", where: raw("\"isActive\" = true"))
+  @@index([organizationId, companyId, normalizedCode, isActive], map: "ix_article_supplier_mapping_search")
+}
+
+model ArticleTraceabilityPolicy {
+  id             String                        @id @default(cuid())
+  organizationId String
+  articleId      String
+  policy         ArticleTraceabilityPolicyKind
+  effectiveAt    DateTime                      @default(now())
+  createdAt      DateTime                      @default(now())
+
+  article Article @relation("ArticleTracePolicies", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_trace_policy_article")
+
+  @@unique([organizationId, articleId, effectiveAt], map: "uq_article_trace_policy_effective")
+  @@index([organizationId, articleId, effectiveAt], map: "ix_article_trace_policy_article")
+}
+
+model StockArticleEligibility {
+  id             String   @id @default(cuid())
+  companyId      String
+  organizationId String
+  articleId      String
+  version        Int
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  company Company @relation("CompanyStockArticleEligibilities", fields: [organizationId, companyId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sae_company")
+  article Article @relation("StockEligibilityArticle", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sae_article")
+
+  @@unique([companyId, id], map: "uq_sae_company_id")
+  @@unique([companyId, articleId], map: "uq_sae_company_article")
+  @@index([companyId, updatedAt], map: "ix_sae_company_updated")
+}
