@@ -2,6 +2,34 @@
 
 Estado: inicial
 
+## 2026-09-17 — Budget to Invoice synthetic DEV acceptance
+
+Done: Approved QA #6999 completed through a persisted operational Invoice draft after reconciled retries. Real Sales UI created/emitted/approved the QA budget; real Pending UI created the Invoice. Not fiscal or whole-ERP acceptance.
+Changed: Previously completed canonical backend/Sales recovery plus minimal Surgery positional-SUBSTRING cast and Invoice advisory-lock result cast. Final validation changed only its new QA Invoice and local evidence; no prior-record edits or external sends.
+Files: `knowledge/specs/CLEAN-BUDGET-INVOICE-SYNTHETIC-QA-20260917/HANDOFF.md` contains exact QA IDs and the retained marker, and references/summarizes all three external attempt journals. Source repair details are in the Surgery/Invoice HTTP500 task handoffs.
+Validations: Fresh authenticated preflight 200; approved CURRENT revision-3 budget for ARS 200; exactly one persisted Invoice Borrador for ARS 200 with source lineage and no issuance number/date; source removed from Pending after hard refresh. Previous source gates: 179/179 offline tests, independent reviews, TypeScript zero and guarded build 56/56. Browser closed within budget.
+Risks: QA records retained; failed-attempt journals immutable. No fiscalization, old-record reconciliation, stock/traceability/receipt/email acceptance, migration, commit or deployment implied. Earlier milestone blockers below are historical; this entry supersedes only their resolved Sales/budget/build/runtime gates.
+Next: Preserve evidence and fixtures; any cleanup or further module recovery remains separately scoped. No further retry of this completed fixture.
+
+## 2026-09-16 — CLEAN-BUDGET-AUTHORITY-RECOVERY-20260916 (Phase 1)
+
+Done: Canonical existing Presupuesto backend recovery ACCEPTED by condemned-yellow-lobster / Engram #6942, no introduced blockers; lock released by parent-authorized docs-only finalization. Original workspace read-only; source hashes stable.
+Changed: Family/commercial/rate declarations and canonical revision lifecycle/service/validator/five routes; exact source SQL artifacts/tests; producer-to-unchanged-Invoice regression. No Invoice eligibility workaround or legacy repair.
+Files: Exact bounded inventory/provenance in `knowledge/specs/CLEAN-BUDGET-AUTHORITY-RECOVERY-20260916/HANDOFF.md` and `SOURCE_BASELINE.md`; prior uncommitted changes preserved.
+Validations: RED 4/4 before implementation; final 111/111 tests in 19 files (including eight geo/contact regressions); full tsc zero; offline datasource-free Prisma 7.8 format/generate pass; focused lint zero errors/two fixture warnings; diff-check pass. SQL exact SHA pins pass; no DB/env/browser/commit operations.
+Independent validation: 46/46 offline tests in five files, full tsc 0/diff-check PASS, all 13 source hashes and HEAD unchanged. Reviewer did not wholly rerun 111-suite. This release changes only own LOCK/HANDOFF/CHANGE_PACK and this milestone; no source/schema/env/test edits or reruns.
+Risks: SQL NOT NULL additions have no legacy backfill; NON-EXECUTABLE until separately authorized live compatibility audit. Offline declarations/tests do not certify live DB. Sales/form remain local-authority; no end-to-end acceptance.
+Next: Parent consumes active read-only catalog audit/UI explorer results, then bounded Sales/form recovery without core Cirugias hooks; no duplication here. Runtime gates pending those results; guarded build remains deferred as permitted. No migration/history replay.
+
+## 2026-09-16 — CLEAN-COMPILE-RECOVERY-20260916
+
+Done: Bounded compile recovery accepted by tragic-aquamarine-lynx / Engram #6909, no confirmed introduced blocker. Compile acceptance YES; functional/runtime acceptance BLOCKED, not completed product.
+Changed: Identifier/QR, financial read/composer/policy, OCR/receipt callback, Article/budget schema declarations and timestamp narrowing. Existing geography correction preserved.
+Files: Exact A-E inventory in `knowledge/specs/CLEAN-COMPILE-RECOVERY-20260916/HANDOFF.md`; ownership lock released. Final continuation modifies only HANDOFF/CHANGE_PACK/LOCK and this milestone; prior geography artifacts preserved.
+Validations: Independently confirmed full tsc zero/diff-check PASS; offline Prisma format/generate pass; implementer 86/86 recovery tests (14 files), separately parent 41/41 geo/contact regressions (8 files, startVitest envFile:false/envDir:false). Applied SQL hash matches. Webpack compiled; build collection blocked by missing SUPABASE_URL. No new tests run during docs release.
+Risks: Legacy budget writes omit authority-required family/contact/commercial fields, slot/state lifecycle/check and invoice-consumed rates, not merely pending-list entries. Historical V1.1 policy is required while later 20260824180000_guided_traceability_profile permits NULL; intended/live baseline uncertified. Email/receipt endpoint gaps pre-exist. No DB/runtime/product acceptance.
+Next: Parent requests explicit bounded local environment recovery approval; no environment/Auth fix attempted. Runtime recovery remains separately delimited; no source/schema/env/DB changes in this docs continuation.
+
 ---
 
 ## 2026-06-03 — GPT-027F.0A inicial
