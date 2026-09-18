@@ -1,0 +1,31 @@
+# Ownership Lock — PENDING-INVOICES-BACKEND-DEV-001
+
+- **task:** PENDING-INVOICES-BACKEND-DEV-001
+- **agent role:** SDD apply executor / senior full-stack
+- **selected model:** openai/gpt-5.6-sol
+- **status:** released
+- **owned files/folders:**
+  - `knowledge/specs/PENDING-INVOICES-BACKEND-DEV-001/`
+  - `src/app/ventas/pendientes-facturar/page.tsx`
+  - `src/hooks/usePendingInvoiceSources.ts`
+  - `src/hooks/useInvoices.ts`
+  - `src/lib/api/invoices.ts`
+  - `src/lib/validators/invoice.ts`
+  - `src/lib/services/invoice.service.ts`
+  - `src/app/api/companies/[companyId]/invoices/route.ts`
+  - focused pending-invoice and existing Invoice test files changed by this task
+- **reserved at:** 2026-09-02
+- **release condition:** focused tests and scoped ESLint completed; final status changed to `released`
+- **released at:** 2026-09-02 after 26 focused tests and scoped ESLint passed
+- **re-reserved at:** 2026-09-02 for GGA lifecycle blocker fix (draft Consumo transition and emitted cancellation restoration)
+- **re-released at:** 2026-09-02 after 29 focused tests, scoped ESLint, and TypeScript passed
+- **second re-reservation at:** 2026-09-02 for GGA transactional source-lock/revalidation blocker
+- **second re-release at:** 2026-09-02 after 31 focused tests, scoped ESLint, and TypeScript passed
+- **third re-reservation at:** 2026-09-02 for GGA approved-total reconciliation and Invoice row serialization blockers
+- **third re-release at:** 2026-09-02 after 35 focused tests, payment regression tests, scoped ESLint, and TypeScript passed
+- **fourth re-reservation at:** 2026-09-02 for GGA source-payload dispatch and draft-delete serialization blockers
+- **fourth re-release at:** 2026-09-02 after 37 focused tests, payment regression tests, scoped ESLint, and TypeScript passed
+- **fifth re-reservation at:** 2026-09-02 for GGA sibling emission row-lock ordering race
+- **fifth re-release at:** 2026-09-02 after focused tests, payment regression, scoped ESLint, and TypeScript passed
+- **sixth re-reservation at:** 2026-09-02 for GGA generic state-transition emission bypass
+- **sixth re-release at:** 2026-09-02 after 38 focused tests, payment regression, scoped ESLint, and TypeScript passed

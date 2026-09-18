@@ -1,0 +1,285 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Exclude docs/specs from Tailwind v4 automatic content detection.
+   Markdown code spans in knowledge/ contain class-like strings (e.g.
+   bg-[var(--op-[alert]-bg)]) that produce invalid CSS when generated. */
+@source not "../../knowledge";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+
+  /* OSSUM brand tokens — used by the Remito workspace and operational surfaces. */
+  --ossum-navy: #071935;
+  --ossum-navy-soft: #0f2748;
+  --ossum-action: #1D2FC0;
+  --ossum-action-hover: #1830a8;
+  --ossum-danger: #D02F28;
+  --ossum-danger-hover: #b82922;
+  --ossum-surface: #FBFBFB;
+  --ossum-surface-2: #F3F3F3;
+  --ossum-line: #e6e8eb;
+  --ossum-line-strong: #d0d4da;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* OSSUM Operational semantic tokens — coordinadores workspace + operational surfaces.
+     Light variant. Built on the --ossum-* brand layer. */
+  --op-app: #f7f8fa;
+  --op-surface: #ffffff;
+  --op-secondary: #f1f3f6;
+  --op-hover: #e9ecf1;
+  --op-border-default: var(--ossum-line);
+  --op-border-subtle: #eef0f3;
+  --op-text-primary: var(--ossum-navy-soft);
+  --op-text-secondary: #4a5568;
+  --op-text-muted: #6b7280;
+  --op-text-disabled: #9ca3af;
+  --op-text-inverse: #ffffff;
+  --op-primary: var(--ossum-action);
+  --op-primary-hover: var(--ossum-action-hover);
+  --op-primary-highlight: #2b3fd6;
+  --op-danger: var(--ossum-danger);
+  --op-danger-bg: #fdeceb;
+  --op-danger-border: #f5c2bf;
+  --op-success: #15803d;
+  --op-success-bg: #ecfdf3;
+  --op-success-border: #bbf7d0;
+  --op-warning: #b45309;
+  --op-warning-bg: #fffbeb;
+  --op-warning-border: #fde68a;
+  --op-info: #1d6fb8;
+  --op-info-bg: #e8f1fb;
+  --op-info-border: #bfdbfe;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  /* OSSUM Operational semantic tokens — dark variant ("OSSUM Dark Operational").
+     Deep navy surfaces, lifted text, brightened action/semantic accents. */
+  --op-app: var(--ossum-navy);
+  --op-surface: var(--ossum-navy-soft);
+  --op-secondary: #0a1d3a;
+  --op-hover: #142b52;
+  --op-border-default: #1f3a63;
+  --op-border-subtle: #16305a;
+  --op-text-primary: #f1f3f6;
+  --op-text-secondary: #aab4c5;
+  --op-text-muted: #7c899e;
+  --op-text-disabled: #4b5a73;
+  --op-text-inverse: var(--ossum-navy-soft);
+  --op-primary: #3b5bff;
+  --op-primary-hover: #5070ff;
+  --op-primary-highlight: #6b86ff;
+  --op-danger: #ff6b6b;
+  --op-danger-bg: rgba(208, 47, 40, 0.16);
+  --op-danger-border: rgba(255, 107, 107, 0.35);
+  --op-success: #4ade80;
+  --op-success-bg: rgba(21, 128, 61, 0.18);
+  --op-success-border: rgba(74, 222, 128, 0.35);
+  --op-warning: #fbbf24;
+  --op-warning-bg: rgba(180, 83, 9, 0.18);
+  --op-warning-border: rgba(251, 191, 36, 0.35);
+  --op-info: #60a5fa;
+  --op-info-bg: rgba(29, 111, 184, 0.18);
+  --op-info-border: rgba(96, 165, 250, 0.35);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* Operational text utilities — semantic color shortcuts over --op-text-*. */
+  .op-text-primary { color: var(--op-text-primary); }
+  .op-text-secondary { color: var(--op-text-secondary); }
+  .op-text-muted { color: var(--op-text-muted); }
+
+  /* Operational situation pills — combine bg + border-color + text tone.
+     Pair with a `border` utility when a visible border is desired. */
+  .op-sit-danger {
+    background-color: var(--op-danger-bg);
+    border-color: var(--op-danger-border);
+    color: var(--op-danger);
+  }
+  .op-sit-warning {
+    background-color: var(--op-warning-bg);
+    border-color: var(--op-warning-border);
+    color: var(--op-warning);
+  }
+  .op-sit-info {
+    background-color: var(--op-info-bg);
+    border-color: var(--op-info-border);
+    color: var(--op-info);
+  }
+  .op-sit-success {
+    background-color: var(--op-success-bg);
+    border-color: var(--op-success-border);
+    color: var(--op-success);
+  }
+
+  /* Operational indicator dots — background only (applied to sized rounded elements). */
+  .op-dot-danger { background-color: var(--op-danger); }
+  .op-dot-warning { background-color: var(--op-warning); }
+  .op-dot-info { background-color: var(--op-info); }
+  .op-dot-success { background-color: var(--op-success); }
+  .op-dot-muted { background-color: var(--op-text-muted); }
+
+  /* Operational selected list item — subtle highlight. */
+  .op-selected {
+    background-color: var(--op-hover);
+  }
+}
+
+/* ─── OCR processing animations ─────────────────────────────────── */
+
+/* Perceived progress bar — fast start, slow approach to 90%. */
+@keyframes ocr-progress {
+  0%   { width: 0%; }
+  10%  { width: 18%; }
+  25%  { width: 35%; }
+  45%  { width: 52%; }
+  65%  { width: 65%; }
+  80%  { width: 76%; }
+  95%  { width: 85%; }
+  100% { width: 90%; }
+}
+.ocr-progress-bar {
+  animation: ocr-progress 7s ease-out forwards;
+}
+
+/* Scan line moving vertically over the document icon. */
+@keyframes ocr-scan {
+  0%   { transform: translateY(0); opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { transform: translateY(36px); opacity: 0; }
+}
+.ocr-scan-line {
+  animation: ocr-scan 1.8s ease-in-out infinite;
+}
+
+/* Gentle pulse for the AI sparkle badge. */
+@keyframes ocr-ai-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+.ocr-ai-pulse {
+  animation: ocr-ai-pulse 1.4s ease-in-out infinite;
+}
+
+/* Fade-in for rotating status messages. */
+@keyframes ocr-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

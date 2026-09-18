@@ -1,0 +1,374 @@
+<!DOCTYPE html><html lang="es" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>OSSUM COR - Caso Quirúrgico CX-9006</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-low": "#ecf5fe",
+                    "error": "#ba1a1a",
+                    "on-primary-container": "#bbd0ff",
+                    "on-tertiary": "#ffffff",
+                    "inverse-primary": "#acc7ff",
+                    "error-container": "#ffdad6",
+                    "on-secondary-fixed": "#002106",
+                    "outline-variant": "#c2c6d4",
+                    "on-tertiary-fixed": "#351000",
+                    "tertiary-fixed": "#ffdbcc",
+                    "on-error-container": "#93000a",
+                    "surface-container-high": "#e0e9f2",
+                    "secondary-fixed-dim": "#66df75",
+                    "on-error": "#ffffff",
+                    "inverse-on-surface": "#e9f2fb",
+                    "tertiary-container": "#983c00",
+                    "surface-tint": "#115cb9",
+                    "surface-bright": "#f6faff",
+                    "secondary-fixed": "#83fc8e",
+                    "on-surface": "#141d23",
+                    "primary": "#003f87",
+                    "primary-container": "#0056b3",
+                    "on-tertiary-fixed-variant": "#7b2f00",
+                    "background": "#f6faff",
+                    "surface-variant": "#dbe4ed",
+                    "on-secondary-container": "#007327",
+                    "tertiary-fixed-dim": "#ffb694",
+                    "surface-dim": "#d2dbe4",
+                    "on-secondary-fixed-variant": "#00531a",
+                    "surface-container-highest": "#dbe4ed",
+                    "tertiary": "#722b00",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary-fixed": "#001a40",
+                    "primary-fixed": "#d7e2ff",
+                    "on-background": "#141d23",
+                    "on-primary-fixed-variant": "#004491",
+                    "inverse-surface": "#293138",
+                    "secondary": "#006e25",
+                    "on-primary": "#ffffff",
+                    "surface-container": "#e6eff8",
+                    "secondary-container": "#80f98b",
+                    "on-surface-variant": "#424752",
+                    "primary-fixed-dim": "#acc7ff",
+                    "outline": "#727784",
+                    "on-secondary": "#ffffff",
+                    "surface": "#f6faff",
+                    "on-tertiary-container": "#ffc2a7"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "sidebar-width": "260px",
+                    "base": "4px",
+                    "xl": "32px",
+                    "sidebar-collapsed": "64px",
+                    "md": "16px",
+                    "sm": "8px",
+                    "drawer-width": "480px",
+                    "xs": "4px",
+                    "lg": "24px"
+            },
+            "fontFamily": {
+                    "h1": ["Inter"],
+                    "h3": ["Inter"],
+                    "body-md": ["Inter"],
+                    "h2": ["Inter"],
+                    "table-data": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "body-sm": ["Inter"]
+            },
+            "fontSize": {
+                    "h1": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "h3": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "h2": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "table-data": ["13px", {"lineHeight": "16px", "fontWeight": "400"}],
+                    "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f6faff; color: #141d23; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .active-tab { border-bottom: 2px solid #003f87; color: #003f87; font-weight: 600; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c2c6d4; border-radius: 10px; }
+    </style>
+</head>
+<body class="overflow-hidden flex flex-col h-screen">
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 left-0 w-full h-16 bg-surface-container-lowest flex justify-between items-center px-lg z-50 border-b border-outline-variant">
+<div class="flex items-center gap-md">
+<span class="font-h1 text-h1 text-primary tracking-tight">OSSUM COR</span>
+<div class="h-8 w-[1px] bg-outline-variant mx-sm"></div>
+<div class="flex items-center gap-xs text-on-surface-variant font-body-md">
+<span class="material-symbols-outlined text-[20px]">medical_services</span>
+<span class="">Cirugías / CX-9006</span>
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<div class="relative bg-surface-container-low px-md py-xs rounded flex items-center gap-sm">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-md w-64" placeholder="Buscar en el sistema..." type="text">
+</div>
+<div class="flex items-center gap-md">
+<button class="material-symbols-outlined text-primary hover:bg-surface-container-high p-xs transition-colors rounded">notifications</button>
+<button class="material-symbols-outlined text-primary hover:bg-surface-container-high p-xs transition-colors rounded">help</button>
+<div class="w-8 h-8 rounded-full overflow-hidden bg-primary-container">
+<img class="w-full h-full object-cover" data-alt="Professional headshot of a surgeon in a sterile environment, high-key lighting, modern clinical aesthetic, soft background blur of a medical facility." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQF2io-MHz45gKlvAz3g4TmrTF5PJq-zqAbwrhPlQ9TSvhXNh-eWOCDC40LUT3wLjwFps3wMJh6xyZJNjVNIXvuawmL6bCG_kochnGenab6FCkQYyF2Pe-8hz1xUJs0WlmDqcelvQNgx26Vo1c-rlVyhmGAzChlFGxWpUh9H4s-laa6tfswpUjCrdwIMVaYTG1SZRgB-YEr4MyJgRV-JNjkE6ONy8zZqPiy68NLcvGg0-9u7ZgK5WhWmtN3OnEFUoosbwtS-N2rYAJ">
+</div>
+</div>
+</div>
+</header>
+<!-- Side Navigation Bar -->
+<nav class="fixed left-0 top-16 h-[calc(100vh-64px)] w-sidebar-width bg-surface-container-low flex flex-col py-md z-40 border-r border-outline-variant">
+<div class="px-md mb-lg">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 bg-primary rounded flex items-center justify-center text-white font-bold">OC</div>
+<div>
+<div class="font-h2 text-[16px] text-primary leading-tight">OSSUM COR</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant">PRECISION ERP</div>
+</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-xs px-sm">
+<a class="flex items-center gap-md px-md py-sm bg-primary-container text-on-primary-container font-bold rounded" href="#">
+<span class="material-symbols-outlined">medical_services</span>
+<span class="font-label-caps text-label-caps">SURGERIES</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-variant transition-all rounded" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-label-caps text-label-caps">INVENTORY</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-variant transition-all rounded" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-label-caps text-label-caps">SCHEDULE</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-variant transition-all rounded" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-caps text-label-caps">ANALYTICS</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-variant transition-all rounded" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-caps text-label-caps">SETTINGS</span>
+</a>
+</div>
+<div class="px-sm mt-auto border-t border-outline-variant pt-md">
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-variant transition-all rounded" href="#">
+<span class="material-symbols-outlined">contact_support</span>
+<span class="font-label-caps text-label-caps">SUPPORT</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="ml-sidebar-width mt-16 flex-1 flex flex-col h-[calc(100vh-64px)] bg-background">
+<!-- Case Header (Persistent) -->
+<header class="bg-surface-container-lowest px-lg pt-lg border-b border-outline-variant flex-none">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-lg">
+<div>
+<h1 class="font-h1 text-h1 text-on-surface">Angel Ariel Garcia</h1>
+<div class="flex items-center gap-sm mt-xs">
+<span class="font-label-caps text-label-caps bg-surface-container px-sm py-1 rounded text-primary">CX-9006</span>
+<span class="font-label-caps text-label-caps bg-secondary-container/20 text-on-secondary-container px-sm py-1 rounded border border-secondary-container">PRE-OPERATORIO</span>
+<span class="font-label-caps text-label-caps bg-surface-container-high text-on-surface-variant px-sm py-1 rounded">PRÓTESIS DE RODILLA</span>
+</div>
+</div>
+</div>
+<div class="flex gap-sm">
+<button class="bg-primary text-white font-body-md px-md py-sm rounded-lg flex items-center gap-sm shadow-sm active:opacity-90">
+<span class="material-symbols-outlined text-[20px]">save</span>
+                        Guardar Cambios
+                    </button>
+<button class="bg-surface-container-lowest border border-outline-variant text-on-surface-variant font-body-md px-md py-sm rounded-lg hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Horizontal Navigation Tabs -->
+<div class="flex gap-xl overflow-x-auto no-scrollbar">
+<button class="font-body-md py-sm px-xs text-on-surface-variant whitespace-nowrap">Resumen</button>
+<button class="font-body-md py-sm px-xs text-on-surface-variant whitespace-nowrap">Materiales</button>
+<button class="font-body-md py-sm px-xs text-on-surface-variant whitespace-nowrap">Logística</button>
+<button class="font-body-md py-sm px-xs active-tab whitespace-nowrap border-b-2 border-primary">Correo</button>
+<button class="font-body-md py-sm px-xs text-on-surface-variant whitespace-nowrap">Documentación</button>
+<button class="font-body-md py-sm px-xs text-on-surface-variant whitespace-nowrap">Facturación</button>
+</div>
+</header>
+<!-- Dynamic Content Area -->
+<div class="p-lg overflow-y-auto flex-1 custom-scrollbar"><div class="max-w-2xl mx-auto space-y-xs p-sm"><!-- Simplified Email Header -->
+<div class="bg-white border border-outline-variant rounded shadow-sm p-xs">
+<div class="flex justify-between items-start mb-xs">
+<div>
+<h2 class="font-h2 text-[14px] text-on-surface mb-0">ASOCIART - ANGEL GARCIA - DR. NAVATTO GARCIA</h2>
+<div class="flex flex-wrap gap-xs text-[11px] text-on-surface-variant">
+<div class="flex items-center gap-xs">
+<span class="font-semibold">De:</span>
+<span class="">autorizaciones@asociart.com.ar</span>
+</div>
+<div class="flex items-center gap-xs">
+<span class="font-semibold">Para:</span>
+<span class="">ingresos@districorr.com.ar</span>
+</div>
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-[12px]">calendar_today</span>
+<span class="">19/06/26 - 14:30 hs</span>
+</div>
+</div>
+</div>
+<div class="flex gap-xs">
+<button class="p-1 hover:bg-surface-container rounded-full text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">print</span>
+</button>
+<button class="p-1 hover:bg-surface-container rounded-full text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">share</span>
+</button>
+</div>
+</div>
+<!-- Email Body -->
+<div class="border-t border-outline-variant pt-sm mt-sm">
+<div class="prose prose-sm max-w-none text-on-surface leading-tight space-y-xs text-[12px]">
+<p class="">Estimados,</p>
+<p class="">El departamento de autorizaciones de Asociart confirma la cobertura total de la prótesis de rodilla solicitada para el paciente <strong>Angel Ariel Garcia</strong> (DNI 20.363.165). Se adjunta el certificado oficial Nro 9.</p>
+<p class="">Se requiere la validación de los números de lote una vez consumidos en cirugía para la facturación final.</p>
+<p class="">Saludos cordiales,<br>Dpto. de Auditoría Médica - Asociart ART</p>
+</div>
+</div>
+</div>
+<!-- Primary Evidence (PDF Preview) -->
+<div class="bg-white border border-outline-variant rounded overflow-hidden shadow-sm">
+<div class="p-xs border-b border-outline-variant bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[16px]">picture_as_pdf</span>
+<span class="font-h3 text-[11px]">Certificado_Autorizacion_9.pdf</span>
+</div>
+<div class="flex gap-xs">
+<button class="text-primary font-label-caps text-[9px] hover:underline flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">download</span> Descargar
+        </button>
+<button class="bg-primary text-white font-label-caps text-[9px] px-xs py-0.5 rounded hover:opacity-90 transition-opacity">Ver Archivo</button>
+</div>
+</div>
+<div class="bg-surface-dim flex justify-center p-xs">
+<div class="relative group cursor-pointer w-full max-w-[180px] aspect-[1/1.4] bg-white shadow-sm border border-outline-variant p-xs overflow-hidden max-h-[120px]" onclick="toggleDrawer()">
+<div class="h-2 w-1/4 bg-surface-container-high mb-sm"></div>
+<div class="space-y-xs">
+<div class="h-1 w-full bg-surface-container-low"></div>
+<div class="h-1 w-5/6 bg-surface-container-low"></div>
+</div>
+<div class="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<div class="bg-white/90 px-sm py-1 rounded-full flex items-center gap-xs shadow-lg">
+<span class="material-symbols-outlined text-primary text-[14px]">zoom_in</span>
+<span class="text-primary font-semibold text-[10px]">Expandir</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Other Attachments -->
+<div class="bg-white border border-outline-variant rounded shadow-sm">
+<div class="p-xs border-b border-outline-variant">
+<h3 class="font-label-caps text-[9px] text-on-surface-variant">OTROS ADJUNTOS (3)</h3>
+</div>
+<div class="divide-y divide-outline-variant/30">
+<div class="p-xs flex items-center justify-between hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-on-surface-variant text-[16px]">image</span>
+<div>
+<p class="font-body-sm font-semibold text-on-surface text-[11px]">Radiografia_Pre_01.jpg</p>
+<p class="text-[9px] text-on-surface-variant">1.2 MB</p>
+</div>
+</div>
+<div class="flex gap-xs">
+<button class="text-primary text-[14px] material-symbols-outlined">visibility</button>
+<button class="text-primary text-[14px] material-symbols-outlined">download</button>
+</div>
+</div>
+<div class="p-xs flex items-center justify-between hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-on-surface-variant text-[16px]">description</span>
+<div>
+<p class="font-body-sm font-semibold text-on-surface text-[11px]">Orden_Medica_Navatto.pdf</p>
+<p class="text-[9px] text-on-surface-variant">0.4 MB</p>
+</div>
+</div>
+<div class="flex gap-xs">
+<button class="text-primary text-[14px] material-symbols-outlined">visibility</button>
+<button class="text-primary text-[14px] material-symbols-outlined">download</button>
+</div>
+</div>
+</div>
+</div></div></div>
+</main>
+<!-- Side Drawer Mockup (Hidden by default, used for interaction) -->
+<div class="fixed right-0 top-0 h-full w-drawer-width bg-white shadow-2xl z-[100] transform transition-transform duration-300 ease-in-out border-l border-outline-variant translate-x-full" id="case-drawer"><div class="flex flex-col h-full">
+<div class="p-lg border-b border-outline-variant flex justify-between items-center">
+<div>
+<h2 class="font-h2 text-primary">Certificado_Autorizacion_9.pdf</h2>
+<p class="text-body-sm text-on-surface-variant">Vista previa de documento oficial</p>
+</div>
+<button class="material-symbols-outlined p-sm hover:bg-surface-container rounded-full" onclick="toggleDrawer()">close</button>
+</div>
+<div class="flex-1 overflow-y-auto bg-surface-dim p-lg flex justify-center">
+<div class="w-full max-w-2xl aspect-[1/1.4] bg-white shadow-2xl border border-outline-variant p-xl">
+<div class="h-12 w-1/3 bg-surface-container-high mb-xl"></div>
+<div class="space-y-md">
+<div class="h-4 w-full bg-surface-container-low"></div>
+<div class="h-4 w-full bg-surface-container-low"></div>
+<div class="h-4 w-5/6 bg-surface-container-low"></div>
+<div class="h-4 w-full bg-surface-container-low"></div>
+<div class="h-4 w-4/6 bg-surface-container-low"></div>
+</div>
+<div class="mt-xl grid grid-cols-2 gap-xl">
+<div class="h-32 border border-outline-variant rounded bg-surface-container-lowest"></div>
+<div class="h-32 border border-outline-variant rounded bg-surface-container-lowest"></div>
+</div>
+<div class="mt-xl space-y-md">
+<div class="h-4 w-full bg-surface-container-low"></div>
+<div class="h-4 w-2/3 bg-surface-container-low"></div>
+</div>
+</div>
+</div>
+<div class="p-lg border-t border-outline-variant bg-white flex gap-md">
+<button class="flex-1 bg-primary text-white font-body-md py-sm rounded-lg flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined">download</span> Descargar PDF
+</button>
+<button class="flex-1 border border-primary text-primary font-body-md py-sm rounded-lg">
+Cerrar Vista
+</button>
+</div>
+</div></div>
+<script>
+        function toggleDrawer() {
+            const drawer = document.getElementById('case-drawer');
+            drawer.classList.toggle('translate-x-full');
+        }
+
+        // Micro-interaction for hover effects on cards
+        document.querySelectorAll('.bg-white.border').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.classList.add('border-primary/30');
+            });
+            card.addEventListener('mouseleave', () => {
+                card.classList.remove('border-primary/30');
+            });
+        });
+    </script>
+
+
+
+
+</body></html>

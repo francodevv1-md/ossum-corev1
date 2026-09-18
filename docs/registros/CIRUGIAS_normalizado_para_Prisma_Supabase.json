@@ -1,0 +1,2204 @@
+{
+  "metadata": {
+    "formato": "cirugias-import-v1",
+    "generado_el": "2026-07-15T09:01:08.381Z",
+    "archivo_fuente": "CIRUGIAS base de datos.xlsx",
+    "hoja_fuente": "Hoja1",
+    "cantidad_cirugias": 81,
+    "cantidad_clientes": 30,
+    "cantidad_pacientes": 74,
+    "cantidad_medicos": 39,
+    "cantidad_estados": 3,
+    "total_presupuesto": 187821283.26,
+    "total_facturado": 43695751.72,
+    "orden_importacion": [
+      "clientes",
+      "pacientes",
+      "medicos",
+      "estados",
+      "cirugias"
+    ],
+    "notas": [
+      "Las fechas usan ISO 8601 YYYY-MM-DD.",
+      "Los campos vacíos se representan con null.",
+      "Los importes son números; en Prisma/Postgres se recomienda Decimal/Numeric.",
+      "expediente es la clave natural única de cirugias."
+    ]
+  },
+  "schema_hints": {
+    "clientes": {
+      "primary_import_key": "cliente_key",
+      "unique": [
+        "cliente_key"
+      ]
+    },
+    "pacientes": {
+      "primary_import_key": "paciente_key",
+      "unique": [
+        "paciente_key"
+      ]
+    },
+    "medicos": {
+      "primary_import_key": "medico_key",
+      "unique": [
+        "medico_key"
+      ]
+    },
+    "estados": {
+      "primary_import_key": "estado_key",
+      "unique": [
+        "estado_key"
+      ]
+    },
+    "cirugias": {
+      "primary_import_key": "expediente",
+      "unique": [
+        "expediente"
+      ],
+      "foreign_keys": {
+        "cliente_key": "clientes.cliente_key",
+        "paciente_key": "pacientes.paciente_key",
+        "medico_key": "medicos.medico_key",
+        "estado_key": "estados.estado_key"
+      }
+    }
+  },
+  "clientes": [
+    {
+      "cliente_key": "CLI-0001",
+      "nombre_original": "PROFESIONAL"
+    },
+    {
+      "cliente_key": "CLI-0002",
+      "nombre_original": "PARTICULAR"
+    },
+    {
+      "cliente_key": "CLI-0003",
+      "nombre_original": "OSDE - ORGANIZACIÓN DE SERVICIOS DIRECTOS EMPRESARIOS"
+    },
+    {
+      "cliente_key": "CLI-0004",
+      "nombre_original": "PREVENCION ART"
+    },
+    {
+      "cliente_key": "CLI-0005",
+      "nombre_original": "MABEL MOULIN"
+    },
+    {
+      "cliente_key": "CLI-0006",
+      "nombre_original": "ASOCIART SA ASEGURADORA DE RIESGOS DEL TRABAJO"
+    },
+    {
+      "cliente_key": "CLI-0007",
+      "nombre_original": "IASEP - INSTITUTO ASISTENCIA SOCIAL PARA EMPLEADOS PUBLICOS"
+    },
+    {
+      "cliente_key": "CLI-0008",
+      "nombre_original": "OMICRON S.R.L."
+    },
+    {
+      "cliente_key": "CLI-0009",
+      "nombre_original": "IOSCOR - INSTITUTO DE OBRA SOCIAL DE LA PROVINCIA DE C"
+    },
+    {
+      "cliente_key": "CLI-0010",
+      "nombre_original": "FEDERACION PATRONAL SEGUROS S.A."
+    },
+    {
+      "cliente_key": "CLI-0011",
+      "nombre_original": "LA SEGUNDA ART"
+    },
+    {
+      "cliente_key": "CLI-0012",
+      "nombre_original": "PARANA ASEGURADORA DE RIESGOS DEL TRABAJO SA"
+    },
+    {
+      "cliente_key": "CLI-0013",
+      "nombre_original": "CARLOS DANIEL DÍAZ"
+    },
+    {
+      "cliente_key": "CLI-0014",
+      "nombre_original": "HOSPITAL DR JULIO C PERRANDO"
+    },
+    {
+      "cliente_key": "CLI-0015",
+      "nombre_original": "MINISTERIO DE DESARROLLO HUMANO FORMOSA"
+    },
+    {
+      "cliente_key": "CLI-0016",
+      "nombre_original": "OSSEG - OBRA SOCIAL DE SEGURO"
+    },
+    {
+      "cliente_key": "CLI-0017",
+      "nombre_original": "PAMI"
+    },
+    {
+      "cliente_key": "CLI-0018",
+      "nombre_original": "FUN.CA.CORR"
+    },
+    {
+      "cliente_key": "CLI-0019",
+      "nombre_original": "PROMEDIK S.R.L."
+    },
+    {
+      "cliente_key": "CLI-0020",
+      "nombre_original": "MINISTERIO DE SALUD PUBLICA CORRIENTES"
+    },
+    {
+      "cliente_key": "CLI-0021",
+      "nombre_original": "PROTECCION MEDICA ESCOLAR S A"
+    },
+    {
+      "cliente_key": "CLI-0022",
+      "nombre_original": "HOSPITAL ALTA COMPLEJIDAD (HAC)"
+    },
+    {
+      "cliente_key": "CLI-0023",
+      "nombre_original": "UCPIM"
+    },
+    {
+      "cliente_key": "CLI-0024",
+      "nombre_original": "PROAXIS"
+    },
+    {
+      "cliente_key": "CLI-0025",
+      "nombre_original": "MINISTERIO DE SALUD PUBLICA CHACO"
+    },
+    {
+      "cliente_key": "CLI-0026",
+      "nombre_original": "PREVENCION SALUD SOCIEDAD ANONIMA"
+    },
+    {
+      "cliente_key": "CLI-0027",
+      "nombre_original": "SERGIO ZIMBALIST"
+    },
+    {
+      "cliente_key": "CLI-0028",
+      "nombre_original": "MAZZA ADRIAN"
+    },
+    {
+      "cliente_key": "CLI-0029",
+      "nombre_original": "SOUTH AMERICA IMPLANTS SA"
+    },
+    {
+      "cliente_key": "CLI-0030",
+      "nombre_original": "UNION PERSONAL"
+    }
+  ],
+  "pacientes": [
+    {
+      "paciente_key": "PAC-0001",
+      "nombre_original": "CALLABA GERARDO ALBERTO"
+    },
+    {
+      "paciente_key": "PAC-0002",
+      "nombre_original": "RODRIGUEZ CRISTIAN"
+    },
+    {
+      "paciente_key": "PAC-0003",
+      "nombre_original": "MANZINO BELLEZZA MARIA"
+    },
+    {
+      "paciente_key": "PAC-0004",
+      "nombre_original": "LOPEZ YANINA ELIZABETH"
+    },
+    {
+      "paciente_key": "PAC-0005",
+      "nombre_original": "ORTIZ BRUNO"
+    },
+    {
+      "paciente_key": "PAC-0006",
+      "nombre_original": "MABEL MOULIN"
+    },
+    {
+      "paciente_key": "PAC-0007",
+      "nombre_original": "MAIDANA RAMONA BEATRIZ"
+    },
+    {
+      "paciente_key": "PAC-0008",
+      "nombre_original": "GAUNA LEONARDO AXEL"
+    },
+    {
+      "paciente_key": "PAC-0009",
+      "nombre_original": "ZUAREZ ANGEL JOEL"
+    },
+    {
+      "paciente_key": "PAC-0010",
+      "nombre_original": "PEDRO CATTAY"
+    },
+    {
+      "paciente_key": "PAC-0011",
+      "nombre_original": "CABRERA HERNAN NICOLAS"
+    },
+    {
+      "paciente_key": "PAC-0012",
+      "nombre_original": "GORDILLO ROLDAN FRANCISCO NAHUEL"
+    },
+    {
+      "paciente_key": "PAC-0013",
+      "nombre_original": "MANETTI, FRANCO"
+    },
+    {
+      "paciente_key": "PAC-0014",
+      "nombre_original": "NAVARRETE MARIO ROLANDO"
+    },
+    {
+      "paciente_key": "PAC-0015",
+      "nombre_original": "AVALOS DIEGO ORLANDO"
+    },
+    {
+      "paciente_key": "PAC-0016",
+      "nombre_original": "BARATTINI ROCIO DEL VALLE"
+    },
+    {
+      "paciente_key": "PAC-0017",
+      "nombre_original": "SANCHEZ LEANDRO JESUS"
+    },
+    {
+      "paciente_key": "PAC-0018",
+      "nombre_original": "GARATE EUSEBIO MARTIRES"
+    },
+    {
+      "paciente_key": "PAC-0019",
+      "nombre_original": "GOMEZ ALBERTO ALEXIS"
+    },
+    {
+      "paciente_key": "PAC-0020",
+      "nombre_original": "MACIEL GUILLERMO FABIAN"
+    },
+    {
+      "paciente_key": "PAC-0021",
+      "nombre_original": "RODA VERONICA INES"
+    },
+    {
+      "paciente_key": "PAC-0022",
+      "nombre_original": "VALDEZ HECTOR HORACIO"
+    },
+    {
+      "paciente_key": "PAC-0023",
+      "nombre_original": "ARGUIMADU CLAUDIA MARISA"
+    },
+    {
+      "paciente_key": "PAC-0024",
+      "nombre_original": "AMARILLA CASIMIRO ISMAEL"
+    },
+    {
+      "paciente_key": "PAC-0025",
+      "nombre_original": "ALARCON PEDRO J"
+    },
+    {
+      "paciente_key": "PAC-0026",
+      "nombre_original": "NUÑEZ SABRINA NOELIA"
+    },
+    {
+      "paciente_key": "PAC-0027",
+      "nombre_original": "ROMERO LAURA BIENVENIDA"
+    },
+    {
+      "paciente_key": "PAC-0028",
+      "nombre_original": "KIBICH IVANA"
+    },
+    {
+      "paciente_key": "PAC-0029",
+      "nombre_original": "CUQUEJO LAURA"
+    },
+    {
+      "paciente_key": "PAC-0030",
+      "nombre_original": "VEGA CARLOS"
+    },
+    {
+      "paciente_key": "PAC-0031",
+      "nombre_original": "MIEREZ DANIEL"
+    },
+    {
+      "paciente_key": "PAC-0032",
+      "nombre_original": "ANGEL CARLOS ALBERTO"
+    },
+    {
+      "paciente_key": "PAC-0033",
+      "nombre_original": "ROJAS MICAELA"
+    },
+    {
+      "paciente_key": "PAC-0034",
+      "nombre_original": "PIPAON PABLO"
+    },
+    {
+      "paciente_key": "PAC-0035",
+      "nombre_original": "PUJOL MIGUEL ANGEL"
+    },
+    {
+      "paciente_key": "PAC-0036",
+      "nombre_original": "SABAO LIDIA"
+    },
+    {
+      "paciente_key": "PAC-0037",
+      "nombre_original": "HERNAN ROBERTO"
+    },
+    {
+      "paciente_key": "PAC-0038",
+      "nombre_original": "GISELA LOPEZ"
+    },
+    {
+      "paciente_key": "PAC-0039",
+      "nombre_original": "DALDAVO NELLY"
+    },
+    {
+      "paciente_key": "PAC-0040",
+      "nombre_original": "DESCARTABLES"
+    },
+    {
+      "paciente_key": "PAC-0041",
+      "nombre_original": "MONZON IGNACIO"
+    },
+    {
+      "paciente_key": "PAC-0042",
+      "nombre_original": "IBARRA CARMEN"
+    },
+    {
+      "paciente_key": "PAC-0043",
+      "nombre_original": "BARRIOS PEDRO"
+    },
+    {
+      "paciente_key": "PAC-0044",
+      "nombre_original": "CAMARGO GLORIA ESTER"
+    },
+    {
+      "paciente_key": "PAC-0045",
+      "nombre_original": "SABAO LIDIA ESTER"
+    },
+    {
+      "paciente_key": "PAC-0046",
+      "nombre_original": "CARDOZO LAURA"
+    },
+    {
+      "paciente_key": "PAC-0047",
+      "nombre_original": "RODRIGUEZ BLANCA"
+    },
+    {
+      "paciente_key": "PAC-0048",
+      "nombre_original": "ZALAZAR MARCIANA"
+    },
+    {
+      "paciente_key": "PAC-0049",
+      "nombre_original": "MARTIN VILLAMAYOR"
+    },
+    {
+      "paciente_key": "PAC-0050",
+      "nombre_original": "BAEZ BENICIO"
+    },
+    {
+      "paciente_key": "PAC-0051",
+      "nombre_original": "AGUIRRE DIEGO"
+    },
+    {
+      "paciente_key": "PAC-0052",
+      "nombre_original": "INSAURRALDE VIVIANA"
+    },
+    {
+      "paciente_key": "PAC-0053",
+      "nombre_original": "FERNANDEZ BLANCA ESTER"
+    },
+    {
+      "paciente_key": "PAC-0054",
+      "nombre_original": "VERON GASTON DE JESUS"
+    },
+    {
+      "paciente_key": "PAC-0055",
+      "nombre_original": "ENCINAS RUBEN ENRIQUE"
+    },
+    {
+      "paciente_key": "PAC-0056",
+      "nombre_original": "ELVAS CARO RAMIRO"
+    },
+    {
+      "paciente_key": "PAC-0057",
+      "nombre_original": "PIGNATARI RAQUEL"
+    },
+    {
+      "paciente_key": "PAC-0058",
+      "nombre_original": "LUGO CELESTINA"
+    },
+    {
+      "paciente_key": "PAC-0059",
+      "nombre_original": "DOMINGUEZ FABIAN AMADEO"
+    },
+    {
+      "paciente_key": "PAC-0060",
+      "nombre_original": "GOMEZ PATRICIA MARGARITA"
+    },
+    {
+      "paciente_key": "PAC-0061",
+      "nombre_original": "RUSSO TROCCOLI MARIA"
+    },
+    {
+      "paciente_key": "PAC-0062",
+      "nombre_original": "VEGA CEFERINO"
+    },
+    {
+      "paciente_key": "PAC-0063",
+      "nombre_original": "PIASENTINI LUZ MARINA"
+    },
+    {
+      "paciente_key": "PAC-0064",
+      "nombre_original": "CUISER CARLOS,"
+    },
+    {
+      "paciente_key": "PAC-0065",
+      "nombre_original": "ZALAZAR FERNANDO"
+    },
+    {
+      "paciente_key": "PAC-0066",
+      "nombre_original": "ROMERO CRISTIAN"
+    },
+    {
+      "paciente_key": "PAC-0067",
+      "nombre_original": "MARÍA MAGDALENA PERA"
+    },
+    {
+      "paciente_key": "PAC-0068",
+      "nombre_original": "PEREYRA LAUTARO ALEXANDER"
+    },
+    {
+      "paciente_key": "PAC-0069",
+      "nombre_original": "ORTIZ RICARDO"
+    },
+    {
+      "paciente_key": "PAC-0070",
+      "nombre_original": "310-35078-2025"
+    },
+    {
+      "paciente_key": "PAC-0071",
+      "nombre_original": "CABRERA MIRTA BEATRIZ"
+    },
+    {
+      "paciente_key": "PAC-0072",
+      "nombre_original": "CANTERO LILIA STELA"
+    },
+    {
+      "paciente_key": "PAC-0073",
+      "nombre_original": "CRISTALDO MANUEL"
+    },
+    {
+      "paciente_key": "PAC-0074",
+      "nombre_original": "GONZALEZ HERMENEGILDO"
+    }
+  ],
+  "medicos": [
+    {
+      "medico_key": "MED-0001",
+      "nombre_original": "DEFELITTO CARLOS"
+    },
+    {
+      "medico_key": "MED-0002",
+      "nombre_original": "LEZCANO SANTIAGO"
+    },
+    {
+      "medico_key": "MED-0003",
+      "nombre_original": "REPARAZ JAVIER"
+    },
+    {
+      "medico_key": "MED-0004",
+      "nombre_original": "OZUNA ERIC"
+    },
+    {
+      "medico_key": "MED-0005",
+      "nombre_original": "FRISONE HORACIO"
+    },
+    {
+      "medico_key": "MED-0006",
+      "nombre_original": "ALVAREZ SALINAS EMILIANO"
+    },
+    {
+      "medico_key": "MED-0007",
+      "nombre_original": "SIGEL JUAN"
+    },
+    {
+      "medico_key": "MED-0008",
+      "nombre_original": "JALFON DIEGO SEBASTIAN"
+    },
+    {
+      "medico_key": "MED-0009",
+      "nombre_original": "PIASENTINI SANTIAGO"
+    },
+    {
+      "medico_key": "MED-0010",
+      "nombre_original": "DEL BUONO MARCELO"
+    },
+    {
+      "medico_key": "MED-0011",
+      "nombre_original": "CALABRECE MARCELO"
+    },
+    {
+      "medico_key": "MED-0012",
+      "nombre_original": "BOGADO RAMON"
+    },
+    {
+      "medico_key": "MED-0013",
+      "nombre_original": "BALDERRAMA ROLANDO A."
+    },
+    {
+      "medico_key": "MED-0014",
+      "nombre_original": "MUNIAGURRIA CAMILO"
+    },
+    {
+      "medico_key": "MED-0015",
+      "nombre_original": "PRUYAS PATRICIO"
+    },
+    {
+      "medico_key": "MED-0016",
+      "nombre_original": "ALVARENGA FRANCO"
+    },
+    {
+      "medico_key": "MED-0017",
+      "nombre_original": "ESTOUP JUAN MARIA"
+    },
+    {
+      "medico_key": "MED-0018",
+      "nombre_original": "TERRAES ANTONIO"
+    },
+    {
+      "medico_key": "MED-0019",
+      "nombre_original": "RAMIREZ GABRIELA"
+    },
+    {
+      "medico_key": "MED-0020",
+      "nombre_original": "PAUBA NICOLAS"
+    },
+    {
+      "medico_key": "MED-0021",
+      "nombre_original": "DENIS ARIANA SOL"
+    },
+    {
+      "medico_key": "MED-0022",
+      "nombre_original": "RAMIREZ LEONARDO"
+    },
+    {
+      "medico_key": "MED-0023",
+      "nombre_original": "ORDENAVIA MARCELO"
+    },
+    {
+      "medico_key": "MED-0024",
+      "nombre_original": "BOSCARINO ADRIAN"
+    },
+    {
+      "medico_key": "MED-0025",
+      "nombre_original": "JUAN LUIS PIASENTINI"
+    },
+    {
+      "medico_key": "MED-0026",
+      "nombre_original": "OSCAR ESPEJO PARRA"
+    },
+    {
+      "medico_key": "MED-0027",
+      "nombre_original": "BARRIOS CENTURION RAMON"
+    },
+    {
+      "medico_key": "MED-0028",
+      "nombre_original": "IHLENFELD CLAUDIA"
+    },
+    {
+      "medico_key": "MED-0029",
+      "nombre_original": "MORENO PABLO"
+    },
+    {
+      "medico_key": "MED-0030",
+      "nombre_original": "CONRADO BENITEZ"
+    },
+    {
+      "medico_key": "MED-0031",
+      "nombre_original": "IHLENFELD PABLO"
+    },
+    {
+      "medico_key": "MED-0032",
+      "nombre_original": "BARRERA SILVA"
+    },
+    {
+      "medico_key": "MED-0033",
+      "nombre_original": "JUAREZ ARIEL"
+    },
+    {
+      "medico_key": "MED-0034",
+      "nombre_original": "ROMERO JAVIER"
+    },
+    {
+      "medico_key": "MED-0035",
+      "nombre_original": "ARROYO MANUEL"
+    },
+    {
+      "medico_key": "MED-0036",
+      "nombre_original": "ERRO JOSE ANTONIO"
+    },
+    {
+      "medico_key": "MED-0037",
+      "nombre_original": "ISCARO BRAVO FERNANDO"
+    },
+    {
+      "medico_key": "MED-0038",
+      "nombre_original": "PAUBA DANIEL"
+    },
+    {
+      "medico_key": "MED-0039",
+      "nombre_original": "PACHECO NICOLAS"
+    }
+  ],
+  "estados": [
+    {
+      "estado_key": "EST-0001",
+      "nombre_original": "AUTORIZADO"
+    },
+    {
+      "estado_key": "EST-0002",
+      "nombre_original": "PENDIENTE"
+    },
+    {
+      "estado_key": "EST-0003",
+      "nombre_original": "EN TRÁNSITO"
+    }
+  ],
+  "cirugias": [
+    {
+      "expediente": 6920,
+      "cliente_key": "CLI-0001",
+      "paciente_key": "PAC-0001",
+      "medico_key": "MED-0001",
+      "material_descripcion": "PROTESIS TOTAL DE CADERA CEMENTADA - LOGISTICA PARA SWIPRO - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 800000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 2,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6918,
+      "cliente_key": "CLI-0002",
+      "paciente_key": "PAC-0002",
+      "medico_key": "MED-0002",
+      "material_descripcion": "2 TORNILLOS CANULADOS 6.5 - 2 PLACAS DE RECONTRUCCION - CAJA DE REDUCCION PELVICA - SET DE PLACAS RECTA Y CURVA - INSTRUMENTAL COMPLETO PARA PELVIS - ASISTENCIA TECNICA - SET DE DESCARTABLES - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 1400000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 3,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6914,
+      "cliente_key": "CLI-0003",
+      "paciente_key": "PAC-0003",
+      "medico_key": "MED-0003",
+      "material_descripcion": "PLACA TERCIO DE TUBO 8 ORIFICIOS EN TITA - TORNILLERA COMPLETA - MOTOR - INSTRUMENTAL A PRESTAMO - - -",
+      "fecha_cirugia_iso": "2026-07-16",
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 280000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 4,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6911,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0004",
+      "medico_key": "MED-0004",
+      "material_descripcion": "PLACA TERCIO 3.5 BLOQUEADA - PAR DE TORNILLOS CANULADOS 4,5 - SET DE COLOCACION + MOTOR -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 790516.07,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 5,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6909,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0005",
+      "medico_key": "MED-0005",
+      "material_descripcion": "PUNTA SHAVER 5.5 - PAR DE TORNILLOS INTERFERENCIAL - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-22",
+      "estado_key": "EST-0002",
+      "autorizacion": "3016265",
+      "total_presupuesto": 737057,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 6,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6907,
+      "cliente_key": "CLI-0005",
+      "paciente_key": "PAC-0006",
+      "medico_key": "MED-0006",
+      "material_descripcion": "SET DE PROTESIS REEMPLAZO TOTAL DE RODIL - CEMENTO - SET DE DESCARTABLE - SET DE COLOCACION Y MOTOR A PRESTAMO - - -",
+      "fecha_cirugia_iso": "2026-07-15",
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 6800000,
+      "total_facturado": 6800000,
+      "fecha_factura_iso": "2026-07-14",
+      "vencimiento_factura_iso": "2026-08-14",
+      "factura_numero": "FV-A-4-694",
+      "fila_origen": 7,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6905,
+      "cliente_key": "CLI-0006",
+      "paciente_key": "PAC-0007",
+      "medico_key": "MED-0001",
+      "material_descripcion": "CLAVO ACERROJADO PARA TIBIA EN TITANIO - PLACA ANATOMICA PARA PERONE - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-16",
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 1582100,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 8,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6902,
+      "cliente_key": "CLI-0006",
+      "paciente_key": "PAC-0008",
+      "medico_key": "MED-0007",
+      "material_descripcion": "PLACA PARA RADIO DISTAL ANATOMICA BLOQ - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-16",
+      "estado_key": "EST-0002",
+      "autorizacion": "6-229406",
+      "total_presupuesto": 481640,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 9,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6901,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0009",
+      "medico_key": "MED-0008",
+      "material_descripcion": "PAR DE TORNILLOS INTERFERENCIALES PARA L - PUNTA DE SHAVER 5,5MM - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-16",
+      "estado_key": "EST-0003",
+      "autorizacion": "3007668",
+      "total_presupuesto": 797057,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 10,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6900,
+      "cliente_key": "CLI-0002",
+      "paciente_key": "PAC-0010",
+      "medico_key": "MED-0009",
+      "material_descripcion": "AIKON DE RODILLA CON VASTAGO Y CUÑA -",
+      "fecha_cirugia_iso": "2026-07-28",
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 11500000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 11,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6898,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0011",
+      "medico_key": "MED-0010",
+      "material_descripcion": "CLAVIJA 0.5 -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "3023126",
+      "total_presupuesto": 9911.46,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 12,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6897,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0012",
+      "medico_key": "MED-0011",
+      "material_descripcion": "CLAVO ENDOMEDULAR ACERROJADO P/TIBIA EN - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-14",
+      "estado_key": "EST-0003",
+      "autorizacion": "3023407",
+      "total_presupuesto": 953242.54,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 13,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6896,
+      "cliente_key": "CLI-0006",
+      "paciente_key": "PAC-0013",
+      "medico_key": "MED-0012",
+      "material_descripcion": "SUTURA DESLIZANTE DE ACROMIO CLAVICULAR - SUTURA DE ALTA RESISTENCIA - SET DE INSTRUMENTAL A COLOCACION -",
+      "fecha_cirugia_iso": "2026-07-16",
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 916170,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 14,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6893,
+      "cliente_key": "CLI-0007",
+      "paciente_key": "PAC-0014",
+      "medico_key": "MED-0013",
+      "material_descripcion": "PUNTA SHAVER 3.5 STRYKER -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 480000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 15,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6891,
+      "cliente_key": "CLI-0008",
+      "paciente_key": "PAC-0015",
+      "medico_key": "MED-0006",
+      "material_descripcion": "BOTON AJUSTABLE SISTEMA CERRADO - ACROMIO CLAVICULAR - PUNTA RADIO FRECUENCIA - ARPON DE PEEK KNOTLESS 3.5MM - SUTURA TAPE - CABESTRILLO TIPO VITNAM -",
+      "fecha_cirugia_iso": "2026-07-15",
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 3287400,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 16,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6890,
+      "cliente_key": "CLI-0009",
+      "paciente_key": "PAC-0016",
+      "medico_key": null,
+      "material_descripcion": "TORNILLOS CANULADOS DE TITANIO 3.5 A 6. - SET DE COLOCACION -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 272000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 17,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": "medico_faltante"
+    },
+    {
+      "expediente": 6887,
+      "cliente_key": "CLI-0010",
+      "paciente_key": "PAC-0017",
+      "medico_key": "MED-0014",
+      "material_descripcion": "PLACA 3.5 EN TITANIO DCP-LCP - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-17",
+      "estado_key": "EST-0003",
+      "autorizacion": null,
+      "total_presupuesto": 471000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 18,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6886,
+      "cliente_key": "CLI-0006",
+      "paciente_key": "PAC-0018",
+      "medico_key": "MED-0006",
+      "material_descripcion": "CEMENTO CON ATB GENTAMICINA - SER DE EXTRACCION TIPO MORELAND - GUIA ENDOMEDULAR CON FRESAS DE FEMUR Y T - SUTURA MECANICA DE PIEL 35 DISPAROS - DESCARTABLE -",
+      "fecha_cirugia_iso": "2026-07-17",
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 895000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 19,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6873,
+      "cliente_key": "CLI-0011",
+      "paciente_key": "PAC-0019",
+      "medico_key": "MED-0015",
+      "material_descripcion": "MICROSIERRA - CLAVIJA 1,5 - CABESTRILLO TIPO VITMAN -",
+      "fecha_cirugia_iso": "2026-07-14",
+      "estado_key": "EST-0002",
+      "autorizacion": "1366868",
+      "total_presupuesto": 85000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 20,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6868,
+      "cliente_key": "CLI-0012",
+      "paciente_key": "PAC-0020",
+      "medico_key": "MED-0006",
+      "material_descripcion": "ARPON DE 3MM DOBLE SUTURA - ARPON DE 5MM DOBLE SUTURA - PUNTA DE SHAVER 3.5 - U-DRAPE - BOMBA DE INFUSION - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-15",
+      "estado_key": "EST-0002",
+      "autorizacion": null,
+      "total_presupuesto": 3865000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 21,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6865,
+      "cliente_key": "CLI-0010",
+      "paciente_key": "PAC-0021",
+      "medico_key": "MED-0001",
+      "material_descripcion": "CLAVO ENDOMEDULAR ACERROJADO - PARA TIBIA EN TITANIO - MOTOR MAKITA - SET DE INSTRUMENTAL A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-13",
+      "estado_key": "EST-0003",
+      "autorizacion": "893203",
+      "total_presupuesto": 1046330,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 22,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6863,
+      "cliente_key": "CLI-0011",
+      "paciente_key": "PAC-0022",
+      "medico_key": "MED-0005",
+      "material_descripcion": "PUNTA SHAVER 4.5 -",
+      "fecha_cirugia_iso": "2026-07-15",
+      "estado_key": "EST-0003",
+      "autorizacion": null,
+      "total_presupuesto": 370000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 23,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6859,
+      "cliente_key": "CLI-0013",
+      "paciente_key": "PAC-0023",
+      "medico_key": "MED-0016",
+      "material_descripcion": "PLACA VOLAR ANATOMICA PARA RADIO DISTAL - EN TITANIO - SET DE COLOCACION + MOTOR EN CALIDAD DE - ASISTENCIA TECNICA - ESTIRIL DRAPE + U DRAPE - - -",
+      "fecha_cirugia_iso": "2026-07-14",
+      "estado_key": "EST-0003",
+      "autorizacion": null,
+      "total_presupuesto": 550000,
+      "total_facturado": 550000,
+      "fecha_factura_iso": "2026-07-09",
+      "vencimiento_factura_iso": "2026-08-09",
+      "factura_numero": "FV-A-4-688",
+      "fila_origen": 24,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6858,
+      "cliente_key": "CLI-0009",
+      "paciente_key": "PAC-0024",
+      "medico_key": "MED-0017",
+      "material_descripcion": "PLACA PHILO BLOQUEADA P/HUMERO -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "3316/2026",
+      "total_presupuesto": 495000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 25,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6857,
+      "cliente_key": "CLI-0009",
+      "paciente_key": "PAC-0025",
+      "medico_key": "MED-0018",
+      "material_descripcion": "PLACA DE PERONE DISTAL 3.5 BLOQUEADA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "3317/2026",
+      "total_presupuesto": 473415,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 26,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6851,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0026",
+      "medico_key": "MED-0008",
+      "material_descripcion": "PAR DE TORNILLOS INTERFERENCIALES PARA L - PUNTA DE SHAVER 5,5MM - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-13",
+      "estado_key": "EST-0003",
+      "autorizacion": "3002339",
+      "total_presupuesto": 797057,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 27,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6849,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0027",
+      "medico_key": "MED-0019",
+      "material_descripcion": "TORNILLOS CANULADOS CON ARANDELAS - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-10",
+      "estado_key": "EST-0003",
+      "autorizacion": "3018849",
+      "total_presupuesto": 287479.2,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 28,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6843,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0028",
+      "medico_key": "MED-0019",
+      "material_descripcion": "PLACAS BLOQUEADA DE 3.5 EXTERNA Y EN T P - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-14",
+      "estado_key": "EST-0003",
+      "autorizacion": "3019792",
+      "total_presupuesto": 1304726.18,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 29,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6837,
+      "cliente_key": "CLI-0007",
+      "paciente_key": "PAC-0029",
+      "medico_key": "MED-0020",
+      "material_descripcion": "SET DE CLAVO GAMMA DE TITANIO - 3 CLAVIJAS - DESCARTABLES - MOTOR - ANDADOR -",
+      "fecha_cirugia_iso": "2026-07-07",
+      "estado_key": "EST-0003",
+      "autorizacion": "C-014097-26",
+      "total_presupuesto": 1200000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 30,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6834,
+      "cliente_key": "CLI-0014",
+      "paciente_key": "PAC-0030",
+      "medico_key": "MED-0021",
+      "material_descripcion": "PLACA RECONSTRUCCION 3.5/4.5 BLOQUEADO E - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "736989",
+      "total_presupuesto": 397500,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 31,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6832,
+      "cliente_key": "CLI-0014",
+      "paciente_key": "PAC-0031",
+      "medico_key": "MED-0022",
+      "material_descripcion": "CLAVO ENDOMEDULAR ACERROJADO P/HUMERO - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": "2026-07-13",
+      "estado_key": "EST-0003",
+      "autorizacion": "611150",
+      "total_presupuesto": 350500,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 32,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6829,
+      "cliente_key": "CLI-0011",
+      "paciente_key": "PAC-0032",
+      "medico_key": "MED-0023",
+      "material_descripcion": "TORNILLO DE INTERFERENCIA TITANIO - PUNTA SHAVER 4.5 - GRAPA - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-13",
+      "estado_key": "EST-0003",
+      "autorizacion": "1362265",
+      "total_presupuesto": 804060,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 33,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6828,
+      "cliente_key": "CLI-0015",
+      "paciente_key": "PAC-0033",
+      "medico_key": "MED-0024",
+      "material_descripcion": "PLACA TERCIO DE TUBO EN ACERO 3.5 - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-21",
+      "estado_key": "EST-0002",
+      "autorizacion": "L015099",
+      "total_presupuesto": 491300,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 34,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6827,
+      "cliente_key": "CLI-0016",
+      "paciente_key": "PAC-0034",
+      "medico_key": "MED-0025",
+      "material_descripcion": "REEMPLAZO TOTAL DE RODILLA ANATOMICA - CEMENTO QUIRURGICO (2) - DESCARTABLES - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "7857572",
+      "total_presupuesto": 3982350,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 35,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6826,
+      "cliente_key": "CLI-0017",
+      "paciente_key": "PAC-0035",
+      "medico_key": "MED-0018",
+      "material_descripcion": "REEMPLAZO TOTAL DE RODILLA ANATOMICO - CEMENTO - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "150271428501/00",
+      "total_presupuesto": 5800000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 36,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6825,
+      "cliente_key": "CLI-0018",
+      "paciente_key": null,
+      "medico_key": null,
+      "material_descripcion": "SONDA VESICAL N18 TRIPLE VIA WELL- LEAD -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0003",
+      "autorizacion": null,
+      "total_presupuesto": 31380,
+      "total_facturado": 31380,
+      "fecha_factura_iso": "2026-07-13",
+      "vencimiento_factura_iso": "2026-08-13",
+      "factura_numero": "FV-B-4-2259",
+      "fila_origen": 37,
+      "estado_importacion": "REVISAR",
+      "observaciones_calidad": "paciente_faltante; medico_faltante"
+    },
+    {
+      "expediente": 6823,
+      "cliente_key": "CLI-0019",
+      "paciente_key": "PAC-0036",
+      "medico_key": "MED-0006",
+      "material_descripcion": "SISTEMA SLY LATARJET TITANIO - ESTERILIZACION - SET DE COLOCACION - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 1865200,
+      "total_facturado": 1865200,
+      "fecha_factura_iso": "2026-07-03",
+      "vencimiento_factura_iso": "2026-08-03",
+      "factura_numero": "FV-A-4-683",
+      "fila_origen": 38,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6819,
+      "cliente_key": "CLI-0004",
+      "paciente_key": "PAC-0037",
+      "medico_key": "MED-0008",
+      "material_descripcion": "SISTEMA ENDOBOTTON LOOP FIJO C/TORNILLO - PUNTA SHAVER 5.5 - SET DE COLOCACION A PRESTAMO - GRAPA -",
+      "fecha_cirugia_iso": "2026-07-14",
+      "estado_key": "EST-0003",
+      "autorizacion": "3013115",
+      "total_presupuesto": 1092948.9,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 39,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6813,
+      "cliente_key": "CLI-0002",
+      "paciente_key": "PAC-0038",
+      "medico_key": "MED-0026",
+      "material_descripcion": "PLACA PARA TIBIAL EN T Y L 3.5 - TORNILLOS CANULADOS 6.5 - CLAVIJAS - INMOVILIZADOR DE RODILLA - SET DE COLOCACION + MOTOR A PRESTAMO - - -",
+      "fecha_cirugia_iso": "2026-07-13",
+      "estado_key": "EST-0003",
+      "autorizacion": null,
+      "total_presupuesto": 900000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 40,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6811,
+      "cliente_key": "CLI-0002",
+      "paciente_key": "PAC-0039",
+      "medico_key": "MED-0027",
+      "material_descripcion": "SET DE TORNILLO 3.0 - SET DE GRAPAS 20 X 10 - SET DE TORNILLO DESCABEZABLES - SET DE COLOCACION A PRESTAMO - MOTOR + SIERRA DE CORTE - ZAPATO QUIRUGICO - - -",
+      "fecha_cirugia_iso": "2026-07-13",
+      "estado_key": "EST-0003",
+      "autorizacion": null,
+      "total_presupuesto": 850000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 41,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6789,
+      "cliente_key": "CLI-0020",
+      "paciente_key": "PAC-0040",
+      "medico_key": null,
+      "material_descripcion": "GUANTE CIRUGIA N°7 - VENDA YESADA 20X3M - VENDA YESADA 20X4M - JERINGA 60ML - JERINGA 10ML - JERINGA 5ML - SONDA DE ASPIRACION TIPO T - CATETER URETA FOLEY - BATERFLY 21G - BATERFLY 23G - BATERFLY 25G - BATERFLY 27G - TUBO ENDOTRAQUEAL -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "310-10821-2026",
+      "total_presupuesto": 8298999.92,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 42,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": "medico_faltante"
+    },
+    {
+      "expediente": 6770,
+      "cliente_key": "CLI-0021",
+      "paciente_key": "PAC-0041",
+      "medico_key": "MED-0023",
+      "material_descripcion": "PAR DE TORNILLOS DE INTERFERENCIA - GRAPA IQL - PUNTA SHAVER 4.5 - SETD E COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-06",
+      "estado_key": "EST-0003",
+      "autorizacion": "50619032",
+      "total_presupuesto": 898330,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 43,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6767,
+      "cliente_key": "CLI-0001",
+      "paciente_key": null,
+      "medico_key": "MED-0009",
+      "material_descripcion": "PAR DE TORNILLOS PARA LCA - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0003",
+      "autorizacion": null,
+      "total_presupuesto": 0.99,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 44,
+      "estado_importacion": "REVISAR",
+      "observaciones_calidad": "paciente_faltante"
+    },
+    {
+      "expediente": 6762,
+      "cliente_key": "CLI-0022",
+      "paciente_key": "PAC-0042",
+      "medico_key": "MED-0028",
+      "material_descripcion": "ARPON DE TITANIO 5MM - CAJA COMPLETA PINZAS ARTROSCOPICA PARA H - PINZA PASA HILO DE AUTOCAPTURA(TIPO FRIS - UDRAPE - STERIDRAPE - CABESTRILLO - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-21",
+      "estado_key": "EST-0002",
+      "autorizacion": "H-001774/2026",
+      "total_presupuesto": 2000000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 45,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6761,
+      "cliente_key": "CLI-0022",
+      "paciente_key": "PAC-0043",
+      "medico_key": null,
+      "material_descripcion": "PAR DE MULETA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "H-001682-2026",
+      "total_presupuesto": 72000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 46,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": "medico_faltante"
+    },
+    {
+      "expediente": 6752,
+      "cliente_key": "CLI-0009",
+      "paciente_key": "PAC-0044",
+      "medico_key": "MED-0029",
+      "material_descripcion": "PROTESIS TOTAL DE CADERA NO CEMENTADA IM -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "880-4849-2026",
+      "total_presupuesto": 6000000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 47,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6751,
+      "cliente_key": "CLI-0009",
+      "paciente_key": "PAC-0045",
+      "medico_key": null,
+      "material_descripcion": "ARPON DE PEEK 3MM DOBLE SUTURA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "880-4830-2026",
+      "total_presupuesto": 2012535,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 48,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": "medico_faltante"
+    },
+    {
+      "expediente": 6748,
+      "cliente_key": "CLI-0011",
+      "paciente_key": "PAC-0046",
+      "medico_key": "MED-0008",
+      "material_descripcion": "TORNILLO INTERFERENCIAL DE TITANIO - SISTEMA ENDOBOTTON - PUNTA SHAVER 5.5 - GRAPA - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": "2026-07-07",
+      "estado_key": "EST-0003",
+      "autorizacion": "1362932",
+      "total_presupuesto": 1175800,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 49,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6733,
+      "cliente_key": "CLI-0002",
+      "paciente_key": "PAC-0047",
+      "medico_key": "MED-0030",
+      "material_descripcion": "REEMPLAZO TOTAL DE RODILLA PIVOT MEDIAL - MODELO: ADVANCE- IMPORTADA - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 11100000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 50,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6731,
+      "cliente_key": "CLI-0023",
+      "paciente_key": null,
+      "medico_key": null,
+      "material_descripcion": "TOPE DE SILICONA P/ ENDODONCIA - REGLA MILIMETRADA PARA ADAPTACION DE CON - ESPONJERO P/ ENDODONCIA - CUÑA DE MADERA GENERICO -",
+      "fecha_cirugia_iso": "2026-07-02",
+      "estado_key": "EST-0003",
+      "autorizacion": "EXPTE N° U-019250-26",
+      "total_presupuesto": 400500,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 51,
+      "estado_importacion": "REVISAR",
+      "observaciones_calidad": "paciente_faltante; medico_faltante"
+    },
+    {
+      "expediente": 6669,
+      "cliente_key": "CLI-0017",
+      "paciente_key": "PAC-0048",
+      "medico_key": "MED-0018",
+      "material_descripcion": "SET DE EXTRACCION UNIVERSAL - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 150000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 52,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6626,
+      "cliente_key": "CLI-0007",
+      "paciente_key": "PAC-0049",
+      "medico_key": "MED-0031",
+      "material_descripcion": "REEMPLAZO TOTLA DE RODILLA EXCENTRICA AN - DE COLOCACION TAMAÑO PROTESICOS COMPLETO - CEMENTO QUIERURGICO - INMOVILIZADOR DE RODILLA -",
+      "fecha_cirugia_iso": "2026-07-28",
+      "estado_key": "EST-0002",
+      "autorizacion": "M-12199/2026",
+      "total_presupuesto": 3900000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 53,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6618,
+      "cliente_key": "CLI-0011",
+      "paciente_key": "PAC-0050",
+      "medico_key": "MED-0010",
+      "material_descripcion": "SET DE EXTRACCION -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "1353424",
+      "total_presupuesto": 40000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 54,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6614,
+      "cliente_key": "CLI-0024",
+      "paciente_key": "PAC-0051",
+      "medico_key": "MED-0032",
+      "material_descripcion": "PAR DE TORNILLOS DE INTERFRENCIA TITANIO - PUNTA SHAVER 4.5 - MICROSIERRA - SET DE COLOCACION -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 600900,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 55,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6613,
+      "cliente_key": "CLI-0025",
+      "paciente_key": "PAC-0052",
+      "medico_key": "MED-0033",
+      "material_descripcion": "PROTESIS P/REEMPLAZO TOTAL DE RODILLA IZ - COMPONENTE TIBIAL EN TITANIO EN 7 MEDIDA - DESCARTABLES (2UNIDADES) - INMOVILIZADOR ALRGO DE RODILLA - (2)CEMENTO CON ATB - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": "2026-08-06",
+      "estado_key": "EST-0002",
+      "autorizacion": "E6-2025-73837-Ae",
+      "total_presupuesto": 4910000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 56,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6610,
+      "cliente_key": "CLI-0017",
+      "paciente_key": "PAC-0053",
+      "medico_key": "MED-0018",
+      "material_descripcion": "SET DE EXTRACCION DE MATERIAL DE DHS - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "EX-2026-5429304",
+      "total_presupuesto": 1500000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 57,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6557,
+      "cliente_key": "CLI-0026",
+      "paciente_key": "PAC-0054",
+      "medico_key": "MED-0001",
+      "material_descripcion": "PAR DE TORNILLO DE INTERFERENCIA - GRAPA IQL - SET DE COLOCACION A PRESTAMO -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "AF:439179/00",
+      "total_presupuesto": 354675,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 58,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6502,
+      "cliente_key": "CLI-0020",
+      "paciente_key": "PAC-0055",
+      "medico_key": "MED-0034",
+      "material_descripcion": "SET DE PLACA P/PERONE - CLAVIJAS - TRONILLO TRANSINDESMAL - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": "2026-06-11",
+      "estado_key": "EST-0001",
+      "autorizacion": "310-13426-2026 CONCURSO: 3385",
+      "total_presupuesto": 1100000,
+      "total_facturado": 1100000,
+      "fecha_factura_iso": "2026-07-03",
+      "vencimiento_factura_iso": "2026-08-03",
+      "factura_numero": "FV-B-4-2223",
+      "fila_origen": 59,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6498,
+      "cliente_key": "CLI-0007",
+      "paciente_key": "PAC-0056",
+      "medico_key": "MED-0035",
+      "material_descripcion": "SET P/RECONSTRUCCION PLASTICA ANATOMICA - DIFERENTES COLORES P/SU IDENTIFICACION - MAS PINZA SCORPION P/RODILLA DE 16MM - ARPON DE PEEK 5.0MM DOBLE SUTURA - SUTURA MENISCAL TODO DENTRO DE 3 DISPARO - INMOVILIZADOR DE RODILLA - PAR DE MULETA - VENDA ELASTICA - PUNTA SHAVER 5.5 -",
+      "fecha_cirugia_iso": "2026-07-27",
+      "estado_key": "EST-0002",
+      "autorizacion": "C-011164/2026",
+      "total_presupuesto": 1800000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 60,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6492,
+      "cliente_key": "CLI-0027",
+      "paciente_key": null,
+      "medico_key": null,
+      "material_descripcion": "KIT DE PROTECCION (CAMISOLIN-COFIA-CUBRE -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 6424900,
+      "total_facturado": 6424899.75,
+      "fecha_factura_iso": "2026-06-01",
+      "vencimiento_factura_iso": "2026-07-01",
+      "factura_numero": "FV-A-4-647",
+      "fila_origen": 61,
+      "estado_importacion": "REVISAR",
+      "observaciones_calidad": "paciente_faltante; medico_faltante"
+    },
+    {
+      "expediente": 6491,
+      "cliente_key": "CLI-0017",
+      "paciente_key": "PAC-0057",
+      "medico_key": null,
+      "material_descripcion": "CATÉTER VESICAL INTERMITENTE CH 12 0.4 M -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 7200000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 62,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": "medico_faltante"
+    },
+    {
+      "expediente": 6487,
+      "cliente_key": "CLI-0022",
+      "paciente_key": "PAC-0058",
+      "medico_key": "MED-0035",
+      "material_descripcion": "SET PARA ARTROSCOPIA DE HOMBRO MAS BOMB - A PRESTAMO O ALQUILER - CANULA N°8 - PINZA PASA HILO DE AUTO CAPTURA - ARPON DE TITANIO 3.0 DOBLE SUTURA - PUNTA RADIOFRECUENCIA DESCARTABLE - PUNTA SHAVER - DESCARTABLES - CABESTRILLO VIETNAM - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0003",
+      "autorizacion": "H-000963-2026- OP-1714335",
+      "total_presupuesto": 1800000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 63,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6485,
+      "cliente_key": "CLI-0027",
+      "paciente_key": null,
+      "medico_key": null,
+      "material_descripcion": "BATERIFLY N°23 - GUANTE ESTERIL PARA CIRUGIA N°7 1/2 - GUANTE ESTERIL PARA CIRUGIA N°7 1/2 - GUANTE ESTERIL PARA CIRUGIA N° 8 - PERFUS N° 1 MACROGOTERO (14) - PERFUS N° 2 RESERVORIO(14) - ALCOHOL 70% X500ML - BARBIJOS QUIRURGICOS ESTERIL TRIPLE CAPA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 24289300,
+      "total_facturado": 24289301.63,
+      "fecha_factura_iso": "2026-06-01",
+      "vencimiento_factura_iso": "2026-07-01",
+      "factura_numero": "FV-A-4-646",
+      "fila_origen": 64,
+      "estado_importacion": "REVISAR",
+      "observaciones_calidad": "paciente_faltante; medico_faltante"
+    },
+    {
+      "expediente": 6480,
+      "cliente_key": "CLI-0025",
+      "paciente_key": "PAC-0059",
+      "medico_key": "MED-0033",
+      "material_descripcion": "ESPACIADOR DE CADERA EN DISTINTAS MEDIDA - Y MORELAND - DOS UNIDADES DE SULFATO DE CALCIO (STIM - DOS UNIDADES DE CEMENTO QUIRURUGICO CON - ALAMBRES QUIRURGICOS - - -",
+      "fecha_cirugia_iso": "2026-07-30",
+      "estado_key": "EST-0002",
+      "autorizacion": "E6-2026-22007-Ae",
+      "total_presupuesto": 9000000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 65,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6270,
+      "cliente_key": "CLI-0009",
+      "paciente_key": "PAC-0060",
+      "medico_key": "MED-0036",
+      "material_descripcion": "PROTESIS PARA REEMPLAZO TOTAL DE CADERA - CROSSLINKED. CABEZA MODULAR INTERCAMBIAN - ORIGEN: ALEMANIA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "880-3392-2026",
+      "total_presupuesto": 6800000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 66,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6246,
+      "cliente_key": "CLI-0020",
+      "paciente_key": "PAC-0061",
+      "medico_key": "MED-0002",
+      "material_descripcion": "PLACA PREMOLDEADA DE 3.5-2.7 P/QUINTO ME - CLAVIJAS - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "310-10054-2026- CONURSO 2618",
+      "total_presupuesto": 2000000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 67,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 6176,
+      "cliente_key": null,
+      "paciente_key": null,
+      "medico_key": null,
+      "material_descripcion": "INMOVILIZADOR DE PIERNA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 1,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 68,
+      "estado_importacion": "REVISAR",
+      "observaciones_calidad": "cliente_faltante; paciente_faltante; medico_faltante"
+    },
+    {
+      "expediente": 6137,
+      "cliente_key": "CLI-0028",
+      "paciente_key": null,
+      "medico_key": null,
+      "material_descripcion": ". -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 1,
+      "total_facturado": 2634970.34,
+      "fecha_factura_iso": "2026-04-27",
+      "vencimiento_factura_iso": "2026-05-27",
+      "factura_numero": "FV-A-4-603",
+      "fila_origen": 69,
+      "estado_importacion": "REVISAR",
+      "observaciones_calidad": "paciente_faltante; medico_faltante"
+    },
+    {
+      "expediente": 6121,
+      "cliente_key": "CLI-0017",
+      "paciente_key": "PAC-0062",
+      "medico_key": null,
+      "material_descripcion": "BOTON GASTRICO TIPO MICKEY 20 FR X3CM -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "EX-2026-29492358",
+      "total_presupuesto": 1350000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 70,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": "medico_faltante"
+    },
+    {
+      "expediente": 6073,
+      "cliente_key": "CLI-0009",
+      "paciente_key": "PAC-0063",
+      "medico_key": "MED-0025",
+      "material_descripcion": "PLACA PUDDU PARA OSTEOTOMIA FEMORAL/TIB -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "880-2898-2026",
+      "total_presupuesto": 306000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 71,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 5988,
+      "cliente_key": "CLI-0007",
+      "paciente_key": "PAC-0064",
+      "medico_key": "MED-0031",
+      "material_descripcion": "UNA PROTESIS PARA REEMPLAZO TOTAL DE ROD - ANATÃ“MICA CON IMPLANTE ROTULIANO+ HEMOS - DOS (2) CEMENTOS QUIRURGICOS - UN INMOVILIZADOR DE RODILLA - - -",
+      "fecha_cirugia_iso": "2026-08-04",
+      "estado_key": "EST-0002",
+      "autorizacion": "C -Nº 006701/2026",
+      "total_presupuesto": 3900000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 72,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 5928,
+      "cliente_key": "CLI-0014",
+      "paciente_key": "PAC-0065",
+      "medico_key": "MED-0021",
+      "material_descripcion": "PLACA ANATOMICA PREMOLDEADA P/HUMERO DIS - MOTOR - SIERRA TIPO BTR - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "296795-25402912",
+      "total_presupuesto": 1000000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 73,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 5811,
+      "cliente_key": "CLI-0009",
+      "paciente_key": "PAC-0066",
+      "medico_key": "MED-0002",
+      "material_descripcion": "PROTESIS PARA REEMPLAZO TOTAL DE CADERA - CROSSLINKED. CABEZA MODULAR INTERCAMBIAN - ORIGEN: ALEMANIA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "880-7874-2025",
+      "total_presupuesto": 5750000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 74,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 5696,
+      "cliente_key": "CLI-0002",
+      "paciente_key": "PAC-0067",
+      "medico_key": "MED-0037",
+      "material_descripcion": "REEMPLAZO TOTAL DE RODILLA - SET DE COLOCACION - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": null,
+      "total_presupuesto": 3900000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 75,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 5654,
+      "cliente_key": "CLI-0020",
+      "paciente_key": "PAC-0068",
+      "medico_key": "MED-0002",
+      "material_descripcion": "PLACA TERCIO DE TUBO PARA PERONE 3.5 (2) - PLACA ANATOMICA P/TIBIA DISTAL 4.5 (4) - CLAVIJA - SET DE COLOCACION A PRESTAMO - - -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "310-4910-2026 CONCURSO:1070",
+      "total_presupuesto": 2100000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 76,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 5575,
+      "cliente_key": "CLI-0007",
+      "paciente_key": "PAC-0069",
+      "medico_key": "MED-0038",
+      "material_descripcion": "CLAVO ENDOMEDULAR PARA TIBIA RECUBIERTO - ANTEROGRADO CON CERROJO PROXIMAL MULTIDI - SET DE IMPLANTES Y COLOCACION - MOTOR - ALAMBRE 1.50 - SUSTITUTO OSEO -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "O-002626/2026",
+      "total_presupuesto": 4000000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 77,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 5551,
+      "cliente_key": "CLI-0020",
+      "paciente_key": "PAC-0070",
+      "medico_key": null,
+      "material_descripcion": "FILTRO 5°LOG GR -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "310-35078-2025",
+      "total_presupuesto": 0,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 78,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": "medico_faltante"
+    },
+    {
+      "expediente": 5113,
+      "cliente_key": "CLI-0029",
+      "paciente_key": "PAC-0071",
+      "medico_key": "MED-0039",
+      "material_descripcion": "465 - CLAVO ENDOMEDULAR PARA ARTRODESIS - LOGISTICA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "374391",
+      "total_presupuesto": 295000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 79,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 5055,
+      "cliente_key": "CLI-0029",
+      "paciente_key": "PAC-0072",
+      "medico_key": "MED-0039",
+      "material_descripcion": "520 - REEMPLAZO TOTAL DE RODILLA ANATOMI - LOGISTICA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "388252",
+      "total_presupuesto": 450000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 80,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 4940,
+      "cliente_key": "CLI-0030",
+      "paciente_key": "PAC-0073",
+      "medico_key": "MED-0036",
+      "material_descripcion": "SET DE SUTURA MENISCAL FUERA DENTRO CON -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "00218488025",
+      "total_presupuesto": 1155000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 81,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    },
+    {
+      "expediente": 4485,
+      "cliente_key": "CLI-0029",
+      "paciente_key": "PAC-0074",
+      "medico_key": "MED-0024",
+      "material_descripcion": "SET DE PLACAS Y TORNILLOS DE 1,5 A 4,5 M - / BLOQUEADAS RECTAS - LOGISTICA -",
+      "fecha_cirugia_iso": null,
+      "estado_key": "EST-0001",
+      "autorizacion": "2140200",
+      "total_presupuesto": 295000,
+      "total_facturado": 0,
+      "fecha_factura_iso": null,
+      "vencimiento_factura_iso": null,
+      "factura_numero": null,
+      "fila_origen": 82,
+      "estado_importacion": "LISTO",
+      "observaciones_calidad": null
+    }
+  ],
+  "data_quality_issues": [
+    {
+      "fila_origen": 17,
+      "expediente": 6890,
+      "hallazgo": "medico_faltante",
+      "severidad": "Advertencia: campo opcional vacío"
+    },
+    {
+      "fila_origen": 37,
+      "expediente": 6825,
+      "hallazgo": "paciente_faltante; medico_faltante",
+      "severidad": "Bloqueante o requiere validación"
+    },
+    {
+      "fila_origen": 42,
+      "expediente": 6789,
+      "hallazgo": "medico_faltante",
+      "severidad": "Advertencia: campo opcional vacío"
+    },
+    {
+      "fila_origen": 44,
+      "expediente": 6767,
+      "hallazgo": "paciente_faltante",
+      "severidad": "Bloqueante o requiere validación"
+    },
+    {
+      "fila_origen": 46,
+      "expediente": 6761,
+      "hallazgo": "medico_faltante",
+      "severidad": "Advertencia: campo opcional vacío"
+    },
+    {
+      "fila_origen": 48,
+      "expediente": 6751,
+      "hallazgo": "medico_faltante",
+      "severidad": "Advertencia: campo opcional vacío"
+    },
+    {
+      "fila_origen": 51,
+      "expediente": 6731,
+      "hallazgo": "paciente_faltante; medico_faltante",
+      "severidad": "Bloqueante o requiere validación"
+    },
+    {
+      "fila_origen": 61,
+      "expediente": 6492,
+      "hallazgo": "paciente_faltante; medico_faltante",
+      "severidad": "Bloqueante o requiere validación"
+    },
+    {
+      "fila_origen": 62,
+      "expediente": 6491,
+      "hallazgo": "medico_faltante",
+      "severidad": "Advertencia: campo opcional vacío"
+    },
+    {
+      "fila_origen": 64,
+      "expediente": 6485,
+      "hallazgo": "paciente_faltante; medico_faltante",
+      "severidad": "Bloqueante o requiere validación"
+    },
+    {
+      "fila_origen": 68,
+      "expediente": 6176,
+      "hallazgo": "cliente_faltante; paciente_faltante; medico_faltante",
+      "severidad": "Bloqueante o requiere validación"
+    },
+    {
+      "fila_origen": 69,
+      "expediente": 6137,
+      "hallazgo": "paciente_faltante; medico_faltante",
+      "severidad": "Bloqueante o requiere validación"
+    },
+    {
+      "fila_origen": 70,
+      "expediente": 6121,
+      "hallazgo": "medico_faltante",
+      "severidad": "Advertencia: campo opcional vacío"
+    },
+    {
+      "fila_origen": 78,
+      "expediente": 5551,
+      "hallazgo": "medico_faltante",
+      "severidad": "Advertencia: campo opcional vacío"
+    }
+  ]
+}

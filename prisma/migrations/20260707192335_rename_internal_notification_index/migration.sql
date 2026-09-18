@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "InternalNotification_companyId_recipientUserId_readAt_createdAt" RENAME TO "InternalNotification_companyId_recipientUserId_readAt_creat_idx";
