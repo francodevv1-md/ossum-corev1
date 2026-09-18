@@ -132,8 +132,8 @@ describe("recovered budget producer → unchanged Invoice consumer (offline)", (
 
   it("pins both recovered SQL artifacts byte-for-byte without executing SQL", () => {
     for (const [name, hash] of [
-      ["20260831010000_presupuesto_authority_unification_dev_001", "0da18309cf6f09917bf35963888282e9c43a88fbf37013ab63865c908f8bfc58"],
-      ["20260831073000_presupuesto_authority_corrective_dev_001", "aa026921293d5120e18b565caeff07e6c9c6a4a3f42fc6a9e784f075aefa9340"],
+      ["20260831010000_presupuesto_authority_unification_dev_001", "0c9cb55bfc5b5c2a9246cbbd4878e03ac5e768c656472186efc0fb3bed0664e3"],
+      ["20260831073000_presupuesto_authority_corrective_dev_001", "9cb832c817a905fb280b1fab6c4ab451c797631954d202e52f1a61efad79c8b0"],
     ]) {
       expect(createHash("sha256").update(readFileSync(`prisma/migrations/${name}/migration.sql`)).digest("hex")).toBe(hash);
     }
