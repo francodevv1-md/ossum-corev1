@@ -41,6 +41,14 @@ const SURGERY_VISIBLE_NUMBER_PADDING = 4;
 const CREATE_SURGERY_MAX_RETRIES = 3;
 const LARGE_OFFSET_THRESHOLD = 10_000;
 
+function isSurgeryVisibleNumberTarget(target: unknown) {
+  if (target === "Surgery_companyId_visibleNumber_key") return true;
+  if (!Array.isArray(target) || target.length !== 2) return false;
+
+  const fields = target.map((field) => String(field).replaceAll('"', ""));
+  return fields.includes("companyId") && fields.includes("visibleNumber");
+}
+
 type ListSurgeriesOptions = {
   status?: string;
   cxStatus?: string;
@@ -787,9 +795,10 @@ export async function createSurgery(
       const uniqueTarget = error instanceof Prisma.PrismaClientKnownRequestError
         ? error.meta?.target
         : null;
-      const isVisibleNumberTarget = Array.isArray(uniqueTarget)
-        ? uniqueTarget.length === 2 && uniqueTarget.includes("companyId") && uniqueTarget.includes("visibleNumber")
-        : uniqueTarget === "Surgery_companyId_visibleNumber_key";
+      const adapterTarget = error instanceof Prisma.PrismaClientKnownRequestError
+        ? (error.meta?.driverAdapterError as { cause?: { constraint?: { fields?: unknown } } } | undefined)?.cause?.constraint?.fields
+        : null;
+      const isVisibleNumberTarget = isSurgeryVisibleNumberTarget(uniqueTarget) || isSurgeryVisibleNumberTarget(adapterTarget);
       const retryableAllocationConflict = error instanceof Prisma.PrismaClientKnownRequestError && (
         error.code === "P2034" ||
         (generatedVisibleNumber && error.code === "P2002" && isVisibleNumberTarget)
