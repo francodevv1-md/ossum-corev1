@@ -4,8 +4,6 @@ import { badRequest } from "../../../../../lib/api/errors";
 import { getNonNegativeIntegerParam, getStringParam } from "../../../../../lib/api/query";
 import { created, errorResponse, ok } from "../../../../../lib/api/responses";
 import prisma from "../../../../../lib/prisma";
-import type { FrontendContactSnapshot } from "../../../../../lib/services/contact.service";
-import { resolveCompanyContactReference } from "../../../../../lib/services/contact.service";
 import { createSurgery, listSurgeriesByCompany } from "../../../../../lib/services/surgery.service";
 
 type RouteContext = {
@@ -68,38 +66,12 @@ async function parseJsonBody(request: Request): Promise<Record<string, unknown>>
   }
 }
 
-function parseOptionalContactSnapshot(
-  value: unknown,
-  fieldName: string
-): FrontendContactSnapshot | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw badRequest(`${fieldName} must be an object`, "invalid_contact_snapshot");
+function parseRequiredContactId(value: unknown, fieldName: string): string {
+  const contactId = parseOptionalString(value);
+  if (!contactId) {
+    throw badRequest(`${fieldName} contact ID is required`, `missing_${fieldName.toLowerCase()}_contact_id`);
   }
-
-  const snapshot = value as Record<string, unknown>;
-  const telefonosValue = snapshot.telefonos;
-
-  return {
-    id: typeof snapshot.id === "string" ? snapshot.id.trim() : "",
-    nombre: typeof snapshot.nombre === "string" ? snapshot.nombre.trim() : "",
-    tipoPersona:
-      snapshot.tipoPersona === "juridica" || snapshot.tipoPersona === "fisica"
-        ? snapshot.tipoPersona
-        : "fisica",
-    razonSocial: typeof snapshot.razonSocial === "string" ? snapshot.razonSocial.trim() : undefined,
-    cuit: typeof snapshot.cuit === "string" ? snapshot.cuit.trim() : undefined,
-    dni: typeof snapshot.dni === "string" ? snapshot.dni.trim() : undefined,
-    email: typeof snapshot.email === "string" ? snapshot.email.trim() : undefined,
-    telefonos: Array.isArray(telefonosValue)
-      ? telefonosValue.filter((phone): phone is string => typeof phone === "string")
-      : undefined,
-    groups: Array.isArray(snapshot.groups)
-      ? snapshot.groups.filter((group): group is string => typeof group === "string")
-      : [],
-  };
+  return contactId;
 }
 
 export async function GET(request: Request, { params }: RouteContext) {
@@ -151,40 +123,10 @@ export async function POST(request: Request, { params }: RouteContext) {
     requireCompanyMutationAccess(ctx, SURGERY_MUTATION_ROLES);
 
     const body = await parseJsonBody(request);
-    const patientContact = parseOptionalContactSnapshot(body.patientContact, "patientContact");
-    const doctorContact = parseOptionalContactSnapshot(body.doctorContact, "doctorContact");
-    const institutionContact = parseOptionalContactSnapshot(body.institutionContact, "institutionContact");
-    const payerContact = parseOptionalContactSnapshot(body.payerContact, "payerContact");
-
-    const patientId = await resolveCompanyContactReference(prisma, {
-      companyId: ctx.companyId,
-      contactId: typeof body.patientId === "string" ? body.patientId.trim() : null,
-      snapshot: patientContact,
-      role: "patient",
-      required: true,
-      fieldLabel: "Patient",
-    });
-    const doctorId = await resolveCompanyContactReference(prisma, {
-      companyId: ctx.companyId,
-      contactId: parseOptionalString(body.doctorId),
-      snapshot: doctorContact,
-      role: "doctor",
-      fieldLabel: "Doctor",
-    });
-    const institutionId = await resolveCompanyContactReference(prisma, {
-      companyId: ctx.companyId,
-      contactId: parseOptionalString(body.institutionId),
-      snapshot: institutionContact,
-      role: "institution",
-      fieldLabel: "Institution",
-    });
-    const payerContactId = await resolveCompanyContactReference(prisma, {
-      companyId: ctx.companyId,
-      contactId: parseOptionalString(body.payerContactId),
-      snapshot: payerContact,
-      role: "payer",
-      fieldLabel: "Payer",
-    });
+    const patientId = parseRequiredContactId(body.patientId, "patient");
+    const doctorId = parseRequiredContactId(body.doctorId, "doctor");
+    const institutionId = parseRequiredContactId(body.institutionId, "institution");
+    const payerContactId = parseRequiredContactId(body.payerContactId, "payer");
 
     const surgery = await createSurgery(
       prisma,
@@ -196,7 +138,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       },
       {
         branchId: parseOptionalString(body.branchId),
-        patientId: patientId ?? "",
+        patientId,
         doctorId,
         institutionId,
         payerContactId,

@@ -465,10 +465,12 @@ describe("mapApiSurgeryListToSurgeries", () => {
     expect(surgeries[0].coordinatorAssignments?.map((assignment) => assignment.slaBasis.status)).toEqual(["valid", "invalid"])
   })
 
-  it("propagates authorized institution and payer ids without inferring absent ids", () => {
+  it("propagates the four explicit surgery contact ids without inferring nested ids", () => {
     const surgeries = mapApiSurgeryListToSurgeries([
       {
         id: "with-ids",
+        patientId: "patient-1",
+        doctorId: "doctor-1",
         institutionId: "institution-1",
         payerContactId: "payer-1",
         institution: { legalName: "Hospital" },
@@ -484,7 +486,11 @@ describe("mapApiSurgeryListToSurgeries", () => {
     expect(surgeries[0]).toMatchObject({
       institutionContactId: "institution-1",
       clientContactId: "payer-1",
+      patientContactId: "patient-1",
+      surgeonContactId: "doctor-1",
     })
+    expect(surgeries[1].patientContactId).toBeUndefined()
+    expect(surgeries[1].surgeonContactId).toBeUndefined()
     expect(surgeries[1].institutionContactId).toBeUndefined()
     expect(surgeries[1].clientContactId).toBeUndefined()
   })

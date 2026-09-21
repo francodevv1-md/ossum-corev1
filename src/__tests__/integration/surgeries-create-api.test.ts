@@ -76,65 +76,16 @@ describe("POST /api/companies/[companyId]/surgeries", () => {
     createSurgery.mockResolvedValue({ id: "surgery-1", visibleNumber: "CX-0001" })
   })
 
-  it("resolves frontend contact snapshots before creating the surgery", async () => {
-    prismaMock.contactCompanyLink.findUnique.mockImplementation(async ({ where }: { where: { contactId_companyId: { contactId: string } } }) => {
-      const contactId = where.contactId_companyId.contactId
-      if (contactId === "db-patient-9") {
-        return { id: "link-patient", isActive: true }
-      }
-      return null
-    })
-
-    prismaMock.contactCompanyLink.findMany.mockResolvedValue([
-      {
-        companyId: "company-1",
-        contactId: "db-patient-9",
-        role: "patient",
-        isActive: true,
-        contact: {
-          id: "db-patient-9",
-          firstName: "Paciente",
-          lastName: "Uno",
-          legalName: null,
-          email: null,
-          phone: null,
-          documentType: "DNI",
-          documentNumber: "30123456",
-          contactType: "patient",
-          groupMemberships: [],
-          addresses: [],
-        },
-      },
-    ])
-
-    prismaMock.__tx.contact.create.mockResolvedValue({ id: "db-doctor-new" })
-    prismaMock.__tx.contactCompanyLink.create.mockResolvedValue({ id: "link-doctor" })
-    prismaMock.__tx.contactCompanyLink.findUnique.mockResolvedValue({
-      id: "link-doctor", companyId: "company-1", contactId: "db-doctor-new", role: "doctor", isActive: true,
-      contact: { id: "db-doctor-new", firstName: "Dr", lastName: "House", groupMemberships: [], addresses: [] },
-    })
-
+  it("forwards the four explicit contact ids without resolving snapshots", async () => {
     const response = await POST(
       new Request("http://localhost/api/companies/company-1/surgeries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          visibleNumber: "CX-0001",
-          patientId: "frontend-patient-1",
-          patientContact: {
-            id: "frontend-patient-1",
-            nombre: "Paciente Uno",
-            dni: "30.123.456",
-            tipoPersona: "fisica",
-            groups: ["pacientes"],
-          },
-          doctorId: "frontend-doctor-1",
-          doctorContact: {
-            id: "frontend-doctor-1",
-            nombre: "Dr House",
-            tipoPersona: "fisica",
-            groups: ["medicos"],
-          },
+          patientId: "patient-1",
+          doctorId: "doctor-1",
+          institutionId: "institution-1",
+          payerContactId: "payer-1",
         }),
       }),
       { params: Promise.resolve({ companyId: "company-1" }) }
@@ -148,39 +99,25 @@ describe("POST /api/companies/[companyId]/surgeries", () => {
     )
     expect(createSurgery.mock.calls[0]?.[2]).toEqual(
       expect.objectContaining({
-        patientId: "db-patient-9",
-        doctorId: "db-doctor-new",
+        patientId: "patient-1",
+        doctorId: "doctor-1",
+        institutionId: "institution-1",
+        payerContactId: "payer-1",
       })
     )
-    expect(createSurgery.mock.calls[0]?.[2]).not.toHaveProperty("visibleNumber")
-    expect(prismaMock.__tx.contact.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          firstName: "Dr",
-          lastName: "House",
-        }),
-      })
-    )
-    expect(prismaMock.__tx.contactCompanyLink.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          companyId: "company-1",
-          role: "doctor",
-        }),
-      })
-    )
+    expect(prismaMock.__tx.contact.create).not.toHaveBeenCalled()
   })
 
-  it("returns a clear 400 when a required frontend contact cannot be resolved", async () => {
-    prismaMock.contactCompanyLink.findUnique.mockResolvedValue(null)
-
+  it("rejects contact snapshots when a required real id is absent", async () => {
     const response = await POST(
       new Request("http://localhost/api/companies/company-1/surgeries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          visibleNumber: "CX-0002",
-          patientId: "frontend-patient-missing",
+          patientContact: { nombre: "Paciente sin ID" },
+          doctorId: "doctor-1",
+          institutionId: "institution-1",
+          payerContactId: "payer-1",
         }),
       }),
       { params: Promise.resolve({ companyId: "company-1" }) }
@@ -189,8 +126,8 @@ describe("POST /api/companies/[companyId]/surgeries", () => {
     const body = await bodyAsJson(response)
 
     expect(response.status).toBe(400)
-    expect(body.error?.code).toBe("surgery_patient_contact_resolution_failed")
-    expect(body.error?.message).toContain("Patient contact")
+    expect(body.error?.code).toBe("missing_patient_contact_id")
+    expect(body.error?.message).toContain("patient contact ID")
     expect(createSurgery).not.toHaveBeenCalled()
   })
 })

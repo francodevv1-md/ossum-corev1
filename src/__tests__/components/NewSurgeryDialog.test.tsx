@@ -260,8 +260,11 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     const form: NewSurgeryForm = {
       ...EMPTY_NEW_FORM,
       surgeon: "Dr. Gómez",
+      surgeonContactId: "doctor-1",
       institution: "Hospital A",
+      institutionContactId: "institution-1",
       client: "Cliente Test",
+      clientContactId: "payer-1",
     }
     renderDialog(form)
 
@@ -306,8 +309,11 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     const form: NewSurgeryForm = {
       ...EMPTY_NEW_FORM,
       surgeon: "Dr. Gómez",
+      surgeonContactId: "doctor-1",
       institution: "Hospital A",
+      institutionContactId: "institution-1",
       client: "Cliente Test",
+      clientContactId: "payer-1",
     }
     renderDialog(form)
 
@@ -415,39 +421,27 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     expect(screen.getByText("IA detectó fecha probable")).toBeInTheDocument()
     expect(screen.getByText("IA detectó ubicación")).toBeInTheDocument()
     expect(screen.getByText("Localidad sugerida: Capital")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Mantener texto" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Mantener texto" })).toBeNull()
     expect(screen.getByRole("button", { name: "Crear paciente" })).toBeInTheDocument()
   })
 
-  it("shows an explicit text-only indicator after clicking 'Mantener texto'", () => {
-    mockAiHookState.result = {
-      confidence: 0.82,
-      extracted: {
-        paciente: "ENCINA MARISOL ITATI",
-        dni: "30123456",
-        medico: "",
-        institucion: "",
-        obra_social: "",
-        fecha_cirugia: "",
-        fecha_probable: "",
-        patologia_sugerida: "",
-        provincia_sugerida: "",
-        localidad_sugerida: "",
-        material_autorizado: [],
-        observaciones: "",
-      },
-    }
-
-    renderDialog()
-
-    act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Mantener texto" }))
+  it("requires real contact ids even when all visible required labels have text", () => {
+    const { setWizardStep } = renderDialog({
+      ...EMPTY_NEW_FORM,
+      patient: "Paciente sin seleccionar",
+      surgeon: "Médico sin seleccionar",
+      institution: "Institución sin seleccionar",
+      client: "Pagador sin seleccionar",
+      classification: "Otro",
     })
 
-    expect(screen.getByText("Texto sin contacto vinculado.")).toBeInTheDocument()
-    expect(screen.getByText(/no queda asociado a una ficha de contacto/i)).toBeInTheDocument()
-    expect(screen.getByTestId("form-state").textContent).toContain('"patient":"ENCINA MARISOL ITATI"')
-    expect(screen.getByTestId("form-state").textContent).not.toContain("patientContactId")
+    act(() => {
+      fireEvent.click(screen.getByTestId("wizard-next-btn"))
+    })
+
+    expect(setWizardStep).not.toHaveBeenCalledWith(1)
+    expect(screen.getByText("Seleccione un paciente existente")).toBeInTheDocument()
+    expect(screen.getByText("Seleccione un médico existente")).toBeInTheDocument()
   })
 
   it("uses contextual quick-create labels for AI contact suggestions", () => {

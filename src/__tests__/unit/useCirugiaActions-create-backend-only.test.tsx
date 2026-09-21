@@ -151,6 +151,29 @@ describe("useCirugiaActions create flow backend-only", () => {
     }} />)
   })
 
+  it("does not post when any required contact id is absent", async () => {
+    act(() => {
+      actions.setNewForm({
+        ...EMPTY_NEW_FORM,
+        patient: "Paciente Test",
+        patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+      })
+    })
+
+    let result = true
+    await act(async () => {
+      result = await actions.handleNewSurgery()
+    })
+
+    expect(result).toBe(false)
+    expect(apiFetchMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Seleccione paciente, médico, institución y cliente / pagador antes de crear la cirugía"
+    )
+  })
+
   it("no inyecta cirugía local si el refresh backend falla después del POST", async () => {
     apiFetchMock.mockResolvedValue({ id: "db-1", visibleNumber: "CX-9001" })
     fetchBackendActiveSurgeriesMock.mockRejectedValue(new Error("backend caído"))
@@ -160,6 +183,9 @@ describe("useCirugiaActions create flow backend-only", () => {
         ...EMPTY_NEW_FORM,
         patient: "Paciente Test",
         patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+        clientContactId: "payer-1",
       })
     })
 
@@ -187,6 +213,9 @@ describe("useCirugiaActions create flow backend-only", () => {
         ...EMPTY_NEW_FORM,
         patient: "Paciente Test",
         patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+        clientContactId: "payer-1",
       })
     })
 
@@ -223,6 +252,9 @@ describe("useCirugiaActions create flow backend-only", () => {
         ...EMPTY_NEW_FORM,
         patient: "Paciente Test",
         patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+        clientContactId: "payer-1",
       })
     })
 

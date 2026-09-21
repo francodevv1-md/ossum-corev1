@@ -79,7 +79,6 @@ type PendingContactCreation = {
 type InlineAiValueField = "date" | "probableDate" | "provincia"
 
 type ContactSelectionOverrides = Partial<Record<ContactSuggestionField, Contacto | null>>
-type TextOnlyContactFields = Partial<Record<ContactSuggestionField, boolean>>
 
 const QUICK_CREATE_LABELS: Record<ContactSuggestionField, string> = {
   patient: "Crear paciente",
@@ -433,7 +432,6 @@ export function NewSurgeryDialog({
   const [pendingContactCreation, setPendingContactCreation] = useState<PendingContactCreation | null>(null)
   const [contactLookupRenderVersion, setContactLookupRenderVersion] = useState(0)
   const [contactSelectionOverrides, setContactSelectionOverrides] = useState<ContactSelectionOverrides>({})
-  const [textOnlyContactFields, setTextOnlyContactFields] = useState<TextOnlyContactFields>({})
 
   // ─── CHATZAI-025: Cancel confirmation state ───
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
@@ -491,10 +489,10 @@ export function NewSurgeryDialog({
   // ─── Step 0 validation ───
   const validateStep0 = useCallback((): boolean => {
     const errs: Step0Errors = {}
-    if (!newForm.patient.trim()) errs.patient = "Paciente es obligatorio"
-    if (!newForm.surgeon.trim()) errs.surgeon = "Médico es obligatorio"
-    if (!newForm.institution.trim()) errs.institution = "Institución es obligatoria"
-    if (!newForm.client) errs.client = "Cliente / Pagador es obligatorio"
+    if (!newForm.patientContactId?.trim()) errs.patient = "Seleccione un paciente existente"
+    if (!newForm.surgeonContactId?.trim()) errs.surgeon = "Seleccione un médico existente"
+    if (!newForm.institutionContactId?.trim()) errs.institution = "Seleccione una institución existente"
+    if (!newForm.clientContactId?.trim()) errs.client = "Seleccione un cliente / pagador existente"
     if (!newForm.classification) errs.classification = "Clasificación es obligatoria"
     setStep0Errors(errs)
     return Object.keys(errs).length === 0
@@ -611,7 +609,6 @@ export function NewSurgeryDialog({
     setShowAiSection(false)
     setContactCreateOpen(false)
     setPendingContactCreation(null)
-    setTextOnlyContactFields({})
     setStep0Errors({})
     setStep1Errors({})
     setCancelConfirmOpen(false)
@@ -650,10 +647,6 @@ export function NewSurgeryDialog({
     setNewForm((prev) => {
       const next: NewSurgeryForm = { ...prev }
 
-      if (!prev.patient.trim() && formFields.patient) next.patient = formFields.patient
-      if (!prev.surgeon.trim() && formFields.surgeon) next.surgeon = formFields.surgeon
-      if (!prev.institution.trim() && formFields.institution) next.institution = formFields.institution
-      if (!prev.client.trim() && formFields.client) next.client = formFields.client
       if (!prev.date.trim() && formFields.date) next.date = formFields.date
       if (!prev.probableDate.trim() && formFields.probableDate) next.probableDate = formFields.probableDate
       if (!prev.provincia.trim() && extracted.provincia_sugerida.trim()) {
@@ -764,7 +757,6 @@ export function NewSurgeryDialog({
 
   const applySuggestedContact = useCallback((field: ContactSuggestionField, contacto: Contacto) => {
     setContactSelectionOverrides((prev) => ({ ...prev, [field]: contacto }))
-    setTextOnlyContactFields((prev) => ({ ...prev, [field]: false }))
 
     setNewForm((prev) => {
       switch (field) {
@@ -776,46 +768,6 @@ export function NewSurgeryDialog({
           return { ...prev, institution: contacto.nombre, institutionContactId: contacto.id }
         case "client":
           return { ...prev, client: contacto.nombre, clientContactId: contacto.id }
-        default:
-          return prev
-      }
-    })
-
-    setContactLookupRenderVersion((prev) => prev + 1)
-
-    setStep0Errors((prev) => {
-      switch (field) {
-        case "patient":
-          return { ...prev, patient: undefined }
-        case "surgeon":
-          return { ...prev, surgeon: undefined }
-        case "institution":
-          return { ...prev, institution: undefined }
-        case "client":
-          return { ...prev, client: undefined }
-        default:
-          return prev
-      }
-    })
-  }, [setNewForm])
-
-  const applyDetectedTextOnly = useCallback((field: ContactSuggestionField, detectedText: string) => {
-    const safeText = detectedText.trim()
-    if (!safeText) return
-
-    setContactSelectionOverrides((prev) => ({ ...prev, [field]: null }))
-    setTextOnlyContactFields((prev) => ({ ...prev, [field]: true }))
-
-    setNewForm((prev) => {
-      switch (field) {
-        case "patient":
-          return { ...prev, patient: safeText, patientContactId: undefined }
-        case "surgeon":
-          return { ...prev, surgeon: safeText, surgeonContactId: undefined }
-        case "institution":
-          return { ...prev, institution: safeText, institutionContactId: undefined }
-        case "client":
-          return { ...prev, client: safeText, clientContactId: undefined }
         default:
           return prev
       }
@@ -951,9 +903,6 @@ export function NewSurgeryDialog({
             <Button type="button" variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => openCreateContactForField(group)}>
               {quickCreateLabel}
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => applyDetectedTextOnly(group.field, group.detectedText)}>
-              Mantener texto
-            </Button>
           </div>
         </div>
 
@@ -1022,32 +971,6 @@ export function NewSurgeryDialog({
     }
     return store.getContactoById(contactId || "")
   }, [contactSelectionOverrides, store])
-
-  const hasTextOnlyContactField = useCallback((field: ContactSuggestionField) => {
-    switch (field) {
-      case "patient":
-        return Boolean(textOnlyContactFields.patient && newForm.patient.trim() && !newForm.patientContactId)
-      case "surgeon":
-        return Boolean(textOnlyContactFields.surgeon && newForm.surgeon.trim() && !newForm.surgeonContactId)
-      case "institution":
-        return Boolean(textOnlyContactFields.institution && newForm.institution.trim() && !newForm.institutionContactId)
-      case "client":
-        return Boolean(textOnlyContactFields.client && newForm.client.trim() && !newForm.clientContactId)
-      default:
-        return false
-    }
-  }, [newForm, textOnlyContactFields])
-
-  const renderTextOnlyContactIndicator = (field: ContactSuggestionField) => {
-    if (!hasTextOnlyContactField(field)) return null
-
-    return (
-      <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
-        <span className="font-semibold">Texto sin contacto vinculado.</span>{" "}
-        <span className="text-amber-700/90 dark:text-amber-300/80">Se usará el texto detectado; no queda asociado a una ficha de contacto.</span>
-      </div>
-    )
-  }
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { handleRequestClose() } else { onOpenChange(true) } }}>
@@ -1250,7 +1173,6 @@ export function NewSurgeryDialog({
                   value={getResolvedContactValue("client", newForm.clientContactId)}
                   onChange={(contacto) => {
                     setContactSelectionOverrides((prev) => ({ ...prev, client: contacto }))
-                    setTextOnlyContactFields((prev) => ({ ...prev, client: false }))
                     if (contacto) {
                       setNewForm((prev) => ({ ...prev, client: contacto.nombre, clientContactId: contacto.id }))
                     } else {
@@ -1261,7 +1183,6 @@ export function NewSurgeryDialog({
                   placeholder="Buscar cliente/pagador..."
                   error={step0Errors.client}
                 />
-                {renderTextOnlyContactIndicator("client")}
                 {renderInlineContactSuggestion("client")}
               </div>
 
@@ -1275,7 +1196,6 @@ export function NewSurgeryDialog({
                   value={getResolvedContactValue("patient", newForm.patientContactId)}
                   onChange={(contacto) => {
                     setContactSelectionOverrides((prev) => ({ ...prev, patient: contacto }))
-                    setTextOnlyContactFields((prev) => ({ ...prev, patient: false }))
                     if (contacto) {
                       setNewForm((prev) => ({ ...prev, patient: contacto.nombre, patientContactId: contacto.id }))
                     } else {
@@ -1286,7 +1206,6 @@ export function NewSurgeryDialog({
                   placeholder="Buscar paciente..."
                   error={step0Errors.patient}
                 />
-                {renderTextOnlyContactIndicator("patient")}
                 {renderInlineContactSuggestion("patient")}
               </div>
 
@@ -1300,7 +1219,6 @@ export function NewSurgeryDialog({
                   value={getResolvedContactValue("surgeon", newForm.surgeonContactId)}
                   onChange={(contacto) => {
                     setContactSelectionOverrides((prev) => ({ ...prev, surgeon: contacto }))
-                    setTextOnlyContactFields((prev) => ({ ...prev, surgeon: false }))
                     if (contacto) {
                       setNewForm((prev) => ({ ...prev, surgeon: contacto.nombre, surgeonContactId: contacto.id }))
                     } else {
@@ -1311,7 +1229,6 @@ export function NewSurgeryDialog({
                   placeholder="Buscar médico..."
                   error={step0Errors.surgeon}
                 />
-                {renderTextOnlyContactIndicator("surgeon")}
                 {renderInlineContactSuggestion("surgeon")}
               </div>
 
@@ -1325,7 +1242,6 @@ export function NewSurgeryDialog({
                   value={getResolvedContactValue("institution", newForm.institutionContactId)}
                   onChange={(contacto) => {
                     setContactSelectionOverrides((prev) => ({ ...prev, institution: contacto }))
-                    setTextOnlyContactFields((prev) => ({ ...prev, institution: false }))
                     if (contacto) {
                       setNewForm((prev) => {
                         const updates: Partial<NewSurgeryForm> = {
@@ -1353,7 +1269,6 @@ export function NewSurgeryDialog({
                   placeholder="Buscar institución..."
                   error={step0Errors.institution}
                 />
-                {renderTextOnlyContactIndicator("institution")}
                 {renderInlineContactSuggestion("institution")}
               </div>
 

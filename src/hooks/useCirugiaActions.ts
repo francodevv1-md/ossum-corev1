@@ -12,7 +12,6 @@ import { useOrtoTrackStore } from "@/lib/store"
 import type { SurgeryClassification } from "@/types"
 import { canAutorizarFV, canRemitirNR, canCargarConsumo } from "@/lib/businessRules"
 import { toast } from "sonner"
-import type { Contacto } from "@/types"
 import type { Surgery, SurgeryState, ConsumoState } from "@/types"
 import type { NewSurgeryForm, NoteType, NotePriority } from "@/lib/cirugias.types"
 import { EMPTY_NEW_FORM } from "@/lib/cirugias.types"
@@ -28,50 +27,6 @@ type CreateSurgeryApiResponse = {
 }
 
 const CREATE_REFRESH_FAILED_MESSAGE = "La cirugía se creó en backend, pero no se pudo actualizar la lista. Recargá para verla."
-
-export type SurgeryCreateContactPayload = Pick<
-  Contacto,
-  | "id"
-  | "nombre"
-  | "tipoPersona"
-  | "razonSocial"
-  | "cuit"
-  | "dni"
-  | "email"
-  | "telefonos"
-  | "provincia"
-  | "localidad"
-  | "groups"
->
-
-export function buildSurgeryCreateContactPayload(
-  contact: Contacto | undefined,
-  fallback: {
-    id?: string
-    nombre?: string
-  }
-): SurgeryCreateContactPayload | null {
-  const resolvedId = contact?.id ?? fallback.id?.trim()
-  const resolvedName = fallback.nombre?.trim() || contact?.nombre?.trim()
-
-  if (!resolvedId && !resolvedName) {
-    return null
-  }
-
-  return {
-    id: resolvedId ?? "",
-    nombre: resolvedName || contact?.nombre || "",
-    tipoPersona: contact?.tipoPersona ?? "fisica",
-    razonSocial: contact?.razonSocial,
-    cuit: contact?.cuit,
-    dni: contact?.dni,
-    email: contact?.email,
-    telefonos: contact?.telefonos,
-    provincia: contact?.provincia,
-    localidad: contact?.localidad,
-    groups: contact?.groups ?? [],
-  }
-}
 
 export function useCirugiaActions() {
   const store = useOrtoTrackStore()
@@ -142,8 +97,13 @@ export function useCirugiaActions() {
         return false
       }
 
-      if (!newForm.patientContactId?.trim()) {
-        toast.error("Seleccione un paciente real antes de crear la cirugía")
+      if (
+        !newForm.patientContactId?.trim() ||
+        !newForm.surgeonContactId?.trim() ||
+        !newForm.institutionContactId?.trim() ||
+        !newForm.clientContactId?.trim()
+      ) {
+        toast.error("Seleccione paciente, médico, institución y cliente / pagador antes de crear la cirugía")
         return false
       }
 
@@ -152,23 +112,6 @@ export function useCirugiaActions() {
         return false
       }
 
-      const patientContact = buildSurgeryCreateContactPayload(
-        store.getContactoById(newForm.patientContactId ?? ""),
-        { id: newForm.patientContactId, nombre: newForm.patient }
-      )
-      const doctorContact = buildSurgeryCreateContactPayload(
-        store.getContactoById(newForm.surgeonContactId ?? ""),
-        { id: newForm.surgeonContactId, nombre: newForm.surgeon }
-      )
-      const institutionContact = buildSurgeryCreateContactPayload(
-        store.getContactoById(newForm.institutionContactId ?? ""),
-        { id: newForm.institutionContactId, nombre: newForm.institution }
-      )
-      const payerContact = buildSurgeryCreateContactPayload(
-        store.getContactoById(newForm.clientContactId ?? ""),
-        { id: newForm.clientContactId, nombre: newForm.client }
-      )
-
       const persistedSurgery = await apiFetch<CreateSurgeryApiResponse>(
         `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries`,
         {
@@ -176,13 +119,9 @@ export function useCirugiaActions() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             patientId: newForm.patientContactId,
-            patientContact,
-            doctorId: newForm.surgeonContactId ?? null,
-            doctorContact,
-            institutionId: newForm.institutionContactId ?? null,
-            institutionContact,
-            payerContactId: newForm.clientContactId ?? null,
-            payerContact,
+            doctorId: newForm.surgeonContactId,
+            institutionId: newForm.institutionContactId,
+            payerContactId: newForm.clientContactId,
             classification: newForm.classification || null,
             priority: newForm.urgente ? "urgent" : null,
             probableDate: newForm.probableDate || null,
