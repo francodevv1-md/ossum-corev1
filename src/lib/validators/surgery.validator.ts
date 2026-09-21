@@ -15,6 +15,8 @@ export type CreateSurgeryInput = {
   probableDate?: Date | null;
   scheduledDate?: Date | null;
   surgeryDate?: Date | null;
+  materialShippingDate?: Date | null;
+  coordinatorContactId?: string | null;
   performedDate?: Date | null;
   cancelledDate?: Date | null;
   source?: string | null;
@@ -286,6 +288,7 @@ export function validateCreateSurgeryInput(
   validateOptionalNullableString(data.doctorId, "doctorId");
   validateOptionalNullableString(data.institutionId, "institutionId");
   validateOptionalNullableString(data.payerContactId, "payerContactId");
+  validateOptionalNullableString(data.coordinatorContactId, "coordinatorContactId");
   validateOptionalNullableString(data.classification, "classification");
   validateOptionalNullableString(data.description, "description");
   validateOptionalNullableString(data.source, "source");
@@ -305,6 +308,7 @@ export function validateCreateSurgeryInput(
   validateOptionalNullableDate(data.probableDate, "probableDate");
   validateOptionalNullableDate(data.scheduledDate, "scheduledDate");
   validateOptionalNullableDate(data.surgeryDate, "surgeryDate");
+  validateOptionalNullableDate(data.materialShippingDate, "materialShippingDate");
   validateOptionalNullableDate(data.performedDate, "performedDate");
   validateOptionalNullableDate(data.cancelledDate, "cancelledDate");
 

@@ -417,6 +417,28 @@ async function assertSurgeryReferencesBelongToCompany(
   }
 }
 
+async function assertCoordinatorContactBelongsToCompany(
+  prisma: PrismaClient,
+  companyId: string,
+  coordinatorContactId: string
+): Promise<void> {
+  const link = await prisma.contactCompanyLink.findFirst({
+    where: {
+      companyId,
+      contactId: coordinatorContactId,
+      isActive: true,
+      role: "coordinator",
+      contact: { isActive: true, isCompany: false },
+    },
+    select: { contactId: true },
+  });
+  if (!link) {
+    throw new Error(
+      `Coordinator contact ${coordinatorContactId} is not linked as coordinator to company ${companyId}`
+    );
+  }
+}
+
 /** List surgeries for a company with optional scoped filters. */
 export async function listSurgeriesByCompany(
   prisma: PrismaClient,
@@ -741,6 +763,14 @@ export async function createSurgery(
     branchId: validatedData.branchId,
   });
 
+  if (validatedData.coordinatorContactId) {
+    await assertCoordinatorContactBelongsToCompany(
+      prisma,
+      scopedCompanyId,
+      validatedData.coordinatorContactId
+    );
+  }
+
   for (let attempt = 0; attempt < CREATE_SURGERY_MAX_RETRIES; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
@@ -766,12 +796,24 @@ export async function createSurgery(
             probableDate: validatedData.probableDate ?? null,
             scheduledDate: validatedData.scheduledDate ?? null,
             surgeryDate: validatedData.surgeryDate ?? null,
+            materialShippingDate: validatedData.materialShippingDate ?? null,
             performedDate: validatedData.performedDate ?? null,
             cancelledDate: validatedData.cancelledDate ?? null,
             source: validatedData.source ?? null,
             notes: validatedData.notes,
           },
         });
+
+        if (validatedData.coordinatorContactId) {
+          await tx.surgeryContactAssignment.create({
+            data: {
+              surgeryId: surgery.id,
+              contactId: validatedData.coordinatorContactId,
+              role: "coordinator",
+              isPrimary: true,
+            },
+          });
+        }
 
         await createAuditEvent({
           prisma: tx as unknown as PrismaClient,
