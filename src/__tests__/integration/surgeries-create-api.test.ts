@@ -130,4 +130,53 @@ describe("POST /api/companies/[companyId]/surgeries", () => {
     expect(body.error?.message).toContain("patient contact ID")
     expect(createSurgery).not.toHaveBeenCalled()
   })
+
+  it("parses materialShippingDate and coordinatorContactId before forwarding to createSurgery", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/companies/company-1/surgeries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientId: "patient-1",
+          doctorId: "doctor-1",
+          institutionId: "institution-1",
+          payerContactId: "payer-1",
+          coordinatorContactId: "coordinator-1",
+          materialShippingDate: "2026-07-08",
+        }),
+      }),
+      { params: Promise.resolve({ companyId: "company-1" }) }
+    )
+
+    expect(response.status).toBe(201)
+    expect(createSurgery).toHaveBeenCalledTimes(1)
+    const forwarded = createSurgery.mock.calls[0]?.[2] as Record<string, unknown>
+    expect(forwarded.coordinatorContactId).toBe("coordinator-1")
+    expect(forwarded.materialShippingDate).toBeInstanceOf(Date)
+    expect((forwarded.materialShippingDate as Date).toISOString().slice(0, 10)).toBe("2026-07-08")
+  })
+
+  it("rejects materialShippingDate with an invalid format", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/companies/company-1/surgeries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientId: "patient-1",
+          doctorId: "doctor-1",
+          institutionId: "institution-1",
+          payerContactId: "payer-1",
+          materialShippingDate: "08/07/2026",
+        }),
+      }),
+      { params: Promise.resolve({ companyId: "company-1" }) }
+    )
+
+    const body = await bodyAsJson(response)
+
+    expect(response.status).toBe(400)
+    expect(body.error?.code).toBe("invalid_date_field")
+    expect(body.error?.message).toContain("materialShippingDate")
+    expect(createSurgery).not.toHaveBeenCalled()
+  })
 })

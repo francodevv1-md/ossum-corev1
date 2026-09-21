@@ -74,6 +74,22 @@ function parseRequiredContactId(value: unknown, fieldName: string): string {
   return contactId;
 }
 
+function parseMaterialShippingDate(value: unknown): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw badRequest("materialShippingDate must use YYYY-MM-DD", "invalid_date_field");
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
+    throw badRequest("materialShippingDate must be a valid calendar date", "invalid_date_field");
+  }
+  return parsed;
+}
+
 export async function GET(request: Request, { params }: RouteContext) {
   const totalStartedAt = perfNow();
   let totalOutcome = "error";
@@ -142,12 +158,14 @@ export async function POST(request: Request, { params }: RouteContext) {
         doctorId,
         institutionId,
         payerContactId,
+        coordinatorContactId: parseOptionalString(body.coordinatorContactId),
         classification: parseOptionalString(body.classification),
         description: parseOptionalString(body.description),
         priority: parseOptionalString(body.priority),
         probableDate: parseOptionalDate(body.probableDate, "probableDate"),
         scheduledDate: parseOptionalDate(body.scheduledDate, "scheduledDate"),
         surgeryDate: parseOptionalDate(body.surgeryDate, "surgeryDate"),
+        materialShippingDate: parseMaterialShippingDate(body.materialShippingDate),
         performedDate: parseOptionalDate(body.performedDate, "performedDate"),
         cancelledDate: parseOptionalDate(body.cancelledDate, "cancelledDate"),
         source: parseOptionalString(body.source),

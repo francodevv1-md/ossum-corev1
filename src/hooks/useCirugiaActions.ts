@@ -122,10 +122,14 @@ export function useCirugiaActions() {
             doctorId: newForm.surgeonContactId,
             institutionId: newForm.institutionContactId,
             payerContactId: newForm.clientContactId,
+            coordinatorContactId: newForm.coordinadorContactId || null,
             classification: newForm.classification || null,
             priority: newForm.urgente ? "urgent" : null,
             probableDate: newForm.probableDate || null,
             surgeryDate: newForm.date || null,
+            materialShippingDate: newForm.fechaEnvioMaterial
+              ? `${newForm.fechaEnvioMaterial}T00:00:00.000Z`
+              : null,
             source: "cirugias-ui:new-surgery-dialog",
             notes: newForm.notes.trim() || null,
           }),
