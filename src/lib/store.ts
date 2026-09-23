@@ -194,7 +194,7 @@ interface OrtoTrackState {
   createProveedor: (data: Omit<Proveedor, "id">) => Proveedor
   createOrdenPago: (data: Omit<OrdenPago, "id">) => OrdenPago
   createFacturaCompra: (data: Omit<FacturaCompra, "id">) => FacturaCompra
-  createRemitoProveedor: (data: Omit<RemitoProveedor, "id">) => RemitoProveedor
+  createRemitoProveedor: (data: Omit<RemitoProveedor, "id">, options?: { id?: string }) => RemitoProveedor
   createEvaluacionProveedor: (data: Omit<EvaluacionProveedor, "id">) => EvaluacionProveedor
 
   // Stock Actions
@@ -1025,8 +1025,8 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
         return fc
       },
 
-      createRemitoProveedor: (data) => {
-        const rp: RemitoProveedor = { ...data, id: generateId("RP") }
+      createRemitoProveedor: (data, options) => {
+        const rp: RemitoProveedor = { ...data, id: options?.id ?? generateId("RP") }
         set((s) => ({ remitosProveedor: [...s.remitosProveedor, rp] }))
         return rp
       },

@@ -93,6 +93,7 @@ model Company {
   projectionReconciliations        ProjectionReconciliation[]               @relation("ProjectionReconciliationCompany")
   durableAttemptAuditEvents        DurableAttemptAuditEvent[]               @relation("CompanyDurableAttemptAuditEvents")
   goodsReceipts                    GoodsReceipt[]                           @relation("GoodsReceiptCompany")
+  supplierRemittances              SupplierRemittance[]                     @relation("SupplierRemittanceCompany")
   surgeryPreparations              SurgeryPreparation[]                     @relation("SurgeryPreparationCompany")
   vehicles                         Vehicle[]
 
@@ -318,13 +319,14 @@ model ContactCompanyLink {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  contact            Contact                  @relation(fields: [contactId], references: [id])
-  company            Company                  @relation(fields: [companyId], references: [id])
-  addresses          ContactAddress[]         @relation("ContactAddressCompanyLink")
-  articleIdentifiers ArticleIdentifier[]      @relation("ArticleIdentifierSupplierLink")
-  articleMappings    ArticleSupplierMapping[] @relation("ArticleSupplierMappingSupplierLink")
-  clientPresupuestos Presupuesto[]            @relation("PresupuestoClientCompany")
-  payerPresupuestos  Presupuesto[]            @relation("PresupuestoPayerCompany")
+  contact             Contact                  @relation(fields: [contactId], references: [id])
+  company             Company                  @relation(fields: [companyId], references: [id])
+  addresses           ContactAddress[]         @relation("ContactAddressCompanyLink")
+  articleIdentifiers  ArticleIdentifier[]      @relation("ArticleIdentifierSupplierLink")
+  articleMappings     ArticleSupplierMapping[] @relation("ArticleSupplierMappingSupplierLink")
+  supplierRemittances SupplierRemittance[]     @relation("SupplierRemittanceSupplier")
+  clientPresupuestos  Presupuesto[]            @relation("PresupuestoClientCompany")
+  payerPresupuestos   Presupuesto[]            @relation("PresupuestoPayerCompany")
 
   @@unique([contactId, companyId])
   @@unique([companyId, code], map: "uq_contact_company_code")
@@ -2306,8 +2308,9 @@ model StockDeposit {
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
-  company  Company        @relation("CompanyStockDeposits", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sd_company")
-  contexts StockContext[] @relation("StockContextDeposit")
+  company      Company            @relation("CompanyStockDeposits", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sd_company")
+  contexts     StockContext[]     @relation("StockContextDeposit")
+  receiptLines GoodsReceiptLine[] @relation("GoodsReceiptLineDeposit")
 
   @@unique([companyId, id], map: "uq_sd_company_id")
   @@unique([companyId, code], map: "uq_sd_company_code")
@@ -3933,27 +3936,69 @@ model DurableAttemptAuditEvent {
 }
 
 model GoodsReceipt {
-  id                String    @id @default(cuid())
-  companyId         String
-  createdById       String
-  confirmedById     String?
-  status            String    @default("DRAFT")
-  supplierId        String?
-  documentReference String?
-  idempotencyKey    String?
-  confirmedAt       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  companyId            String
+  createdById          String
+  confirmedById        String?
+  status               String    @default("DRAFT")
+  supplierId           String?
+  documentReference    String?
+  idempotencyKey       String?
+  supplierRemittanceId String?
+  confirmedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  company     Company            @relation("GoodsReceiptCompany", fields: [companyId], references: [id], onDelete: Restrict)
-  createdBy   User               @relation("GoodsReceiptCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  confirmedBy User?              @relation("GoodsReceiptConfirmedBy", fields: [confirmedById], references: [id], onDelete: Restrict)
-  lines       GoodsReceiptLine[]
-  scanEvents  ScanEvent[]
+  company            Company             @relation("GoodsReceiptCompany", fields: [companyId], references: [id], onDelete: Restrict)
+  createdBy          User                @relation("GoodsReceiptCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  confirmedBy        User?               @relation("GoodsReceiptConfirmedBy", fields: [confirmedById], references: [id], onDelete: Restrict)
+  lines              GoodsReceiptLine[]
+  scanEvents         ScanEvent[]
+  supplierRemittance SupplierRemittance? @relation("SupplierRemittanceGoodsReceipt", fields: [companyId, supplierRemittanceId], references: [companyId, id], onDelete: Restrict)
 
   @@unique([companyId, id], map: "uq_goods_receipt_company_id")
   @@unique([companyId, idempotencyKey], map: "uq_goods_receipt_idempotency")
+  @@unique([companyId, supplierRemittanceId], map: "uq_goods_receipt_supplier_remittance")
   @@index([companyId, status, createdAt])
+}
+
+model SupplierRemittance {
+  id           String   @id @default(cuid())
+  companyId    String
+  supplierId   String
+  number       String
+  documentDate DateTime @db.Date
+  observations String?  @db.Text
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company      Company                  @relation("SupplierRemittanceCompany", fields: [companyId], references: [id], onDelete: Restrict)
+  supplier     ContactCompanyLink       @relation("SupplierRemittanceSupplier", fields: [supplierId, companyId], references: [contactId, companyId], onDelete: Restrict)
+  lines        SupplierRemittanceLine[]
+  goodsReceipt GoodsReceipt?            @relation("SupplierRemittanceGoodsReceipt")
+
+  @@unique([companyId, id], map: "uq_supplier_remittance_company_id")
+  @@unique([companyId, number], map: "uq_supplier_remittance_number")
+  @@index([companyId, documentDate], map: "ix_supplier_remittance_company_date")
+}
+
+model SupplierRemittanceLine {
+  id                   String    @id @default(cuid())
+  supplierRemittanceId String
+  lineNumber           Int
+  expectedCode         String?
+  expectedDescription  String
+  expectedQuantity     Decimal   @db.Decimal(24, 4)
+  articleId            String?
+  lotCode              String?
+  expirationDate       DateTime? @db.Date
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  supplierRemittance SupplierRemittance @relation(fields: [supplierRemittanceId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierRemittanceId, lineNumber], map: "uq_supplier_remittance_line_number")
 }
 
 model GoodsReceiptLine {
@@ -3962,6 +4007,7 @@ model GoodsReceiptLine {
   receiptId              String
   lineNumber             Int
   articleId              String?
+  depositId              String?
   requestedQuantity      Decimal   @db.Decimal(24, 4)
   expectedQuantity       Decimal?  @db.Decimal(24, 4)
   receivedQuantity       Decimal   @default(0) @db.Decimal(24, 4)
@@ -3982,6 +4028,7 @@ model GoodsReceiptLine {
 
   receipt GoodsReceipt             @relation(fields: [companyId, receiptId], references: [companyId, id], onDelete: Cascade)
   article StockArticleEligibility? @relation("GoodsReceiptLineEligibility", fields: [companyId, articleId], references: [companyId, articleId], onDelete: Restrict)
+  deposit StockDeposit?            @relation("GoodsReceiptLineDeposit", fields: [companyId, depositId], references: [companyId, id], onDelete: Restrict)
   scans   ScanEvent[]
 
   @@unique([companyId, id], map: "uq_goods_receipt_line_company_id")
