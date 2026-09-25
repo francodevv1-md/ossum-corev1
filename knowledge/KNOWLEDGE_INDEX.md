@@ -37,6 +37,7 @@ Cada documento debe tener una función clara:
 ## core/
 
 - `PROJECT_BRIEF.md`: definición corta del producto, problema y objetivo.
+- `MODULOS_IMPLEMENTADOS_RESUMEN.md`: resumen técnico de módulos y componentes implementados.
 - `CURRENT_STATE.md`: estado real del prototipo/repo, límites y riesgos actuales.
 - `CANONICAL_DECISIONS.md`: lista corta de decisiones vigentes.
 - `REPO_MAP.md`: mapa resumido del repo para ahorrar tokens.
