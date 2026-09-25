@@ -103,11 +103,33 @@ Propósito: Documentación técnica y funcional exhaustiva de los desarrollos, m
 
 ---
 
-## 6. Testing y Quality Assurance
+## 6. Módulo Logística & Despacho
+
+### 6.1 Bandeja Global y Centro de Control (`LogisticsGlobalInbox.tsx`)
+- **Tira de métricas interactivas (`LogisticsMetricsStrip.tsx`):** Contadores operacionales en tiempo real (*Bloqueos / Alertas*, *Urgentes*, *Novedades*, *En tránsito*, *Pendiente de preparación*) con filtrado instantáneo y estados activos con anillos de foco.
+- **Barra de controles y filtros (`LogisticsControlsToolbar.tsx`):**
+  - Alternador de modos de visualización: *Grilla*, *Tarjetas (Buckets)* y *Mapa & Rutas*.
+  - Búsqueda reactiva por paciente, cirugía, médico o remito.
+  - Selectores desplegables estilo Shadcn para estado de preparación, estado logístico e institución.
+  - Filtro booleano directo para cirugías con bloqueos y botón de limpieza de filtros activos.
+- **Grilla operativa de alta legibilidad (`LogisticsTableView.tsx`):**
+  - Filas con acento cromático sutil y micro-badges de urgencia (`🚨 URG`).
+  - Columnas estructuradas: *Expediente / ID*, *Fecha*, *Paciente & Cirujano*, *Institución & Destino*, *Preparación*, *Logística*, *Alertas / Bloqueos* y botón de acción contextual *Operar*.
+- **Vista de tarjetas agrupadas por etapa (`LogisticsCardsView.tsx`):**
+  - Distribución por franjas: *Con Bloqueos / Excepciones*, *Por Despachar / En Almacén*, *En Tránsito / En Reparto* y *Entregadas / Completadas*.
+- **Integración con Mapa y Espacio de Operaciones:**
+  - Panel de mapa interactivo con cálculo de rutas de vehículos y marcadores de entrega (`LogisticsMapPanel.tsx`).
+  - Apertura directa del espacio de operaciones logísticas (`LogisticsOperationsWorkspace.tsx`) con trazabilidad de ítems, escaneo de lotes y transiciones de remito.
+
+---
+
+## 7. Testing y Quality Assurance
 
 - **Unit Tests & Component Tests:**
   - `CirugiasDataGrid.test.tsx`: Validación de rendering, ordenamiento, selección de fila y Op-Tabs.
   - `ViewCustomizationDialog.test.tsx`: Comprobación de cambio de variantes de estado, densidad y visibilidad de columnas.
   - `CoordinatorActionConfirmDialog.test.tsx` y `DefineDateModal.test.tsx`: Interacciones y accesibilidad en modales de coordinación.
+  - `LogisticsGlobalInbox.test.tsx`: Renderizado del centro de control logístico, conmutación de vistas, filtros y apertura de workspace.
+  - `logistica-canonical-quantities.test.ts`: Cálculo canónico de cantidades enviadas, devueltas y pendientes.
   - `NotificationMenu.test.tsx` y `NotificationsInbox.test.tsx`: Gestión y marcado de notificaciones.
   - `NovedadesTabContent.test.tsx` y `coordination-view-route.test.ts`: Flujo de novedades y filtros de coordinación.

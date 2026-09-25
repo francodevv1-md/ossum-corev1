@@ -92,6 +92,37 @@ model Company {
   cajasProjectionReconciliations   CajasProjectionReconciliation[]          @relation("CajasCompanyProjectionReconciliations")
   surgeryDocumentChecklists        SurgeryDocumentChecklist[]               @relation("CompanyDocumentChecklists")
   surgeryDocumentItems             SurgeryDocumentItem[]                    @relation("CompanyDocumentItems")
+  vehicles                         Vehicle[]
+}
+
+model Vehicle {
+  id               String   @id @default(cuid())
+  companyId        String
+  name             String
+  provider         String   @default("rastreo_satelital")
+  trackingDeviceId String?  @unique(map: "uq_vehicle_tracking_device")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  company        Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  latestPosition VehicleLatestPosition?
+
+  @@unique([companyId, id], map: "uq_vehicle_company_id")
+  @@index([companyId, provider], map: "ix_vehicle_company_provider")
+}
+
+model VehicleLatestPosition {
+  vehicleId  String   @id
+  companyId  String
+  latitude   Decimal  @db.Decimal(10, 7)
+  longitude  Decimal  @db.Decimal(10, 7)
+  recordedAt DateTime
+  receivedAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Cascade)
+
+  @@unique([companyId, vehicleId], map: "uq_vehicle_latest_position_company_vehicle")
+  @@index([companyId, recordedAt], map: "ix_vehicle_latest_position_company_recorded")
 }
 
 // ─── Sucursal ────────────────────────────────────────────────────────
