@@ -1,9 +1,10 @@
 "use client"
 
-import { useSyncExternalStore } from "react"
+import { useSyncExternalStore, useState, useEffect } from "react"
+import Link from "next/link"
 import { LogOut, Moon, MoreHorizontal, Sun, User } from "lucide-react"
 import { useTheme } from "next-themes"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/ui/user-avatar"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
@@ -15,14 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/components/auth/AuthProvider"
-
-function getInitials(value?: string | null) {
-  if (!value) return "OC"
-  const name = value.includes("@") ? (value.split("@")[0] ?? "") : value
-  const parts = name.split(/[\s._-]/).filter(Boolean)
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
-  return name.slice(0, 2).toUpperCase() || "OC"
-}
 
 interface UserMenuProps {
   compact?: boolean
@@ -38,8 +31,27 @@ export function UserMenu({ compact = false, sidebar = false, className }: UserMe
   const displayName = currentUser?.displayName ?? email
   const roleLabel = currentAccess?.role ?? "Usuario OSSUM COR"
   const companyName = activeCompany?.name
-  const initials = getInitials(displayName)
   const isDarkMode = mounted && resolvedTheme === "dark"
+
+  const [avatarSeed, setAvatarSeed] = useState<string>("")
+  const [avatarBg, setAvatarBg] = useState<"squircle" | "circle" | "square" | false>("squircle")
+
+  useEffect(() => {
+    const updateFromStorage = () => {
+      if (typeof window === "undefined") return
+      const stored = localStorage.getItem("ossum_avatar_seed")
+      const storedBg = localStorage.getItem("ossum_avatar_bg")
+      setAvatarSeed(stored || email)
+      if (storedBg === "none") setAvatarBg(false)
+      else if (storedBg === "circle" || storedBg === "squircle" || storedBg === "square") setAvatarBg(storedBg)
+    }
+
+    updateFromStorage()
+    window.addEventListener("ossum_avatar_changed", updateFromStorage)
+    return () => window.removeEventListener("ossum_avatar_changed", updateFromStorage)
+  }, [email])
+
+  const effectiveSeed = avatarSeed || email
 
   return (
     <DropdownMenu>
@@ -54,11 +66,13 @@ export function UserMenu({ compact = false, sidebar = false, className }: UserMe
           )}
           aria-label={compact ? "Menú de usuario" : undefined}
         >
-          <Avatar className={cn("size-6", sidebar && "size-[30px]")}>
-            <AvatarFallback className="bg-primary text-[10px] text-primary-foreground">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar
+            seed={effectiveSeed}
+            size={sidebar ? 30 : 24}
+            background={avatarBg}
+            animate="hover"
+            className="shrink-0"
+          />
           <div className={cn(
             "min-w-0 max-w-40 flex-1 flex-col items-start",
             compact ? "hidden" : sidebar ? "flex" : "hidden sm:flex",
@@ -70,19 +84,30 @@ export function UserMenu({ compact = false, sidebar = false, className }: UserMe
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side={sidebar ? "right" : "bottom"} align="end" className="w-60">
-        <DropdownMenuLabel>
-          <div className="flex flex-col">
-            <span className="truncate">{displayName}</span>
-            <span className="truncate text-xs font-normal text-muted-foreground">{email}</span>
-            {companyName ? (
-              <span className="truncate text-xs font-normal text-muted-foreground">{companyName}</span>
-            ) : null}
+        <DropdownMenuLabel className="p-2.5">
+          <div className="flex items-center gap-2.5">
+            <UserAvatar
+              seed={effectiveSeed}
+              size={36}
+              background={avatarBg}
+              animate="hover"
+              className="shrink-0"
+            />
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="truncate font-semibold text-xs text-foreground">{displayName}</span>
+              <span className="truncate text-[11px] font-normal text-muted-foreground">{email}</span>
+              {companyName ? (
+                <span className="truncate text-[10px] font-normal text-blue-600 dark:text-blue-400">{companyName}</span>
+              ) : null}
+            </div>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
-          <User className="mr-2 size-4" />
-          Perfil pendiente
+        <DropdownMenuItem asChild>
+          <Link href="/perfil" className="flex items-center w-full cursor-pointer">
+            <User className="mr-2 size-4" />
+            Mi Perfil
+          </Link>
         </DropdownMenuItem>
         {mounted ? (
           <DropdownMenuItem onClick={() => setTheme(isDarkMode ? "light" : "dark")}>

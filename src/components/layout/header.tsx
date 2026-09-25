@@ -3,11 +3,8 @@
 import React from "react"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "./app-shell"
-import { NotificationMenu } from "./ShellUtilityMenus"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { UserMenu } from "./UserMenu"
 import {
   Menu,
   PanelLeftOpen,
@@ -27,7 +24,6 @@ const ROUTE_LABELS: Record<string, string> = {
   "/ventas/comprobantes": "Comprobantes Asociados",
   "/stock": "Stock",
   "/cajas": "Cajas",
-  "/cajas/presentacion": "Cajas · Presentación",
   "/tablero": "Tablero quirúrgico",
   "/remitos": "Remitos",
   "/consumo": "Consumo",
@@ -41,6 +37,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/compras/forecast": "Forecast",
   "/compras/ordenes-pago": "Órdenes de Pago",
   "/compras/movimientos": "Movimientos Compra",
+  "/compras/remitos-proveedor": "Remitos Proveedor",
   "/compras/facturas-compra": "Facturas Compra",
   "/trazabilidad": "Trazabilidad",
   "/documentacion": "Documentación",
@@ -122,12 +119,6 @@ export function Header() {
               Área activa
             </span>
             <h1 className="truncate text-[12px] font-semibold leading-none text-foreground/85">{pageTitle}</h1>
-          </div>
-
-          <div className="ml-auto flex items-center gap-1 rounded-xl border border-border/50 bg-muted/40 px-1 py-1">
-            <NotificationMenu buttonClassName="relative size-7.5 rounded-lg" />
-            <Separator orientation="vertical" className="h-4 bg-border/60" />
-            <UserMenu />
           </div>
         </>
       )}

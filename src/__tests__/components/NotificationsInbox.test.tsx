@@ -309,7 +309,7 @@ describe("NotificationsInbox", () => {
     expect(screen.getByText("Reprogramación")).toBeInTheDocument()
     expect(screen.getAllByText(/Nueva fecha 04\/07\/2026 · 10:00 · Antes 03\/07\/2026 · 09:00/).length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByRole("button", { name: /abrir expediente/i }))
+    fireEvent.click(screen.getByRole("button", { name: /abrir (expediente|caso)/i }))
 
     await waitFor(() => {
       expect(markAsReadMock).toHaveBeenCalledWith("notif-3")

@@ -1,10 +1,14 @@
 "use client"
 
 import { useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   CheckCheck,
   ChevronRight,
   SlidersHorizontal,
+  RefreshCw,
+  Bell,
+  Sparkles,
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
@@ -15,12 +19,13 @@ import { useNotifications } from "@/hooks/useNotifications"
 import {
   getAvailabilityRequestCandidate,
   getNotificationEntryId,
+  isCoordinatorAssignmentNotification,
   readAvailabilityRequestCandidate,
 } from "@/components/notifications/notificationAppearance"
 import { AvailabilityRequestActionDialog } from "@/components/notifications/AvailabilityRequestActionDialog"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { NotificationListItem } from "@/components/notifications/NotificationListItem"
-import { buildNotificationExpedienteLink } from "@/lib/expediente-navigation"
+import { buildNotificationCirugiaLink, buildNotificationExpedienteLink } from "@/lib/expediente-navigation"
 import {
   getNotificationEmptyCopy,
   NotificationStateSurface,
@@ -85,10 +90,9 @@ export function NotificationsInbox() {
         setSelectedRequestId(requestCandidate)
         return
       }
-      router.push(buildNotificationExpedienteLink({
-        surgeryId: notification.surgeryId,
-        entryId: getNotificationEntryId(notification),
-      }))
+       router.push(isCoordinatorAssignmentNotification(notification)
+         ? buildNotificationCirugiaLink(notification.surgeryId)
+         : buildNotificationExpedienteLink({ surgeryId: notification.surgeryId, entryId: getNotificationEntryId(notification) }))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo abrir la notificación")
     }
@@ -115,11 +119,11 @@ export function NotificationsInbox() {
   return (
     <>
     <div className="flex h-full flex-col">
-      <div className="shrink-0 border-b bg-card/80 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="shrink-0 border-b border-border/80 bg-card/90 backdrop-blur-md px-4 py-4 sm:px-6 sm:py-5">
         <div className="space-y-3.5 sm:space-y-4">
           <SectionHeader
             title="Notificaciones"
-            description="Inbox interno de menciones y novedades recientes."
+            description="Menciones y novedades de tus cirugías."
             actions={(
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <Badge variant="outline" className="rounded-full border-border/70 bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground sm:px-2.5 sm:text-[11px]">
@@ -132,19 +136,37 @@ export function NotificationsInbox() {
             )}
           />
 
-          <div className="rounded-3xl border border-border/60 bg-background/75 p-3 shadow-sm shadow-black/[0.03] sm:p-4">
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="rounded-3xl border border-border/70 bg-background/80 backdrop-blur-xs p-3.5 shadow-sm shadow-black/[0.02] sm:p-4.5"
+          >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-2">
-                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-[10px] font-medium text-muted-foreground sm:px-3 sm:text-[11px]">
-                  <SlidersHorizontal className="size-3.5" />
-                  {visibleCountLabel} · {totalCountLabel}
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-border/60 bg-muted/30 px-3 py-1 text-[10px] font-semibold text-muted-foreground sm:text-[11px]">
+                  <SlidersHorizontal className="size-3.5 text-slate-400" />
+                  <span>{visibleCountLabel} · {totalCountLabel}</span>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                  <div className="flex w-full items-center gap-1 rounded-xl border border-border/70 bg-muted/30 p-1 sm:w-auto">
-                    <Button type="button" variant={filter === "all" ? "default" : "ghost"} size="sm" className="h-7 flex-1 rounded-lg px-2.5 text-[11px] sm:h-8 sm:flex-none sm:px-3" onClick={() => handleFilterChange("all")}>
+                  {/* Status Toggle Switcher with Animated Pill */}
+                  <div className="relative flex w-full items-center gap-1 rounded-xl border border-border/70 bg-muted/40 p-1 sm:w-auto">
+                    <Button
+                      type="button"
+                      variant={filter === "all" ? "default" : "ghost"}
+                      size="sm"
+                      className="relative z-10 h-7.5 flex-1 rounded-lg px-3 text-[11px] font-semibold sm:flex-none transition-colors"
+                      onClick={() => handleFilterChange("all")}
+                    >
                       Todas
                     </Button>
-                    <Button type="button" variant={filter === "unread" ? "default" : "ghost"} size="sm" className="h-7 flex-1 rounded-lg px-2.5 text-[11px] sm:h-8 sm:flex-none sm:px-3" onClick={() => handleFilterChange("unread")}>
+                    <Button
+                      type="button"
+                      variant={filter === "unread" ? "default" : "ghost"}
+                      size="sm"
+                      className="relative z-10 h-7.5 flex-1 rounded-lg px-3 text-[11px] font-semibold sm:flex-none transition-colors"
+                      onClick={() => handleFilterChange("unread")}
+                    >
                       No leídas
                     </Button>
                   </div>
@@ -155,7 +177,8 @@ export function NotificationsInbox() {
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:max-w-[34rem] lg:justify-end">
-                <div className="flex w-full items-center gap-1 rounded-xl border border-border/70 bg-muted/30 p-1 sm:w-auto">
+                {/* Categories Switcher */}
+                <div className="flex w-full items-center gap-1 rounded-xl border border-border/70 bg-muted/40 p-1 sm:w-auto">
                   {[
                     { key: "all", label: "Todas" },
                     { key: "mention", label: "Menciones" },
@@ -166,46 +189,56 @@ export function NotificationsInbox() {
                       type="button"
                       variant={categoryFilter === option.key ? "default" : "ghost"}
                       size="sm"
-                      className="h-7 flex-1 rounded-lg px-2.5 text-[11px] sm:h-8 sm:flex-none sm:px-3"
+                      className="h-7.5 flex-1 rounded-lg px-3 text-[11px] font-semibold sm:flex-none transition-colors"
                       onClick={() => handleCategoryChange(option.key as "all" | "mention" | "operational")}
                     >
                       {option.label}
-                      <span className="ml-1 text-[11px] opacity-80">
+                      <span className="ml-1 text-[10px] font-bold opacity-75">
                         {categoryCounts[option.key as "all" | "mention" | "operational"]}
                       </span>
                     </Button>
                   ))}
                 </div>
+
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 rounded-lg px-3 text-[11px]"
-                    onClick={() => void refreshList()}
-                    disabled={loadingList}
-                  >
-                    Actualizar
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-8 rounded-lg px-3 text-[11px]"
-                    onClick={() => void handleMarkAll()}
-                    disabled={markingAll || unreadCount === 0}
-                  >
-                    <CheckCheck className="size-4" />
-                    {markingAll ? "Marcando..." : "Marcar todas como leídas"}
-                  </Button>
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-xl px-3 text-[11px] font-semibold shadow-2xs gap-1.5"
+                      onClick={() => void refreshList()}
+                      disabled={loadingList}
+                    >
+                      <RefreshCw className={`size-3.5 ${loadingList ? "animate-spin text-[#1D2FC0]" : ""}`} />
+                      <span>Actualizar</span>
+                    </Button>
+                  </motion.div>
+
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 rounded-xl px-3.5 text-[11px] font-semibold shadow-2xs gap-1.5"
+                      onClick={() => void handleMarkAll()}
+                      disabled={markingAll || unreadCount === 0}
+                    >
+                      <CheckCheck className="size-4" />
+                      <span>{markingAll ? "Marcando..." : "Marcar todas como leídas"}</span>
+                    </Button>
+                  </motion.div>
                 </div>
               </div>
             </div>
-            <p className="mt-2.5 text-[11px] text-muted-foreground sm:mt-3 sm:text-xs">
+
+            <p className="mt-2.5 text-[11px] text-muted-foreground sm:mt-3 sm:text-xs font-medium">
               {unreadCount > 0
-                ? `${unreadCount} notificaciones siguen pendientes.`
-                : "No hay pendientes por revisar."}
+                ? unreadCount === 1
+                  ? "1 notificación pendiente de revisar."
+                  : `${unreadCount} notificaciones pendientes de revisar.`
+                : "No hay nada pendiente, estás al día."}
             </p>
-          </div>
+          </motion.div>
         </div>
       </div>
 
@@ -229,53 +262,60 @@ export function NotificationsInbox() {
           />
         ) : (
           <div className="space-y-4">
-            <div className="overflow-hidden rounded-3xl border border-border/60 bg-background/85 shadow-sm shadow-black/[0.03]">
-              {items.map((notification) => {
-                const unread = !notification.readAt
-                const marking = isMarking(notification.id)
+            <motion.div
+              layout
+              className="overflow-hidden rounded-3xl border border-border/70 bg-background/90 shadow-sm shadow-black/[0.02]"
+            >
+              <AnimatePresence initial={false}>
+                {items.map((notification) => {
+                  const unread = !notification.readAt
+                  const marking = isMarking(notification.id)
 
-                return (
-                  <NotificationListItem
-                    key={notification.id}
-                     notification={notification}
-                     variant="inbox"
-                     availabilityRequestsEnabled={availabilityRequestsEnabled}
-                     marking={marking}
-                    onOpen={() => void handleOpenNotification(
-                      notification,
-                      unread
-                    )}
-                    onMarkAsRead={unread ? () => {
-                      void markAsRead(notification.id).catch((error) => {
-                        toast.error(error instanceof Error ? error.message : "No se pudo marcar la notificación")
-                      })
-                    } : undefined}
-                  />
-                )
-              })}
-            </div>
+                  return (
+                    <NotificationListItem
+                      key={notification.id}
+                      notification={notification}
+                      variant="inbox"
+                      availabilityRequestsEnabled={availabilityRequestsEnabled}
+                      marking={marking}
+                      onOpen={() => void handleOpenNotification(
+                        notification,
+                        unread
+                      )}
+                      onMarkAsRead={unread ? () => {
+                        void markAsRead(notification.id).catch((error) => {
+                          toast.error(error instanceof Error ? error.message : "No se pudo marcar la notificación")
+                        })
+                      } : undefined}
+                    />
+                  )
+                })}
+              </AnimatePresence>
+            </motion.div>
 
             {hasMore ? (
-              <div className="flex justify-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-full px-4 transition-transform duration-150 ease-out motion-reduce:transition-none hover:-translate-y-px active:translate-y-0"
-                  onClick={() => setTake((current) => current + PAGE_SIZE)}
-                  disabled={loadingList}
-                >
-                  {loadingList ? (
-                    <span className="inline-flex items-center gap-2 text-muted-foreground">
-                      <span className="size-1.5 rounded-full bg-current animate-pulse motion-reduce:animate-none" />
-                      Cargando más
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5">
-                      Cargar más
-                      <ChevronRight className="size-3.5" />
-                    </span>
-                  )}
-                </Button>
+              <div className="flex justify-center pt-1">
+                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full px-4 text-xs font-semibold shadow-2xs transition-all"
+                    onClick={() => setTake((current) => current + PAGE_SIZE)}
+                    disabled={loadingList}
+                  >
+                    {loadingList ? (
+                      <span className="inline-flex items-center gap-2 text-muted-foreground">
+                        <span className="size-1.5 rounded-full bg-[#1D2FC0] animate-pulse" />
+                        Cargando más...
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>Cargar más</span>
+                        <ChevronRight className="size-3.5" />
+                      </span>
+                    )}
+                  </Button>
+                </motion.div>
               </div>
             ) : null}
           </div>
@@ -301,3 +341,4 @@ export function NotificationsInbox() {
     </>
   )
 }
+

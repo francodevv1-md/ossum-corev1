@@ -95,6 +95,11 @@ export function getNotificationEntryId(notification: { sourceEntityId: string; m
   return metadata.sourceEntityType === "seguimiento_entry" ? notification.sourceEntityId : undefined
 }
 
+export function isCoordinatorAssignmentNotification(notification: { metadata: unknown }) {
+  const metadata = asNotificationMetadata(notification.metadata)
+  return metadata?.eventType === "coordinator_assigned" || metadata?.eventType === "surgery_date_requested"
+}
+
 function readString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
@@ -183,10 +188,10 @@ export function getNotificationAppearance(notification: {
         return {
           label: "Disponibilidad",
           summary: body,
-          actionLabel: "Informar disponibilidad",
-          icon: CalendarClock,
-          ...NOTIFICATION_TONES.scheduled,
-        }
+        actionLabel: "Informar disponibilidad",
+        icon: CalendarClock,
+        ...NOTIFICATION_TONES.scheduled,
+      }
       }
       break
     case "coordinator_assigned": {
@@ -194,7 +199,7 @@ export function getNotificationAppearance(notification: {
       return {
         label: "Asignación",
         summary: coordinatorName ? `Coordinador ${coordinatorName}` : body,
-        actionLabel: "Abrir expediente",
+        actionLabel: "Abrir caso",
         icon: UserRoundPlus,
         ...NOTIFICATION_TONES.assignment,
       }
@@ -217,7 +222,7 @@ export function getNotificationAppearance(notification: {
         summary: nextLabel
           ? `Nueva fecha ${nextLabel}${previousLabel ? ` · Antes ${previousLabel}` : ""}`
           : body,
-        actionLabel: "Abrir expediente",
+        actionLabel: "Abrir caso",
         icon: Clock3,
         ...NOTIFICATION_TONES.rescheduled,
       }
@@ -242,3 +247,4 @@ export function getNotificationAppearance(notification: {
     ...NOTIFICATION_TONES.mention,
   }
 }
+

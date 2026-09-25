@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>OSSUM COR · Recepción y Stock · Mockup UX</title>
+  <!--
+    THESIS: Una recepción es una transferencia de custodia verificable, no un formulario largo.
+    OWN-WORLD: Mesa operativa clara, azul OSSUM, líneas finas, datos tabulares y estados con forma, texto e icono.
+    STORY: Entrar desde Stock o Compras, resolver trazabilidad, confirmar y comprobar el impacto en saldo.
+    FIRST VIEWPORT: Origen y estado siempre visibles; la próxima acción ocupa el foco, sin tablero de métricas.
+    FORM: Extensión del producto existente; navegación por cinco escenas y simulador desktop/mobile.
+  -->
+  <style>
+    :root {
+      color-scheme: light;
+      --navy: #071935;
+      --navy-2: #0f2748;
+      --action: #1d2fc0;
+      --action-hover: #1830a8;
+      --ink: #17233a;
+      --muted: #667085;
+      --subtle: #f4f6f8;
+      --canvas: #eef1f4;
+      --line: #dfe3e8;
+      --line-strong: #c9cfd8;
+      --white: #ffffff;
+      --success: #167849;
+      --success-bg: #eaf8f0;
+      --warning: #9a5b00;
+      --warning-bg: #fff6df;
+      --info: #1769aa;
+      --info-bg: #eaf3fb;
+      --danger: #b42318;
+      --danger-bg: #fff0ee;
+      --radius: 10px;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font-size: 14px; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+      outline: 3px solid rgba(29, 47, 192, .24);
+      outline-offset: 2px;
+    }
+    a { color: inherit; }
+
+    .prototype-bar {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 8px 18px;
+      background: #020c1d;
+      color: white;
+    }
+    .prototype-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+    .prototype-title strong { font-size: 13px; letter-spacing: .02em; }
+    .prototype-title span { color: #aab7ca; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .device-switch { display: inline-flex; padding: 3px; background: #14213a; border-radius: 7px; }
+    .device-switch button { border: 0; border-radius: 5px; padding: 6px 10px; background: transparent; color: #aab7ca; font-size: 11px; }
+    .device-switch button.active { background: white; color: var(--navy); }
+
+    .stage { padding: 22px; min-height: calc(100vh - 48px); overflow: auto; }
+    .app {
+      width: min(1440px, 100%);
+      min-height: 780px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 216px minmax(0, 1fr);
+      background: var(--white);
+      border: 1px solid #cdd3dc;
+      box-shadow: 0 22px 55px rgba(7, 25, 53, .13);
+      overflow: hidden;
+    }
+    .app.mobile { width: 390px; min-height: 820px; grid-template-columns: 1fr; }
+
+    .sidebar { display: flex; flex-direction: column; background: var(--navy); color: white; }
+    .brand { height: 58px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid rgba(255,255,255,.12); }
+    .brand-mark { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid #8ea2ff; border-radius: 7px; color: #b9c5ff; font-size: 11px; font-weight: 800; }
+    .brand strong { font-size: 13px; letter-spacing: .05em; }
+    .branch { padding: 15px 12px 8px; color: #8190a6; font-size: 10px; text-transform: uppercase; letter-spacing: .11em; }
+    .side-link { width: calc(100% - 16px); margin: 2px 8px; display: flex; align-items: center; gap: 10px; border: 0; border-radius: 7px; background: transparent; color: #c6cfdd; padding: 9px 10px; text-align: left; font-size: 12px; }
+    .side-link::before { content: ""; width: 6px; height: 6px; border: 1px solid currentColor; border-radius: 2px; }
+    .side-link:hover, .side-link.active { color: white; background: rgba(255,255,255,.1); }
+    .side-link.active::before { background: #8190ff; border-color: #8190ff; }
+    .sidebar-note { margin: auto 12px 14px; padding: 10px; border-top: 1px solid rgba(255,255,255,.12); color: #8190a6; font-size: 10px; line-height: 1.5; }
+
+    .workspace { min-width: 0; background: #fafbfc; }
+    .topbar { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; background: white; border-bottom: 1px solid var(--line); }
+    .crumb { color: var(--muted); font-size: 11px; }
+    .crumb strong { color: var(--ink); }
+    .profile { display: flex; align-items: center; gap: 9px; font-size: 11px; color: var(--muted); }
+    .avatar { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; background: #e9ecff; color: var(--action); font-weight: 700; }
+    .content { padding: 20px 24px 32px; }
+    .screen { display: none; animation: screen-in .22s ease-out; }
+    .screen.active { display: block; }
+    @keyframes screen-in { from { opacity: .25; transform: translateY(4px); } }
+
+    .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+    .page-head h1 { margin: 0; color: var(--navy); font-size: 21px; letter-spacing: -.02em; }
+    .page-head p { margin: 5px 0 0; color: var(--muted); font-size: 12px; max-width: 68ch; }
+    .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .btn { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid var(--line-strong); border-radius: 7px; background: white; color: var(--ink); font-weight: 650; font-size: 12px; text-decoration: none; }
+    .btn:hover { border-color: #9ea7b5; background: #f8f9fb; }
+    .btn.primary { border-color: var(--action); background: var(--action); color: white; }
+    .btn.primary:hover { background: var(--action-hover); }
+    .btn.success { border-color: var(--success); background: var(--success); color: white; }
+    .btn:disabled { cursor: not-allowed; opacity: .45; }
+    .btn.small { min-height: 30px; padding: 0 10px; font-size: 11px; }
+    .btn.full { width: 100%; }
+
+    .table-shell { border: 1px solid var(--line); background: white; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 12px; }
+    th { padding: 9px 11px; background: var(--navy); color: white; text-align: left; font-size: 10px; font-weight: 650; letter-spacing: .025em; }
+    td { padding: 10px 11px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f7f8fb; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .mono { font-family: Consolas, "Courier New", monospace; font-size: 11px; }
+    .link { border: 0; background: transparent; padding: 0; color: var(--action); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+    .muted { color: var(--muted); }
+    .positive { color: var(--success); font-weight: 700; }
+    .negative { color: var(--danger); font-weight: 700; }
+
+    .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .field { height: 34px; border: 1px solid var(--line-strong); border-radius: 7px; background: white; padding: 0 10px; color: var(--ink); font-size: 12px; }
+    .search { width: 260px; }
+    .count-line { margin-left: auto; color: var(--muted); font-size: 11px; }
+
+    .status { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 750; white-space: nowrap; }
+    .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .status.draft { color: #586174; background: #edf0f3; }
+    .status.trace { color: var(--warning); background: var(--warning-bg); }
+    .status.ready { color: var(--info); background: var(--info-bg); }
+    .status.confirmed { color: var(--success); background: var(--success-bg); }
+
+    .entry-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); gap: 14px; }
+    .context-panel { border: 1px solid var(--line); background: white; padding: 16px; }
+    .context-panel h2 { margin: 0 0 4px; color: var(--navy); font-size: 14px; }
+    .context-panel > p { margin: 0 0 15px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .choice { width: 100%; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 11px 0; border: 0; border-top: 1px solid var(--line); background: transparent; text-align: left; }
+    .choice:first-of-type { border-top: 0; }
+    .choice-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 7px; background: #eef0ff; color: var(--action); font-weight: 800; }
+    .choice strong { display: block; font-size: 12px; color: var(--ink); }
+    .choice span { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+    .choice b { color: var(--action); font-size: 16px; }
+    .rule-note { margin-top: 13px; padding: 10px 11px; border: 1px solid #c7dcf0; background: var(--info-bg); color: #315e81; font-size: 10px; line-height: 1.5; }
+
+    .receipt-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
+    .receipt-id { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .receipt-id h1 { margin: 0; font-size: 20px; color: var(--navy); }
+    .receipt-id p { width: 100%; margin: -2px 0 0; color: var(--muted); font-size: 11px; }
+    .state-rail { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 14px; border: 1px solid var(--line); background: white; }
+    .state-step { position: relative; min-height: 66px; border: 0; border-right: 1px solid var(--line); background: white; padding: 10px 11px 9px 38px; text-align: left; color: var(--muted); }
+    .state-step:last-child { border-right: 0; }
+    .state-step strong { display: block; color: inherit; font-size: 10px; letter-spacing: .02em; }
+    .state-step span { display: block; margin-top: 3px; font-size: 9px; line-height: 1.35; }
+    .step-index { position: absolute; left: 11px; top: 13px; width: 18px; height: 18px; display: grid !important; place-items: center; border: 1px solid var(--line-strong); border-radius: 50%; background: white; color: #687184; font-size: 9px !important; font-weight: 700; }
+    .state-step.done { background: #f5fbf7; color: var(--success); }
+    .state-step.done .step-index { border-color: var(--success); color: var(--success); }
+    .state-step.current { box-shadow: inset 0 -3px 0 var(--action); background: #f5f6ff; color: var(--action); }
+    .state-step.current .step-index { border-color: var(--action); background: var(--action); color: white; }
+
+    .work-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(270px, .65fr); gap: 14px; }
+    .work-main, .next-panel { border: 1px solid var(--line); background: white; }
+    .section-head { min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border-bottom: 1px solid var(--line); }
+    .section-head h2 { margin: 0; font-size: 13px; color: var(--navy); }
+    .section-head p { margin: 3px 0 0; color: var(--muted); font-size: 10px; }
+    .scan-zone { margin: 13px; padding: 14px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8px; border: 1px dashed #aeb7c5; background: var(--subtle); }
+    .scan-zone label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; }
+    .scan-zone input { width: 100%; height: 37px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 0 10px; background: white; }
+    .mobile-card-list { display: none; }
+    .issue-row { display: flex; align-items: flex-start; gap: 10px; margin: 12px 13px; padding: 11px; border: 1px solid #efd999; background: var(--warning-bg); }
+    .issue-mark { flex: 0 0 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: #f5d47b; color: #694100; font-weight: 800; }
+    .issue-row strong { display: block; font-size: 11px; color: #694100; }
+    .issue-row p { margin: 3px 0 8px; color: #745d31; font-size: 10px; line-height: 1.45; }
+
+    .next-panel { padding: 15px; align-self: start; }
+    .next-kicker { color: var(--action); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
+    .next-panel h2 { margin: 7px 0 5px; font-size: 16px; color: var(--navy); }
+    .next-panel > p { margin: 0 0 14px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .check-list { margin: 0 0 14px; padding: 0; list-style: none; }
+    .check-list li { display: flex; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 10px; color: var(--muted); }
+    .check-list li::before { content: "✓"; color: var(--success); font-weight: 800; }
+    .check-list li.pending::before { content: "!"; color: var(--warning); }
+    .lock-note { margin-top: 10px; color: var(--muted); font-size: 9px; text-align: center; line-height: 1.45; }
+
+    .confirm-layout { max-width: 850px; margin: 28px auto 0; display: grid; grid-template-columns: 1fr 260px; gap: 18px; }
+    .success-panel { border: 1px solid #b4ddc6; background: white; }
+    .success-band { padding: 22px; background: var(--success-bg); border-bottom: 1px solid #b4ddc6; }
+    .success-check { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--success); color: white; font-size: 21px; font-weight: 800; }
+    .success-band h1 { margin: 14px 0 5px; color: #115c39; font-size: 22px; }
+    .success-band p { margin: 0; color: #46705b; font-size: 12px; }
+    .receipt-summary { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .summary-cell { padding: 14px; border-right: 1px solid var(--line); }
+    .summary-cell:last-child { border-right: 0; }
+    .summary-cell span { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    .summary-cell strong { display: block; margin-top: 5px; color: var(--navy); font-size: 14px; }
+    .success-actions { display: flex; gap: 8px; padding: 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+    .decision-note { padding: 15px; border: 1px solid var(--line); background: white; align-self: start; }
+    .decision-note h2 { margin: 0 0 8px; color: var(--navy); font-size: 13px; }
+    .decision-note p { margin: 0 0 10px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+
+    .delta-band { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid #b4ddc6; background: var(--success-bg); }
+    .delta-band strong { color: #115c39; font-size: 12px; }
+    .delta-band p { margin: 3px 0 0; color: #46705b; font-size: 10px; }
+    .delta-value { color: var(--success); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .article-layout { display: grid; grid-template-columns: minmax(0, 1fr) 274px; border: 1px solid var(--line); background: white; }
+    .article-main { min-width: 0; }
+    .article-title { padding: 13px 15px; border-bottom: 1px solid var(--line); }
+    .article-title h2 { margin: 0; color: var(--navy); font-size: 14px; }
+    .article-title p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
+    .tabs { display: flex; gap: 17px; padding: 0 15px; border-bottom: 1px solid var(--line); overflow: auto; }
+    .tab { height: 38px; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: 10px; }
+    .tab.active { border-color: var(--action); color: var(--action); font-weight: 700; }
+    .position-block { padding: 14px; }
+    .position-block h3 { margin: 0 0 9px; color: var(--navy); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    .projection { border-left: 1px solid var(--line); background: var(--subtle); padding: 15px; }
+    .projection h3 { margin: 0 0 4px; color: var(--navy); font-size: 12px; }
+    .projection > p { margin: 0 0 13px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .balance { padding: 13px 0; border-top: 1px solid var(--line); }
+    .balance:first-of-type { border-top: 0; }
+    .balance span { display: block; color: var(--muted); font-size: 9px; }
+    .balance strong { display: block; margin-top: 3px; color: var(--navy); font-size: 19px; font-variant-numeric: tabular-nums; }
+    .balance.available strong { color: var(--success); font-size: 28px; }
+    .formula { margin-top: 8px; padding: 9px; background: white; border: 1px solid var(--line); color: var(--muted); font-size: 9px; line-height: 1.5; }
+
+    .modal-backdrop { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; padding: 18px; background: rgba(3, 12, 29, .62); }
+    .modal-backdrop.open { display: grid; }
+    .modal { width: min(480px, 100%); background: white; border-radius: 11px; box-shadow: 0 24px 70px rgba(0,0,0,.28); overflow: hidden; }
+    .modal-head { padding: 18px; border-bottom: 1px solid var(--line); }
+    .modal-head h2 { margin: 0; color: var(--navy); font-size: 17px; }
+    .modal-head p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .modal-body { padding: 15px 18px; }
+    .impact-row { display: flex; justify-content: space-between; gap: 18px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 11px; }
+    .impact-row:last-child { border-bottom: 0; }
+    .impact-row span { color: var(--muted); }
+    .impact-row strong { color: var(--navy); text-align: right; }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 18px; border-top: 1px solid var(--line); background: var(--subtle); }
+    .toast { position: fixed; z-index: 30; top: 62px; right: 18px; width: min(360px, calc(100vw - 36px)); display: none; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid #8dcca9; border-radius: 8px; background: white; box-shadow: 0 15px 40px rgba(7, 25, 53, .17); }
+    .toast.show { display: flex; animation: toast-in .25s ease-out; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } }
+    .toast-mark { width: 24px; height: 24px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: var(--success); color: white; font-weight: 800; }
+    .toast strong { display: block; color: #115c39; font-size: 11px; }
+    .toast span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+
+    .mobile-nav { display: none; }
+    .app.mobile .sidebar { display: none; }
+    .app.mobile .workspace { padding-bottom: 58px; }
+    .app.mobile .topbar { height: 50px; padding: 0 14px; }
+    .app.mobile .profile span { display: none; }
+    .app.mobile .content { padding: 14px 12px 24px; }
+    .app.mobile .page-head, .app.mobile .receipt-head { display: block; }
+    .app.mobile .page-head .actions, .app.mobile .receipt-head .actions { margin-top: 12px; justify-content: stretch; }
+    .app.mobile .page-head .actions .btn, .app.mobile .receipt-head .actions .btn { flex: 1; }
+    .app.mobile .entry-grid, .app.mobile .work-grid, .app.mobile .confirm-layout, .app.mobile .article-layout { grid-template-columns: 1fr; }
+    .app.mobile .context-panel { margin-top: 12px; }
+    .app.mobile .toolbar { display: grid; grid-template-columns: 1fr 1fr; }
+    .app.mobile .toolbar .search { width: 100%; grid-column: 1 / -1; }
+    .app.mobile .count-line { margin-left: 0; }
+    .app.mobile .state-rail { grid-template-columns: 1fr; }
+    .app.mobile .state-step { min-height: 53px; border-right: 0; border-bottom: 1px solid var(--line); padding-left: 42px; }
+    .app.mobile .state-step:last-child { border-bottom: 0; }
+    .app.mobile .state-step.current { box-shadow: inset 3px 0 0 var(--action); }
+    .app.mobile .scan-zone { grid-template-columns: 1fr; }
+    .app.mobile .desktop-table { display: none; }
+    .app.mobile .mobile-card-list { display: block; padding: 0 13px 13px; }
+    .mobile-item { padding: 11px 0; border-bottom: 1px solid var(--line); }
+    .mobile-item:last-child { border-bottom: 0; }
+    .mobile-item-head { display: flex; justify-content: space-between; gap: 12px; }
+    .mobile-item strong { font-size: 11px; }
+    .mobile-item p { margin: 4px 0 0; color: var(--muted); font-size: 9px; }
+    .mobile-item-foot { margin-top: 8px; display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; }
+    .app.mobile .confirm-layout { margin-top: 8px; }
+    .app.mobile .receipt-summary { grid-template-columns: 1fr; }
+    .app.mobile .summary-cell { border-right: 0; border-bottom: 1px solid var(--line); }
+    .app.mobile .success-actions .btn { width: 100%; }
+    .app.mobile .projection { border-left: 0; border-top: 1px solid var(--line); }
+    .app.mobile .mobile-nav { position: absolute; z-index: 9; bottom: 0; left: 0; right: 0; height: 58px; display: grid; grid-template-columns: repeat(5, 1fr); background: white; border-top: 1px solid var(--line); }
+    .mobile-nav button { border: 0; background: white; color: var(--muted); font-size: 8px; line-height: 1.2; }
+    .mobile-nav button::before { content: ""; display: block; width: 5px; height: 5px; margin: 0 auto 5px; border: 1px solid currentColor; border-radius: 50%; }
+    .mobile-nav button.active { color: var(--action); font-weight: 700; }
+    .mobile-nav button.active::before { background: var(--action); }
+
+    @media (max-width: 760px) {
+      .prototype-title span { display: none; }
+      .stage { padding: 0; }
+      .app { width: 100%; min-height: calc(100vh - 48px); border: 0; box-shadow: none; grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .workspace { padding-bottom: 58px; }
+      .topbar { height: 50px; padding: 0 14px; }
+      .content { padding: 14px 12px 24px; }
+      .entry-grid, .work-grid, .confirm-layout, .article-layout { grid-template-columns: 1fr; }
+      .mobile-nav { position: fixed; z-index: 9; bottom: 0; left: 0; right: 0; height: 58px; display: grid; grid-template-columns: repeat(5, 1fr); background: white; border-top: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <header class="prototype-bar">
+    <div class="prototype-title">
+      <strong>RECEIPT-STOCK-UX-MOCKUP-001</strong>
+      <span>Artefacto visual interactivo · datos demostrativos · sin conexión a backend</span>
+    </div>
+    <div class="device-switch" aria-label="Vista del dispositivo">
+      <button class="active" data-device="desktop">Desktop</button>
+      <button data-device="mobile">Mobile</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="app" id="app">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">OC</span><strong>OSSUM COR</strong></div>
+        <div class="branch">Operación</div>
+        <button class="side-link active" data-screen="stock">Stock</button>
+        <button class="side-link" data-screen="remitos">Compras · Remitos</button>
+        <button class="side-link" data-screen="receipt">Recepción activa</button>
+        <button class="side-link" data-screen="confirmed">Confirmación</button>
+        <button class="side-link" data-screen="balance">Saldo actualizado</button>
+        <div class="sidebar-note">Mockup de interacción. Los controles simulan navegación y estados, sin persistir datos.</div>
+      </aside>
+
+      <section class="workspace">
+        <div class="topbar">
+          <div class="crumb">Empresa Norte / <strong id="top-context">Stock</strong></div>
+          <div class="profile"><span>Depósito Central</span><span class="avatar">FM</span></div>
+        </div>
+
+        <div class="content">
+          <section class="screen active" data-screen-panel="stock">
+            <div class="page-head">
+              <div><h1>Stock</h1><p>Artículos, posiciones y disponibilidad operativa por depósito.</p></div>
+              <div class="actions">
+                <button class="btn primary" data-open-entry>+ Nueva recepción</button>
+                <button class="btn">+ Nuevo artículo</button>
+              </div>
+            </div>
+            <div class="toolbar">
+              <input class="field search" value="" placeholder="Buscar artículo, SKU, lote o serie…" aria-label="Buscar artículo">
+              <select class="field" aria-label="Depósito"><option>Todos los depósitos</option></select>
+              <select class="field" aria-label="Estado"><option>Todos los estados</option></select>
+              <span class="count-line">128 artículos</span>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead><tr><th>SKU</th><th>Artículo</th><th>Depósito</th><th class="num">Disponible</th><th class="num">Reservado</th><th>Control</th><th>Estado</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">TOR-35-024</td><td><button class="link" data-screen="balance">Tornillo cortical 3.5 × 24 mm</button></td><td>Central</td><td class="num">18</td><td class="num">6</td><td>Lote + vencimiento</td><td><span class="status confirmed">Disponible</span></td></tr>
+                  <tr><td class="mono">PLACA-LCP-06</td><td>Placa LCP 6 orificios</td><td>Central</td><td class="num">7</td><td class="num">2</td><td>Serie</td><td><span class="status confirmed">Disponible</span></td></tr>
+                  <tr><td class="mono">KIT-ROD-01</td><td>Kit instrumental rodilla</td><td>Quirófano</td><td class="num">1</td><td class="num">1</td><td>Serie</td><td><span class="status trace">Reservado</span></td></tr>
+                  <tr><td class="mono">SUT-2-0-75</td><td>Sutura absorbible 2/0</td><td>Central</td><td class="num">42</td><td class="num">0</td><td>Lote + vencimiento</td><td><span class="status confirmed">Disponible</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="entry-grid" id="stock-entry" style="margin-top:14px; display:none">
+              <div></div>
+              <aside class="context-panel">
+                <h2>Nueva recepción</h2>
+                <p>Elegí el punto de partida. Ambos caminos crean la misma recepción operativa.</p>
+                <button class="choice" data-screen="remitos"><span class="choice-icon">R</span><span><strong>Usar remito de proveedor</strong>Reutiliza proveedor, número y artículos ya cargados.</span><b>→</b></button>
+                <button class="choice" data-start-no-document><span class="choice-icon">S</span><span><strong>Continuar sin remito</strong>Recepción directa; no compara contra cantidades esperadas.</span><b>→</b></button>
+                <div class="rule-note"><strong>Regla visible:</strong> “Sin remito” es un camino válido, no una excepción escondida.</div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="screen" data-screen-panel="remitos">
+            <div class="page-head">
+              <div><h1>Remitos de proveedor</h1><p>Documentos ya cargados, listos para iniciar o retomar la recepción física.</p></div>
+              <div class="actions"><button class="btn" data-start-no-document>Recepción sin remito</button><button class="btn primary">+ Cargar comprobante</button></div>
+            </div>
+            <div class="toolbar">
+              <input class="field search" placeholder="Número o proveedor…" aria-label="Buscar remito">
+              <select class="field"><option>Pendientes de recepción</option></select>
+              <span class="count-line">3 documentos</span>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead><tr><th>Número</th><th>Proveedor</th><th>Fecha</th><th class="num">Artículos</th><th>Recepción</th><th>Acción</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">R-0004-018453</td><td>Trauma Medical SA</td><td>22 sep 2026</td><td class="num">3</td><td><span class="status draft">Sin iniciar</span></td><td><button class="btn small primary" data-start-receipt>Recibir mercadería</button></td></tr>
+                  <tr><td class="mono">R-0002-009118</td><td>BioImplantes SRL</td><td>21 sep 2026</td><td class="num">8</td><td><span class="status trace">Trazabilidad pendiente</span></td><td><button class="btn small" data-start-receipt>Retomar recepción</button></td></tr>
+                  <tr><td class="mono">R-0001-004221</td><td>Surgical Supply</td><td>20 sep 2026</td><td class="num">5</td><td><span class="status ready">Lista para confirmar</span></td><td><button class="btn small" data-start-receipt>Revisar</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="rule-note"><strong>Entrada desde Compras:</strong> no se vuelve a pedir el PDF ni el número. La recepción queda ligada al remito seleccionado.</div>
+          </section>
+
+          <section class="screen" data-screen-panel="receipt">
+            <div class="receipt-head">
+              <div class="receipt-id"><h1>Recepción REC-0248</h1><span class="status trace" id="receipt-status">Pendiente de trazabilidad</span><p id="receipt-source">Remito R-0004-018453 · Trauma Medical SA · Depósito Central</p></div>
+              <div class="actions"><button class="btn">Guardar y salir</button></div>
+            </div>
+
+            <nav class="state-rail" aria-label="Estados de recepción">
+              <button class="state-step done" data-state="draft"><span class="step-index">✓</span><strong>Borrador</strong><span>Origen y líneas cargadas</span></button>
+              <button class="state-step current" data-state="trace"><span class="step-index">2</span><strong>Pendiente de trazabilidad</strong><span>Faltan lote o vencimiento</span></button>
+              <button class="state-step" data-state="ready"><span class="step-index">3</span><strong>Lista para confirmar</strong><span>Controles completos</span></button>
+              <button class="state-step" data-state="confirmed"><span class="step-index">4</span><strong>Confirmada</strong><span>Stock impactado</span></button>
+            </nav>
+
+            <div class="work-grid">
+              <div class="work-main">
+                <div class="section-head"><div><h2>Mercadería recibida</h2><p id="line-subtitle">3 artículos esperados · 24 unidades registradas</p></div><span class="mono">24 / 24 u</span></div>
+                <div class="scan-zone" id="scan-zone">
+                  <div><label for="scan">Escanear DataMatrix, QR o código de barras</label><input id="scan" placeholder="Cámara, lector USB o código manual"></div>
+                  <button class="btn primary">Registrar unidad</button>
+                </div>
+                <div class="issue-row" id="trace-issue">
+                  <span class="issue-mark">!</span>
+                  <div><strong>1 dato de trazabilidad pendiente</strong><p>El lote del tornillo fue leído, pero falta confirmar el vencimiento antes de cerrar.</p><button class="btn small" data-resolve>Completar vencimiento</button></div>
+                </div>
+                <div class="table-shell desktop-table" style="border-width:1px 0 0">
+                  <table>
+                    <thead><tr><th>Artículo</th><th class="num">Esperado</th><th class="num">Recibido</th><th>Lote / Serie</th><th>Vencimiento</th><th>Control</th></tr></thead>
+                    <tbody>
+                      <tr><td><strong>Tornillo cortical 3.5 × 24 mm</strong><br><span class="mono muted">TOR-35-024</span></td><td class="num">12</td><td class="num">12</td><td class="mono">LT-2409-A</td><td id="expiry-cell"><span class="status trace">Pendiente</span></td><td id="control-cell"><span class="status trace">Revisar</span></td></tr>
+                      <tr><td><strong>Placa LCP 6 orificios</strong><br><span class="mono muted">PLACA-LCP-06</span></td><td class="num">4</td><td class="num">4</td><td class="mono">SN-2281…2284</td><td>—</td><td><span class="status confirmed">Completo</span></td></tr>
+                      <tr><td><strong>Sutura absorbible 2/0</strong><br><span class="mono muted">SUT-2-0-75</span></td><td class="num">8</td><td class="num">8</td><td class="mono">SU-9150</td><td>30 nov 2028</td><td><span class="status confirmed">Completo</span></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="mobile-card-list">
+                  <article class="mobile-item"><div class="mobile-item-head"><strong>Tornillo cortical 3.5 × 24</strong><span class="status trace">Revisar</span></div><p class="mono">TOR-35-024 · LT-2409-A</p><div class="mobile-item-foot"><span>12 de 12 u</span><span>Vencimiento pendiente</span></div></article>
+                  <article class="mobile-item"><div class="mobile-item-head"><strong>Placa LCP 6 orificios</strong><span class="status confirmed">Completo</span></div><p class="mono">PLACA-LCP-06 · SN-2281…2284</p><div class="mobile-item-foot"><span>4 de 4 u</span><span>Por serie</span></div></article>
+                  <article class="mobile-item"><div class="mobile-item-head"><strong>Sutura absorbible 2/0</strong><span class="status confirmed">Completo</span></div><p class="mono">SUT-2-0-75 · SU-9150</p><div class="mobile-item-foot"><span>8 de 8 u</span><span>30 nov 2028</span></div></article>
+                </div>
+              </div>
+
+              <aside class="next-panel">
+                <span class="next-kicker">Próxima acción</span>
+                <h2 id="next-title">Completá la trazabilidad</h2>
+                <p id="next-copy">La cantidad coincide con el remito. Solo falta un vencimiento para habilitar la confirmación.</p>
+                <ul class="check-list">
+                  <li>24 de 24 unidades recibidas</li>
+                  <li>Sin diferencias de cantidad</li>
+                  <li class="pending" id="trace-check">1 dato pendiente</li>
+                </ul>
+                <button class="btn primary full" id="confirm-button" disabled data-open-confirm>Confirmar recepción</button>
+                <div class="lock-note" id="lock-note">Se habilita cuando no quedan datos obligatorios pendientes.</div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="screen" data-screen-panel="confirmed">
+            <div class="confirm-layout">
+              <div class="success-panel">
+                <div class="success-band"><div class="success-check">✓</div><h1>Recepción confirmada</h1><p>El ingreso quedó registrado y el saldo de Stock fue recalculado.</p></div>
+                <div class="receipt-summary">
+                  <div class="summary-cell"><span>Recepción</span><strong class="mono">REC-0248</strong></div>
+                  <div class="summary-cell"><span>Movimiento</span><strong class="mono">MOV-8712</strong></div>
+                  <div class="summary-cell"><span>Ingreso total</span><strong class="positive">+24 u</strong></div>
+                </div>
+                <div class="success-actions"><button class="btn primary" data-screen="balance">Ver saldo actualizado</button><button class="btn" data-screen="remitos">Volver a remitos</button></div>
+              </div>
+              <aside class="decision-note">
+                <h2>Feedback propuesto</h2>
+                <p><strong>1. Modal previo:</strong> explicita que confirmar impacta Stock y bloquea la edición.</p>
+                <p><strong>2. Toast inmediato:</strong> confirma el resultado sin reemplazar el contexto.</p>
+                <p><strong>3. Resultado persistente:</strong> conserva IDs auditables y ofrece el acceso al saldo.</p>
+                <p><strong>Redirección:</strong> bajo acción explícita. No se fuerza para que el operador pueda copiar la referencia o volver a Remitos.</p>
+              </aside>
+            </div>
+          </section>
+
+          <section class="screen" data-screen-panel="balance">
+            <div class="page-head">
+              <div><h1>Saldo actualizado</h1><p>Artículo → posición física → proyección disponible.</p></div>
+              <div class="actions"><button class="btn" data-screen="confirmed">← Volver a recepción</button></div>
+            </div>
+            <div class="delta-band"><div><strong>Ingreso aplicado desde REC-0248</strong><p>Depósito Central · posición A-03-12 · movimiento MOV-8712</p></div><span class="delta-value">+12 u</span></div>
+            <div class="article-layout">
+              <div class="article-main">
+                <div class="article-title"><h2><span class="mono">TOR-35-024</span> · Tornillo cortical 3.5 × 24 mm</h2><p>Activo · Implantes · Trauma Medical SA</p></div>
+                <nav class="tabs" aria-label="Ficha de artículo"><button class="tab">General</button><button class="tab">Identificación</button><button class="tab">Stock</button><button class="tab">Compras</button><button class="tab active">Trazabilidad</button><button class="tab">Adjuntos</button><button class="tab">Historial</button></nav>
+                <div class="position-block">
+                  <h3>Existencias trazables</h3>
+                  <div class="table-shell">
+                    <table>
+                      <thead><tr><th>Depósito</th><th>Posición</th><th>Lote</th><th>Vencimiento</th><th class="num">Existencia</th><th>Origen</th></tr></thead>
+                      <tbody>
+                        <tr><td>Central</td><td class="mono">A-03-12</td><td class="mono">LT-2409-A</td><td>30 sep 2029</td><td class="num positive">12</td><td><button class="link" data-screen="confirmed">REC-0248</button></td></tr>
+                        <tr><td>Central</td><td class="mono">A-03-10</td><td class="mono">LT-2406-C</td><td>30 jun 2029</td><td class="num">18</td><td class="mono">REC-0197</td></tr>
+                        <tr><td>Consignación</td><td class="mono">C-01-04</td><td class="mono">LT-2312-F</td><td>31 dic 2028</td><td class="num">18</td><td class="mono">AJ-0421</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <h3 style="margin-top:18px">Último movimiento</h3>
+                  <div class="table-shell">
+                    <table>
+                      <thead><tr><th>Fecha</th><th>Tipo</th><th>Referencia</th><th>Usuario</th><th class="num">Cantidad</th></tr></thead>
+                      <tbody><tr><td>22 sep 2026 · 11:42</td><td>Ingreso por recepción</td><td><button class="link" data-screen="confirmed">REC-0248</button></td><td>Franco M.</td><td class="num positive">+12</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <aside class="projection">
+                <h3>Proyección de saldo</h3><p>Resultado operativo después de aplicar movimientos y reservas.</p>
+                <div class="balance"><span>Existencia física</span><strong>48 u</strong></div>
+                <div class="balance"><span>Reservado</span><strong>−6 u</strong></div>
+                <div class="balance"><span>En tránsito</span><strong>0 u</strong></div>
+                <div class="balance available"><span>Disponible proyectado</span><strong>42 u</strong></div>
+                <div class="formula">48 existencia − 6 reservado = <strong>42 disponible</strong><br>Actualizado por MOV-8712.</div>
+              </aside>
+            </div>
+          </section>
+        </div>
+
+        <nav class="mobile-nav" aria-label="Flujos del mockup">
+          <button class="active" data-screen="stock">Stock</button>
+          <button data-screen="remitos">Remitos</button>
+          <button data-screen="receipt">Recepción</button>
+          <button data-screen="confirmed">Resultado</button>
+          <button data-screen="balance">Saldo</button>
+        </nav>
+      </section>
+    </div>
+  </main>
+
+  <div class="modal-backdrop" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="modal">
+      <div class="modal-head"><h2 id="confirm-title">Confirmar recepción REC-0248</h2><p>Esta acción genera movimientos de Stock y deja la recepción en modo solo lectura.</p></div>
+      <div class="modal-body">
+        <div class="impact-row"><span>Artículos</span><strong>3</strong></div>
+        <div class="impact-row"><span>Unidades a ingresar</span><strong>24</strong></div>
+        <div class="impact-row"><span>Depósito de destino</span><strong>Central</strong></div>
+        <div class="impact-row"><span>Diferencias</span><strong>Sin diferencias</strong></div>
+      </div>
+      <div class="modal-foot"><button class="btn" data-close-confirm>Seguir revisando</button><button class="btn success" data-confirm>Confirmar e ingresar stock</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span class="toast-mark">✓</span><div><strong>Recepción confirmada</strong><span>24 unidades ingresadas. El saldo de Stock ya está actualizado.</span></div></div>
+
+  <script>
+    const app = document.querySelector('#app');
+    const contexts = { stock: 'Stock', remitos: 'Compras / Remitos de proveedor', receipt: 'Stock / Recepción REC-0248', confirmed: 'Stock / Recepción confirmada', balance: 'Stock / Artículo / Trazabilidad' };
+    let receiptState = 'trace';
+
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      app.classList.add('mobile');
+      document.querySelectorAll('[data-device]').forEach((button) => button.classList.toggle('active', button.dataset.device === 'mobile'));
+    }
+
+    function showScreen(name) {
+      document.querySelectorAll('[data-screen-panel]').forEach((panel) => panel.classList.toggle('active', panel.dataset.screenPanel === name));
+      document.querySelectorAll('[data-screen]').forEach((button) => button.classList.toggle('active', button.dataset.screen === name));
+      document.querySelector('#top-context').textContent = contexts[name];
+    }
+
+    function setReceiptState(state) {
+      receiptState = state;
+      const order = ['draft', 'trace', 'ready', 'confirmed'];
+      const labels = { draft: 'Borrador', trace: 'Pendiente de trazabilidad', ready: 'Lista para confirmar', confirmed: 'Confirmada' };
+      const status = document.querySelector('#receipt-status');
+      status.className = `status ${state}`;
+      status.textContent = labels[state];
+      document.querySelectorAll('.state-step').forEach((step) => {
+        const index = order.indexOf(step.dataset.state);
+        const current = order.indexOf(state);
+        step.classList.toggle('current', index === current);
+        step.classList.toggle('done', index < current);
+        step.querySelector('.step-index').textContent = index < current ? '✓' : String(index + 1);
+      });
+      const ready = state === 'ready';
+      document.querySelector('#confirm-button').disabled = !ready;
+      document.querySelector('#trace-issue').style.display = state === 'trace' ? 'flex' : 'none';
+      document.querySelector('#scan-zone').style.display = state === 'confirmed' ? 'none' : 'grid';
+      document.querySelector('#next-title').textContent = state === 'draft' ? 'Registrá la mercadería' : state === 'trace' ? 'Completá la trazabilidad' : state === 'ready' ? 'Revisá y confirmá' : 'Recepción cerrada';
+      document.querySelector('#next-copy').textContent = state === 'draft' ? 'Escaneá o ingresá las unidades recibidas.' : state === 'trace' ? 'La cantidad coincide. Falta un vencimiento obligatorio.' : state === 'ready' ? 'Cantidades y trazabilidad están completas. La confirmación impactará Stock.' : 'El movimiento de Stock ya fue generado.';
+      document.querySelector('#trace-check').classList.toggle('pending', state === 'trace');
+      document.querySelector('#trace-check').textContent = state === 'trace' ? '1 dato pendiente' : 'Trazabilidad completa';
+      document.querySelector('#lock-note').textContent = ready ? 'Confirmar bloquea la edición y genera los movimientos.' : state === 'confirmed' ? 'La recepción confirmada es de solo lectura.' : 'Se habilita cuando no quedan datos obligatorios pendientes.';
+      if (state === 'confirmed') showScreen('confirmed');
+    }
+
+    document.addEventListener('click', (event) => {
+      const screenButton = event.target.closest('[data-screen]');
+      if (screenButton) showScreen(screenButton.dataset.screen);
+
+      if (event.target.closest('[data-open-entry]')) {
+        const panel = document.querySelector('#stock-entry');
+        panel.style.display = panel.style.display === 'none' ? 'grid' : 'none';
+      }
+      if (event.target.closest('[data-start-receipt]')) {
+        document.querySelector('#receipt-source').textContent = 'Remito R-0004-018453 · Trauma Medical SA · Depósito Central';
+        showScreen('receipt');
+        setReceiptState('trace');
+      }
+      if (event.target.closest('[data-start-no-document]')) {
+        document.querySelector('#receipt-source').textContent = 'Sin remito · Ingreso directo · Depósito Central';
+        document.querySelector('#line-subtitle').textContent = 'Sin comparación documental · control por artículos y trazabilidad';
+        showScreen('receipt');
+        setReceiptState('draft');
+      }
+      const stateButton = event.target.closest('[data-state]');
+      if (stateButton) setReceiptState(stateButton.dataset.state);
+      if (event.target.closest('[data-resolve]')) {
+        document.querySelector('#expiry-cell').textContent = '30 sep 2029';
+        document.querySelector('#control-cell').innerHTML = '<span class="status confirmed">Completo</span>';
+        setReceiptState('ready');
+      }
+      if (event.target.closest('[data-open-confirm]') && receiptState === 'ready') document.querySelector('#confirm-modal').classList.add('open');
+      if (event.target.closest('[data-close-confirm]')) document.querySelector('#confirm-modal').classList.remove('open');
+      if (event.target.closest('[data-confirm]')) {
+        document.querySelector('#confirm-modal').classList.remove('open');
+        setReceiptState('confirmed');
+        const toast = document.querySelector('#toast');
+        toast.classList.add('show');
+        window.setTimeout(() => toast.classList.remove('show'), 5200);
+      }
+      const device = event.target.closest('[data-device]');
+      if (device) {
+        document.querySelectorAll('[data-device]').forEach((button) => button.classList.toggle('active', button === device));
+        app.classList.toggle('mobile', device.dataset.device === 'mobile');
+      }
+    });
+  </script>
+</body>
+</html>

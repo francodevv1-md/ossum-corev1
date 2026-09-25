@@ -1,10 +1,10 @@
+import { motion } from "framer-motion"
 import { ChevronRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   formatRelativeTime,
   getNotificationAppearance,
-  getNotificationPreview,
 } from "@/components/notifications/notificationAppearance"
 import type { InternalNotificationListItem } from "@/lib/api/notifications"
 import { cn } from "@/lib/utils"
@@ -34,8 +34,8 @@ export function NotificationListItem({
   const showBody = Boolean(notification.body && notification.body !== appearance.summary)
   const preview = showBody
     ? appearance.summary
-    : getNotificationPreview(appearance.summary, notification.body)
-  const statusLabel = unread ? "Sin leer" : "Leída"
+    : (appearance.summary ?? notification.body)
+  const statusLabel = unread ? "Nuevo" : "Visto"
 
   if (variant === "dropdown") {
     return (
@@ -49,56 +49,30 @@ export function NotificationListItem({
           )}
         />
         <div className="flex w-full items-start gap-3">
-          <div className={cn("mt-0.5 flex size-[2.125rem] shrink-0 items-center justify-center rounded-full border transition-transform duration-150 ease-out motion-reduce:transition-none group-hover:scale-[1.02] group-active:scale-[0.99] group-data-[highlighted]:scale-[0.98]", appearance.iconClassName)}>
+          <div className={cn("mt-0.5 flex size-[2.125rem] shrink-0 items-center justify-center rounded-full border transition-transform duration-200 ease-out motion-reduce:transition-none group-hover:scale-[1.08] group-active:scale-[0.95] group-data-[highlighted]:scale-[1.05]", appearance.iconClassName)}>
             <Icon className="size-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  <span className={appearance.labelClassName}>{appearance.label}</span>
-                  <span className="text-muted-foreground/40">•</span>
-                  <span className="truncate">Caso {notification.surgeryId}</span>
-                </div>
-                <div className="mt-1.5 flex items-start gap-2">
-                  <span className="line-clamp-2 flex-1 text-sm font-medium leading-5 text-foreground">
-                    {notification.title}
-                  </span>
-                </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <span className={cn("shrink-0", appearance.labelClassName)}>{appearance.label}</span>
+                <span className="text-muted-foreground/40">•</span>
+                <span className="truncate">Caso {notification.surgeryId}</span>
               </div>
-              <div className="flex min-w-[6.25rem] shrink-0 items-center justify-end gap-2 pl-1 text-right">
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "mt-1 size-2 rounded-full transition-opacity duration-150 ease-out motion-reduce:transition-none",
-                    unread ? "opacity-100" : "opacity-0",
-                    appearance.unreadIndicatorClassName
-                  )}
-                />
-                <span className="pt-0.5 text-[10px] text-muted-foreground transition-opacity duration-150 ease-out motion-reduce:transition-none group-hover:opacity-100 group-data-[highlighted]:opacity-100">
-                  {marking ? "Leyendo..." : formatRelativeTime(notification.createdAt)}
-                </span>
-              </div>
-            </div>
-            <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-              {notification.actorName}
-            </span>
-            {preview ? (
-              <span className="mt-2 line-clamp-2 block text-xs leading-5 text-muted-foreground/90">
-                {preview}
+              <span className="shrink-0 pt-0.5 text-[10px] text-muted-foreground transition-opacity duration-150 ease-out motion-reduce:transition-none group-hover:opacity-100 group-data-[highlighted]:opacity-100">
+                {marking ? "Marcando..." : formatRelativeTime(notification.createdAt)}
               </span>
+            </div>
+            <p className="mt-1.5 line-clamp-2 text-sm font-medium leading-5 text-foreground">
+              {notification.title}
+            </p>
+            {notification.patientName ? (
+              <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
+                {notification.patientName}
+              </p>
             ) : null}
-            <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
-              <Badge
-                variant="outline"
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors duration-150 ease-out motion-reduce:transition-none",
-                  unread ? appearance.badgeClassName : "border-border/70 bg-background text-muted-foreground"
-                )}
-              >
-                {statusLabel}
-              </Badge>
-              <span className="inline-flex items-center gap-1 font-medium text-foreground/80 transition-transform duration-150 ease-out motion-reduce:transition-none group-hover:translate-x-0.5 group-data-[highlighted]:translate-x-0.5">
+            <div className="mt-2 flex items-center justify-end">
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/80 transition-transform duration-200 ease-out motion-reduce:transition-none group-hover:translate-x-1 group-data-[highlighted]:translate-x-1">
                 <span>{appearance.actionLabel}</span>
                 <ChevronRight className="size-3.5" />
               </span>
@@ -110,9 +84,14 @@ export function NotificationListItem({
   }
 
   return (
-    <article
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -16, transition: { duration: 0.2 } }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
       className={cn(
-        "group relative border-b border-border/60 px-5 py-4 transition-[background-color,border-color,transform,box-shadow,opacity] duration-150 ease-out motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-px hover:shadow-sm hover:shadow-black/[0.03] last:border-b-0",
+        "group relative border-b border-border/60 px-5 py-4 transition-[background-color,border-color,transform,box-shadow] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none hover:-translate-y-0.5 hover:shadow-md hover:shadow-black/[0.04] last:border-b-0",
         unread ? appearance.unreadCardClassName : "bg-background",
         className
       )}
@@ -126,7 +105,7 @@ export function NotificationListItem({
         )}
       />
       <div className="flex items-start gap-3">
-        <div className={cn("mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border transition-transform duration-150 ease-out motion-reduce:transition-none group-hover:scale-[1.02] group-active:scale-[0.99]", appearance.iconClassName)}>
+        <div className={cn("mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border transition-transform duration-200 ease-out motion-reduce:transition-none group-hover:scale-[1.08] group-active:scale-[0.95]", appearance.iconClassName)}>
           <Icon className="size-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -172,7 +151,7 @@ export function NotificationListItem({
                   unread ? appearance.badgeClassName : "border-border/70 bg-background text-muted-foreground"
                 )}
               >
-                  {statusLabel}
+                {statusLabel}
               </Badge>
             </div>
           </div>
@@ -213,6 +192,8 @@ export function NotificationListItem({
           </div>
         </div>
       </div>
-    </article>
+    </motion.article>
   )
 }
+
+
