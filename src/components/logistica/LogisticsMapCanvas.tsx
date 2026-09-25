@@ -5,6 +5,10 @@ import Map, { Marker, NavigationControl, Popup, type MapRef } from "react-map-gl
 import * as maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 
+if (typeof window !== "undefined" && typeof maplibregl.setWorkerUrl === "function") {
+  maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs")
+}
+
 import { Button } from "@/components/ui/button"
 import type { LogisticsGeo } from "@/lib/services/logistics-geography"
 
@@ -67,6 +71,12 @@ export default function LogisticsMapCanvas({
         : ([-58.3816, -34.6037] as [number, number]), // Default to CABA center
     [markers, positionedVehicles]
   )
+
+  useEffect(() => {
+    if (typeof maplibregl.setWorkerUrl === "function") {
+      maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs")
+    }
+  }, [])
 
   useEffect(() => {
     if (!mapReady || route.length < 2) return
