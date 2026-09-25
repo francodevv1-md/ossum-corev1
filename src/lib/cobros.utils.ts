@@ -8,20 +8,20 @@ import { PLAZO_PAGO_DEFAULT_DIAS } from "./cobros.constants"
 // ── Cobro movement state ──
 
 /** Total imputado para un cobro específico */
-export function getImporteImputadoCobro(cobroId: string, imputaciones: ImputacionCobro[]): number {
-  return imputaciones
+export function getImporteImputadoCobro(cobroId: string, imputaciones: ImputacionCobro[] = []): number {
+  return (imputaciones || [])
     .filter((imp) => imp.cobroId === cobroId)
     .reduce((sum, imp) => sum + imp.importeImputado, 0)
 }
 
 /** Importe no imputado de un cobro (saldo disponible para imputar) */
-export function getImporteNoImputadoCobro(cobro: CobroV2, imputaciones: ImputacionCobro[]): number {
+export function getImporteNoImputadoCobro(cobro: CobroV2, imputaciones: ImputacionCobro[] = []): number {
   const imputado = getImporteImputadoCobro(cobro.id, imputaciones)
   return Math.max(0, cobro.importe - imputado)
 }
 
 /** Estado del cobro (movimiento) según sus imputaciones */
-export function getEstadoCobro(cobro: CobroV2, imputaciones: ImputacionCobro[]): EstadoCobro {
+export function getEstadoCobro(cobro: CobroV2, imputaciones: ImputacionCobro[] = []): EstadoCobro {
   const imputado = getImporteImputadoCobro(cobro.id, imputaciones)
   if (imputado === 0) return "registrado"
   if (imputado >= cobro.importe) return "imputado_completo"
@@ -31,27 +31,27 @@ export function getEstadoCobro(cobro: CobroV2, imputaciones: ImputacionCobro[]):
 // ── Factura cobranza state ──
 
 /** Total cobrado para una factura (FV) */
-export function getTotalCobradoFactura(facturaId: string, imputaciones: ImputacionCobro[]): number {
-  return imputaciones
+export function getTotalCobradoFactura(facturaId: string, imputaciones: ImputacionCobro[] = []): number {
+  return (imputaciones || [])
     .filter((imp) => imp.facturaId === facturaId)
     .reduce((sum, imp) => sum + imp.importeImputado, 0)
 }
 
 /** Saldo pendiente de una factura */
-export function getSaldoPendienteFactura(factura: Comprobante, imputaciones: ImputacionCobro[]): number {
+export function getSaldoPendienteFactura(factura: Comprobante, imputaciones: ImputacionCobro[] = []): number {
   const cobrado = getTotalCobradoFactura(factura.number, imputaciones)
   return Math.max(0, factura.amount - cobrado)
 }
 
 /** Porcentaje cobrado de una factura */
-export function getPorcentajeCobradoFactura(factura: Comprobante, imputaciones: ImputacionCobro[]): number {
+export function getPorcentajeCobradoFactura(factura: Comprobante, imputaciones: ImputacionCobro[] = []): number {
   if (factura.amount === 0) return 100
   const cobrado = getTotalCobradoFactura(factura.number, imputaciones)
   return Math.min(100, Math.round((cobrado / factura.amount) * 100))
 }
 
 /** Estado de cobranza de una factura (DCob-008 corrected) */
-export function getEstadoCobranzaFactura(factura: Comprobante, imputaciones: ImputacionCobro[]): EstadoCobranzaFactura {
+export function getEstadoCobranzaFactura(factura: Comprobante, imputaciones: ImputacionCobro[] = []): EstadoCobranzaFactura {
   const saldo = getSaldoPendienteFactura(factura, imputaciones)
   if (saldo <= 0) return "cobrada"
   if (isFacturaVencida(factura, imputaciones)) return "vencida"

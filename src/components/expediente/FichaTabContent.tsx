@@ -1,19 +1,28 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
+import { motion } from "framer-motion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatDate } from "@/lib/formatters"
 import {
-  CalendarDays,
+  Building2,
+  Calendar,
+  ClipboardList,
   Clock,
   FileText,
+  FolderKanban,
   History,
   MapPin,
-  PencilLine,
+  MessageSquareText,
+  Package,
+  Pencil,
   Plus,
-  StickyNote,
-  Wrench,
+  ReceiptText,
+  ShieldCheck,
+  Stethoscope,
+  User,
+  UserRoundCog,
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -28,7 +37,7 @@ import type {
 } from "@/types"
 import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
 
-// ─── Props (preserved exactly) ───────────────────────────────────
+// ─── Props ────────────────────────────────────────────────────────
 interface FichaTabContentProps {
   surgery: Surgery
   presupuestos: Presupuesto[]
@@ -42,18 +51,6 @@ interface FichaTabContentProps {
   onViewRemitos?: () => void
 }
 
-// ─── Local style tokens ──────────────────────────────────────────
-/**
- * NOTE: project has no `text-primary` token; spec fallback
- * `text-slate-800` is used for section titles, and `text-sky-700`
- * for section icons (closest canonical primary tone).
- */
-const SECTION_TITLE_CLS = "text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-900 dark:text-slate-100"
-const SUBSECTION_TITLE_CLS = "text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300"
-const LABEL_CLS = "text-[8px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400"
-const VALUE_CLS = "text-[13px] font-semibold leading-5 text-slate-950 dark:text-slate-100"
-const EMPTY_CLS = "italic text-slate-500 dark:text-slate-400"
-
 const PREP_TEXT_COLOR: Record<string, string> = {
   "Sin preparar": "text-slate-700 dark:text-slate-200",
   "En preparación": "text-sky-700 dark:text-sky-300",
@@ -63,18 +60,17 @@ const PREP_TEXT_COLOR: Record<string, string> = {
   "Retirado": "text-slate-700 dark:text-slate-200",
 }
 
-// Availability dot color derived from preparationState (bg-only subset).
 const PREP_DOT_COLOR: Record<string, string> = {
   "Sin preparar": "bg-slate-400",
-  "En preparación": "bg-sky-500",
-  "Congelado": "bg-amber-500",
-  "Congelado con faltantes": "bg-orange-500",
-  "Entregado": "bg-teal-500",
-  "Retirado": "bg-slate-500",
+  "En preparación": "bg-sky-500 ring-2 ring-sky-200 dark:ring-sky-900",
+  "Congelado": "bg-amber-500 ring-2 ring-amber-200 dark:ring-amber-900",
+  "Congelado con faltantes": "bg-orange-500 ring-2 ring-orange-200 dark:ring-orange-900",
+  "Entregado": "bg-teal-500 ring-2 ring-teal-200 dark:ring-teal-900",
+  "Retirado": "bg-slate-500 ring-2 ring-slate-200 dark:ring-slate-800",
 }
 
-// ─── Section card wrapper ────────────────────────────────────────
-function SectionCard({
+// ─── Section Container with subtle Hover Microinteraction ─────────
+function SectionContainer({
   title,
   icon: Icon,
   action,
@@ -85,86 +81,96 @@ function SectionCard({
   action?: React.ReactNode
   children: React.ReactNode
 }) {
+  const [isHeaderHovered, setIsHeaderHovered] = useState(false)
+
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-800 dark:bg-slate-900/90">
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800">
+    <section className="rounded-lg border border-slate-200/90 bg-[#F9FBFD] shadow-2xs dark:border-slate-800 dark:bg-slate-900/90">
+      <div
+        className="flex items-center justify-between gap-2 border-b border-slate-200/80 bg-white/70 px-3.5 py-2 transition-colors dark:border-slate-800 dark:bg-slate-900/60"
+        onMouseEnter={() => setIsHeaderHovered(true)}
+        onMouseLeave={() => setIsHeaderHovered(false)}
+      >
         <div className="flex items-center gap-2">
-          <div className="text-slate-700 dark:text-slate-300">
-            <Icon className="size-4" />
-          </div>
-          <h3 className={SECTION_TITLE_CLS}>{title}</h3>
+          <motion.div
+            animate={isHeaderHovered ? { scale: 1.15, rotate: -4 } : { scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 350, damping: 20 }}
+            className="flex items-center justify-center text-slate-600 dark:text-slate-400"
+          >
+            <Icon className="size-3.5" />
+          </motion.div>
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+            {title}
+          </h3>
         </div>
         {action}
       </div>
-      <div className="px-3 py-3">{children}</div>
+      <div className="p-3 sm:p-3.5">{children}</div>
     </section>
   )
 }
 
-// ─── Read-only field ─────────────────────────────────────────────
-function Field({
+// ─── Property Field (Microcontenedor con jerarquía de dominio) ────
+function PropertyField({
   label,
   value,
-  emptyText = "Sin asignar",
-}: {
-  label: string
-  value?: React.ReactNode
-  emptyText?: string
-}) {
-  const isEmpty =
-    value === null ||
-    value === undefined ||
-    value === "" ||
-    (typeof value === "string" && value.trim() === "")
-  return (
-    <div className="space-y-0.5">
-      <p className={LABEL_CLS}>{label}</p>
-      {isEmpty ? (
-        <p className={cn(VALUE_CLS, EMPTY_CLS)}>{emptyText}</p>
-      ) : (
-        <p className={VALUE_CLS}>{value}</p>
-      )}
-    </div>
-  )
-}
-
-function CompactListRow({
-  label,
-  value,
-  emptyText = "Sin asignar",
-  valueClassName = VALUE_CLS,
-}: {
-  label: string
-  value?: React.ReactNode
-  emptyText?: string
-  valueClassName?: string
-}) {
-  const isEmpty =
-    value === null ||
-    value === undefined ||
-    value === "" ||
-    (typeof value === "string" && value.trim() === "")
-
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-1.5 last:border-b-0 dark:border-slate-800">
-      <span className="min-w-0 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">{label}</span>
-      <span className={cn("min-w-0 text-right", isEmpty ? EMPTY_CLS : valueClassName)}>{isEmpty ? emptyText : value}</span>
-    </div>
-  )
-}
-
-function CompactGroup({
-  title,
+  emptyText = "—",
+  className,
+  valueClassName,
+  icon: Icon,
+  accentColor,
   children,
 }: {
-  title: string
-  children: React.ReactNode
+  label: string
+  value?: React.ReactNode
+  emptyText?: string
+  className?: string
+  valueClassName?: string
+  icon?: React.ComponentType<{ className?: string }>
+  accentColor?: string
+  children?: React.ReactNode
 }) {
+  const isSimpleEmpty =
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    (typeof value === "string" && value.trim() === "")
+
+  const isOperativeAbsence =
+    value === "Sin asignar" ||
+    value === "Sin PR asociado" ||
+    value === "Sin definir" ||
+    emptyText === "Sin asignar" ||
+    emptyText === "Sin PR asociado"
+
   return (
-    <div className="space-y-1.5">
-      <p className={SUBSECTION_TITLE_CLS}>{title}</p>
-      <div className="rounded-md border border-slate-200 bg-white/70 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-950/50">
-        {children}
+    <div
+      className={cn(
+        "group flex min-w-0 flex-col justify-center rounded-[6px] border border-slate-200/80 bg-[#F2F5F9] px-3 py-1.5 transition-all hover:border-slate-300 hover:shadow-2xs dark:border-slate-800/80 dark:bg-slate-950/60 dark:hover:border-slate-700",
+        className
+      )}
+    >
+      <div className="flex items-center gap-1.5">
+        {Icon && (
+          <Icon
+            className={cn(
+              "size-3 shrink-0 text-slate-400 transition-colors group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300",
+              accentColor
+            )}
+          />
+        )}
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          {label}
+        </span>
+      </div>
+      <div
+        className={cn(
+          "truncate pt-0.5 text-[13px] font-bold leading-snug text-slate-950 dark:text-slate-50",
+          isSimpleEmpty && !isOperativeAbsence && "font-normal italic text-slate-400 dark:text-slate-500",
+          isOperativeAbsence && isSimpleEmpty && "text-[12px] font-medium text-slate-500 dark:text-slate-400",
+          valueClassName
+        )}
+      >
+        {children ?? (isSimpleEmpty ? emptyText : value)}
       </div>
     </div>
   )
@@ -189,238 +195,376 @@ export function FichaTabContent({
     )
     .slice(0, 4)
 
-  // Referencias administrativas lookup by tipo.
   const findRef = (tipo: string) =>
     surgery.referenciasAdministrativas?.find((r) => r.tipo === tipo && r.valor)
-  const refInterna =
-    findRef("Ref") || findRef("Expediente") || findRef("Otro")
+  const refInterna = findRef("Ref") || findRef("Expediente") || findRef("Otro")
   const refAutorizacion = findRef("Autorización")
   const refSiniestro = findRef("Siniestro")
 
   const prepDot = PREP_DOT_COLOR[surgery.preparationState] || "bg-slate-400"
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       {/* ─────────────────────────────────────────────────────────
           SECCIÓN 1 — Datos de la cirugía
       ───────────────────────────────────────────────────────── */}
-      <SectionCard
+      <SectionContainer
         title="Datos de la cirugía"
-        icon={CalendarDays}
+        icon={ClipboardList}
         action={
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1 border-slate-300 bg-white text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            onClick={onEditFicha}
-          >
-            <PencilLine className="size-3.5" />
-            Editar ficha
-          </Button>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="group h-6.5 gap-1.5 rounded border-slate-300 bg-white px-2.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+              onClick={onEditFicha}
+            >
+              <motion.div
+                className="flex items-center"
+                whileHover={{ rotate: -15 }}
+                transition={{ type: "spring", stiffness: 400, damping: 15 }}
+              >
+                <Pencil className="size-3 text-slate-500 group-hover:text-slate-800 dark:text-slate-400 dark:group-hover:text-slate-200" />
+              </motion.div>
+              <span>Editar ficha</span>
+            </Button>
+          </motion.div>
         }
       >
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <CompactGroup title="Programación">
-            <CompactListRow label="Fecha CX" value={formatDate(surgery.date)} valueClassName="text-[13px] font-bold text-sky-900 dark:text-sky-200" />
-            <CompactListRow label="Envío" value={surgery.fechaEnvioMaterial ? formatDate(surgery.fechaEnvioMaterial) : ""} emptyText="—" />
-            <CompactListRow label="Probable" value={surgery.probableDate ? formatDate(surgery.probableDate) : ""} emptyText="—" />
-            <CompactListRow label="Logística" value={surgery.fechaEnvioMaterial ? formatDate(surgery.fechaEnvioMaterial) : ""} emptyText="—" />
-          </CompactGroup>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:gap-2.5">
+          {/* Dominio Temporal / Fechas */}
+          <PropertyField
+            label="Fecha CX"
+            icon={Calendar}
+            accentColor="text-sky-600 dark:text-sky-400"
+            value={formatDate(surgery.date)}
+            valueClassName="text-sky-900 dark:text-sky-200 text-[13.5px] font-extrabold"
+          />
 
-          <CompactGroup title="Caso">
-            <CompactListRow label="Clasificación" value={surgery.classification} />
-            <CompactListRow label="Médico" value={surgery.surgeon} />
-            <CompactListRow label="Institución" value={surgery.institution} />
-            <CompactListRow label="Cliente" value={surgery.client || surgery.financiador || surgery.obraSocial} />
-          </CompactGroup>
+          <PropertyField
+            label="Clasificación"
+            icon={ClipboardList}
+            accentColor="text-indigo-500 dark:text-indigo-400"
+            value={surgery.classification}
+            valueClassName="text-slate-900 dark:text-slate-100"
+          />
 
-          <CompactGroup title="Material">
-            <CompactListRow
-              label="Disponibilidad"
-              value={<span className={cn("inline-flex items-center gap-2", PREP_TEXT_COLOR[surgery.preparationState] || "text-slate-950")}><span className={cn("size-2 rounded-full", prepDot)} />{surgery.preparationState}</span>}
-            />
-            <CompactListRow label="Notas internas" value={surgery.leyenda} emptyText="—" />
-          </CompactGroup>
+          {/* Dominio Profesional / Médico */}
+          <PropertyField
+            label="Médico"
+            icon={Stethoscope}
+            accentColor="text-teal-600 dark:text-teal-400"
+            value={surgery.surgeon}
+            valueClassName="text-slate-950 dark:text-slate-50"
+          />
+
+          {/* Dominio Operativo / Material */}
+          <PropertyField
+            label="Disponibilidad"
+            icon={Package}
+            accentColor="text-amber-600 dark:text-amber-400"
+            value={
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 font-bold",
+                  PREP_TEXT_COLOR[surgery.preparationState] || "text-slate-950"
+                )}
+              >
+                <span className={cn("size-2 shrink-0 rounded-full", prepDot)} />
+                <span className="truncate">{surgery.preparationState}</span>
+              </span>
+            }
+          />
+
+          <PropertyField
+            label="Envío material"
+            icon={Clock}
+            value={surgery.fechaEnvioMaterial ? formatDate(surgery.fechaEnvioMaterial) : ""}
+            emptyText="—"
+          />
+
+          <PropertyField
+            label="Fecha probable"
+            icon={Calendar}
+            value={surgery.probableDate ? formatDate(surgery.probableDate) : ""}
+            emptyText="—"
+          />
+
+          {/* Dominio Lugar / Institución */}
+          <PropertyField
+            label="Institución"
+            icon={Building2}
+            accentColor="text-emerald-600 dark:text-emerald-400"
+            value={surgery.institution}
+            valueClassName="text-emerald-950 dark:text-emerald-200 font-bold"
+            className="col-span-2"
+          />
+
+          {/* Dominio Comercial / Cliente */}
+          <PropertyField
+            label="Cliente / Financiador"
+            icon={ShieldCheck}
+            accentColor="text-blue-600 dark:text-blue-400"
+            value={surgery.client || surgery.financiador || surgery.obraSocial}
+            valueClassName="text-slate-950 dark:text-slate-50 font-bold"
+            className="col-span-2"
+          />
+
+          <PropertyField
+            label="Notas internas"
+            icon={FileText}
+            value={surgery.leyenda}
+            emptyText="—"
+            className="col-span-2"
+          />
         </div>
-      </SectionCard>
+      </SectionContainer>
 
       {/* ─────────────────────────────────────────────────────────
-          SECCIÓN 2 — Gestión operativa
+          SECCIÓN 2 — Gestión del caso
       ───────────────────────────────────────────────────────── */}
-      <SectionCard title="Gestión operativa" icon={Wrench}>
-        {/* Subgroup: Equipo */}
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <CompactGroup title="Equipo">
-            <CompactListRow
-              label="Urgente"
-               value={surgery.urgente ? <span className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-300">Sí <Badge variant="destructive" className="h-4 px-1 text-[8px]">URGENTE</Badge></span> : <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">No <X className="size-3" /></span>}
-            />
-            <CompactListRow label="Coordinador" value={surgery.coordinadorCx} />
-            <CompactListRow label="Vendedor" value={surgery.vendedor} />
-            <CompactListRow label="Instrumentista" value={surgery.instrumentador} />
-          </CompactGroup>
+      <SectionContainer title="Gestión del caso" icon={FolderKanban}>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:gap-2.5">
+          <PropertyField
+            label="Urgente"
+            value={
+              surgery.urgente ? (
+                <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-bold">
+                  Sí
+                  <Badge variant="destructive" className="h-4 px-1 text-[9px] font-bold">
+                    URGENTE
+                  </Badge>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 font-medium text-slate-600 dark:text-slate-400">
+                  No <X className="size-3" />
+                </span>
+              )
+            }
+          />
 
-        {/* Subgroup: Documentación y Referencias */}
-          <div className="space-y-1.5">
-            <p className={SUBSECTION_TITLE_CLS}>Documentación y referencias</p>
-            <div className="rounded-md border border-slate-200 bg-white/70 px-3 py-2 dark:border-slate-700 dark:bg-slate-950/50">
-            {/* Comprobante PR clickable card */}
-            {pr ? (
-               <div className="flex cursor-pointer items-center gap-2.5 rounded-md border border-slate-300 bg-white px-3 py-2 transition-colors hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600 dark:hover:bg-slate-800/80">
-                  <FileText className="size-4 shrink-0 text-sky-700 dark:text-sky-300" />
-                   <span className="text-[13px] font-medium text-slate-950 dark:text-slate-100">
-                     {pr.id}
-                  </span>
+          <PropertyField
+            label="Coordinador"
+            icon={UserRoundCog}
+            accentColor="text-violet-600 dark:text-violet-400"
+            value={surgery.coordinadorCx}
+            emptyText="Sin asignar"
+            valueClassName="text-slate-950 dark:text-slate-50"
+          />
+
+          <PropertyField
+            label="Vendedor"
+            icon={User}
+            value={surgery.vendedor}
+            emptyText="Sin asignar"
+          />
+
+          <PropertyField
+            label="Instrumentista"
+            icon={User}
+            value={surgery.instrumentador}
+            emptyText="Sin asignar"
+          />
+
+          {/* Comprobante PR */}
+          <PropertyField
+            label="PR asociado"
+            icon={FileText}
+            accentColor="text-sky-600 dark:text-sky-400"
+            value={
+              pr ? (
+                <span className="inline-flex items-center gap-1 font-bold text-sky-950 dark:text-sky-200">
+                  <span>{pr.id}</span>
                   {pr.createdAt && (
-                    <span className="text-[10px] text-slate-600 dark:text-slate-400">
-                      {formatDate(pr.createdAt)}
+                    <span className="text-[10px] font-normal text-slate-500">
+                      ({formatDate(pr.createdAt)})
                     </span>
                   )}
-                 <Badge variant="outline" className="ml-auto border-blue-200 bg-blue-50 text-[9px] font-bold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
-                  Presupuesto
-                </Badge>
-              </div>
-             ) : (
-               <p className={cn(VALUE_CLS, EMPTY_CLS)}>
-                 Sin comprobante PR asociado
-               </p>
-             )}
+                </span>
+              ) : (
+                "Sin PR asociado"
+              )
+            }
+            emptyText="Sin PR asociado"
+          />
 
-              <div className="mt-2.5 grid grid-cols-1 gap-3 border-t border-slate-200 pt-2.5 dark:border-slate-700 sm:grid-cols-1 lg:grid-cols-1">
-                <CompactListRow label="Ref. interna" value={refInterna?.valor} emptyText="—" />
-                <CompactListRow label="N° autorización" value={refAutorizacion?.valor} emptyText="—" />
-                <CompactListRow label="Siniestro" value={refSiniestro?.valor} emptyText="—" />
-              </div>
-            </div>
-          </div>
+          <PropertyField label="Ref. interna" value={refInterna?.valor} emptyText="—" />
+          <PropertyField label="N° autorización" value={refAutorizacion?.valor} emptyText="—" />
+          <PropertyField label="Siniestro" value={refSiniestro?.valor} emptyText="—" />
         </div>
-      </SectionCard>
+      </SectionContainer>
 
       {/* ─────────────────────────────────────────────────────────
           SECCIÓN 3 — Destino y facturación
       ───────────────────────────────────────────────────────── */}
-      <SectionCard title="Destino y facturación" icon={MapPin}>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {/* Remitir a */}
-          <CompactGroup title="Destino">
-            <CompactListRow label="Remitir a" value={surgery.aQuienRemitir || surgery.institution || "Sin definir"} />
-            <CompactListRow label="Ciudad" value={surgery.institutionCity} emptyText="—" />
-            {surgery.institution && surgery.aQuienRemitir ? <CompactListRow label="Institución" value={surgery.institution} emptyText="—" /> : null}
-          </CompactGroup>
-          {/* Facturar a */}
-          <CompactGroup title="Facturación">
-            <CompactListRow label="Facturar a" value={surgery.aQuienFacturar || surgery.client || surgery.financiador || "Sin definir"} />
-            <CompactListRow label="Cliente / financiador" value={[surgery.client, surgery.financiador, surgery.obraSocial].filter(Boolean).join(" · ")} emptyText="—" />
-          </CompactGroup>
+      <SectionContainer title="Destino y facturación" icon={MapPin}>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {/* Destino */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+              <MapPin className="size-3" />
+              <h4 className="text-[10px] font-bold uppercase tracking-wider">
+                Destino (Sanatorio / Entrega)
+              </h4>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <PropertyField
+                label="Remitir a"
+                icon={Building2}
+                value={surgery.aQuienRemitir || surgery.institution || "Sin definir"}
+                valueClassName="text-emerald-950 dark:text-emerald-200 font-bold"
+              />
+              <PropertyField label="Ciudad" value={surgery.institutionCity} emptyText="—" />
+              {surgery.institution && surgery.aQuienRemitir && surgery.institution !== surgery.aQuienRemitir ? (
+                <PropertyField
+                  label="Institución"
+                  icon={Building2}
+                  value={surgery.institution}
+                  className="sm:col-span-2"
+                  valueClassName="text-emerald-950 dark:text-emerald-200 font-bold"
+                />
+              ) : null}
+            </div>
+          </div>
+
+          {/* Facturación */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+              <ReceiptText className="size-3" />
+              <h4 className="text-[10px] font-bold uppercase tracking-wider">
+                Facturación (Entidad comercial)
+              </h4>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <PropertyField
+                label="Facturar a"
+                icon={ReceiptText}
+                value={surgery.aQuienFacturar || surgery.client || surgery.financiador || "Sin definir"}
+                valueClassName="text-slate-950 dark:text-slate-50 font-bold"
+              />
+              <PropertyField
+                label="Financiador / Cliente"
+                icon={ShieldCheck}
+                value={[surgery.client, surgery.financiador, surgery.obraSocial].filter(Boolean).join(" · ")}
+                emptyText="—"
+                valueClassName="text-slate-900 dark:text-slate-100"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="mt-3">
           <RemitosSummaryCard surgeryId={surgery.id} onViewRemitos={onViewRemitos} />
         </div>
-      </SectionCard>
+      </SectionContainer>
 
       {/* ─────────────────────────────────────────────────────────
           SECCIÓN 4 — Novedades e historial
       ───────────────────────────────────────────────────────── */}
-      <SectionCard
+      <SectionContainer
         title="Novedades e historial"
         icon={History}
         action={
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1 border-slate-300 bg-white text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            onClick={onAddNote}
-          >
-            <Plus className="size-3.5" />
-            Agregar nota
-          </Button>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="group h-6.5 gap-1.5 rounded border-slate-300 bg-white px-2.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+              onClick={onAddNote}
+            >
+              <motion.div
+                className="flex items-center"
+                whileHover={{ rotate: 90 }}
+                transition={{ type: "spring", stiffness: 400, damping: 15 }}
+              >
+                <Plus className="size-3 text-slate-500 group-hover:text-slate-800 dark:text-slate-400 dark:group-hover:text-slate-200" />
+              </motion.div>
+              <span>Agregar nota</span>
+            </Button>
+          </motion.div>
         }
       >
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-slate-200 dark:lg:divide-slate-800">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-slate-200/80 dark:lg:divide-slate-800">
           {/* Últimas notas */}
-          <div className="lg:pr-6">
-            <p className={LABEL_CLS}>Últimas notas</p>
+          <div className="lg:pr-4">
+            <div className="mb-1.5 flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <MessageSquareText className="size-3" />
+              <h4 className="text-[10px] font-bold uppercase tracking-wider">
+                Últimas notas
+              </h4>
+            </div>
             {notes.length > 0 ? (
-              <div className="mt-2 divide-y divide-slate-200 border-t border-slate-200 dark:divide-slate-800 dark:border-slate-800">
-                {notes.slice(-3).reverse().filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i).map((n) => (
-                  <div
-                    key={n.id}
-                    className="py-2.5"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[8px] font-semibold">
-                        {n.type}
-                      </Badge>
-                      <span className="text-[9px] text-slate-600 dark:text-slate-400">
-                        {formatDate(n.date)} {n.time}
-                      </span>
+              <div className="space-y-1.5">
+                {notes
+                  .slice(-3)
+                  .reverse()
+                  .filter((n, i, arr) => arr.findIndex((x) => x.id === n.id) === i)
+                  .map((n) => (
+                    <div
+                      key={n.id}
+                      className="rounded-[6px] border border-slate-200/70 bg-[#F2F5F9] p-2 dark:border-slate-800/80 dark:bg-slate-950/60"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="px-1 py-0 text-[8px] font-semibold">
+                          {n.type}
+                        </Badge>
+                        <span className="text-[9px] text-slate-500 dark:text-slate-400">
+                          {formatDate(n.date)} {n.time}
+                        </span>
+                        <span className="ml-auto text-[9px] font-medium text-slate-500">{n.userName}</span>
+                      </div>
+                      <p className="mt-1 text-[12px] font-medium leading-snug text-slate-900 dark:text-slate-100">
+                        {n.text}
+                      </p>
                     </div>
-                    <p className="mt-0.5 text-[12px] font-medium text-slate-800 dark:text-slate-200">{n.text}</p>
-                    <p className="mt-0.5 text-[9px] text-slate-500 dark:text-slate-400">
-                      {n.userName}
-                    </p>
-                  </div>
-                ))}
+                  ))}
               </div>
             ) : (
-              <div className="mt-2 rounded-md border border-dashed border-slate-300 px-3 py-4 text-center dark:border-slate-700 dark:bg-slate-950/40">
-                <StickyNote className="mx-auto size-4.5 text-slate-400 dark:text-slate-500" />
-                <p className="mt-1.5 text-[12px] font-medium text-slate-700 dark:text-slate-200">
-                  Sin notas registradas
-                </p>
-                <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
-                  Hacé clic en &quot;Agregar nota&quot; para registrar una
-                  novedad.
-                </p>
+              <div className="rounded-[6px] border border-slate-200/60 bg-[#F2F5F9]/60 px-3 py-2 text-[11px] italic text-slate-400 dark:border-slate-800/60 dark:bg-slate-950/40 dark:text-slate-500">
+                Sin notas registradas
               </div>
             )}
           </div>
 
           {/* Actividad reciente */}
-          <div className="lg:pl-6">
-            <p className={LABEL_CLS}>Actividad reciente</p>
+          <div className="pt-2 lg:pl-4 lg:pt-0">
+            <div className="mb-1.5 flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <History className="size-3" />
+              <h4 className="text-[10px] font-bold uppercase tracking-wider">
+                Actividad reciente
+              </h4>
+            </div>
             {recentHistory.length > 0 ? (
-              <>
-                <div className="mt-2 space-y-2.5 border-l border-slate-300 pl-3 dark:border-slate-700">
-                  {recentHistory.map((entry) => (
-                    <div key={entry.id} className="relative">
-                      <span className="absolute -left-[15px] top-1.5 size-1.5 rounded-full bg-slate-500 dark:bg-slate-400" />
-                      <p className="text-[12px] font-semibold text-slate-900 dark:text-slate-100">
-                        {entry.action}
+              <div className="space-y-1.5 border-l-2 border-slate-200 pl-3 dark:border-slate-700">
+                {recentHistory.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="relative rounded-[6px] border border-slate-200/70 bg-[#F2F5F9] p-2 dark:border-slate-800/80 dark:bg-slate-950/60"
+                  >
+                    <span className="absolute -left-[18px] top-3 size-1.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+                    <p className="text-[12px] font-bold text-slate-950 dark:text-slate-50">
+                      {entry.action}
+                    </p>
+                    {entry.details && (
+                      <p className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                        {entry.details}
                       </p>
-                      {entry.details && (
-                        <p className="mt-0.5 text-[11px] text-slate-700 dark:text-slate-300">
-                          {entry.details}
-                        </p>
-                      )}
-                      <p className="mt-0.5 flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400">
-                        <Clock className="size-3" />
-                        {entry.userName} · {formatDate(entry.date)}{" "}
-                        {entry.time}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="mt-3 h-auto p-0 text-[11px] text-slate-700 dark:text-slate-300"
-                >
-                  Ver historial completo
-                </Button>
-              </>
+                    )}
+                    <p className="mt-0.5 flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400">
+                      <Clock className="size-2.5" />
+                      {entry.userName} · {formatDate(entry.date)} {entry.time}
+                    </p>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="mt-2 rounded-md border border-dashed border-slate-300 px-3 py-4 text-center dark:border-slate-700 dark:bg-slate-950/40">
-                <History className="mx-auto size-4.5 text-slate-400 dark:text-slate-500" />
-                <p className="mt-1.5 text-[12px] font-medium text-slate-700 dark:text-slate-200">
-                  Sin actividad reciente
-                </p>
+              <div className="rounded-[6px] border border-slate-200/60 bg-[#F2F5F9]/60 px-3 py-2 text-[11px] italic text-slate-400 dark:border-slate-800/60 dark:bg-slate-950/40 dark:text-slate-500">
+                Sin actividad reciente
               </div>
             )}
           </div>
         </div>
-      </SectionCard>
+      </SectionContainer>
     </div>
   )
 }

@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useMemo } from "react"
-import { FileText, Truck } from "lucide-react"
+import { motion } from "framer-motion"
+import { ArrowRight, Truck } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -36,63 +37,59 @@ export function RemitosSummaryCard({ surgeryId, onViewRemitos }: RemitosSummaryC
   const latestState = latestRemito ? formatState(latestRemito.state) : "Sin remitos"
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white/70 px-3 py-2 dark:border-slate-700 dark:bg-slate-950/50">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Truck className="size-4 shrink-0 text-sky-700 dark:text-sky-300" />
-            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">
-              Remitos
-            </p>
-            <Badge variant="outline" className="h-5 text-[10px]">
-              {isPending ? "…" : remitos.length}
-            </Badge>
-          </div>
-          <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-            Resumen operativo de remitos asociados a esta CX.
-          </p>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-slate-200/75 bg-[#F2F5F9] px-3.5 py-2 text-[12px] dark:border-slate-800/80 dark:bg-slate-950/60">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+        <div className="flex items-center gap-1.5">
+          <Truck className="size-3.5 text-slate-600 dark:text-slate-400" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+            Remitos
+          </span>
+          <Badge variant="outline" className="h-4.5 border-slate-300 bg-white px-1.5 text-[9px] font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            {isPending ? "…" : remitos.length}
+          </Badge>
         </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold uppercase text-slate-400">Cantidad:</span>
+          <span className="font-bold text-slate-950 dark:text-slate-50">
+            {isUnavailable ? "—" : isPending ? "…" : remitos.length}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold uppercase text-slate-400">Último:</span>
+          <span className="font-bold text-slate-950 dark:text-slate-50">
+            {isPending ? "…" : latestNumber}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold uppercase text-slate-400">Estado:</span>
+          <span className="font-bold text-slate-950 dark:text-slate-50">
+            {isPending ? "…" : latestState}
+          </span>
+        </div>
+      </div>
+
+      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="h-7 shrink-0 gap-1 border-slate-300 bg-white text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+          className="group h-6.5 gap-1 px-2.5 text-[11px] font-bold text-primary hover:bg-primary/10 dark:hover:bg-primary/20"
           onClick={onViewRemitos}
           disabled={!onViewRemitos}
         >
-          <FileText className="size-3.5" />
-          Ver remitos
+          <span>Ver remitos</span>
+          <motion.div
+            className="flex items-center"
+            whileHover={{ x: 3 }}
+            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+          >
+            <ArrowRight className="size-3" />
+          </motion.div>
         </Button>
-      </div>
-
-      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div>
-          <p className="text-[8px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">Cantidad</p>
-          <p className="text-[13px] font-semibold leading-5 text-slate-950 dark:text-slate-100">
-            {isUnavailable ? "—" : isPending ? "Cargando…" : remitos.length}
-          </p>
-        </div>
-        <div>
-          <p className="text-[8px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">Último</p>
-          <p className="truncate text-[13px] font-semibold leading-5 text-slate-950 dark:text-slate-100">{isPending ? "Cargando…" : latestNumber}</p>
-        </div>
-        <div>
-          <p className="text-[8px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">Estado</p>
-          <p className="truncate text-[13px] font-semibold leading-5 text-slate-950 dark:text-slate-100">{isPending ? "Cargando…" : latestState}</p>
-        </div>
-      </div>
-
-      {latestRemito ? (
-        <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">
-          Fecha: {formatDate(latestRemito.issuedAt ?? latestRemito.createdAt)}
-        </p>
-      ) : null}
-
-      {isUnavailable ? (
-        <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">Sin empresa activa o CX sin ID server-side.</p>
-      ) : error && ready ? (
-        <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">No se pudo cargar el resumen de remitos.</p>
-      ) : null}
+      </motion.div>
     </div>
   )
 }

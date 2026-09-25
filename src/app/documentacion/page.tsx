@@ -15,9 +15,10 @@ import { useExpedienteDrawer } from "@/components/layout/app-shell"
 import { toast } from "sonner"
 import {
   BookOpen, FileCheck, FileX, FileClock,
-  FolderOpen,
+  FolderOpen, FileText, Printer,
 } from "lucide-react"
-import type { DocumentStatus, DocumentChecklistType } from "@/types"
+import type { DocumentStatus, DocumentChecklistType, Surgery } from "@/types"
+import { DocumentViewerDialog, type DocumentType } from "@/components/pdf/DocumentViewerDialog"
 
 const STATUS_OPTIONS = [
   { value: "", label: "Todos los estados" },
@@ -33,6 +34,15 @@ export default function DocumentacionPage() {
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
+  const [selectedSurgeryForPdf, setSelectedSurgeryForPdf] = useState<Surgery | null>(null)
+  const [initialDocTypeForPdf, setInitialDocTypeForPdf] = useState<DocumentType>("presupuesto")
+
+  const openDocumentViewer = (surgery?: Surgery | null, docType: DocumentType = "presupuesto") => {
+    setSelectedSurgeryForPdf(surgery || store.surgeries[0] || null)
+    setInitialDocTypeForPdf(docType)
+    setPdfDialogOpen(true)
+  }
 
   const checklists = store.documentChecklists
 
@@ -71,9 +81,16 @@ export default function DocumentacionPage() {
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold">Documentación</h1>
-          <p className="text-sm text-muted-foreground">Checklist documental por cirugía</p>
+          <h1 className="text-xl font-bold">Documentación & Comprobantes</h1>
+          <p className="text-sm text-muted-foreground">Emisión de comprobantes oficiales (Presupuestos, Remitos, Facturas, Órdenes de Compra y Consumo) y checklist documental</p>
         </div>
+        <Button
+          size="sm"
+          className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600"
+          onClick={() => openDocumentViewer(null, "presupuesto")}
+        >
+          <FileText className="size-4" /> Generar Comprobantes PDF
+        </Button>
       </div>
 
       {/* Stats */}
@@ -166,11 +183,19 @@ export default function DocumentacionPage() {
                     </div>
                   </div>
 
-                  <div className="shrink-0 sm:ml-4">
+                  <div className="shrink-0 sm:ml-4 flex flex-col sm:flex-row gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5"
+                      className="gap-1.5 text-xs text-blue-700 border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-900/50 dark:hover:bg-blue-950/40"
+                      onClick={() => openDocumentViewer(surgery, "remito")}
+                    >
+                      <Printer className="size-3.5 text-blue-600 dark:text-blue-400" /> Comprobantes
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs"
                       onClick={() => openExpediente(dc.surgeryId)}
                     >
                       <FolderOpen className="size-3.5" /> Ver cirugía
@@ -191,6 +216,13 @@ export default function DocumentacionPage() {
       </div>
 
       <SurgeryDrawer />
+
+      <DocumentViewerDialog
+        open={pdfDialogOpen}
+        onOpenChange={setPdfDialogOpen}
+        surgery={selectedSurgeryForPdf}
+        initialDocType={initialDocTypeForPdf}
+      />
     </div>
   )
 }

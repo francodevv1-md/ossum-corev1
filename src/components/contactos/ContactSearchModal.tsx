@@ -1,7 +1,6 @@
-"use client"
-
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronDown, ChevronUp, CircleAlert, Loader2, Plus, Search } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Check, ChevronDown, ChevronUp, CircleAlert, Loader2, Pencil, Plus, Search, X, User } from "lucide-react"
 import { toast } from "sonner"
 
 import { useAuth } from "@/components/auth/AuthProvider"
@@ -46,6 +45,7 @@ export function ContactSearchModal({ open, onOpenChange, context, onSelect }: Co
   const [expanded, setExpanded] = useState(false)
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [editingContact, setEditingContact] = useState<Contacto | null>(null)
   const [addingGroupId, setAddingGroupId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -137,35 +137,254 @@ export function ContactSearchModal({ open, onOpenChange, context, onSelect }: Co
 
   return <>
     <Dialog open={open} onOpenChange={(nextOpen) => { if (nextOpen) onOpenChange(true); else close() }}>
-      <DialogContent className="flex h-[min(44rem,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw-2rem)]">
-        <DialogHeader className="shrink-0 border-b border-[var(--ossum-line)] bg-white px-4 py-3 sm:px-5">
-          <DialogTitle className="text-base text-[var(--ossum-navy)]">{context.title}</DialogTitle>
-          <DialogDescription className="text-xs">Buscá en los contactos activos de la empresa seleccionada.</DialogDescription>
+      <DialogContent
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="flex h-[min(44rem,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw-2rem)] border-slate-200/90 shadow-2xl dark:border-slate-800"
+      >
+        <DialogHeader className="shrink-0 border-b border-slate-200/90 bg-white/95 px-4 py-3 sm:px-5 dark:border-slate-800 dark:bg-slate-950/95 backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">{context.title}</DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">Buscá en los contactos activos de la empresa seleccionada.</DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="shrink-0 space-y-2 border-b border-[var(--ossum-line)] bg-white px-4 py-3">
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" /><Input autoFocus aria-label="Buscar contactos" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Código, nombre, CUIT o DNI…" className="h-11 pl-9 text-sm sm:h-8 sm:text-xs" /></div>
-          {contextGroups.length > 0 && <div className="flex flex-wrap gap-1">{contextGroups.map((group) => <button key={group.id} type="button" aria-pressed={groupFilter === group.id} onClick={() => setGroupFilter((current) => current === group.id ? null : group.id)} className={cn("h-8 border px-2 text-xs transition-[background-color,border-color,color] motion-reduce:transition-none", groupFilter === group.id ? "border-[var(--ossum-action)] bg-[#eef0ff] text-[var(--ossum-action)]" : "border-[var(--ossum-line)] bg-white text-gray-600 hover:bg-[var(--ossum-surface-2)]")}>{group.nombre}</button>)}</div>}
-          {context.allowExpandedSearch && context.allowedRoles?.length && context.allowedRoles.length < ALL_CONTACT_ROLES.length ? <button type="button" onClick={() => setExpanded((value) => !value)} className="inline-flex h-8 items-center gap-1 text-xs text-gray-500 hover:text-gray-800">{expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}{expanded ? "Restringir al contexto" : "Ampliar a todos los contactos"}</button> : null}
+        <div className="shrink-0 space-y-2.5 border-b border-slate-200/90 bg-slate-50/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              autoFocus
+              aria-label="Buscar contactos"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Código, nombre, CUIT o DNI…"
+              className="h-10 pl-9 pr-8 text-sm sm:h-8 sm:text-xs rounded-md bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-2xs focus-visible:ring-1 focus-visible:ring-blue-500"
+            />
+            {query.trim() && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+                title="Limpiar búsqueda"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          {contextGroups.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {contextGroups.map((group) => {
+                const isActive = groupFilter === group.id
+                return (
+                  <motion.button
+                    key={group.id}
+                    type="button"
+                    whileTap={{ scale: 0.95 }}
+                    aria-pressed={isActive}
+                    onClick={() => setGroupFilter((current) => current === group.id ? null : group.id)}
+                    className={cn(
+                      "relative h-7 rounded-full border px-2.5 text-xs font-medium transition-all select-none",
+                      isActive
+                        ? "border-blue-600 bg-blue-50 text-blue-700 font-semibold shadow-2xs dark:border-blue-500 dark:bg-blue-950/50 dark:text-blue-300"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    )}
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId="active-contact-group-pill"
+                        className="absolute inset-0 rounded-full bg-blue-500/10 pointer-events-none"
+                        transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                      />
+                    )}
+                    <span className="relative z-10">{group.nombre}</span>
+                  </motion.button>
+                )
+              })}
+            </div>
+          )}
+
+          {context.allowExpandedSearch && context.allowedRoles?.length && context.allowedRoles.length < ALL_CONTACT_ROLES.length ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="inline-flex h-6 items-center gap-1 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+            >
+              {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+              {expanded ? "Restringir al contexto" : "Ampliar a todos los contactos"}
+            </button>
+          ) : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--ossum-surface)] p-3" aria-live="polite">
-          {loading ? <div className="flex h-full items-center justify-center gap-2 text-sm text-gray-500" role="status"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />Cargando contactos…</div>
-            : error ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center" role="alert"><CircleAlert className="size-5 text-destructive" /><div><p className="text-sm font-medium">No se pudieron cargar los contactos</p><p className="mt-1 max-w-sm text-xs text-gray-500">{error}</p></div>{companyId && <Button type="button" variant="outline" size="sm" onClick={() => void load()} className="h-11 sm:h-8">Reintentar</Button>}</div>
-            : results.length === 0 ? <div className="flex h-full flex-col items-center justify-center text-center"><p className="text-sm font-medium">No se encontraron contactos</p><p className="mt-1 text-xs text-gray-500">Probá otro texto o ampliá la búsqueda.</p></div>
-            : <ul className="divide-y divide-[var(--ossum-line)] border border-[var(--ossum-line)] bg-white">{results.map((contact) => {
-              const missingPreferred = context.preferredGroups.length > 0 && !contact.groups.some((group) => context.preferredGroups.includes(group)) ? context.preferredGroups[0] : undefined
-              return <li key={contact.id} className="flex items-start justify-between gap-3 px-3 py-2 hover:bg-[var(--ossum-surface-2)]">
-                <div className="min-w-0"><div className="flex items-center gap-2"><span className="shrink-0 font-mono text-xs font-semibold text-[var(--ossum-action)]">{contact.codigoContacto}</span><span className="truncate text-sm font-medium">{contact.nombre}</span></div><p className="mt-0.5 text-xs text-gray-500">{contact.cuit || contact.dni || contact.localidad || "Sin documento informado"}</p><div className="mt-1 flex flex-wrap gap-1">{contact.roles.map((role) => <Badge key={role} variant="outline" className={cn("h-4 px-1.5 text-[9px]", CONTACT_ROLE_BADGE_COLORS[role])}>{CONTACT_ROLE_LABELS[role]}</Badge>)}{contact.groups.map((group) => { const role = getGroupById(group)?.role ?? contact.roles[0] ?? "cliente"; return <Badge key={group} variant="outline" className={cn("h-4 px-1.5 text-[9px]", GROUP_BADGE_COLORS[role])}>{getGroupLabel(group)}</Badge> })}</div></div>
-                {missingPreferred && !expanded ? <Button type="button" variant="outline" size="sm" disabled={addingGroupId === contact.id} onClick={() => void addGroupAndSelect(contact, missingPreferred)} className="h-11 shrink-0 text-xs sm:h-8">{addingGroupId === contact.id ? "Actualizando…" : `Agregar ${getGroupLabel(missingPreferred)}`}</Button> : <Button type="button" size="sm" onClick={() => select(contact)} className="h-11 shrink-0 bg-[var(--ossum-action)] text-xs text-white hover:bg-[#1830a8] sm:h-8"><Check className="size-3" />Seleccionar</Button>}
-              </li>
-            })}</ul>}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100/50 p-3 dark:bg-slate-950/70" aria-live="polite">
+          {loading ? (
+            <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-500" role="status">
+              <Loader2 className="size-4 animate-spin text-blue-600" />
+              Cargando contactos…
+            </div>
+          ) : error ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-center" role="alert">
+              <CircleAlert className="size-5 text-destructive" />
+              <div>
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">No se pudieron cargar los contactos</p>
+                <p className="mt-1 max-w-sm text-xs text-slate-500">{error}</p>
+              </div>
+              {companyId && (
+                <Button type="button" variant="outline" size="sm" onClick={() => void load()} className="h-8">
+                  Reintentar
+                </Button>
+              )}
+            </div>
+          ) : results.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <User className="size-8 text-slate-300 dark:text-slate-700 mb-2" />
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">No se encontraron contactos</p>
+              <p className="mt-1 text-xs text-slate-500">Probá otro texto o ampliá la búsqueda.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-200/90 rounded-md border border-slate-200/90 bg-white shadow-2xs dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+              <AnimatePresence mode="popLayout">
+                {results.map((contact) => {
+                  const missingPreferred = context.preferredGroups.length > 0 && !contact.groups.some((group) => context.preferredGroups.includes(group)) ? context.preferredGroups[0] : undefined
+                  return (
+                    <motion.li
+                      key={contact.id}
+                      layout
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.12 }}
+                      className="flex items-start justify-between gap-3 px-3.5 py-2.5 transition-colors hover:bg-slate-50/90 dark:hover:bg-slate-800/60"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800">
+                            {contact.codigoContacto}
+                          </span>
+                          <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            {contact.nombre}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                          {contact.cuit || contact.dni || contact.localidad || "Sin documento informado"}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {contact.roles.map((role) => (
+                            <Badge key={role} variant="outline" className={cn("h-4 px-1.5 text-[9px] rounded-sm", CONTACT_ROLE_BADGE_COLORS[role])}>
+                              {CONTACT_ROLE_LABELS[role]}
+                            </Badge>
+                          ))}
+                          {contact.groups.map((group) => {
+                            const role = getGroupById(group)?.role ?? contact.roles[0] ?? "cliente"
+                            return (
+                              <Badge key={group} variant="outline" className={cn("h-4 px-1.5 text-[9px] rounded-sm", GROUP_BADGE_COLORS[role])}>
+                                {getGroupLabel(group)}
+                              </Badge>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Editar ${contact.nombre}`}
+                          title="Editar contacto"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingContact(contact)
+                            setFormOpen(true)
+                          }}
+                          className="h-8 w-8 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        {missingPreferred && !expanded ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={addingGroupId === contact.id}
+                            onClick={() => void addGroupAndSelect(contact, missingPreferred)}
+                            className="h-8 shrink-0 text-xs font-medium border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                          >
+                            {addingGroupId === contact.id ? "Actualizando…" : `Agregar ${getGroupLabel(missingPreferred)}`}
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => select(contact)}
+                            className="h-8 shrink-0 bg-blue-600 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs"
+                          >
+                            <Check className="size-3.5 mr-1" />
+                            Seleccionar
+                          </Button>
+                        )}
+                      </div>
+                    </motion.li>
+                  )
+                })}
+              </AnimatePresence>
+            </ul>
+          )}
         </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--ossum-line)] bg-white px-4 py-3"><span className="text-xs text-gray-500">{!loading && !error ? `${results.length} resultado${results.length === 1 ? "" : "s"}` : ""}</span><div className="flex gap-2"><Button type="button" variant="outline" onClick={close} className="h-11 sm:h-8">Cancelar</Button>{context.allowCreate && <Button type="button" disabled={!companyId} onClick={() => setFormOpen(true)} className="h-11 bg-[var(--ossum-action)] text-white hover:bg-[#1830a8] sm:h-8"><Plus className="size-3.5" />Nuevo contacto</Button>}</div></footer>
+        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200/90 bg-white px-4 py-2.5 dark:border-slate-800 dark:bg-slate-950">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            {!loading && !error ? `${results.length} resultado${results.length === 1 ? "" : "s"}` : ""}
+          </span>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={close} className="h-8">
+              Cancelar
+            </Button>
+            {context.allowCreate && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!companyId}
+                onClick={() => {
+                  setEditingContact(null)
+                  setFormOpen(true)
+                }}
+                className="h-8 bg-blue-600 text-white hover:bg-blue-700 shadow-xs"
+              >
+                <Plus className="size-3.5 mr-1" />
+                Nuevo contacto
+              </Button>
+            )}
+          </div>
+        </footer>
       </DialogContent>
     </Dialog>
 
-    <ContactoFormDialog open={formOpen} onOpenChange={setFormOpen} defaultRoles={context.createDefaults?.roles} defaultGroups={context.createDefaults?.groups} onSaved={(contact) => { setFormOpen(false); select(contact) }} />
+    <ContactoFormDialog
+      open={formOpen}
+      onOpenChange={(isOpen) => {
+        setFormOpen(isOpen)
+        if (!isOpen) setEditingContact(null)
+      }}
+      contacto={editingContact}
+      defaultRoles={context.createDefaults?.roles}
+      defaultGroups={context.createDefaults?.groups}
+      onSaved={(contact) => {
+        setFormOpen(false)
+        setEditingContact(null)
+        setContacts((prev) => {
+          const idx = prev.findIndex((c) => c.id === contact.id)
+          if (idx >= 0) {
+            const next = [...prev]
+            next[idx] = contact
+            return next
+          }
+          return [contact, ...prev]
+        })
+        select(contact)
+      }}
+    />
   </>
 }
+
