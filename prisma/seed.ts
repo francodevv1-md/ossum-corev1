@@ -325,6 +325,7 @@ async function main() {
     create: {
       id: IDS.patientAddress,
       contactId: patient.id,
+      companyId: company.id,
       street: "Av. Siempre Viva",
       number: "742",
       city: "CABA",

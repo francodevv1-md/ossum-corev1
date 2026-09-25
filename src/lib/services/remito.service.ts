@@ -4,10 +4,11 @@
 // Catálogos (origin / state / transitions) viven acá para single source of truth.
 // schema.prisma queda intocable (schema phase1 cerrado).
 
+import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { PrismaClient, Remito as PrismaRemito } from "@prisma/client";
 
-import { createAuditEvent, type AuditPrismaClient } from "../audit";
+import { createAuditEvent } from "../audit";
 import { requireCompanyId } from "../tenant";
 import { ApiError, badRequest, notFound } from "../api/errors";
 import {
@@ -15,6 +16,19 @@ import {
   createDevolucion,
   updateDevolucionState,
 } from "./devolucion.service";
+import {
+  persistRemitoIssuanceVerification,
+  runRemitoIssuanceTransaction,
+  runSurgicalRemitoIssuanceTransaction,
+  type SurgicalSqlstate,
+  type RemitoIssuanceDependencies,
+} from "../remito-verification/repository";
+import { isApprovedAuthorizationProof, WCB06_CONTRACT_IDS } from "../permissions/c14/authorize-insert-writer";
+import { isC14BundleEnabled } from "./c14/activation";
+import { execute as executeWcb06, type Wcb06Attempt } from "./c14/bundles/wcb-06";
+import { C14RuntimeError, type Wcb06Command, type Wcb06Row } from "./c14/bundles/private-writer-runtime";
+import { appendDurableAttemptEvent, deriveDurableEventId, newCorrelationId, newTransactionId } from "./c14/durable-attempt-audit";
+import { reconcileDurableAttempts } from "./c14/reconcile-durable-attempts";
 
 // ─── Catálogos (single source of truth; validator re-exporta estos) ─────────
 export const REMITO_ORIGINS = ["box", "presupuesto", "manual", "mixto"] as const;
@@ -48,17 +62,22 @@ export const REMITO_TRANSITIONS: Record<RemitoState, RemitoState[]> = {
 };
 
 // TODO: migrate to src/lib/permissions/*
-export const REMITO_MUTATION_ROLES = ["admin", "coordinador", "logistica"] as const;
+// Role vocabulary is inconsistent across the codebase: the coordination-dev
+// bootstrap provisions "coordinator" (English) while older modules use
+// "coordinador" (Spanish). Both shapes coexist in surgery, mail and
+// documentation roles; remito roles must accept both too or DEV-auth
+// users get a 403 on create/emit.
+export const REMITO_MUTATION_ROLES = ["admin", "coordinador", "coordinator", "logistica"] as const;
 export const REMITO_READ_ROLES = [
   "admin",
   "coordinador",
+  "coordinator",
   "logistica",
   "vendedor",
   "matrona",
   "instrumentador",
 ] as const;
 
-const REMITO_EMIT_MAX_RETRIES = 3;
 const DEFAULT_LIST_TAKE = 50;
 
 // ─── Errores ─────────────────────────────────────────────────────────────────
@@ -189,6 +208,103 @@ const remitoReadSelect = {
   },
 } satisfies Prisma.RemitoSelect;
 
+const remitoListDetailSelect = {
+  ...remitoReadSelect,
+  scanLocator: {
+    select: {
+      companyId: true,
+      locator: true,
+    },
+  },
+  branch: { select: { name: true } },
+  issuedBranch: { select: { name: true } },
+  surgery: {
+    select: {
+      visibleNumber: true,
+      description: true,
+      surgeryDate: true,
+      scheduledDate: true,
+      patient: { select: { firstName: true, lastName: true, legalName: true } },
+      doctor: { select: { firstName: true, lastName: true, legalName: true } },
+      institution: { select: { firstName: true, lastName: true, legalName: true } },
+      payer: { select: { firstName: true, lastName: true, legalName: true } },
+    },
+  },
+  createdBy: { select: { firstName: true, lastName: true } },
+  cajasDispatches: {
+    where: { recordKind: "ORIGINAL" },
+    orderBy: { sequence: "asc" },
+    select: {
+      lines: {
+        where: { recordKind: "ORIGINAL" },
+        orderBy: { lineNumber: "asc" },
+        select: {
+          skuSnapshot: true,
+          descriptionSnapshot: true,
+          quantity: true,
+          stockUnit: true,
+          lotCodeSnapshot: true,
+          expirationDateSnapshot: true,
+          serialNumberSnapshot: true,
+          identifiedCodeSnapshot: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.RemitoSelect;
+
+type RemitoListDetailRecord = Prisma.RemitoGetPayload<{
+  select: typeof remitoListDetailSelect;
+}>;
+
+function projectRemitoListDetail(remito: RemitoListDetailRecord) {
+  const { scanLocator, branch, issuedBranch, surgery, createdBy, cajasDispatches, ...record } = remito;
+  const contactName = (contact: { firstName: string | null; lastName: string | null; legalName: string | null } | null) => {
+    const legalName = contact?.legalName?.trim();
+    return legalName || [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || null;
+  };
+  const dispatchDetailItems = cajasDispatches.flatMap((dispatch, dispatchIndex) =>
+    dispatch.lines.map((line) => ({
+      groupLabel: `Caja / Fórmula ${dispatchIndex + 1}`,
+      sku: line.skuSnapshot,
+      description: line.descriptionSnapshot ?? "Componente sin descripción",
+      quantity: line.quantity,
+      unit: line.stockUnit,
+      lotNumber: line.lotCodeSnapshot,
+      expirationDate: line.expirationDateSnapshot?.toISOString() ?? null,
+      serialNumber: line.serialNumberSnapshot,
+      identifiedCode: line.identifiedCodeSnapshot,
+    }))
+  );
+  const detailItems = dispatchDetailItems.length ? dispatchDetailItems : record.items.map((item) => ({
+    groupLabel: null,
+    sku: item.sku,
+    description: item.description,
+    quantity: item.quantity,
+    unit: item.unit,
+    lotNumber: item.lotNumber,
+    expirationDate: item.expirationDate?.toISOString() ?? null,
+    serialNumber: item.serialNumber,
+    identifiedCode: null,
+  }));
+  return {
+    ...record,
+    detailItems,
+    remitoShortCode:
+      scanLocator?.companyId === remito.companyId ? scanLocator.locator : null,
+    branchLabel: branch?.name ?? null,
+    issuedBranchLabel: issuedBranch?.name ?? null,
+    surgeryLabel: surgery?.visibleNumber ?? null,
+    surgeryDescription: surgery?.description ?? null,
+    surgeryDate: (surgery?.surgeryDate ?? surgery?.scheduledDate)?.toISOString() ?? null,
+    surgeryPatientName: contactName(surgery?.patient ?? null),
+    surgeryDoctorName: contactName(surgery?.doctor ?? null),
+    surgeryInstitutionName: contactName(surgery?.institution ?? null),
+    surgeryClientName: contactName(surgery?.payer ?? null),
+    createdByName: createdBy ? [createdBy.firstName, createdBy.lastName].filter(Boolean).join(" ").trim() || null : null,
+  };
+}
+
 function requireCompanyMatch(
   remito: { companyId: string } | null,
   companyId: string,
@@ -265,8 +381,6 @@ async function getNextVisibleNumber(
   branchId: string,
   documentType: RemitoDocumentType
 ): Promise<number> {
-  await tx.$executeRaw`LOCK TABLE "Remito" IN SHARE ROW EXCLUSIVE MODE`;
-
   const rows = await tx.$queryRaw<Array<{ next: bigint | number | null }>>`
     SELECT COALESCE(MAX("visibleNumber"), 0) + 1 AS "next"
     FROM "Remito"
@@ -345,6 +459,9 @@ export interface EmitirRemitoInput {
   remitoId: string;
   updatedById?: string;
   prisma: PrismaClient;
+  issuanceDependencies: RemitoIssuanceDependencies;
+  idempotencyKey?: string;
+  authorizationProof?: Record<string, unknown>;
 }
 
 export interface UpdateRemitoStateInput {
@@ -602,13 +719,15 @@ export async function listRemitos(input: ListRemitosInput) {
   const take = input.take ?? DEFAULT_LIST_TAKE;
   const skip = input.skip ?? 0;
 
-  return prisma.remito.findMany({
-    select: remitoReadSelect,
+  const remitos = await prisma.remito.findMany({
+    select: remitoListDetailSelect,
     where,
     orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
     take,
     skip,
   });
+
+  return remitos.map(projectRemitoListDetail);
 }
 
 // ─── getRemito ─────────────────────────────────────────────────────────────────
@@ -617,7 +736,7 @@ export async function getRemito(input: GetRemitoInput) {
   const prisma = input.prisma;
 
   const remito = await prisma.remito.findFirst({
-    select: remitoReadSelect,
+    select: remitoListDetailSelect,
     where: { id: input.remitoId, companyId },
   });
 
@@ -625,7 +744,7 @@ export async function getRemito(input: GetRemitoInput) {
     throw notFound(`Remito ${input.remitoId} not found in company ${companyId}`, "remito_not_found");
   }
 
-  return remito;
+  return projectRemitoListDetail(remito);
 }
 
 // ─── updateRemitoDraft ──────────────────────────────────────────────────────
@@ -716,10 +835,10 @@ export async function updateRemitoDraft(input: UpdateRemitoDraftInput) {
 
     requireCompanyMatch(current, companyId, input.remitoId);
 
-    if (current.state !== "Borrador") {
+    if (current.state !== "Borrador" && current.state !== "Entregado") {
       throw new RemitoError(
-        "remito_not_borrador",
-        `Cannot update remito in state ${current.state} (only Borrador)`,
+        "remito_not_editable",
+        `Cannot update remito in state ${current.state} (only Borrador or Entregado)`,
         409
       );
     }
@@ -759,7 +878,7 @@ export async function updateRemitoDraft(input: UpdateRemitoDraftInput) {
       where: {
         id: input.remitoId,
         companyId,
-        state: "Borrador",
+        state: current.state,
         ...(expectedUpdatedAt ? { updatedAt: new Date(expectedUpdatedAt) } : {}),
       },
       data,
@@ -809,7 +928,7 @@ export async function updateRemitoDraft(input: UpdateRemitoDraftInput) {
         userId: updatedById,
         entityType: "Remito",
         entityId: result.id,
-        action: "remito.draft_updated",
+        action: current.state === "Borrador" ? "remito.draft_updated" : "remito.updated",
         module: "remito",
         oldValue: serializeRemitoForAudit(current),
         newValue: serializeRemitoForAudit(result),
@@ -821,21 +940,123 @@ export async function updateRemitoDraft(input: UpdateRemitoDraftInput) {
 }
 
 // ─── emitirRemito ────────────────────────────────────────────────────────────
+const digest = (domain: string, value: unknown) => createHash("sha256").update(domain).update("\0").update(JSON.stringify(value)).digest("hex");
+const rowId = (kind: string, key: string, suffix = "") => `${kind}.${digest(kind, [key, suffix])}`;
+const decimal = (value: unknown) => new Prisma.Decimal(String(value)).toString();
+
+async function deriveSurgicalDispatch(tx: Prisma.TransactionClient, current: Prisma.RemitoGetPayload<{ select: typeof remitoReadSelect }>, actorId: string, proof: Record<string, unknown>, transportKey?: string): Promise<Wcb06Command> {
+  const assignments = await tx.cajasAssignment.findMany({
+    where: { companyId: current.companyId, surgeryId: current.surgeryId!, activeSlot: 1, endedAt: null },
+    include: { dispatches: true, differences: { include: { resolutions: { orderBy: { sequence: "desc" }, take: 1 } } }, preparations: { include: { latestControl: { include: { lines: true } }, lines: true, reservationCorrelations: { include: { stockReservation: { include: { projection: true, position: { include: { eligibilityByArticle: { include: { article: true } }, lot: { include: { primaryObservation: true } }, identifiedUnit: { include: { currentConfiguration: true } } } } } } } } } } },
+  });
+  if (assignments.length !== 1) throw new RemitoError("remito_dispatch_assignment_invalid", "Surgical remito requires exactly one active Caja assignment", 422);
+  const assignment = assignments[0], preparation = assignment.preparations[0];
+  const control = preparation?.latestControl;
+  if (!preparation || assignment.preparations.length !== 1 || preparation.requiresRecontrol || !control || !["CLEAN", "WITH_DIFFERENCES"].includes(control.result) || control.sourcePreparationVersion !== preparation.version) {
+    throw new RemitoError("remito_dispatch_control_stale", "Surgical remito requires the current accepted Caja control", 422);
+  }
+  if ((assignment.differences ?? []).some(difference => !difference.resolutions[0]?.closesDifference)) throw new RemitoError("remito_dispatch_difference_open", "Surgical Remito requires every Caja difference to be explicitly accepted", 422);
+  const activeLines = preparation.lines.filter(line => line.isActive);
+  if (!activeLines.length || !control.lines.length) throw new RemitoError("remito_dispatch_lineage_invalid", "Caja control has no physical allocations", 422);
+  const mapped = control.lines.map(line => {
+    const prepLine = activeLines.find(candidate => candidate.id === line.sourcePreparationLineId);
+    const correlations = preparation.reservationCorrelations.filter(candidate => candidate.preparationLineId === prepLine?.id && candidate.stockPositionId === line.stockPositionId && candidate.quantity?.equals(line.quantity));
+    const correlation = correlations[0], reservation = correlation?.stockReservation;
+    if (!prepLine || !line.stockPositionId || prepLine.articleId !== line.articleId
+      || prepLine.stockUnit !== line.stockUnit || prepLine.scaleSnapshot !== line.scaleSnapshot
+      || correlations.length !== 1 || (correlation.quantity != null && !correlation.quantity.equals(line.quantity))
+      || correlation.stockUnit !== line.stockUnit || correlation.scaleSnapshot !== line.scaleSnapshot
+      || !reservation?.projection || !["ACTIVE", "PARTIALLY_APPLIED"].includes(reservation.projection.status)
+      || reservation.projection.activeQuantity.lessThan(line.quantity) || reservation.position.articleId !== line.articleId) {
+      throw new RemitoError("remito_dispatch_reservation_stale", "Caja reservation lineage is missing or stale", 422);
+    }
+    return { line, prepLine, correlation, reservation };
+  });
+  if (new Set(mapped.map(value => value.line.id)).size !== control.lines.length) throw new RemitoError("remito_dispatch_lineage_invalid", "Caja control lines are not unique", 422);
+  const commercial = new Map<string, { item: typeof current.items[number]; total: Prisma.Decimal }>();
+  for (const value of mapped) {
+    const article = value.reservation.position.eligibilityByArticle?.article;
+    const existing = commercial.get(value.line.articleId);
+    if (existing) { existing.total = existing.total.plus(value.line.quantity); continue; }
+    const candidates = current.items.filter(item => item.sku === (article?.sku ?? value.line.skuSnapshot) && (item.unit == null || item.unit === value.line.stockUnit));
+    if (candidates.length !== 1) throw new RemitoError("remito_dispatch_lineage_invalid", "Surgical Remito requires one commercial item per server-authoritative Article", 422);
+    commercial.set(value.line.articleId, { item: candidates[0], total: new Prisma.Decimal(value.line.quantity) });
+  }
+  if (commercial.size !== current.items.length || [...commercial.values()].some(value => !value.item.quantity.equals(value.total))) throw new RemitoError("remito_dispatch_lineage_invalid", "Commercial Remito lines must equal the authoritative Article aggregates", 422);
+  const key = transportKey?.trim() || current.id;
+  const commandId = rowId("remito-dispatch-command", key), dispatchId = rowId("cajas-dispatch", key);
+  const evidenceId = rowId("stock-evidence", key), reservationEvidenceId = rowId("reservation-evidence", key);
+  const trace = (value: typeof mapped[number]) => {
+    const capture = value.line.traceCapture as Record<string, unknown> | null;
+    if (!capture) return { schemaVersion: "C14-TRACE-SNAPSHOT-V1", mode: "NONE" };
+    if (!capture.traceMode) throw new RemitoError("remito_dispatch_trace_invalid", "Caja control trace snapshot is required", 422);
+    if (capture.traceMode === "LOT") return { schemaVersion: "C14-TRACE-SNAPSHOT-V1", mode: "LOT", lotCode: capture.lotCode ?? null, expirationDate: capture.expirationDate ?? null };
+    if (capture.traceMode === "IDENTIFIED_UNIT") return { schemaVersion: "C14-TRACE-SNAPSHOT-V1", mode: "IDENTIFIED_UNIT", identifiedCode: capture.identifiedCode ?? null, serialNumber: capture.serialNumber ?? null };
+    return { schemaVersion: "C14-TRACE-SNAPSHOT-V1", mode: "NONE" };
+  };
+  const stockEvidenceLines: Wcb06Row[] = mapped.map((value, index) => { const snapshot = trace(value), item = commercial.get(value.line.articleId)!.item; return { id: rowId("stock-evidence-line", key, value.line.id), evidenceId, lineNumber: index + 1, articleId: value.line.articleId, fromPositionId: value.line.stockPositionId, toPositionId: null, reservationId: value.reservation.id, quantity: decimal(value.line.quantity), stockUnit: value.line.stockUnit, scaleSnapshot: value.line.scaleSnapshot, lotCodeSnapshot: snapshot.mode === "LOT" ? snapshot.lotCode : null, expirationDateSnapshot: snapshot.mode === "LOT" ? snapshot.expirationDate : null, serialNumberSnapshot: snapshot.mode === "IDENTIFIED_UNIT" ? snapshot.serialNumber : null, identifiedCodeSnapshot: snapshot.mode === "IDENTIFIED_UNIT" ? snapshot.identifiedCode : null, sourceLineId: item.id, traceSnapshot: snapshot }; });
+  const dispatchLines: Wcb06Row[] = mapped.map((value, index) => { const stock = stockEvidenceLines[index], snapshot = stock.traceSnapshot, item = commercial.get(value.line.articleId)!.item; return { id: rowId("cajas-dispatch-line", key, value.line.id), dispatchId, assignmentId: assignment.id, remitoId: current.id, lineNumber: index + 1, recordKind: "ORIGINAL", accountingSign: 1, neutralizesDispatchLineId: null, remitoItemId: item.id, sourceControlLineId: value.line.id, sourcePreparationId: preparation.id, sourcePreparationLineId: value.prepLine.id, articleId: value.line.articleId, stockPositionId: value.line.stockPositionId, quantity: stock.quantity, stockUnit: stock.stockUnit, scaleSnapshot: stock.scaleSnapshot, skuSnapshot: item.sku, descriptionSnapshot: item.description, lotCodeSnapshot: stock.lotCodeSnapshot, expirationDateSnapshot: stock.expirationDateSnapshot, serialNumberSnapshot: stock.serialNumberSnapshot, identifiedCodeSnapshot: stock.identifiedCodeSnapshot, traceabilitySnapshot: snapshot, stockEvidenceLineId: stock.id }; });
+  const reservations = [...new Map(mapped.map(value => [value.reservation.id, value.reservation])).values()];
+  const command = { companyId: current.companyId, commandId, actorId, resultEntityId: dispatchId, authorizationProof: proof,
+    anchorIdentifiedUnitIds: [assignment.boxIdentifiedUnitId, ...mapped.map(value => value.reservation.position.identifiedUnitId).filter((id): id is string => Boolean(id))],
+    stockEvidenceHeader: { id: evidenceId, kind: "DISPATCH", recordKind: "ORIGINAL", sourceDomain: "CAJAS", sourceEntityType: "REMITO", sourceEntityId: current.id, sourceCheckpoint: "DISPATCH_ACCEPTANCE_WITH_RESERVATION_APPLICATION", activationBoundaryId: null, correctsEvidenceId: null, reversesEvidenceId: null, cause: null }, stockEvidenceLines,
+    reservationEvidence: { id: reservationEvidenceId, reservationId: reservations[0].id, sequence: reservations[0].projection!.version + 1, kind: "APPLY_TO_DISPATCH", quantity: decimal(mapped.filter(value => value.reservation.id === reservations[0].id).reduce((sum, value) => sum.plus(value.line.quantity), new Prisma.Decimal(0))), stockUnit: mapped.find(value => value.reservation.id === reservations[0].id)!.line.stockUnit, scaleSnapshot: mapped.find(value => value.reservation.id === reservations[0].id)!.line.scaleSnapshot, replacesEvidenceId: null, cause: null }, reservationEvidences: reservations.map((reservation, index) => ({ id: index === 0 ? reservationEvidenceId : rowId("reservation-evidence", key, reservation.id), reservationId: reservation.id, sequence: reservation.projection!.version + 1, kind: "APPLY_TO_DISPATCH", quantity: decimal(mapped.filter(value => value.reservation.id === reservation.id).reduce((sum, value) => sum.plus(value.line.quantity), new Prisma.Decimal(0))), stockUnit: mapped.find(value => value.reservation.id === reservation.id)!.line.stockUnit, scaleSnapshot: mapped.find(value => value.reservation.id === reservation.id)!.line.scaleSnapshot, replacesEvidenceId: null, cause: null })),
+    dispatchHeader: { id: dispatchId, assignmentId: assignment.id, remitoId: current.id, sourceControlId: control.id, sequence: assignment.dispatches?.length ? assignment.dispatches.length + 1 : 1, recordKind: "ORIGINAL", correctsDispatchId: null, cause: null }, dispatchLines,
+    reservationEffect: { id: rowId("reservation-effect", key), stockReservationEvidenceId: reservationEvidenceId }, reservationEffects: reservations.map((reservation, index) => ({ id: index === 0 ? rowId("reservation-effect", key) : rowId("reservation-effect", key, reservation.id), stockReservationEvidenceId: index === 0 ? reservationEvidenceId : rowId("reservation-evidence", key, reservation.id) })), stockEffect: { id: rowId("stock-effect", key), stockEvidenceId: evidenceId }, completePayloadSha256: "" };
+  command.completePayloadSha256 = digest("C14-WCB06-COMPLETE-PAYLOAD-V1", command);
+  return command;
+}
+
 export async function emitirRemito(input: EmitirRemitoInput) {
   const companyId = requireCompanyId(input.companyId);
   const prisma = input.prisma;
   const updatedById = requireCreatedById(input.updatedById);
 
-  for (let attempt = 0; attempt < REMITO_EMIT_MAX_RETRIES; attempt += 1) {
-    try {
-      return await prisma.$transaction(
+  const surgical = await prisma.remito.findFirst({ where: { id: input.remitoId, companyId }, select: { surgeryId: true } });
+  const enabled = Boolean(surgical?.surgeryId) && isC14BundleEnabled({ bundleId: "WCB-06", contractIds: WCB06_CONTRACT_IDS });
+  if (surgical?.surgeryId && !enabled) throw new RemitoError("remito_stock_dispatch_disabled", "Surgical Remito dispatch is not activated", 409);
+  const correlationId = enabled ? newCorrelationId() : null;
+  let durable: Awaited<ReturnType<typeof appendDurableAttemptEvent>> | null = null;
+  const durableBase = { correlationId: correlationId!, companyId, bundleSemanticKeySha256: digest("C14-WCB06-SEMANTIC-KEY-V1", [companyId, input.remitoId, input.idempotencyKey?.trim() || input.remitoId]), completePayloadSha256: digest("C14-WCB06-TRANSPORT-V1", [companyId, input.remitoId, input.idempotencyKey?.trim() || null]) };
+  let eventOrdinal = 0;
+  const transactionIds = new Map<number, string>();
+  const append = async (eventKind: "AUTH_DENIED"|"ATTEMPT_STARTED"|"ATTEMPT_ROLLED_BACK"|"RETRY_SCHEDULED"|"RETRY_EXHAUSTED"|"SUCCESS_COMMITTED", attemptOrdinal: 1|2|3|null, transactionId: string|null, domainCommitState: "NOT_STARTED"|"ROLLED_BACK"|"COMMITTED", sqlstate: SurgicalSqlstate|null = null) => {
+    eventOrdinal += 1;
+    durable = await appendDurableAttemptEvent(prisma, { ...durableBase, eventId: deriveDurableEventId(correlationId!, eventOrdinal), eventOrdinal, eventKind, attemptOrdinal, transactionId, anchorSetSha256: null, sqlstate, domainCommitState, occurredAt: new Date().toISOString(), predecessorEventSha256: durable?.eventSha256 ?? null });
+  };
+  if (enabled && prisma.durableAttemptAuditEvent) await reconcileDurableAttempts(prisma, async () => {
+    const [remito, dispatch] = await Promise.all([
+      prisma.remito.findFirst({ where: { id: input.remitoId, companyId }, select: { state: true } }),
+      prisma.cajasDispatch.findUnique({ where: { id: rowId("cajas-dispatch", input.idempotencyKey?.trim() || input.remitoId) }, select: { id: true } }),
+    ]);
+    return remito?.state === "Emitido" && dispatch ? "SUCCESS" : remito?.state === "Borrador" && !dispatch ? "ROLLED_BACK" : "AMBIGUOUS";
+  }, new Date(), { companyId, bundleSemanticKeySha256: durableBase.bundleSemanticKeySha256 });
+  if (enabled && !isApprovedAuthorizationProof(input.authorizationProof)) {
+    await append("AUTH_DENIED", null, null, "NOT_STARTED");
+    throw new RemitoError("remito_dispatch_authorization_required", "Surgical Remito dispatch requires pre-transaction authorization", 403);
+  }
+  const authorizationProof = input.authorizationProof;
+  try {
+    let activeAttempt: Wcb06Attempt | null = null;
+    const executeAttempt = () =>
+    prisma.$transaction(
         async (tx) => {
+          await tx.$executeRaw`LOCK TABLE "Remito" IN SHARE ROW EXCLUSIVE MODE`;
           const current = await tx.remito.findFirst({
             where: { id: input.remitoId, companyId },
             select: remitoReadSelect,
           });
 
           requireCompanyMatch(current, companyId, input.remitoId);
+
+          if (current.surgeryId) {
+            const actorId = updatedById ?? current.createdById;
+            if (!actorId) throw new RemitoError("remito_issue_actor_required", "Remito issuance requires an actor");
+            if (!enabled) throw new RemitoError("remito_stock_dispatch_disabled", "Surgical Remito dispatch is not activated", 409);
+            const command = await deriveSurgicalDispatch(tx, current, actorId, authorizationProof!, input.idempotencyKey);
+            const dispatch = await executeWcb06(tx, command, activeAttempt!);
+            if (dispatch.replayed && current.state === "Emitido") return current;
+          }
 
           if (current.state !== "Borrador") {
             throw new RemitoError(
@@ -845,6 +1066,9 @@ export async function emitirRemito(input: EmitirRemitoInput) {
             );
           }
 
+          const actorId = updatedById ?? current.createdById;
+          if (!actorId) throw new RemitoError("remito_issue_actor_required", "Remito issuance requires an actor");
+
           const branchId = requireBranchId(current.branchId);
           const issuedBranchId = requireBranchId(current.issuedBranchId ?? current.branchId);
           if (!isRemitoDocumentType(current.documentType)) {
@@ -853,56 +1077,48 @@ export async function emitirRemito(input: EmitirRemitoInput) {
 
           const visibleNumber = await getNextVisibleNumber(tx, companyId, branchId, current.documentType);
 
+          const issuedAt = input.issuanceDependencies.now?.() ?? new Date();
           const result = await tx.remito.update({
             where: { id: input.remitoId },
             data: {
               issuedBranchId,
               visibleNumber,
               state: "Emitido",
-              issuedAt: new Date(),
+              issuedAt,
               updatedById,
             },
             select: remitoReadSelect,
           });
 
-          if (updatedById) {
-            await createAuditEvent({
-              prisma: tx as unknown as PrismaClient,
-              companyId,
-              userId: updatedById,
-              entityType: "Remito",
-              entityId: result.id,
-              action: "remito.issued",
-              module: "remito",
-              oldValue: { state: current.state },
-              newValue: { state: result.state, visibleNumber: result.visibleNumber },
-            });
-          }
+           await persistRemitoIssuanceVerification({
+            tx,
+            remito: result,
+            actorId,
+            dependencies: input.issuanceDependencies,
+          });
 
           return result;
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         }
-      );
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2034" &&
-        attempt < REMITO_EMIT_MAX_RETRIES - 1
-      ) {
-        continue;
-      }
-
-      // Propagate RemitoError and ApiError as-is
-      if (error instanceof RemitoError) {
-        throw error;
-      }
-      throw error;
-    }
+    );
+    const result = enabled ? await runSurgicalRemitoIssuanceTransaction(executeAttempt, {
+      sleep: input.issuanceDependencies.sleep,
+      onAttemptStart: async (attempt) => { const transactionId = newTransactionId(); transactionIds.set(attempt, transactionId); activeAttempt = Object.freeze({ attemptId: transactionId, semanticKeySha256: durableBase.bundleSemanticKeySha256 }); await append("ATTEMPT_STARTED", attempt as 1|2|3, transactionId, "NOT_STARTED"); },
+      onAttemptFailed: async (attempt, _error, sqlstate, willRetry, retryExhausted) => {
+        const transactionId = transactionIds.get(attempt)!;
+        await append("ATTEMPT_ROLLED_BACK", attempt as 1|2|3, transactionId, "ROLLED_BACK", sqlstate);
+        if (willRetry) await append("RETRY_SCHEDULED", attempt as 1|2|3, transactionId, "ROLLED_BACK", sqlstate);
+        else if (retryExhausted) await append("RETRY_EXHAUSTED", attempt as 1|2|3, transactionId, "ROLLED_BACK", sqlstate);
+      },
+    }) : await runRemitoIssuanceTransaction(executeAttempt);
+    if (enabled) { const attempt = transactionIds.size as 1|2|3; await append("SUCCESS_COMMITTED", attempt, transactionIds.get(attempt)!, "COMMITTED"); }
+    return result;
+  } catch (error) {
+    if (error instanceof C14RuntimeError) throw new RemitoError(error.code, error.message, error.httpStatus);
+    throw error;
   }
-
-  throw new RemitoError("remito_emit_failed", "Failed to emit remito after retrying transactional visible number allocation");
 }
 
 // ─── updateRemitoState ─────────────────────────────────────────────────────────
