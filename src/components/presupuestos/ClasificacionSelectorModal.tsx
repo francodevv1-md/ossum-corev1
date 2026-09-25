@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -155,48 +156,55 @@ export function ClasificacionSelectorModal({
           {/* Classification list */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             {filteredClassifications.length > 0 ? (
-              filteredClassifications.map((classification: ClassificationConfig) => {
-                const isSelected = value === classification.name
-                const isCurrent = selectedLocal === classification.name
-                return (
-                  <button
-                    key={classification.id}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors border-l-2",
-                      isSelected
-                        ? "bg-emerald-50 dark:bg-emerald-950/30 border-l-emerald-500"
-                        : "hover:bg-muted/60 border-l-transparent"
-                    )}
-                    onClick={() => handleSelect(classification.name)}
-                  >
-                    {/* Color indicator dot */}
-                    <div
+              <AnimatePresence mode="popLayout">
+                {filteredClassifications.map((classification: ClassificationConfig) => {
+                  const isSelected = value === classification.name
+                  return (
+                    <motion.button
+                      key={classification.id}
+                      layout
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={{ duration: 0.12 }}
                       className={cn(
-                        "size-2.5 rounded-full shrink-0",
-                        getColorClass(classification.name)
+                        "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors border-l-2 select-none",
+                        isSelected
+                          ? "bg-emerald-50/90 dark:bg-emerald-950/40 border-l-emerald-600 font-semibold"
+                          : "hover:bg-slate-100/70 dark:hover:bg-slate-800/60 border-l-transparent"
                       )}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium truncate">
-                          {classification.name}
-                        </span>
-                        {isSelected && (
-                          <Badge variant="default" className="text-[8px] h-3.5 px-1 bg-emerald-600">
-                            Actual
-                          </Badge>
+                      onClick={() => handleSelect(classification.name)}
+                    >
+                      {/* Color indicator dot */}
+                      <div
+                        className={cn(
+                          "size-2.5 rounded-full shrink-0 shadow-2xs",
+                          getColorClass(classification.name)
                         )}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-medium truncate text-slate-900 dark:text-slate-100">
+                            {classification.name}
+                          </span>
+                          {isSelected && (
+                            <Badge variant="default" className="text-[8px] h-3.5 px-1 bg-emerald-600 text-white">
+                              Actual
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
+                          {classification.description}
+                        </p>
                       </div>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
-                        {classification.description}
-                      </p>
-                    </div>
-                    {isSelected && (
-                      <Check className="size-3.5 text-emerald-600 shrink-0" />
-                    )}
-                  </button>
-                )
-              })
+                      {isSelected && (
+                        <Check className="size-3.5 text-emerald-600 shrink-0" />
+                      )}
+                    </motion.button>
+                  )
+                })}
+              </AnimatePresence>
             ) : (
               <div className="px-4 py-8 text-center">
                 <Tag className="size-6 text-muted-foreground/40 mx-auto mb-2" />

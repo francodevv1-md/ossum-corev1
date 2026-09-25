@@ -59,6 +59,9 @@ export const EMPTY_FORM_ITEM: FormItem = {
 // ─── Form data type ───
 
 export interface PresupuestoFormData {
+  branchId: string
+  clientContactId: string
+  payerContactId: string
   client: string
   obraSocial: string
   financiador: string
@@ -87,6 +90,9 @@ function todayStr(): string {
 }
 
 const DEFAULT_FORM_DATA: PresupuestoFormData = {
+  branchId: "",
+  clientContactId: "",
+  payerContactId: "",
   client: "",
   obraSocial: "",
   financiador: "",
