@@ -39,7 +39,7 @@ const COORDINATION_STATE_OPTIONS = SURGERY_STATE_OPTIONS
 import { getFacturacionStatus } from "@/lib/cirugias.utils"
 import { CX_STATE_COLORS } from "@/lib/shared-constants"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Building2, CalendarDays, ChevronDown, ClipboardList, Loader2, MapPin, MessageSquarePlus, Share2, Stethoscope, TriangleAlert, Truck, UserCircle } from "lucide-react"
+import { Building2, CalendarDays, ChevronDown, ClipboardList, Loader2, MapPin, MessageSquarePlus, Share2, Stethoscope, TriangleAlert, Truck } from "lucide-react"
 import { useCoordinationView, type CoordinationViewController } from "@/hooks/useCoordinationView"
 import { CoordinationPreviewRoot } from "@/components/coordinadores/preview/CoordinationPreviewRoot"
 import { CoordinationStateSurface } from "@/components/coordinadores/CoordinationStateSurface"
@@ -48,8 +48,8 @@ import { useAuth } from "@/components/auth/AuthProvider"
 import { coordinationEzequielDevDiagnostic } from "@/lib/api/surgery-adapter"
 import { canAccessGlobalCoordination } from "@/lib/permissions/coordination"
 import { deriveCoordinatorCaseAdvisory } from "@/lib/cx-operations-derived"
-import { CoordinationMetricFilters } from "@/components/coordinadores/CoordinationMetricFilters"
-import { CoordinationAdvancedFilters, createEmptyAdvancedFilters } from "@/components/coordinadores/CoordinationAdvancedFilters"
+import { createEmptyAdvancedFilters } from "@/components/coordinadores/CoordinationAdvancedFilters"
+import { CoordinationWorkspace } from "@/components/coordinadores/workspace/CoordinationWorkspace"
 import {
   countActiveAdvancedFilters,
   acceptCoordinationEzequielDevFacts,
@@ -222,36 +222,6 @@ export function CaseCard({
   )
 }
 
-function SectionBlock({
-  title,
-  count,
-  tone,
-  children,
-}: {
-  title: string
-  count: number
-  tone: string
-  children: React.ReactNode
-}) {
-  if (count === 0) return null
-
-  return (
-    <section className="space-y-1.5">
-      <div className={cn("border-b px-1 py-2", tone)}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-[12px] font-semibold">{title}</h2>
-          </div>
-          <Badge variant="outline" className="h-5 rounded bg-white text-[10px]">
-            {count}
-          </Badge>
-        </div>
-      </div>
-      <div className="space-y-2">{children}</div>
-    </section>
-  )
-}
-
 export function ProductiveRecentFinalized({ count, children }: { count: number; children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   if (count === 0) return null
@@ -412,17 +382,6 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
   )
   const hasContradiction = snapshot ? hasFilterContradiction(selectedMetrics, appliedAdvanced) : false
 
-  const requiresCoordination = useMemo(
-    () => visibleCases.filter((entry) => entry.bucket === "autorizado" && (!entry.subgroup || entry.subgroup === "nueva-asignacion" || entry.subgroup === "pendiente-coordinar")),
-    [visibleCases]
-  )
-
-  const scheduledPrepared = useMemo(
-    () => visibleCases.filter((entry) => entry.bucket === "autorizado" && entry.subgroup !== null && entry.subgroup !== "nueva-asignacion" && entry.subgroup !== "pendiente-coordinar"),
-    [visibleCases]
-  )
-
-  const transitCases = useMemo(() => visibleCases.filter((entry) => entry.bucket === "transito"), [visibleCases])
   const advancedCount = countActiveAdvancedFilters(appliedAdvanced)
   const hasActiveFilters = selectedMetrics.size > 0 || advancedCount > 0
   const blockedStatus = controller.response?.context.personalResolution?.status
@@ -504,97 +463,30 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
           />
         </div>
       ) : (
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 bg-[var(--ossum-surface)] p-3 pb-6 sm:p-4 md:p-5">
-          <div className="border border-[var(--ossum-line-strong)] bg-white px-3 py-3 sm:px-4">
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h1 className="text-lg font-semibold tracking-tight text-[var(--ossum-navy)]">Mi bandeja</h1>
-                  <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-slate-600">
-                    <UserCircle className="size-3.5" />
-                    {controller.response?.context.viewSubject?.label || "Coordinador"} · {snapshot?.cases.length ?? 0} casos activos
-                  </div>
-                </div>
-
-                <GlobalCoordinationLink />
-              </div>
-
-              {snapshot ? <CoordinationMetricFilters counts={snapshot.counts} selected={selectedMetrics} onToggle={toggleMetric} /> : null}
-            </div>
-          </div>
-
-          {snapshot ? <div className="min-w-0 border border-[var(--ossum-line-strong)] bg-white p-2">
-            <CoordinationAdvancedFilters
-              applied={appliedAdvanced}
-              institutionOptions={snapshot.institutionOptions}
-              clientOptions={snapshot.clientOptions}
-              stateOptions={COORDINATION_STATE_OPTIONS}
-              onApply={setAppliedAdvanced}
-              onClearAdvanced={() => setAppliedAdvanced(createEmptyAdvancedFilters())}
-            />
-            <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveMessage}</p>
-          </div> : null}
-
+        <div className="flex min-h-0 flex-1 flex-col bg-[var(--ossum-surface)]">
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveMessage}</p>
           <CoordinationStateSurface state={coordinationState} surface="personal" emptyStateVariant="productive-personal" loadedAnnouncements="external" onRetry={() => void controller.refresh()} onClearFilters={clearFilters}>
-            <div className="space-y-4">
-              <SectionBlock
-                title="Necesitan respuesta"
-                count={requiresCoordination.length}
-                tone="border-sky-200 bg-sky-50/70 text-sky-900"
-              >
-                {requiresCoordination.map((entry) => (
-                  <CaseCard
-                    key={entry.surgery.id}
-                    entry={entry}
-                    acceptedDevFacts={entry.surgery.backendId ? acceptedDevFacts.get(entry.surgery.backendId) : null}
-                    onManage={() => setManagingCase({ entry, initialView: "gestion" })}
-                    onTracking={() => setManagingCase({ entry, initialView: "seguimiento" })}
-                    onOpenLogistics={() => openExpedienteTab(entry.surgery.id, "logistica")}
-                    onShare={() => setSharingCase(entry)}
-                    onUrgent={() => setManagingCase({ entry, initialView: "gestion", initialManagementFocus: "urgency" })}
-                  />
-                ))}
-              </SectionBlock>
-
-              <SectionBlock
-                title="Próximas cirugías"
-                count={scheduledPrepared.length}
-                tone="border-amber-200 bg-amber-50/70 text-amber-900"
-              >
-                {scheduledPrepared.map((entry) => (
-                  <CaseCard
-                    key={entry.surgery.id}
-                    entry={entry}
-                    acceptedDevFacts={entry.surgery.backendId ? acceptedDevFacts.get(entry.surgery.backendId) : null}
-                    onManage={() => setManagingCase({ entry, initialView: "gestion" })}
-                    onTracking={() => setManagingCase({ entry, initialView: "seguimiento" })}
-                    onOpenLogistics={() => openExpedienteTab(entry.surgery.id, "logistica")}
-                    onShare={() => setSharingCase(entry)}
-                    onUrgent={() => setManagingCase({ entry, initialView: "gestion", initialManagementFocus: "urgency" })}
-                  />
-                ))}
-              </SectionBlock>
-
-              <SectionBlock
-                title="Avanzando normalmente"
-                count={transitCases.length}
-                tone="border-violet-200 bg-violet-50/70 text-violet-900"
-              >
-                {transitCases.map((entry) => (
-                  <CaseCard
-                    key={entry.surgery.id}
-                    entry={entry}
-                    acceptedDevFacts={entry.surgery.backendId ? acceptedDevFacts.get(entry.surgery.backendId) : null}
-                    onManage={() => setManagingCase({ entry, initialView: "gestion" })}
-                    onTracking={() => setManagingCase({ entry, initialView: "seguimiento" })}
-                    onOpenLogistics={() => openExpedienteTab(entry.surgery.id, "logistica")}
-                    onShare={() => setSharingCase(entry)}
-                    onUrgent={() => setManagingCase({ entry, initialView: "gestion", initialManagementFocus: "urgency" })}
-                  />
-                ))}
-              </SectionBlock>
-
-            </div>
+            <CoordinationWorkspace
+              subjectLabel={controller.response?.context.viewSubject?.label || "Coordinador"}
+              snapshot={snapshot}
+              visibleCases={visibleCases}
+              selectedMetrics={selectedMetrics}
+              onToggleMetric={toggleMetric}
+              appliedAdvanced={appliedAdvanced}
+              onApplyAdvanced={setAppliedAdvanced}
+              onClearAdvanced={() => setAppliedAdvanced(createEmptyAdvancedFilters())}
+              institutionOptions={snapshot?.institutionOptions ?? []}
+              clientOptions={snapshot?.clientOptions ?? []}
+              stateOptions={COORDINATION_STATE_OPTIONS}
+              globalLink={<GlobalCoordinationLink />}
+              handlers={{
+                onManage: (entry, initialView, focus) => setManagingCase({ entry, initialView, initialManagementFocus: focus }),
+                onUrgent: (entry) => setManagingCase({ entry, initialView: "gestion", initialManagementFocus: "urgency" }),
+                onShare: (entry) => setSharingCase(entry),
+                onOpenLogistics: (surgeryId) => openExpedienteTab(surgeryId, "logistica"),
+                onOpenExpediente: (surgeryId) => selection.openExpediente(surgeryId),
+              }}
+            />
           </CoordinationStateSurface>
           {controller.hasMore ? (
             <div className="flex flex-col items-center gap-1.5 py-1">

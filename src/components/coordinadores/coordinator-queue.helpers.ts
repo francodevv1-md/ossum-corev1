@@ -374,16 +374,51 @@ export function buildCoordinatorDoctorMessage(entry: CoordinatorCase) {
   const { clientLabel, surgeonLabel, institutionLabel } = getCoordinatorMessageBase(entry)
 
   return [
-    "Hola doc, buenos días. Ingresó la autorización de un paciente.",
+    `Hola Dr. ${surgeonLabel !== "Sin definir" ? surgeonLabel : ""}, buen día. Le escribo desde Coordinación de Cirugías.`,
     "",
-    `🛑 Cliente / Cobertura: ${clientLabel}`,
-    ` Nosocomio: ${institutionLabel}`,
-    ` Médico: ${surgeonLabel}`,
-    ` Paciente: ${surgery.patient}`,
+    "📋 *Ingresó autorización de paciente:*",
+    `• *Paciente:* ${surgery.patient}`,
+    `• *Cobertura:* ${clientLabel}`,
+    `• *Institución:* ${institutionLabel}`,
+    `• *Procedimiento:* ${surgery.procedure || surgery.classification || "A coordinar"}`,
     "",
-    `Tenemos disponibilidad del material hacia la institución a partir del: ${entry.materialAvailabilityLabel}`,
+    `📦 *Disponibilidad de material en nosocomio:* ${entry.materialAvailabilityLabel}`,
     "",
-    "¿Me confirmaría por favor la fecha de cirugía?",
+    "¿Qué fecha y horario tentativo de quirófano le queda mejor para programarla?",
+  ].join("\n")
+}
+
+export function buildCoordinatorConfirmationMessage(entry: CoordinatorCase) {
+  const { surgery } = entry
+  const { clientLabel, surgeonLabel, institutionLabel, surgeryDateLabel, surgeryTimeLabel, shippingDateLabel } = getCoordinatorMessageBase(entry)
+
+  return [
+    `Dr. ${surgeonLabel !== "Sin definir" ? surgeonLabel : ""}, confirmamos la coordinación de la cirugía:`,
+    "",
+    `📅 *Fecha de Cirugía:* ${surgeryDateLabel} ${surgeryTimeLabel !== "Sin definir" ? `a las ${surgeryTimeLabel} hs` : ""}`,
+    `🏥 *Institución:* ${institutionLabel}`,
+    `👤 *Paciente:* ${surgery.patient} (${clientLabel})`,
+    `🚚 *Envío de materiales programado:* ${shippingDateLabel}`,
+    "",
+    "Los materiales e instrumental llegarán en tiempo y forma al quirófano.",
+    "Cualquier cambio o requerimiento adicional, quedamos a total disposición.",
+  ].join("\n")
+}
+
+export function buildCoordinatorUrgentMessage(entry: CoordinatorCase) {
+  const { surgery } = entry
+  const { clientLabel, surgeonLabel, institutionLabel } = getCoordinatorMessageBase(entry)
+
+  return [
+    `🚨 *ATENCIÓN - CASO PRIORITARIO / URGENCIA*`,
+    "",
+    `Estimado Dr. ${surgeonLabel !== "Sin definir" ? surgeonLabel : ""},`,
+    `Nos comunicamos por la cirugía de *${surgery.patient}* (${clientLabel}) en *${institutionLabel}*.`,
+    "",
+    "⚠️ *Requerimos con urgencia definir la fecha de quirófano* para asegurar la reserva y despacho de materiales.",
+    `📦 *Disponibilidad estimada:* ${entry.materialAvailabilityLabel}`,
+    "",
+    "Por favor indíquenos a la brevedad fecha y horario asignados.",
   ].join("\n")
 }
 
@@ -392,27 +427,24 @@ export function buildCoordinatorFormalMessage(entry: CoordinatorCase) {
   const { clientLabel, instrumentadorLabel, surgeryDateLabel, surgeryTimeLabel, shippingDateLabel, surgeryTypeLabel, surgeonLabel, institutionLabel } = getCoordinatorMessageBase(entry)
 
   return [
-    "📝 *REPORTE DE CIRUGÍA*",
+    "📝 *REPORTE DE COORDINACIÓN DE CIRUGÍA*",
     "",
-    "Estimados, adjunto detalles de la cirugía programada:",
+    "Estimados, adjuntamos los detalles operativos de la cirugía:",
     "",
     `👤 *Paciente:* ${surgery.patient}`,
-    `👨‍⚕️ *Médico:* ${surgeonLabel}`,
-    `🧰 *Instrumentador:* ${instrumentadorLabel}`,
-    `🛑 *Cliente / ART:* ${clientLabel}`,
-    `📅 *Fecha cirugía:* ${surgeryDateLabel}`,
-    `🕒 *Hora:* ${surgeryTimeLabel}`,
-    `🚚 *Fecha envío:* ${shippingDateLabel}`,
-    `🏥 *Lugar:* ${institutionLabel}`,
-    `📂 *CX:* ${surgery.id}`,
-    `🩺 *Tipo de cirugía:* ${surgeryTypeLabel}`,
-    `📆 *Disponibilidad material:* ${entry.materialAvailabilityLabel}`,
+    `👨‍⚕️ *Médico Tratante:* ${surgeonLabel}`,
+    `🧰 *Instrumentador Asignado:* ${instrumentadorLabel}`,
+    `🛑 *Cliente / Cobertura:* ${clientLabel}`,
+    `📅 *Fecha de Cirugía:* ${surgeryDateLabel}`,
+    `🕒 *Hora Quirófano:* ${surgeryTimeLabel}`,
+    `🚚 *Fecha de Envío de Material:* ${shippingDateLabel}`,
+    `🏥 *Institución / Sede:* ${institutionLabel}`,
+    `📂 *Identificador CX:* ${surgery.visibleNumber || surgery.id}`,
+    `🩺 *Procedimiento:* ${surgeryTypeLabel}`,
+    `📆 *Disponibilidad de Material:* ${entry.materialAvailabilityLabel}`,
     "",
-    "📦 *Material requerido:*",
-    "• Completar listado",
-    "",
-    "Saludos cordiales.",
-    "Equipo de Coordinación.",
+    "Saludos cordiales,",
+    "Área de Coordinación Quirúrgica.",
   ].join("\n")
 }
 

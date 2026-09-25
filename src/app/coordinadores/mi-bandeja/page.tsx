@@ -1,5 +1,5 @@
-import { CoordinatorInboxView } from "@/components/coordinadores/CoordinatorInboxView"
+import { CoordinatorPersonalClient } from "@/components/coordinadores/CoordinatorPersonalClient"
 
 export default function MiBandejaCoordinacionPage() {
-  return <CoordinatorInboxView />
+  return <CoordinatorPersonalClient />
 }
