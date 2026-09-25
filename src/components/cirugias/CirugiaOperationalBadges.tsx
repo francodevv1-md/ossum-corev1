@@ -73,27 +73,54 @@ interface CirugiaOperationalBadgesProps {
   consumoState: string | null
   facturacionStatus: string
   facturado: boolean
+  cellClassName?: string
+}
+
+export function DocStatusBadgeCell({ docStatus, cellClassName, asCell = true }: { docStatus: string; cellClassName?: string; asCell?: boolean }) {
+  const badge = <NeutralBadge status={docStatus} category="doc" />
+  if (!asCell) return badge
+  return (
+    <td className={cn("px-2 py-1.5", cellClassName)}>
+      {badge}
+    </td>
+  )
+}
+
+export function ConsumoStatusBadgeCell({ consumoState, cellClassName, asCell = true }: { consumoState: string | null; cellClassName?: string; asCell?: boolean }) {
+  const badge = consumoState ? (
+    <NeutralBadge status={consumoState} category="consumo" />
+  ) : (
+    <span className="inline-flex min-h-6 items-center rounded-md border border-dashed border-slate-200/80 px-2 py-1 text-[10px] text-slate-400 dark:border-slate-800/80 dark:text-slate-500">—</span>
+  )
+  if (!asCell) return badge
+  return (
+    <td className={cn("px-2 py-1.5", cellClassName)}>
+      {badge}
+    </td>
+  )
+}
+
+export function FacturadoStatusBadgeCell({ facturado, facturacionStatus, cellClassName, asCell = true }: { facturado: boolean; facturacionStatus: string; cellClassName?: string; asCell?: boolean }) {
+  const badge = (
+    <NeutralBadge
+      status={facturado ? "Facturada" : facturacionStatus === "Sin facturar" ? "No facturada" : getFacturacionBadgeLabel(facturacionStatus)}
+      category="fact"
+    />
+  )
+  if (!asCell) return badge
+  return (
+    <td className={cn("px-2 py-1.5", cellClassName)}>
+      {badge}
+    </td>
+  )
 }
 
 export function CirugiaOperationalBadges({ docStatus, consumoState, facturacionStatus, facturado }: CirugiaOperationalBadgesProps) {
   return (
     <>
-      <td className="px-2 py-1.5">
-        <NeutralBadge status={docStatus} category="doc" />
-      </td>
-      <td className="px-2 py-1.5">
-        {consumoState ? (
-          <NeutralBadge status={consumoState} category="consumo" />
-        ) : (
-          <span className="inline-flex min-h-6 items-center rounded-md border border-dashed border-slate-200/80 px-2 py-1 text-[10px] text-slate-400 dark:border-slate-800/80 dark:text-slate-500">—</span>
-        )}
-      </td>
-      <td className="px-2 py-1.5">
-        <NeutralBadge
-          status={facturado ? "Facturada" : facturacionStatus === "Sin facturar" ? "No facturada" : getFacturacionBadgeLabel(facturacionStatus)}
-          category="fact"
-        />
-      </td>
+      <DocStatusBadgeCell docStatus={docStatus} />
+      <ConsumoStatusBadgeCell consumoState={consumoState} />
+      <FacturadoStatusBadgeCell facturado={facturado} facturacionStatus={facturacionStatus} />
     </>
   )
 }

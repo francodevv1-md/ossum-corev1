@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { useOrtoTrackStore } from "@/lib/store"
@@ -25,12 +25,15 @@ import { CirugiasToolbar } from "@/components/cirugias/CirugiasToolbar"
 import { CirugiasModuleBar } from "@/components/cirugias/CirugiasModuleBar"
 import { ActiveFilterChips } from "@/components/cirugias/ActiveFilterChips"
 import { CxOperationPresets, applyCxOperationPreset, clearCxOperationPreset, type CxOperationPresetKey, type CxOperationPresetOwnership } from "@/components/cirugias/CxOperationPresets"
+import { CirugiasOpTabs, computeOpTabCounts } from "@/components/cirugias/CirugiasOpTabs"
+import { SurgeryContextTray } from "@/components/cirugias/SurgeryContextTray"
 import type { SearchChip } from "@/lib/cirugias.types"
 import type { CoordinatorCase } from "@/components/coordinadores/coordinator-queue.helpers"
 import { getAuthorizedSubgroup, getCoordinatorAssignmentBaseDate, getCoordinatorBucket, getMaterialAvailability, getSlaMeta } from "@/components/coordinadores/coordinator-queue.helpers"
 
 // Table
-import { CirugiasTable } from "@/components/cirugias/CirugiasTable"
+import { CirugiasDataGrid } from "@/components/cirugias/CirugiasDataGrid"
+import type { CirugiasColumnContext } from "@/lib/cirugias/cirugias-columns"
 
 // Dialogs
 import { ChangeStateDialog } from "@/components/cirugias/dialogs/ChangeStateDialog"
@@ -179,6 +182,10 @@ export default function CirugiasPage() {
     filters.clearFilters()
   }
 
+  const opTabCounts = useMemo(() => {
+    return computeOpTabCounts(store.surgeries, (id) => store.getConsumoBySurgeryId(id)?.state ?? null)
+  }, [store.surgeries, store])
+
   // ── Facturacion helper ──
   const facturacionStatusFor = useMemo(() => (s: typeof store.surgeries[0]) =>
     getFacturacionStatus(s, store.getDocStatus, store.getResumenCobranzaBySurgeryId(s.id)),
@@ -221,6 +228,70 @@ export default function CirugiasPage() {
     if (newKpiFilter !== undefined) filters.setKpiFilter(newKpiFilter)
     if (newStateFilters) filters.setStateFilters(newStateFilters)
   }
+
+  // ── Column Context & Table State bridge for TanStack Table ──
+  const columnContext = useMemo<CirugiasColumnContext>(() => ({
+    getDocStatus: store.getDocStatus,
+    getConsumoState: (id: string) => store.getConsumoBySurgeryId(id)?.state ?? null,
+    getFacturacionStatus: facturacionStatusFor,
+    getPrId: (id: string) => store.getPresupuestosBySurgeryId(id)[0]?.id,
+    shipmentDateMap,
+    circuitProgressMap,
+    coordinatorCaseMap: coordinatorCases,
+    closureSignalsMap,
+    cxVariant: columns.cxVariant,
+    onOpenExpediente: selection.openExpediente,
+    onOpenPresupuestoDialog: actions.openPresupuestoDialog,
+    onSetExpTab: selection.setExpTab,
+    onSetDialogSurgery: actions.setDialogSurgery,
+    onSetNewState: actions.setNewState,
+    onSetChangeStateDialogOpen: actions.setChangeStateDialogOpen,
+    onSetChangeDateDialogOpen: actions.setChangeDateDialogOpen,
+    onSetSuspendDialogOpen: actions.setSuspendDialogOpen,
+    onSetCancelDialogOpen: actions.setCancelDialogOpen,
+    onSetNoteDialogOpen: actions.setNoteDialogOpen,
+    onSetFacturarDialogOpen: actions.setFacturarDialogOpen,
+    onRecover: actions.handleRecover,
+    canFacturar: actions.canFacturar,
+  }), [
+    store.getDocStatus,
+    store.getConsumoBySurgeryId,
+    facturacionStatusFor,
+    store.getPresupuestosBySurgeryId,
+    shipmentDateMap,
+    circuitProgressMap,
+    coordinatorCases,
+    closureSignalsMap,
+    columns.cxVariant,
+    selection.openExpediente,
+    actions.openPresupuestoDialog,
+    selection.setExpTab,
+    actions.setDialogSurgery,
+    actions.setNewState,
+    actions.setChangeStateDialogOpen,
+    actions.setChangeDateDialogOpen,
+    actions.setSuspendDialogOpen,
+    actions.setCancelDialogOpen,
+    actions.setNoteDialogOpen,
+    actions.setFacturarDialogOpen,
+    actions.handleRecover,
+    actions.canFacturar,
+  ])
+
+  const tableSorting = useMemo(() => [{ id: sorting.sortKey, desc: sorting.sortDir === "desc" }], [sorting.sortKey, sorting.sortDir])
+
+  const handleTableSortingChange = useCallback((updater: any) => {
+    const next = typeof updater === "function" ? updater(tableSorting) : updater
+    if (Array.isArray(next) && next.length > 0) {
+      const primary = next[0]
+      sorting.handleSort(primary.id)
+    }
+  }, [tableSorting, sorting])
+
+  const handleColumnVisibilityChange = useCallback((updater: any) => {
+    const next = typeof updater === "function" ? updater(columns.visibleCols) : updater
+    columns.setVisibleCols(next)
+  }, [columns])
 
   // ── Selected surgery helpers (for ExpedienteFullView) ──
   const selectedFacturacionStatus = selection.selectedSurgery
@@ -374,9 +445,17 @@ export default function CirugiasPage() {
               />
 
               {showOperationPresets ? (
-                <div className="border-b border-slate-200 px-3 dark:border-slate-800">
-                  <CxOperationPresets selectedPreset={filters.selectedPreset as CxOperationPresetKey | null} onApply={applyPreset} onClear={clearPreset} />
-                </div>
+                <CirugiasOpTabs
+                  selectedPreset={filters.selectedPreset as CxOperationPresetKey | null}
+                  counts={opTabCounts}
+                  onSelectTab={(tabKey) => {
+                    if (tabKey === "all") {
+                      clearPreset()
+                    } else {
+                      applyPreset(tabKey)
+                    }
+                  }}
+                />
               ) : null}
 
               {/* ── Active Filter Chips (CHATZAI-025: includes search chips) ── */}
@@ -396,51 +475,47 @@ export default function CirugiasPage() {
               </div>
             </div>
 
-            {/* ── Table — full width, no preview panel ── */}
+            {/* ── Table & Context Tray Container ── */}
             <div className="mx-1 -mt-px flex min-h-0 flex-1 flex-col border border-slate-300 border-t-0 bg-white dark:border-slate-800 dark:bg-slate-950 lg:mx-2">
               <div className="min-h-0 min-w-0 flex-1">
-                <CirugiasTable
-                data={filtered}
-                selectedSurgeryId={selection.selectedSurgeryId}
-                visibleCols={columns.visibleCols}
-                sortKey={sorting.sortKey}
-                sortDir={sorting.sortDir}
-                onSort={sorting.handleSort}
-                getDocStatus={store.getDocStatus}
-                getConsumoState={(id: string) => store.getConsumoBySurgeryId(id)?.state ?? null}
-                getFacturacionStatus={facturacionStatusFor}
-                getPrId={(id: string) => store.getPresupuestosBySurgeryId(id)[0]?.id}
-                onSelect={selection.selectSurgery}
-                onOpenExpediente={selection.openExpediente}
-                onOpenPresupuestoDialog={actions.openPresupuestoDialog}
-                onSetExpTab={selection.setExpTab}
-                onSetDialogSurgery={actions.setDialogSurgery}
-                onSetNewState={actions.setNewState}
-                onSetChangeStateDialogOpen={actions.setChangeStateDialogOpen}
-                onSetChangeDateDialogOpen={actions.setChangeDateDialogOpen}
-                onSetSuspendDialogOpen={actions.setSuspendDialogOpen}
-                onSetCancelDialogOpen={actions.setCancelDialogOpen}
-                onSetNoteDialogOpen={actions.setNoteDialogOpen}
-                onSetFacturarDialogOpen={actions.setFacturarDialogOpen}
-                onRecover={actions.handleRecover}
-                canFacturar={actions.canFacturar}
-                stickyColumns={columns.stickyColumns}
-                compactMode={columns.compactMode}
-                fixedLeftColumns={columns.fixedLeftColumns}
-                columnOrder={columns.columnOrder}
-                columnWidths={columns.columnWidths}
-                groups={columns.columnGroups}
-                showGroupedHeaders={columns.showGroupedHeaders}
-                 onClearFilters={clearAllFilters}
-                onNewSurgery={actions.openNewSurgeryDialog}
-                hasActiveFilters={filters.hasActiveFilters}
-                circuitProgressMap={circuitProgressMap}
-                 shipmentDateMap={shipmentDateMap}
-                 coordinatorCaseMap={coordinatorCases}
-                 closureSignalsMap={closureSignalsMap}
-              />
+                <CirugiasDataGrid
+                  data={filtered}
+                  columnContext={columnContext}
+                  cxVariant={columns.cxVariant}
+                  selectedSurgeryId={selection.selectedSurgeryId}
+                  onSelect={selection.selectSurgery}
+                  onOpenExpediente={selection.openExpediente}
+                  density={columns.compactMode ? "compact" : "standard"}
+                  columnVisibility={columns.visibleCols}
+                  onColumnVisibilityChange={handleColumnVisibilityChange}
+                  columnOrder={columns.columnOrder}
+                  onColumnOrderChange={columns.setColumnOrder}
+                  sorting={tableSorting}
+                  onSortingChange={handleTableSortingChange}
+                  stickyColumns={columns.stickyColumns}
+                  fixedLeftColumns={columns.fixedLeftColumns}
+                  columnWidths={columns.columnWidths}
+                  onClearFilters={clearAllFilters}
+                  onNewSurgery={actions.openNewSurgeryDialog}
+                  hasActiveFilters={filters.hasActiveFilters}
+                />
               </div>
 
+              {/* ── Bandeja Contextual Inferior (Context Tray) ── */}
+              <SurgeryContextTray
+                surgery={selection.selectedSurgery}
+                notes={selection.selNotes}
+                docStatus={selection.selDocStatus}
+                consumoState={selection.selectedSurgery ? store.getConsumoBySurgeryId(selection.selectedSurgery.id)?.state ?? null : null}
+                onOpenExpediente={selection.openExpediente}
+                onAddNote={() => {
+                  if (selection.selectedSurgery) {
+                    actions.setDialogSurgery(selection.selectedSurgery)
+                    actions.setNoteDialogOpen(true)
+                  }
+                }}
+                onClose={selection.deselectSurgery}
+              />
             </div>
           </>
         )}
@@ -542,7 +617,8 @@ export default function CirugiasPage() {
           showGroupedHeaders={columns.showGroupedHeaders}
           showOperationPresets={showOperationPresets}
           onShowOperationPresetsChange={setShowOperationPresets}
-          onApply={({ visibleCols, columnOrder, stickyColumns, columnWidths, compactMode, fixedColumns, groups, showGroupedHeaders }) => {
+          cxVariant={columns.cxVariant}
+          onApply={({ visibleCols, columnOrder, stickyColumns, columnWidths, compactMode, fixedColumns, groups, showGroupedHeaders, cxVariant }) => {
             columns.applyViewPreferences({
               visibleCols,
               columnOrder,
@@ -552,6 +628,7 @@ export default function CirugiasPage() {
               fixedLeftColumns: fixedColumns,
               columnGroups: groups,
               showGroupedHeaders,
+              cxVariant,
             })
           }}
           onResetToDefault={columns.resetToDefault}

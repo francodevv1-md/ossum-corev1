@@ -68,8 +68,8 @@ export const CELL_BASE = "px-2.5 py-1.5 min-h-[34px] align-middle"
 export const CELL_BASE_COMPACT = "px-2 py-1 min-h-[28px] align-middle"
 export const TABLE_GROUP_HEADER_BASE = "border-r border-slate-300 px-2.5 py-1.5 text-left text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600 last:border-r-0 dark:border-slate-700 dark:text-slate-200"
 export const TABLE_GROUP_HEADER_COMPACT = "border-r border-slate-300 px-2 py-1 text-left text-[9px] font-bold uppercase tracking-[0.14em] text-slate-600 last:border-r-0 dark:border-slate-700 dark:text-slate-200"
-export const TABLE_COLUMN_HEADER_BASE = "whitespace-nowrap border-r border-slate-200 px-2.5 py-2 text-left text-[11px] font-semibold text-slate-900 last:border-r-0"
-export const TABLE_COLUMN_HEADER_COMPACT = "whitespace-nowrap border-r border-slate-200 px-2 py-1.5 text-left text-[10px] font-semibold text-slate-900 last:border-r-0"
+export const TABLE_COLUMN_HEADER_BASE = "whitespace-nowrap border-r border-slate-200/80 px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 last:border-r-0"
+export const TABLE_COLUMN_HEADER_COMPACT = "whitespace-nowrap border-r border-slate-200/80 px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 last:border-r-0"
 
 // ═══════════════════════════════════════════════════════════════
 // STATE COLOR MAPS — CX_STATE_COLORS and PREP_STATE_COLORS
@@ -112,15 +112,211 @@ export const CX_STATE_CELL_COLORS: Record<string, string> = {
   "Sin consumo": "bg-amber-200 text-amber-900",
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ESTADO CX MULTI-VARIANTE (A: Celda, B: Barra 4px, C: Dot)
+// Conforme al prototipo de alta densidad
+// ═══════════════════════════════════════════════════════════════
+
+export type CxStatusVariant = "a" | "b" | "c" | "d"
+
+export interface CxStatusStyle {
+  barColor: string
+  cellBg: string
+  dotColor: string
+  textColor: string
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SISTEMA VISUAL CANÓNICO DE ESTADOS CX (ADDENDUM OFICIAL)
+// ═══════════════════════════════════════════════════════════════
+
+export interface CxStateVisual {
+  strong: string        // Hex oficial para Estado CX fuerte
+  rowTint: string       // Hex oficial para el tinte suave de la fila
+  hoverTint: string     // Hex para el hover sutil de la fila
+  darkRowTint?: string  // Hex para el tinte suave de la fila en modo oscuro
+  darkHoverTint?: string // Hex para el hover sutil de la fila en modo oscuro
+  strongClass: string   // Clases Tailwind para badge / celda fuerte con texto blanco
+  barClass: string      // Clases Tailwind para barra 4px
+  dotClass: string      // Clases Tailwind para dot
+  textClass: string     // Clases Tailwind para texto semántico
+}
+
+export const CX_STATE_VISUALS: Record<string, CxStateVisual> = {
+  "Pendiente": {
+    strong: "#F59E0B",
+    rowTint: "#FFFDF6",
+    hoverTint: "#FEF7E2",
+    darkRowTint: "#18140c",
+    darkHoverTint: "#261e10",
+    strongClass: "bg-amber-500 text-white font-bold",
+    barClass: "bg-amber-500",
+    dotClass: "bg-amber-500",
+    textClass: "text-amber-700 dark:text-amber-300 font-semibold",
+  },
+  "Autorizada": {
+    strong: "#0284C7",
+    rowTint: "#F5FAFF",
+    hoverTint: "#E8F4FD",
+    darkRowTint: "#051624",
+    darkHoverTint: "#09243a",
+    strongClass: "bg-sky-600 text-white font-bold",
+    barClass: "bg-sky-600",
+    dotClass: "bg-sky-600",
+    textClass: "text-sky-700 dark:text-sky-300 font-semibold",
+  },
+  "En tránsito": {
+    strong: "#2563EB",
+    rowTint: "#F4F8FE",
+    hoverTint: "#E8F1FC",
+    darkRowTint: "#07162d",
+    darkHoverTint: "#0b2348",
+    strongClass: "bg-blue-600 text-white font-bold",
+    barClass: "bg-blue-600",
+    dotClass: "bg-blue-600",
+    textClass: "text-blue-700 dark:text-blue-300 font-semibold",
+  },
+  "Realizada": {
+    strong: "#059669",
+    rowTint: "#F2FBF6",
+    hoverTint: "#E5F7ED",
+    darkRowTint: "#051c17",
+    darkHoverTint: "#092b23",
+    strongClass: "bg-emerald-600 text-white font-bold",
+    barClass: "bg-emerald-600",
+    dotClass: "bg-emerald-600",
+    textClass: "text-emerald-700 dark:text-emerald-300 font-semibold",
+  },
+  "Finalizada": {
+    strong: "#334155",
+    rowTint: "#F8FAFC",
+    hoverTint: "#F1F5F9",
+    darkRowTint: "#0e1522",
+    darkHoverTint: "#162034",
+    strongClass: "bg-slate-700 text-white font-bold dark:bg-slate-600",
+    barClass: "bg-slate-700 dark:bg-slate-600",
+    dotClass: "bg-slate-700 dark:bg-slate-600",
+    textClass: "text-slate-700 dark:text-slate-300 font-semibold",
+  },
+  "Sin autorizar": {
+    strong: "#E11D48",
+    rowTint: "#FFF6F7",
+    hoverTint: "#FEEDEF",
+    darkRowTint: "#1d0910",
+    darkHoverTint: "#2d0e19",
+    strongClass: "bg-rose-600 text-white font-bold",
+    barClass: "bg-rose-600",
+    dotClass: "bg-rose-600",
+    textClass: "text-rose-700 dark:text-rose-300 font-semibold",
+  },
+  "Suspendida": {
+    strong: "#7C3AED",
+    rowTint: "#FAF7FF",
+    hoverTint: "#F3EDFE",
+    darkRowTint: "#140c26",
+    darkHoverTint: "#20133c",
+    strongClass: "bg-violet-600 text-white font-bold",
+    barClass: "bg-violet-600",
+    dotClass: "bg-violet-600",
+    textClass: "text-violet-700 dark:text-violet-300 font-semibold",
+  },
+  "Cancelada": {
+    strong: "#52525B",
+    rowTint: "#F8F8FA",
+    hoverTint: "#F0F0F3",
+    darkRowTint: "#111418",
+    darkHoverTint: "#1a1f26",
+    strongClass: "bg-zinc-600 text-white font-bold",
+    barClass: "bg-zinc-600",
+    dotClass: "bg-zinc-600",
+    textClass: "text-zinc-600 dark:text-zinc-300 font-semibold",
+  },
+  "Sin consumo": {
+    strong: "#9333EA",
+    rowTint: "#FAF6FF",
+    hoverTint: "#F3EBFE",
+    darkRowTint: "#160c26",
+    darkHoverTint: "#23133c",
+    strongClass: "bg-purple-600 text-white font-bold",
+    barClass: "bg-purple-600",
+    dotClass: "bg-purple-600",
+    textClass: "text-purple-700 dark:text-purple-300 font-semibold",
+  },
+  "Sin fecha": {
+    strong: "#64748B",
+    rowTint: "#F8FAFC",
+    hoverTint: "#F1F5F9",
+    darkRowTint: "#0d131d",
+    darkHoverTint: "#151e2e",
+    strongClass: "bg-slate-500 text-white font-bold",
+    barClass: "bg-slate-500",
+    dotClass: "bg-slate-500",
+    textClass: "text-slate-600 dark:text-slate-300 font-medium",
+  },
+}
+
+export const DEFAULT_CX_STATE_VISUAL: CxStateVisual = {
+  strong: "#64748B",
+  rowTint: "#F8FAFC",
+  hoverTint: "#F1F5F9",
+  darkRowTint: "#0d131d",
+  darkHoverTint: "#151e2e",
+  strongClass: "bg-slate-500 text-white font-bold",
+  barClass: "bg-slate-500",
+  dotClass: "bg-slate-500",
+  textClass: "text-slate-600 dark:text-slate-300 font-medium",
+}
+
+export interface CxFullTableRowColor {
+  strongBg: string
+  rowBg: string
+  rowHoverBg: string
+  stickyBg: string
+  stickyHoverBg: string
+}
+
+export const DEFAULT_FULL_TABLE_ROW_COLORS: CxFullTableRowColor = {
+  strongBg: DEFAULT_CX_STATE_VISUAL.strongClass,
+  rowBg: DEFAULT_CX_STATE_VISUAL.rowTint,
+  rowHoverBg: DEFAULT_CX_STATE_VISUAL.hoverTint,
+  stickyBg: DEFAULT_CX_STATE_VISUAL.rowTint,
+  stickyHoverBg: DEFAULT_CX_STATE_VISUAL.hoverTint,
+}
+
+export const CX_FULL_TABLE_ROW_COLORS: Record<string, CxFullTableRowColor> = Object.fromEntries(
+  Object.entries(CX_STATE_VISUALS).map(([k, v]) => [
+    k,
+    {
+      strongBg: v.strongClass,
+      rowBg: v.rowTint,
+      rowHoverBg: v.hoverTint,
+      stickyBg: v.rowTint,
+      stickyHoverBg: v.hoverTint,
+    },
+  ])
+)
+
+export const CX_STATE_VARIANTS_CONFIG: Record<string, CxStatusStyle> = Object.fromEntries(
+  Object.entries(CX_STATE_VISUALS).map(([k, v]) => [
+    k,
+    {
+      barColor: v.barClass,
+      cellBg: v.strongClass,
+      dotColor: v.dotClass,
+      textColor: v.textClass,
+    },
+  ])
+)
+
 /** Preparación subestado cell colors — softer, subordinated to Estado CX */
 export const PREP_STATE_CELL_COLORS: Record<PreparationState, string> = {
-  "Sin preparar": "bg-gray-50 text-gray-500 border border-gray-200",
-  "En preparación": "bg-cyan-50 text-cyan-700 border border-cyan-200",
-  "Congelado": "bg-amber-50 text-amber-600 border border-amber-200",
-  "Congelado con faltantes": "bg-orange-50 text-orange-600 border border-orange-200",
-  "Enviado": "bg-blue-50 text-blue-700 border border-blue-200",
-  "Entregado": "bg-teal-50 text-teal-600 border border-teal-200",
-  "Retirado": "bg-slate-50 text-slate-500 border border-slate-200",
+  "Sin preparar": "bg-white/80 text-slate-600 border border-slate-200/90 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-800",
+  "En preparación": "bg-cyan-50/90 text-cyan-800 border border-cyan-200/80 dark:bg-cyan-950/60 dark:text-cyan-300 dark:border-cyan-800/60",
+  "Congelado": "bg-amber-50/90 text-amber-800 border border-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60",
+  "Congelado con faltantes": "bg-orange-50/90 text-orange-800 border border-orange-200/80 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800/60",
+  "Enviado": "bg-blue-50/90 text-blue-800 border border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60",
+  "Entregado": "bg-teal-50/90 text-teal-800 border border-teal-200/80 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800/60",
+  "Retirado": "bg-slate-50/90 text-slate-600 border border-slate-200/80 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-800/60",
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -153,38 +349,82 @@ export const EXPEDIENTE_MORE_TABS: readonly { value: ExpTab; label: string; icon
 // COORDINADOR_CX_OPTIONS — now in shared-constants.ts (re-exported above)
 
 export const CIRUGIAS_COLUMNS = [
-  { key: "state", label: "Estado CX" },                        // Protagonist status
+  { key: "id", label: "ID CX" },                              // Master identifier (Sticky 1)
+  { key: "state", label: "Estado CX" },                        // Protagonist status (Sticky 2)
+  { key: "patient", label: "Paciente" },                       // Primary patient anchor (Sticky 3)
+  { key: "clientOs", label: "Cliente / OS" },
+  { key: "institution", label: "Institución" },
+  { key: "surgeon", label: "Médico" },
+  { key: "classification", label: "Clasificación" },
+  { key: "preparationState", label: "Preparación" },           // Subestado
   { key: "date", label: "Fecha CX" },
+  { key: "time", label: "Hora" },
+  { key: "fechaEnvio", label: "Fecha envío" },
+  { key: "prNumber", label: "Remito" },                        // Remito / PR
+  { key: "expedienteNumber", label: "Expediente" },             // Associated document
+  { key: "doc", label: "Doc" },                                 // Indicador documental
+  { key: "consumo", label: "Consumo" },                          // Indicador consumo
+  { key: "facturado", label: "Fact" },                           // Indicador facturación
   { key: "probableDate", label: "Fecha probable" },
   { key: "fechaLogistica", label: "Fecha logística" },
-  { key: "fechaEnvio", label: "Fecha envío" },
-  { key: "patient", label: "Paciente" },
-  { key: "surgeon", label: "Médico" },
-  { key: "institution", label: "Institución" },
-  { key: "id", label: "ID CX" },                              // Master identifier
-  { key: "prNumber", label: "PR Nº" },                         // Associated document
-  { key: "expedienteNumber", label: "Expediente" },             // Associated document
-  { key: "preparationState", label: "Preparación" },           // Subestado
-  { key: "doc", label: "Doc" },                                 // Neutral indicator
-  { key: "consumo", label: "Consumo" },                          // Neutral indicator
-  { key: "facturado", label: "Fact" },                           // Neutral indicator
   { key: "circuitProgress", label: "Circuito" },
-  { key: "clientOs", label: "Cliente / OS" },
   { key: "coordinadorCx", label: "Coordinador" },
-  { key: "classification", label: "Clasificación" },
   { key: "urgente", label: "Urgente" },
   { key: "vendedor", label: "Vendedor" },
   { key: "instrumentador", label: "Instrumentador" },
   { key: "provincia", label: "Provincia" },
-  { key: "actions", label: "Acciones" },
+  { key: "actions", label: "Acciones" },                       // Primary contextual action (Sticky right)
 ] as const
+
+/** 15 Columnas Operativas — Preajuste optimizado para flujo diario de alta densidad */
+export const PRESET_COLUMNS_15_OPS: string[] = [
+  "id",
+  "state",
+  "patient",
+  "clientOs",
+  "institution",
+  "surgeon",
+  "classification",
+  "preparationState",
+  "date",
+  "time",
+  "fechaEnvio",
+  "prNumber",
+  "actions",
+]
+
+/** 22 Columnas Extremo — Preajuste completo para auditoría y trazabilidad exhaustiva */
+export const PRESET_COLUMNS_22_EXTREMO: string[] = [
+  "id",
+  "state",
+  "patient",
+  "clientOs",
+  "institution",
+  "surgeon",
+  "classification",
+  "preparationState",
+  "date",
+  "time",
+  "probableDate",
+  "fechaLogistica",
+  "fechaEnvio",
+  "prNumber",
+  "expedienteNumber",
+  "doc",
+  "consumo",
+  "facturado",
+  "circuitProgress",
+  "coordinadorCx",
+  "urgente",
+  "actions",
+]
 
 export const CIRUGIAS_COLUMN_GROUPS = [
   {
     key: "identificacion",
     label: "Identificación",
     className: "bg-slate-100 text-slate-700",
-    columns: ["state", "patient", "surgeon", "institution", "id", "prNumber", "expedienteNumber", "classification", "urgente"],
+    columns: ["id", "state", "patient", "institution", "clientOs", "surgeon", "classification", "urgente"],
   },
   {
     key: "fechas",
@@ -202,57 +442,75 @@ export const CIRUGIAS_COLUMN_GROUPS = [
     key: "doc-comercial",
     label: "Doc / Comercial",
     className: "bg-emerald-50 text-emerald-700",
-    columns: ["clientOs", "doc", "consumo", "facturado", "actions"],
+    columns: ["prNumber", "expedienteNumber", "doc", "consumo", "facturado", "actions"],
   },
 ] as const
 
 export const DEFAULT_VISIBLE_COLS: Record<string, boolean> = {
-  id: true, prNumber: true, expedienteNumber: true, state: true, date: true, probableDate: true, fechaLogistica: true, fechaEnvio: true,
-  patient: true, surgeon: true, institution: true, coordinadorCx: false, clientOs: true,
-  classification: true, urgente: true, provincia: false, vendedor: false,
-  instrumentador: false, preparationState: true, doc: true,
-  consumo: true, facturado: true, circuitProgress: true, actions: true,
+  id: true, state: true, patient: true, clientOs: true, institution: true,
+  surgeon: true, classification: true, preparationState: true, date: true, time: true,
+  fechaEnvio: false, prNumber: true, actions: true, expedienteNumber: true,
+  doc: true, consumo: true, facturado: true, probableDate: false, fechaLogistica: false,
+  circuitProgress: true, coordinadorCx: false, urgente: false, provincia: false, vendedor: false,
+  instrumentador: false,
 }
 
 export const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
-  state: 120,
-  date: 132,
-  probableDate: 132,
-  fechaLogistica: 124,
-  fechaEnvio: 124,
-  patient: 150,
-  surgeon: 140,
-  institution: 148,
-  id: 75,
-  prNumber: 75,
-  expedienteNumber: 90,
-  preparationState: 134,
-  doc: 96,
-  consumo: 96,
-  facturado: 96,
-  circuitProgress: 148,
-  clientOs: 148,
-  coordinadorCx: 148,
-  classification: 148,
-  urgente: 96,
-  vendedor: 148,
-  instrumentador: 148,
-  provincia: 148,
-  actions: 96,
+  id: 88,
+  state: 115,
+  patient: 170,
+  clientOs: 135,
+  institution: 135,
+  surgeon: 125,
+  classification: 130,
+  preparationState: 115,
+  date: 105,
+  time: 68,
+  fechaEnvio: 105,
+  prNumber: 90,
+  expedienteNumber: 85,
+  doc: 70,
+  consumo: 75,
+  facturado: 70,
+  probableDate: 110,
+  fechaLogistica: 110,
+  circuitProgress: 125,
+  coordinadorCx: 115,
+  urgente: 70,
+  vendedor: 115,
+  instrumentador: 115,
+  provincia: 110,
+  actions: 105,
 }
 
 export const PINNABLE_LEFT_COLUMN_KEYS = [
-  "state",
-  "date",
-  "patient",
-  "surgeon",
-  "institution",
   "id",
+  "state",
+  "patient",
+  "clientOs",
+  "institution",
+  "surgeon",
+  "classification",
+  "preparationState",
+  "date",
+  "time",
+  "probableDate",
+  "fechaLogistica",
+  "fechaEnvio",
   "prNumber",
   "expedienteNumber",
+  "doc",
+  "consumo",
+  "facturado",
+  "circuitProgress",
+  "coordinadorCx",
+  "urgente",
+  "provincia",
+  "vendedor",
+  "instrumentador",
 ] as const
 
-export const DEFAULT_FIXED_LEFT_COLUMNS = ["state", "date", "patient"] as const
+export const DEFAULT_FIXED_LEFT_COLUMNS = ["id", "state", "patient"] as const
 
 /** Columns that should not be sortable */
 export const NON_SORTABLE_KEYS = ["actions", "doc", "facturado", "consumo", "coordinadorCx", "circuitProgress", "probableDate", "fechaLogistica", "fechaEnvio"]

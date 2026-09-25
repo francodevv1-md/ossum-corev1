@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/tooltip"
 import {
   Eye, Receipt, Truck, Activity, MoreHorizontal,
-  StickyNote, ArrowUpDown, CalendarDays, Ban, XCircle, RotateCcw, Trash2, PlayCircle, Loader2,
+  StickyNote, ArrowUpDown, CalendarDays, Ban, XCircle, RotateCcw, Trash2, PlayCircle, Loader2, CheckCircle2,
 } from "lucide-react"
 import {
   canRemitirNR,
@@ -58,53 +58,73 @@ interface CirugiaActionsCellProps {
   canFacturar: (s: Surgery) => { allowed: boolean; reason?: string }
   tdClassName?: string
   tdStyle?: CSSProperties
+  asCell?: boolean
 }
 
 // ═══════════════════════════════════════════════════════════════
 // Business rule helpers for primary action determination
 // ═══════════════════════════════════════════════════════════════
 
-type PrimaryAction = "crear_pr" | "remitir_nr" | "cargar_consumo" | "facturar" | "ver_expediente"
+type PrimaryAction = "autorizar" | "crear_pr" | "despacho" | "cargar" | "facturar" | "ver" | "reanudar" | "expediente"
 
 /**
  * Determine the most relevant next step based on the surgery's current state.
- * Priority chain:
- *   1. No PR → "Crear PR"
- *   2. Has PR, can remit → "Remitir NR"
- *   3. Has remito / authorized, can load consumption → "Cargar consumo"
- *   4. Can invoice → "Facturar"
- *   5. Otherwise → "Ver expediente"
- *
- * Uses business rules from businessRules.ts to avoid contradicting
- * the surgery's actual state.
  */
 function determinePrimaryAction(
   surgery: Surgery,
   prId: string | undefined,
   canFacturarResult: { allowed: boolean; reason?: string },
 ): PrimaryAction {
-  // 1. No PR → Create PR
-  if (!prId && !surgery.prNumber && !surgery.presupuestoId) {
+  // 1. Sin autorizar
+  if (surgery.state === "Sin autorizar" || !surgery.autorizado) {
+    return "autorizar"
+  }
+
+  // 2. Suspendida / Cancelada
+  if (surgery.state === "Suspendida") {
+    return "reanudar"
+  }
+  if (surgery.state === "Cancelada") {
+    return "expediente"
+  }
+
+  // 3. En tránsito -> Despacho
+  if (surgery.state === "En tránsito") {
+    return "despacho"
+  }
+
+  // 4. Sin consumo -> Cargar
+  if (surgery.state === "Sin consumo") {
+    return "cargar"
+  }
+
+  // 5. Realizada / Finalizada -> Ver
+  if (surgery.state === "Realizada" || surgery.state === "Finalizada") {
+    return "ver"
+  }
+
+  // 6. Pendiente / Sin PR -> Crear PR
+  if (surgery.state === "Pendiente" || (!prId && !surgery.prNumber && !surgery.presupuestoId)) {
     return "crear_pr"
   }
 
-  // 2. Can remit NR
+  // 7. Puede remitir -> Despacho
   if (canRemitirNR(surgery).allowed) {
-    return "remitir_nr"
+    return "despacho"
   }
 
-  // 3. Can load consumption
+  // 8. Puede cargar consumo -> Cargar
   if (canCargarConsumo(surgery).allowed) {
-    return "cargar_consumo"
+    return "cargar"
   }
 
-  // 4. Can invoice
+  // 9. Puede facturar -> Facturar
   if (canFacturarResult.allowed) {
     return "facturar"
   }
 
-  // 5. Default: View expediente
-  return "ver_expediente"
+  // 10. Default: Ver
+  return "ver"
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -167,7 +187,7 @@ export function CirugiaActionsCell({
   onSetNewState, onSetChangeStateDialogOpen, onSetChangeDateDialogOpen,
   onSetSuspendDialogOpen, onSetCancelDialogOpen, onSetNoteDialogOpen,
   onSetFacturarDialogOpen, onRecover, canFacturar,
-  tdClassName, tdStyle,
+  tdClassName, tdStyle, asCell = true,
 }: CirugiaActionsCellProps) {
   const s = surgery
   const { activeCompany } = useAuth()
@@ -200,7 +220,7 @@ export function CirugiaActionsCell({
     : !s.backendId || !activeCompany?.id
       ? "La cirugía no tiene contexto server-side disponible."
       : undefined
-  const primaryButtonClassName = "h-7 shrink-0 gap-1 border-slate-300/80 bg-white/90 text-[10px] text-slate-700 shadow-sm hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-100 dark:hover:bg-slate-800 dark:hover:text-white"
+  const primaryButtonClassName = "h-6 px-2 text-[11px] font-medium border border-slate-300/90 bg-white hover:bg-slate-50 text-slate-800 shadow-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
   const openDeletePreview = () => {
     onSetDialogSurgery(s)
     window.dispatchEvent(new CustomEvent("ossum:open-delete-surgery-dialog", { detail: { surgery: s } }))
@@ -224,41 +244,56 @@ export function CirugiaActionsCell({
     }
   }
 
-  return (
-    <td className={cn("px-2 py-1.5", tdClassName)} style={tdStyle} onClick={(e) => e.stopPropagation()}>
-      <div className="flex items-center gap-1 rounded-md border border-transparent pr-0.5 dark:border-slate-800/60 dark:bg-slate-950/55">
+  const renderInner = () => (
+    <>
+      <div className="flex items-center gap-1">
         {/* ── Contextual primary action ── */}
+        {primaryAction === "autorizar" && (
+          <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => { onOpenExpediente(s.id); onSetExpTab("ficha") }}>
+            Autorizar
+          </Button>
+        )}
         {primaryAction === "crear_pr" && (
           <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => onOpenPresupuestoDialog(s)}>
-            <Receipt className="size-3" /> Crear PR
+            Crear PR
           </Button>
         )}
-        {primaryAction === "remitir_nr" && (
+        {primaryAction === "despacho" && (
           <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => { onOpenExpediente(s.id); onSetExpTab("remitos") }}>
-            <Truck className="size-3" /> Remitir NR
+            Despacho
           </Button>
         )}
-        {primaryAction === "cargar_consumo" && (
+        {primaryAction === "cargar" && (
           <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => { onOpenExpediente(s.id); onSetExpTab("consumo") }}>
-            <Activity className="size-3" /> Cargar consumo
+            Cargar
           </Button>
         )}
         {primaryAction === "facturar" && (
           <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => { onSetDialogSurgery(s); onSetFacturarDialogOpen(true) }}>
-            <Receipt className="size-3" /> Facturar
+            Facturar
           </Button>
         )}
-        {primaryAction === "ver_expediente" && (
+        {primaryAction === "reanudar" && (
+          <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => onRecover(s)}>
+            Reanudar
+          </Button>
+        )}
+        {primaryAction === "expediente" && (
           <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => onOpenExpediente(s.id)}>
-            <Eye className="size-3" /> Ver expediente
+            Expediente
+          </Button>
+        )}
+        {primaryAction === "ver" && (
+          <Button variant="outline" size="sm" className={primaryButtonClassName} onClick={() => onOpenExpediente(s.id)}>
+            Ver
           </Button>
         )}
 
         {/* ── More actions dropdown ── */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 w-7 border border-slate-200/80 bg-white/80 p-0 text-slate-600 shadow-sm hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
-              <MoreHorizontal className="size-3.5" />
+            <Button variant="outline" size="sm" className="h-6 w-6 p-0 border border-slate-300/90 bg-white hover:bg-slate-50 text-slate-600 shadow-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800">
+              <MoreHorizontal className="size-3" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60 border-slate-200/80 bg-white/95 shadow-xl backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95">
@@ -407,6 +442,20 @@ export function CirugiaActionsCell({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </td>
+    </>
+  )
+
+  if (!asCell) {
+    return (
+      <div className={cn("flex items-center", tdClassName)} style={tdStyle} onClick={(e) => e.stopPropagation()}>
+        {renderInner()}
+      </div>
+    )
+  }
+
+  return (
+    <td className={cn("px-2 py-1", tdClassName)} style={tdStyle} onClick={(e) => e.stopPropagation()}>
+      {renderInner()}
+    </td>
   )
 }

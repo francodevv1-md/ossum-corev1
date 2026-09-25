@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils"
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react"
 import { CirugiaRow } from "./CirugiaRow"
 import { CirugiasEmptyState } from "./CirugiasEmptyState"
-import { CIRUGIAS_COLUMNS, CIRUGIAS_COLUMN_GROUPS, DEFAULT_COLUMN_WIDTHS, NON_SORTABLE_KEYS, TABLE_COLUMN_HEADER_BASE, TABLE_COLUMN_HEADER_COMPACT, TABLE_GROUP_HEADER_BASE, TABLE_GROUP_HEADER_COMPACT } from "@/lib/cirugias.constants"
+import { SurgeryPaginationFooter } from "./SurgeryPaginationFooter"
+import { CIRUGIAS_COLUMNS, CIRUGIAS_COLUMN_GROUPS, DEFAULT_COLUMN_WIDTHS, NON_SORTABLE_KEYS, TABLE_COLUMN_HEADER_BASE, TABLE_COLUMN_HEADER_COMPACT, TABLE_GROUP_HEADER_BASE, TABLE_GROUP_HEADER_COMPACT, type CxStatusVariant } from "@/lib/cirugias.constants"
 import type { GroupedHeaderPreference } from "@/hooks/useColumnVisibility"
 import type { CircuitStage } from "@/lib/circuit-progress"
 import type { Surgery, SurgeryState } from "@/types"
@@ -57,6 +58,7 @@ interface CirugiasTableProps {
   circuitProgressMap?: Record<string, CircuitStage[]>
   coordinatorCaseMap?: Record<string, CoordinatorCase | null>
   closureSignalsMap?: Record<string, CxOperationsClosureSignals>
+  cxVariant?: CxStatusVariant
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -97,6 +99,25 @@ export function CirugiasTable(props: CirugiasTableProps) {
   }, [props.visibleCols, props.columnOrder])
   const scrollRef = useRef<HTMLDivElement>(null)
   const [scrollState, setScrollState] = useState({ canLeft: false, canRight: false })
+
+  // ── Pagination State ──
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+
+  const isAll = pageSize === 0 || pageSize >= props.data.length
+  const totalPages = isAll || props.data.length === 0 ? 1 : Math.ceil(props.data.length / pageSize)
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [currentPage, totalPages])
+
+  const paginatedData = useMemo(() => {
+    if (pageSize === 0 || pageSize >= props.data.length) return props.data
+    const start = (currentPage - 1) * pageSize
+    return props.data.slice(start, start + pageSize)
+  }, [props.data, currentPage, pageSize])
 
   const visibleGroupHeaders = useMemo(() => {
     return (props.groups?.length ? props.groups : defaultGroups)
@@ -175,22 +196,23 @@ export function CirugiasTable(props: CirugiasTableProps) {
   const hasHorizontalScroll = scrollState.canLeft || scrollState.canRight
 
   return (
-    <div className="relative h-full min-h-0">
-      {/* ── Left shadow indicator ── */}
-      {scrollState.canLeft && (
-        <div className="absolute left-0 top-0 bottom-0 z-20 w-10 pointer-events-none bg-gradient-to-r from-slate-900/10 via-slate-700/5 to-transparent dark:from-slate-950/70 dark:via-slate-900/35" />
-      )}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="relative min-h-0 flex-1">
+        {/* ── Left shadow indicator ── */}
+        {scrollState.canLeft && (
+          <div className="absolute left-0 top-0 bottom-0 z-20 w-10 pointer-events-none bg-gradient-to-r from-slate-900/10 via-slate-700/5 to-transparent dark:from-slate-950/70 dark:via-slate-900/35" />
+        )}
 
-      {/* ── Right shadow indicator ── */}
-      {scrollState.canRight && (
-        <div className="absolute right-0 top-0 bottom-0 z-20 w-10 pointer-events-none bg-gradient-to-l from-slate-900/10 via-slate-700/5 to-transparent dark:from-slate-950/70 dark:via-slate-900/35" />
-      )}
+        {/* ── Right shadow indicator ── */}
+        {scrollState.canRight && (
+          <div className="absolute right-0 top-0 bottom-0 z-20 w-10 pointer-events-none bg-gradient-to-l from-slate-900/10 via-slate-700/5 to-transparent dark:from-slate-950/70 dark:via-slate-900/35" />
+        )}
 
-      {/* ── Scroll container ── */}
-      <div
-        ref={scrollRef}
-        className="h-full overflow-auto rounded-md border border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] [scrollbar-color:rgba(100,116,139,0.45)_transparent] [scrollbar-width:thin] dark:border-slate-800/90 dark:bg-slate-950/95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] dark:[scrollbar-color:rgba(148,163,184,0.35)_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400/45 hover:[&::-webkit-scrollbar-thumb]:bg-slate-500/55 dark:[&::-webkit-scrollbar-thumb]:bg-slate-600/50 dark:hover:[&::-webkit-scrollbar-thumb]:bg-slate-500/65"
-      >
+        {/* ── Scroll container ── */}
+        <div
+          ref={scrollRef}
+          className="h-full overflow-auto rounded-t-md border border-b-0 border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] [scrollbar-color:rgba(100,116,139,0.45)_transparent] [scrollbar-width:thin] dark:border-slate-800/90 dark:bg-slate-950/95 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] dark:[scrollbar-color:rgba(148,163,184,0.35)_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400/45 hover:[&::-webkit-scrollbar-thumb]:bg-slate-500/55 dark:[&::-webkit-scrollbar-thumb]:bg-slate-600/50 dark:hover:[&::-webkit-scrollbar-thumb]:bg-slate-500/65"
+        >
         <table className="w-full border-collapse text-sm [&_tbody_tr:nth-child(even)]:bg-slate-50/35 dark:[&_tbody_tr:nth-child(even)]:bg-slate-900/30">
           <colgroup>
             {columns.map((col) => (
@@ -198,7 +220,7 @@ export function CirugiasTable(props: CirugiasTableProps) {
             ))}
           </colgroup>
           <thead className="sticky top-0 z-10">
-             {props.showGroupedHeaders !== false && visibleGroupHeaders.length > 0 && (
+             {props.showGroupedHeaders === true && visibleGroupHeaders.length > 0 && (
                 <tr className="border-b border-slate-300/90 bg-slate-100/95 text-slate-700 shadow-[inset_0_-1px_0_rgba(148,163,184,0.45)] backdrop-blur-sm dark:border-slate-700/90 dark:bg-slate-900/95 dark:text-slate-200 dark:shadow-[inset_0_-1px_0_rgba(30,41,59,0.85)]">
                  {visibleGroupHeaders.map((group) => (
                    <th
@@ -214,7 +236,7 @@ export function CirugiasTable(props: CirugiasTableProps) {
                  ))}
                </tr>
              )}
-             <tr className="border-b border-slate-300/90 bg-slate-50/95 text-slate-700 shadow-[0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-sm dark:border-slate-700/90 dark:bg-slate-900/95 dark:text-slate-100 dark:shadow-[0_1px_0_rgba(15,23,42,0.95)]">
+             <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC] text-slate-600 shadow-[0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
               {columns.map((col) => {
                 const isStickyLeft = props.stickyColumns && pinnedLeftKeys.includes(col.key)
                 const isStickyRight = props.stickyColumns && col.key === "actions"
@@ -225,15 +247,15 @@ export function CirugiasTable(props: CirugiasTableProps) {
                     key={col.key}
                     className={cn(
                        props.compactMode ? TABLE_COLUMN_HEADER_COMPACT : TABLE_COLUMN_HEADER_BASE,
-                        !NON_SORTABLE_KEYS.includes(col.key) && "cursor-pointer select-none hover:bg-slate-100/90 dark:hover:bg-slate-800/90",
+                        !NON_SORTABLE_KEYS.includes(col.key) && "cursor-pointer select-none hover:bg-slate-200/60 dark:hover:bg-slate-800/90",
                        // Sticky left styles
-                         isStickyLeft && "sticky z-20 bg-slate-50 dark:bg-slate-900",
+                         isStickyLeft && "sticky z-20 bg-[#F8FAFC] dark:bg-slate-900",
                        // Sticky right styles
-                       isStickyRight && "sticky right-0 z-20 bg-slate-50 dark:bg-slate-900",
-                       // Shadow on last left-sticky column
-                       isLastLeft && "shadow-[2px_0_6px_rgba(15,23,42,0.08)] dark:shadow-[2px_0_8px_rgba(2,6,23,0.65)]",
+                       isStickyRight && "sticky right-0 z-20 bg-[#F8FAFC] dark:bg-slate-900",
+                       // Shadow on last left-sticky column (separación con cuerpo de tabla)
+                       isLastLeft && "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_8px_rgba(2,6,23,0.65)]",
                        // Shadow on right-sticky column
-                       isStickyRight && "shadow-[-2px_0_6px_rgba(15,23,42,0.08)] dark:shadow-[-2px_0_8px_rgba(2,6,23,0.65)]",
+                       isStickyRight && "shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[-3px_0_8px_rgba(2,6,23,0.65)]",
                      )}
                     style={{
                       width: resolvedColumnWidths[col.key],
@@ -252,7 +274,7 @@ export function CirugiasTable(props: CirugiasTableProps) {
             </tr>
           </thead>
           <tbody>
-            {props.data.map((s, idx) => (
+            {paginatedData.map((s, idx) => (
               <CirugiaRow
                 key={s.id}
                 surgery={s}
@@ -286,6 +308,7 @@ export function CirugiasTable(props: CirugiasTableProps) {
                 rowIndex={idx}
                 coordinatorCase={props.coordinatorCaseMap?.[s.id] ?? null}
                 closureSignals={props.closureSignalsMap?.[s.id]}
+                cxVariant={props.cxVariant ?? "b"}
               />
             ))}
             {props.data.length === 0 && (
@@ -299,37 +322,50 @@ export function CirugiasTable(props: CirugiasTableProps) {
         </table>
       </div>
 
-      {/* ── Horizontal scroll buttons (floating, bottom-center) ── */}
-      {hasHorizontalScroll && (
-        <div className="absolute bottom-2.5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-sm border border-slate-300/90 bg-white/85 px-1 py-1 shadow-sm backdrop-blur-sm dark:border-slate-700/90 dark:bg-slate-900/90 dark:shadow-[0_8px_24px_rgba(2,6,23,0.35)]">
-          <button
-            onClick={() => scrollBy("left")}
-            disabled={!scrollState.canLeft}
-            className={cn(
-                "flex size-7 items-center justify-center rounded-sm border border-slate-300 bg-white/95 text-slate-700 backdrop-blur-sm shadow-sm transition-all dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200",
-               scrollState.canLeft
-                 ? "cursor-pointer opacity-90 hover:bg-background dark:hover:bg-slate-800"
-                 : "opacity-0 pointer-events-none"
-            )}
-            aria-label="Desplazar tabla a la izquierda"
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-          <button
-            onClick={() => scrollBy("right")}
-            disabled={!scrollState.canRight}
-            className={cn(
-                "flex size-7 items-center justify-center rounded-sm border border-slate-300 bg-white/95 text-slate-700 backdrop-blur-sm shadow-sm transition-all dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200",
-               scrollState.canRight
-                 ? "cursor-pointer opacity-90 hover:bg-background dark:hover:bg-slate-800"
-                 : "opacity-0 pointer-events-none"
-            )}
-            aria-label="Desplazar tabla a la derecha"
-          >
-            <ChevronRight className="size-4" />
-          </button>
-        </div>
-      )}
+        {/* ── Horizontal scroll buttons (floating, bottom-center) ── */}
+        {hasHorizontalScroll && (
+          <div className="absolute bottom-2.5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-sm border border-slate-300/90 bg-white/85 px-1 py-1 shadow-sm backdrop-blur-sm dark:border-slate-700/90 dark:bg-slate-900/90 dark:shadow-[0_8px_24px_rgba(2,6,23,0.35)]">
+            <button
+              onClick={() => scrollBy("left")}
+              disabled={!scrollState.canLeft}
+              className={cn(
+                  "flex size-7 items-center justify-center rounded-sm border border-slate-300 bg-white/95 text-slate-700 backdrop-blur-sm shadow-sm transition-all dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200",
+                 scrollState.canLeft
+                   ? "cursor-pointer opacity-90 hover:bg-background dark:hover:bg-slate-800"
+                   : "opacity-0 pointer-events-none"
+              )}
+              aria-label="Desplazar tabla a la izquierda"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <button
+              onClick={() => scrollBy("right")}
+              disabled={!scrollState.canRight}
+              className={cn(
+                  "flex size-7 items-center justify-center rounded-sm border border-slate-300 bg-white/95 text-slate-700 backdrop-blur-sm shadow-sm transition-all dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200",
+                 scrollState.canRight
+                   ? "cursor-pointer opacity-90 hover:bg-background dark:hover:bg-slate-800"
+                   : "opacity-0 pointer-events-none"
+              )}
+              aria-label="Desplazar tabla a la derecha"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Paginación Integrada en Footer ── */}
+      <SurgeryPaginationFooter
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalResults={props.data.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(newSize) => {
+          setPageSize(newSize)
+          setCurrentPage(1)
+        }}
+      />
     </div>
   )
 }

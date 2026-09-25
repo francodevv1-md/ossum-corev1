@@ -14,6 +14,9 @@ import {
   DEFAULT_COLUMN_WIDTHS,
   DEFAULT_FIXED_LEFT_COLUMNS,
   PINNABLE_LEFT_COLUMN_KEYS,
+  PRESET_COLUMNS_15_OPS,
+  PRESET_COLUMNS_22_EXTREMO,
+  type CxStatusVariant,
 } from "@/lib/cirugias.constants"
 
 const STICKY_COLS_KEY = "ortotrack-sticky-columns"
@@ -26,6 +29,8 @@ const COMPACT_MODE_KEY = "ortotrack-compact-mode"
 const COMPACT_MODE_EVENT = "ortotrack-compact-mode-change"
 const COLUMN_GROUPS_KEY = "ortotrack-column-groups"
 const SHOW_GROUPED_HEADERS_KEY = "ortotrack-show-grouped-headers"
+const CX_VARIANT_KEY = "ortotrack-cx-variant"
+const CX_VARIANT_EVENT = "ortotrack-cx-variant-change"
 const SERVER_MIGRATION_KEY_PREFIX = "ortotrack-surgeries-view-preferences-server-migrated"
 const SERVER_PREFERENCES_DEFER_MS = 1400
 
@@ -38,6 +43,7 @@ const LEGACY_PREFERENCE_KEYS = [
   COMPACT_MODE_KEY,
   COLUMN_GROUPS_KEY,
   SHOW_GROUPED_HEADERS_KEY,
+  CX_VARIANT_KEY,
 ] as const
 
 const GROUP_COLOR_OPTIONS = [
@@ -65,6 +71,7 @@ export type SurgeryViewPreferences = {
   fixedLeftColumns: string[]
   columnGroups: GroupedHeaderPreference[]
   showGroupedHeaders: boolean
+  cxVariant: CxStatusVariant
 }
 
 type SurgeryViewPreferenceEnvelope = {
@@ -155,7 +162,11 @@ function normalizeColumnOrder(order: unknown): string[] {
     .filter((entry, index, self) => self.indexOf(entry) === index)
 
   const missing = DEFAULT_COLUMN_ORDER.filter((key) => !normalized.includes(key))
-  return [...normalized, ...missing]
+  const combined = [...normalized, ...missing]
+  if (combined.includes("actions")) {
+    return [...combined.filter((k) => k !== "actions"), "actions"]
+  }
+  return combined
 }
 
 function normalizeColumnWidths(value: unknown): Record<string, number> {
@@ -202,7 +213,8 @@ function normalizePreferences(value: Partial<SurgeryViewPreferences> | unknown):
     compactMode: record.compactMode === true,
     fixedLeftColumns: normalizeFixedLeftColumns(record.fixedLeftColumns),
     columnGroups: normalizeColumnGroups(record.columnGroups),
-    showGroupedHeaders: typeof record.showGroupedHeaders === "boolean" ? record.showGroupedHeaders : true,
+    showGroupedHeaders: typeof record.showGroupedHeaders === "boolean" ? record.showGroupedHeaders : false,
+    cxVariant: (record.cxVariant === "a" || record.cxVariant === "b" || record.cxVariant === "c" || record.cxVariant === "d") ? record.cxVariant : "b",
   }
 }
 
@@ -379,6 +391,31 @@ function saveFixedLeftColumns(value: string[]) {
   emitFixedLeftColumnsChange(normalized)
 }
 
+function loadCxVariant(): CxStatusVariant {
+  if (typeof window === "undefined") return "b"
+  try {
+    const val = localStorage.getItem(CX_VARIANT_KEY)
+    if (val === "a" || val === "b" || val === "c" || val === "d") return val
+    return "b"
+  } catch {
+    return "b"
+  }
+}
+
+function emitCxVariantChange(value: CxStatusVariant) {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent(CX_VARIANT_EVENT, { detail: value }))
+}
+
+function saveCxVariant(value: CxStatusVariant) {
+  try {
+    localStorage.setItem(CX_VARIANT_KEY, value)
+  } catch {
+    // Silently fail
+  }
+  emitCxVariantChange(value)
+}
+
 function loadPreferencesFromLocalStorage(): SurgeryViewPreferences {
   return normalizePreferences({
     visibleCols: loadVisibleCols(),
@@ -389,6 +426,7 @@ function loadPreferencesFromLocalStorage(): SurgeryViewPreferences {
     fixedLeftColumns: loadFixedLeftColumns(),
     columnGroups: loadColumnGroups(),
     showGroupedHeaders: loadShowGroupedHeaders(),
+    cxVariant: loadCxVariant(),
   })
 }
 
@@ -401,6 +439,7 @@ function persistPreferencesToLocalStorage(preferences: SurgeryViewPreferences) {
   saveFixedLeftColumns(preferences.fixedLeftColumns)
   saveColumnGroups(preferences.columnGroups)
   saveShowGroupedHeaders(preferences.showGroupedHeaders)
+  saveCxVariant(preferences.cxVariant)
 }
 
 function hasLegacyLocalStoragePreferences(): boolean {
@@ -570,6 +609,7 @@ export function useColumnVisibility(options: UseColumnVisibilityOptions = {}) {
   const [fixedLeftColumns, setFixedLeftColumnsInternal] = useState<string[]>([...DEFAULT_FIXED_LEFT_COLUMNS])
   const [columnGroups, setColumnGroupsInternal] = useState<GroupedHeaderPreference[]>(() => cloneColumnGroups(DEFAULT_COLUMN_GROUPS))
   const [showGroupedHeaders, setShowGroupedHeadersInternal] = useState<boolean>(true)
+  const [cxVariant, setCxVariantInternal] = useState<CxStatusVariant>("b")
   const saveSequenceRef = useRef(0)
 
   const applyPreferencesState = useCallback((preferences: SurgeryViewPreferences) => {
@@ -581,6 +621,7 @@ export function useColumnVisibility(options: UseColumnVisibilityOptions = {}) {
     setFixedLeftColumnsInternal(preferences.fixedLeftColumns)
     setColumnGroupsInternal(cloneColumnGroups(preferences.columnGroups))
     setShowGroupedHeadersInternal(preferences.showGroupedHeaders)
+    setCxVariantInternal(preferences.cxVariant)
   }, [])
 
   const persistPreferences = useCallback((preferences: SurgeryViewPreferences) => {
@@ -653,8 +694,9 @@ export function useColumnVisibility(options: UseColumnVisibilityOptions = {}) {
     fixedLeftColumns,
     columnGroups,
     showGroupedHeaders,
+    cxVariant,
     ...patch,
-  }), [visibleCols, columnOrder, stickyColumns, columnWidths, compactMode, fixedLeftColumns, columnGroups, showGroupedHeaders])
+  }), [visibleCols, columnOrder, stickyColumns, columnWidths, compactMode, fixedLeftColumns, columnGroups, showGroupedHeaders, cxVariant])
 
   const applyViewPreferences = useCallback((next: SurgeryViewPreferences) => {
     persistPreferences(next)
@@ -715,6 +757,19 @@ export function useColumnVisibility(options: UseColumnVisibilityOptions = {}) {
     persistPreferences(buildNextPreferences({ showGroupedHeaders: value }))
   }, [buildNextPreferences, persistPreferences])
 
+  const setCxVariant = useCallback((variant: CxStatusVariant) => {
+    persistPreferences(buildNextPreferences({ cxVariant: variant }))
+  }, [buildNextPreferences, persistPreferences])
+
+  const setColumnsPreset = useCallback((preset: "15-ops" | "22-extremo") => {
+    const targetKeys = preset === "15-ops" ? PRESET_COLUMNS_15_OPS : PRESET_COLUMNS_22_EXTREMO
+    const newVisible: Record<string, boolean> = {}
+    for (const col of CIRUGIAS_COLUMNS) {
+      newVisible[col.key] = targetKeys.includes(col.key)
+    }
+    persistPreferences(buildNextPreferences({ visibleCols: newVisible }))
+  }, [buildNextPreferences, persistPreferences])
+
   const resetToDefault = useCallback(() => {
     persistPreferences(buildDefaultPreferences())
   }, [persistPreferences])
@@ -739,6 +794,9 @@ export function useColumnVisibility(options: UseColumnVisibilityOptions = {}) {
     setColumnGroups,
     showGroupedHeaders,
     setShowGroupedHeadersEnabled,
+    cxVariant,
+    setCxVariant,
+    setColumnsPreset,
     reorderColumns,
     resetToDefault,
     applyViewPreferences,

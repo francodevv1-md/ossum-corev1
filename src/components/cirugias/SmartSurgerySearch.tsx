@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useMemo, useCallback } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Search, X, User, Building2, Hospital, CreditCard, Hash } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -373,27 +374,37 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
             aria-label="Buscar cirugías"
           >
             {/* Existing chips */}
-            {chips.map((chip) => (
-              <Badge
-                key={chip.id}
-                variant="outline"
-                className={cn(
-                   "h-5 shrink-0 gap-0.5 border px-1.5 text-[10px] font-semibold shadow-sm",
-                   FIELD_BADGE_COLORS[chip.field]
-                  )}
-              >
-                {chip.label}
-                <button
-                  className="ml-0.5 hover:opacity-70"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleRemoveChip(chip.id)
-                  }}
+            <AnimatePresence mode="popLayout">
+              {chips.map((chip) => (
+                <motion.div
+                  key={chip.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.15 }}
                 >
-                  <X className="size-2.5" />
-                </button>
-              </Badge>
-            ))}
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "h-5 shrink-0 gap-0.5 border px-1.5 text-[10px] font-semibold shadow-sm",
+                      FIELD_BADGE_COLORS[chip.field]
+                    )}
+                  >
+                    {chip.label}
+                    <button
+                      className="ml-0.5 hover:opacity-70 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRemoveChip(chip.id)
+                      }}
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </Badge>
+                </motion.div>
+              ))}
+            </AnimatePresence>
 
             {/* Search input */}
               <div className="relative min-w-[120px] flex-1">

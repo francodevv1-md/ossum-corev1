@@ -10,11 +10,11 @@ describe("Cirugías date columns", () => {
     expect(CIRUGIAS_COLUMNS.find((column) => column.key === "fechaEnvio")?.label).toBe("Fecha envío")
   })
 
-  it("shows all four date columns by default and keeps only Fecha CX sortable", () => {
+  it("shows primary Fecha CX by default, secondary dates opt-in, and keeps only Fecha CX sortable", () => {
     expect(DEFAULT_VISIBLE_COLS.date).toBe(true)
-    expect(DEFAULT_VISIBLE_COLS.probableDate).toBe(true)
-    expect(DEFAULT_VISIBLE_COLS.fechaLogistica).toBe(true)
-    expect(DEFAULT_VISIBLE_COLS.fechaEnvio).toBe(true)
+    expect(DEFAULT_VISIBLE_COLS.probableDate).toBe(false)
+    expect(DEFAULT_VISIBLE_COLS.fechaLogistica).toBe(false)
+    expect(DEFAULT_VISIBLE_COLS.fechaEnvio).toBe(false)
     expect(NON_SORTABLE_KEYS).toContain("probableDate")
     expect(NON_SORTABLE_KEYS).toContain("fechaLogistica")
     expect(NON_SORTABLE_KEYS).toContain("fechaEnvio")

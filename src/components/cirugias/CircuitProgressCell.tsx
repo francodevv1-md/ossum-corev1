@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils"
 
 interface CircuitProgressCellProps {
   stages: CircuitStage[]
+  cellClassName?: string
+  asCell?: boolean
 }
 
 const STAGE_ORDER: CircuitStage["key"][] = ["cx", "pr", "nr", "consumo", "doc", "fact", "cobro"]
@@ -33,24 +35,30 @@ function Connector({ done }: { done: boolean }) {
   )
 }
 
-export function CircuitProgressCell({ stages }: CircuitProgressCellProps) {
+export function CircuitProgressCell({ stages, cellClassName, asCell = true }: CircuitProgressCellProps) {
   const stageMap = new Map(stages.map((stage) => [stage.key, stage]))
 
-  return (
-    <td className="px-2 py-1.5">
-      <div className="flex h-5 min-w-[120px] items-center gap-0 rounded-md border border-slate-200/70 bg-slate-50/70 px-2 dark:border-slate-800/80 dark:bg-slate-950/80">
-        {STAGE_ORDER.map((key, index) => {
-          const stage = stageMap.get(key)
-          if (!stage) return null
+  const content = (
+    <div className="flex h-5 min-w-[120px] items-center gap-0 rounded-md border border-slate-200/70 bg-slate-50/70 px-2 dark:border-slate-800/80 dark:bg-slate-950/80">
+      {STAGE_ORDER.map((key, index) => {
+        const stage = stageMap.get(key)
+        if (!stage) return null
 
-          return (
-            <Fragment key={key}>
-              <Dot stage={stage} />
-              {index < STAGE_ORDER.length - 1 && <Connector done={stage.done} />}
-            </Fragment>
-          )
-        })}
-      </div>
+        return (
+          <Fragment key={key}>
+            <Dot stage={stage} />
+            {index < STAGE_ORDER.length - 1 && <Connector done={stage.done} />}
+          </Fragment>
+        )
+      })}
+    </div>
+  )
+
+  if (!asCell) return content
+
+  return (
+    <td className={cn("px-2 py-1.5", cellClassName)}>
+      {content}
     </td>
   )
 }

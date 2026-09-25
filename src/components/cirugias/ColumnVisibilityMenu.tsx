@@ -3,7 +3,7 @@ import React, { useState, useRef, useCallback } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
-import { Columns3, Pin, GripVertical, RotateCcw } from "lucide-react"
+import { Columns3, GripVertical, RotateCcw } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
@@ -13,8 +13,8 @@ interface ColumnVisibilityMenuProps {
   columns: ReadonlyArray<{ key: string; label: string }>
   visibleCols: Record<string, boolean>
   toggleColumn: (key: string, checked: boolean) => void
-  stickyColumns: boolean
-  onToggleStickyColumns: () => void
+  stickyColumns?: boolean
+  onToggleStickyColumns?: () => void
   columnOrder: string[]
   onReorderColumns: (fromIndex: number, toIndex: number) => void
   onResetToDefault: () => void
@@ -154,30 +154,6 @@ export function ColumnVisibilityMenu({
               columnCount={allOrderedColumns.length}
             />
           ))}
-        </div>
-
-        <Separator />
-
-        {/* Sticky columns toggle */}
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-            Columnas fijas
-          </span>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox
-              checked={stickyColumns}
-              onCheckedChange={onToggleStickyColumns}
-            />
-            <div className="flex items-center gap-1.5">
-              <Pin className="size-3 text-muted-foreground" />
-              <span className="text-xs">Activar columnas fijas</span>
-            </div>
-          </label>
-          {stickyColumns && (
-            <p className="text-[10px] text-muted-foreground leading-tight pl-5">
-              ID CX, PR Nº, Expediente y Estado CX fijas a la izquierda. Acciones fija a la derecha.
-            </p>
-          )}
         </div>
 
         <Separator />
