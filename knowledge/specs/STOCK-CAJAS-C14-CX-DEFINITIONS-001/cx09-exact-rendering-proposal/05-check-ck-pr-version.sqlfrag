@@ -1,0 +1,5 @@
+ALTER TABLE "public"."ProjectionReconciliation"
+ADD CONSTRAINT "ck_pr_version"
+CHECK (
+  ("observedVersion" > 0) IS TRUE
+);

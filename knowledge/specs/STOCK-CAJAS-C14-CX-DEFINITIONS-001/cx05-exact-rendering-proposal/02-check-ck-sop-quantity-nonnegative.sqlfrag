@@ -1,0 +1,5 @@
+ALTER TABLE "public"."StockOpeningPosition"
+ADD CONSTRAINT "ck_sop_quantity_nonnegative"
+CHECK (
+  ("quantity" >= 0) IS TRUE
+);

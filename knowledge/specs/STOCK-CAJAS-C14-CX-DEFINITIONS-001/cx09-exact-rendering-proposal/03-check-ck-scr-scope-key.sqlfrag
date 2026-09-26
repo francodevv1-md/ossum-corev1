@@ -1,0 +1,17 @@
+ALTER TABLE "public"."StockCompatibilityReference"
+ADD CONSTRAINT "ck_scr_scope_key"
+CHECK (
+  (
+    (
+      "sourceScopeKind" = 'HEADER'
+      AND "sourceLineId" IS NULL
+      AND "sourceScopeKey" = 'H:' || "sourceEntityId"
+    )
+    OR
+    (
+      "sourceScopeKind" = 'LINE'
+      AND "sourceLineId" IS NOT NULL
+      AND "sourceScopeKey" = 'L:' || "sourceLineId"
+    )
+  ) IS TRUE
+);

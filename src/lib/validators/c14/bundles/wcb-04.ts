@@ -1,0 +1,1 @@
+export const validate = Object.freeze({ bundleId: "WCB-04", contractIds: ["ISW-CX11-02", "ISW-CX11-03"], payloadSectionIds: ["controlHeader", "controlLines"], bundleRowSha256: "ce281a1d2b403709888317fda57113a0fe054418b18873f581aab64d68fc63bf", productState: "INERT" } as const)

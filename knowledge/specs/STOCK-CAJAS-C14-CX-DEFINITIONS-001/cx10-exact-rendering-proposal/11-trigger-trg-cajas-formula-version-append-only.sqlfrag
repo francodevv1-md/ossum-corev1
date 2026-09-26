@@ -1,0 +1,4 @@
+CREATE TRIGGER "trg_cajas_formula_version_append_only"
+BEFORE UPDATE OR DELETE ON "public"."cajas_formula_version"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."fn_cajas_formula_version_append_only"();

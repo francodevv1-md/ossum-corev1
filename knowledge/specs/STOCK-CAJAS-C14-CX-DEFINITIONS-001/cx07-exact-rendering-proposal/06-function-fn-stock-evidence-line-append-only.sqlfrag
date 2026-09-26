@@ -1,0 +1,23 @@
+CREATE FUNCTION "public"."fn_stock_evidence_line_append_only"() RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SECURITY INVOKER
+SET search_path = ''
+AS $c14fn$
+BEGIN
+  RAISE EXCEPTION USING
+    ERRCODE = '23514',
+    MESSAGE = 'C14 invariant violation',
+    DETAIL = 'c14e1;schema=' || TG_TABLE_SCHEMA ||
+             ';table=' || TG_TABLE_NAME ||
+             ';operation=' || TG_OP ||
+             ';invariant=function:fn_stock_evidence_line_append_only' ||
+             ';function=fn_stock_evidence_line_append_only' ||
+             ';branch=R0001' ||
+             ';family=APPEND_ONLY',
+    HINT = 'messageId=C14_INV_FN_FN_STOCK_EVIDENCE_LINE_APPEND_ONLY',
+    CONSTRAINT = TG_NAME,
+    SCHEMA = TG_TABLE_SCHEMA,
+    TABLE = TG_TABLE_NAME;
+END;
+$c14fn$;

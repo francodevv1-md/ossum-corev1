@@ -1,0 +1,9 @@
+ALTER TABLE "public"."StockReservationProjection"
+ADD CONSTRAINT "ck_srp_values"
+CHECK (
+  (
+    "activeQuantity" >= 0
+    AND "appliedQuantity" >= 0
+    AND "version" > 0
+  ) IS TRUE
+);

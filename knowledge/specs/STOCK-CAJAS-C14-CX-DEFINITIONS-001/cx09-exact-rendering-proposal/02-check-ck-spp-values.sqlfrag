@@ -1,0 +1,12 @@
+ALTER TABLE "public"."StockPositionProjection"
+ADD CONSTRAINT "ck_spp_values"
+CHECK (
+  (
+    "physicalQuantity" >= 0
+    AND "reservedQuantity" >= 0
+    AND "availableQuantity" >= 0
+    AND "underReviewQuantity" >= 0
+    AND "finalDispositionQuantity" >= 0
+    AND "version" > 0
+  ) IS TRUE
+);

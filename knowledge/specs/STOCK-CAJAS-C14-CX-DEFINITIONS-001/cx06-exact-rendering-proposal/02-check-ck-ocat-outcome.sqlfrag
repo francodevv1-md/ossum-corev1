@@ -1,0 +1,41 @@
+ALTER TABLE "public"."OperationalCommandAttempt"
+ADD CONSTRAINT "ck_ocat_outcome"
+CHECK (
+  (
+    (
+      "outcome" = 'ACCEPTED'
+      AND "commandAcceptanceId" IS NOT NULL
+      AND "auditEventId" IS NOT NULL
+    )
+    OR
+    (
+      "outcome" = 'DENIED'
+      AND "commandAcceptanceId" IS NULL
+      AND "auditEventId" IS NOT NULL
+    )
+    OR
+    (
+      "outcome" = 'VALIDATION_FAILED'
+      AND "commandAcceptanceId" IS NULL
+      AND "auditEventId" IS NOT NULL
+    )
+    OR
+    (
+      "outcome" = 'CONFLICT'
+      AND "commandAcceptanceId" IS NULL
+      AND "auditEventId" IS NOT NULL
+    )
+    OR
+    (
+      "outcome" = 'FAILED'
+      AND "commandAcceptanceId" IS NULL
+      AND "auditEventId" IS NOT NULL
+    )
+    OR
+    (
+      "outcome" = 'UNKNOWN'
+      AND "commandAcceptanceId" IS NULL
+      AND "auditEventId" IS NOT NULL
+    )
+  ) IS TRUE
+);

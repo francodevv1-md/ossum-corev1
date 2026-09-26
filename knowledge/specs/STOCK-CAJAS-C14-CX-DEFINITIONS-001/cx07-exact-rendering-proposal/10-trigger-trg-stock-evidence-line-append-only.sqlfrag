@@ -1,0 +1,4 @@
+CREATE TRIGGER "trg_stock_evidence_line_append_only"
+BEFORE UPDATE OR DELETE ON "public"."StockEvidenceLine"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."fn_stock_evidence_line_append_only"();

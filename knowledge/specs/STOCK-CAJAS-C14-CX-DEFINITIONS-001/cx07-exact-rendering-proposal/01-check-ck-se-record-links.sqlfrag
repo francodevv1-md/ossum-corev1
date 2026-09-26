@@ -1,0 +1,28 @@
+ALTER TABLE "public"."StockEvidence"
+ADD CONSTRAINT "ck_se_record_links"
+CHECK (
+  (
+    (
+      "recordKind" = 'ORIGINAL'
+      AND "kind" IN ('OPENING', 'RECEIPT', 'DISPATCH', 'RETURN', 'CONSUMPTION', 'COUNT_OBSERVATION', 'REVIEW_HOLD', 'REVIEW_RELEASE')
+      AND "correctsEvidenceId" IS NULL
+      AND "reversesEvidenceId" IS NULL
+    )
+    OR
+    (
+      "recordKind" = 'CORRECTION'
+      AND "kind" = 'CORRECTION'
+      AND "correctsEvidenceId" IS NOT NULL
+      AND "correctsEvidenceId" <> "id"
+      AND "reversesEvidenceId" IS NULL
+    )
+    OR
+    (
+      "recordKind" = 'REVERSAL'
+      AND "kind" = 'REVERSAL'
+      AND "correctsEvidenceId" IS NULL
+      AND "reversesEvidenceId" IS NOT NULL
+      AND "reversesEvidenceId" <> "id"
+    )
+  ) IS TRUE
+);

@@ -1,0 +1,4 @@
+ALTER TABLE "public"."cajas_control"
+ADD CONSTRAINT "ck_cc_positive_sequence_version" CHECK ((
+  "sequence" > 0 AND "source_preparation_version" > 0
+) IS TRUE);

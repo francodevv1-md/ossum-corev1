@@ -1,0 +1,5 @@
+ALTER TABLE "public"."StockActivationBoundary"
+ADD CONSTRAINT "ck_sab_valid_window"
+CHECK (
+  (("validUntil" IS NULL) OR ("validUntil" > "cutoffAt")) IS TRUE
+);

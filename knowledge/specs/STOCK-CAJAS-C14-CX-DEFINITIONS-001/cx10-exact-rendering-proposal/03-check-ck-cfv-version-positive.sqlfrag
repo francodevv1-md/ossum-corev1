@@ -1,0 +1,3 @@
+ALTER TABLE "public"."cajas_formula_version"
+ADD CONSTRAINT "ck_cfv_version_positive"
+CHECK (("version_number" > 0) IS TRUE);

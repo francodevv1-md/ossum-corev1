@@ -1,0 +1,273 @@
+CREATE FUNCTION "public"."fn_stock_reservation_ceiling"() RETURNS trigger
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path = ''
+AS $c14fn$
+DECLARE
+  v_article_id text; v_position_unit text; v_identified_unit_id text;
+  v_position_scale smallint; v_event_count bigint; v_max_sequence integer;
+  v_live_before numeric(24,4); v_live_after numeric(24,4);
+  v_ceiling numeric(24,4); v_scope_live_after numeric(24,4);
+  v_other_unit_live boolean; v_valid boolean;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN RETURN NEW; END IF;
+
+  SELECT "position"."articleId", "position"."stockUnit",
+         "position"."quantityScale", "reservation"."identifiedUnitId"
+  INTO v_article_id, v_position_unit, v_position_scale, v_identified_unit_id
+  FROM "public"."StockReservation" AS "reservation"
+  JOIN "public"."StockPosition" AS "position"
+    ON "position"."companyId" = "reservation"."companyId"
+   AND "position"."id" = "reservation"."positionId"
+  WHERE "reservation"."companyId" = NEW."companyId"
+    AND "reservation"."id" = NEW."reservationId";
+
+  SELECT COUNT(*), COALESCE(MAX("event"."sequence"), 0),
+    COALESCE(SUM(CASE WHEN "event"."kind" IN ('RESERVE', 'REPLACE')
+                      THEN "event"."quantity" ELSE -"event"."quantity" END), 0::numeric)
+  INTO v_event_count, v_max_sequence, v_live_before
+  FROM "public"."StockReservationEvidence" AS "event"
+  WHERE "event"."companyId" = NEW."companyId"
+    AND "event"."reservationId" = NEW."reservationId"
+    AND ("event"."kind" NOT IN ('RESERVE', 'REPLACE') OR NOT EXISTS (
+      SELECT 1 FROM "public"."StockReservationEvidence" AS "replacement"
+      WHERE "replacement"."companyId" = "event"."companyId"
+        AND "replacement"."reservationId" = "event"."reservationId"
+        AND "replacement"."kind" = 'REPLACE'
+        AND "replacement"."replacesEvidenceId" = "event"."id"));
+
+  v_live_after := CASE NEW."kind"
+    WHEN 'RESERVE' THEN v_live_before + NEW."quantity"
+    WHEN 'REPLACE' THEN v_live_before + NEW."quantity" - (
+      SELECT "target"."quantity" FROM "public"."StockReservationEvidence" AS "target"
+      WHERE "target"."companyId" = NEW."companyId"
+        AND "target"."reservationId" = NEW."reservationId"
+        AND "target"."id" = NEW."replacesEvidenceId"
+        AND "target"."kind" IN ('RESERVE', 'REPLACE')
+        AND "target"."id" <> NEW."id"
+        AND NOT EXISTS (
+          SELECT 1 FROM "public"."StockReservationEvidence" AS "replacement"
+          WHERE "replacement"."companyId" = "target"."companyId"
+            AND "replacement"."reservationId" = "target"."reservationId"
+            AND "replacement"."kind" = 'REPLACE'
+            AND "replacement"."replacesEvidenceId" = "target"."id"))
+    ELSE v_live_before - NEW."quantity" END;
+
+  WITH "base" AS (
+    SELECT "evidence"."id", "evidence"."kind", "evidence"."sourceDomain",
+           "evidence"."sourceEntityType", "evidence"."sourceEntityId", "evidence"."acceptedAt"
+    FROM "public"."StockEvidence" AS "evidence"
+    WHERE "evidence"."companyId" = NEW."companyId"
+      AND "evidence"."recordKind" = 'ORIGINAL'
+      AND "evidence"."kind" IN ('OPENING', 'RECEIPT', 'DISPATCH', 'RETURN',
+        'CONSUMPTION', 'COUNT_OBSERVATION', 'REVIEW_HOLD', 'REVIEW_RELEASE')
+      AND "evidence"."correctsEvidenceId" IS NULL
+      AND "evidence"."reversesEvidenceId" IS NULL
+      AND "evidence"."acceptedAt" <= NEW."acceptedAt"
+  ),
+  "traceLine" AS (
+    SELECT "line".*
+    FROM "public"."StockEvidenceLine" AS "line"
+    JOIN "public"."StockEvidence" AS "evidence"
+      ON "evidence"."companyId" = "line"."companyId"
+     AND "evidence"."id" = "line"."evidenceId"
+    JOIN "public"."StockPosition" AS "tracePosition"
+      ON "tracePosition"."companyId" = "line"."companyId"
+     AND "tracePosition"."articleId" = "line"."articleId"
+     AND "tracePosition"."id" = COALESCE("line"."fromPositionId", "line"."toPositionId")
+    LEFT JOIN "public"."StockLot" AS "traceLot"
+      ON "traceLot"."companyId" = "tracePosition"."companyId"
+     AND "traceLot"."articleId" = "tracePosition"."articleId"
+     AND "traceLot"."id" = "tracePosition"."lotId"
+    LEFT JOIN "public"."StockLotObservation" AS "traceObservation"
+      ON "traceObservation"."companyId" = "traceLot"."companyId"
+     AND "traceObservation"."articleId" = "traceLot"."articleId"
+     AND "traceObservation"."id" = "traceLot"."primaryObservationId"
+    LEFT JOIN LATERAL (
+      SELECT "configuration"."internalCode", "configuration"."serialNumber"
+      FROM "public"."StockIdentifiedUnitConfigurationVersion" AS "configuration"
+      WHERE "configuration"."companyId" = "tracePosition"."companyId"
+        AND "configuration"."identifiedUnitId" = "tracePosition"."identifiedUnitId"
+        AND "configuration"."effectiveAt" <= "evidence"."acceptedAt"
+        AND "configuration"."acceptedAt" <= "evidence"."acceptedAt"
+      ORDER BY "configuration"."effectiveAt" DESC, "configuration"."versionNumber" DESC,
+               convert_to("configuration"."id", 'UTF8') DESC
+      LIMIT 1
+    ) AS "traceConfiguration" ON TRUE
+    WHERE "evidence"."recordKind" IN ('ORIGINAL', 'CORRECTION')
+      AND (
+        ("tracePosition"."traceMode" = 'NONE'
+         AND "tracePosition"."lotId" IS NULL AND "tracePosition"."identifiedUnitId" IS NULL
+         AND "line"."lotCodeSnapshot" IS NULL AND "line"."expirationDateSnapshot" IS NULL
+         AND "line"."serialNumberSnapshot" IS NULL AND "line"."identifiedCodeSnapshot" IS NULL)
+        OR
+        ("tracePosition"."traceMode" = 'LOT'
+         AND "tracePosition"."lotId" IS NOT NULL AND "tracePosition"."identifiedUnitId" IS NULL
+         AND "traceLot"."acceptedAt" <= "evidence"."acceptedAt"
+         AND "traceObservation"."observedAt" <= "evidence"."acceptedAt"
+         AND "line"."lotCodeSnapshot" = "traceObservation"."displayLotCode"
+         AND "line"."expirationDateSnapshot" IS NOT DISTINCT FROM "traceObservation"."expirationDate"
+         AND "line"."serialNumberSnapshot" IS NULL AND "line"."identifiedCodeSnapshot" IS NULL)
+        OR
+        ("tracePosition"."traceMode" = 'IDENTIFIED_UNIT'
+         AND "tracePosition"."lotId" IS NULL AND "tracePosition"."identifiedUnitId" IS NOT NULL
+         AND "traceConfiguration"."internalCode" IS NOT NULL
+         AND "line"."lotCodeSnapshot" IS NULL AND "line"."expirationDateSnapshot" IS NULL
+         AND "line"."serialNumberSnapshot" IS NOT DISTINCT FROM "traceConfiguration"."serialNumber"
+         AND "line"."identifiedCodeSnapshot" = "traceConfiguration"."internalCode"))
+  ),
+  "candidateAdjustment" AS (
+    SELECT "base"."id" AS "baseId", "base"."kind" AS "baseKind",
+           "adjustment"."id" AS "adjustmentId", "adjustment"."recordKind" AS "adjustmentRecordKind"
+    FROM "base"
+    JOIN "public"."StockEvidence" AS "adjustment"
+      ON "adjustment"."companyId" = NEW."companyId"
+     AND "adjustment"."acceptedAt" BETWEEN "base"."acceptedAt" AND NEW."acceptedAt"
+     AND (("adjustment"."recordKind" = 'CORRECTION' AND "adjustment"."kind" = 'CORRECTION'
+           AND "adjustment"."correctsEvidenceId" = "base"."id"
+           AND "adjustment"."reversesEvidenceId" IS NULL)
+       OR ("adjustment"."recordKind" = 'REVERSAL' AND "adjustment"."kind" = 'REVERSAL'
+           AND "adjustment"."reversesEvidenceId" = "base"."id"
+           AND "adjustment"."correctsEvidenceId" IS NULL))
+     AND ("adjustment"."sourceDomain", "adjustment"."sourceEntityType", "adjustment"."sourceEntityId")
+       = ("base"."sourceDomain", "base"."sourceEntityType", "base"."sourceEntityId")
+    WHERE (SELECT COUNT(*) FROM "public"."StockEvidence" AS "child"
+           WHERE "child"."companyId" = NEW."companyId"
+             AND "child"."acceptedAt" <= NEW."acceptedAt"
+             AND ("child"."correctsEvidenceId" = "base"."id"
+               OR "child"."reversesEvidenceId" = "base"."id")) = 1
+  ),
+  "validAdjustment" AS (
+    SELECT "candidate".* FROM "candidateAdjustment" AS "candidate"
+    WHERE EXISTS (SELECT 1 FROM "public"."StockEvidenceLine" AS "baseLine"
+                  WHERE "baseLine"."companyId" = NEW."companyId"
+                    AND "baseLine"."evidenceId" = "candidate"."baseId")
+      AND (SELECT COUNT(*) FROM "public"."StockEvidenceLine" AS "baseLine"
+           WHERE "baseLine"."companyId" = NEW."companyId"
+             AND "baseLine"."evidenceId" = "candidate"."baseId")
+        = (SELECT COUNT(*) FROM "public"."StockEvidenceLine" AS "adjustmentLine"
+           WHERE "adjustmentLine"."companyId" = NEW."companyId"
+             AND "adjustmentLine"."evidenceId" = "candidate"."adjustmentId")
+      AND NOT EXISTS (
+        SELECT 1 FROM "public"."StockEvidenceLine" AS "baseLine"
+        WHERE "baseLine"."companyId" = NEW."companyId"
+          AND "baseLine"."evidenceId" = "candidate"."baseId"
+          AND NOT EXISTS (
+            SELECT 1 FROM "public"."StockEvidenceLine" AS "adjustmentLine"
+            WHERE "adjustmentLine"."companyId" = NEW."companyId"
+              AND "adjustmentLine"."evidenceId" = "candidate"."adjustmentId"
+              AND "adjustmentLine"."lineNumber" = "baseLine"."lineNumber"
+              AND ("adjustmentLine"."articleId", "adjustmentLine"."reservationId",
+                   "adjustmentLine"."stockUnit", "adjustmentLine"."scaleSnapshot",
+                   "adjustmentLine"."sourceLineId") IS NOT DISTINCT FROM
+                  ("baseLine"."articleId", "baseLine"."reservationId", "baseLine"."stockUnit",
+                   "baseLine"."scaleSnapshot", "baseLine"."sourceLineId")
+              AND (("candidate"."adjustmentRecordKind" = 'CORRECTION'
+                    AND "adjustmentLine"."fromPositionId" IS NOT DISTINCT FROM "baseLine"."fromPositionId"
+                    AND "adjustmentLine"."toPositionId" IS NOT DISTINCT FROM "baseLine"."toPositionId"
+                    AND EXISTS (SELECT 1 FROM "traceLine" AS "trace"
+                                WHERE "trace"."id" = "adjustmentLine"."id"))
+                OR ("candidate"."adjustmentRecordKind" = 'REVERSAL'
+                    AND "adjustmentLine"."quantity" = "baseLine"."quantity"
+                    AND ("adjustmentLine"."lotCodeSnapshot", "adjustmentLine"."expirationDateSnapshot",
+                         "adjustmentLine"."serialNumberSnapshot", "adjustmentLine"."identifiedCodeSnapshot")
+                      IS NOT DISTINCT FROM
+                        ("baseLine"."lotCodeSnapshot", "baseLine"."expirationDateSnapshot",
+                         "baseLine"."serialNumberSnapshot", "baseLine"."identifiedCodeSnapshot")
+                    AND (("candidate"."baseKind" IN ('OPENING', 'RECEIPT', 'RETURN')
+                          AND "adjustmentLine"."fromPositionId" = "baseLine"."toPositionId"
+                          AND "adjustmentLine"."toPositionId" IS NULL)
+                      OR ("candidate"."baseKind" IN ('DISPATCH', 'CONSUMPTION')
+                          AND "adjustmentLine"."fromPositionId" IS NULL
+                          AND "adjustmentLine"."toPositionId" = "baseLine"."fromPositionId")
+                      OR ("candidate"."baseKind" IN ('COUNT_OBSERVATION', 'REVIEW_HOLD', 'REVIEW_RELEASE')
+                          AND "adjustmentLine"."fromPositionId" = "baseLine"."fromPositionId"
+                          AND "adjustmentLine"."toPositionId" IS NULL))))))
+  ),
+  "effectiveLine" AS (
+    SELECT "base"."kind", "line"."articleId", "line"."fromPositionId", "line"."toPositionId",
+           "line"."quantity", "line"."stockUnit", "line"."scaleSnapshot"
+    FROM "base" JOIN "traceLine" AS "line" ON "line"."companyId" = NEW."companyId"
+      AND "line"."evidenceId" = "base"."id"
+    WHERE NOT EXISTS (SELECT 1 FROM "validAdjustment" AS "adjustment"
+                      WHERE "adjustment"."baseId" = "base"."id")
+    UNION ALL
+    SELECT "base"."kind", "line"."articleId", "line"."fromPositionId", "line"."toPositionId",
+           "line"."quantity", "line"."stockUnit", "line"."scaleSnapshot"
+    FROM "base" JOIN "validAdjustment" AS "correction"
+      ON "correction"."baseId" = "base"."id"
+     AND "correction"."adjustmentRecordKind" = 'CORRECTION'
+    JOIN "traceLine" AS "line" ON "line"."companyId" = NEW."companyId"
+      AND "line"."evidenceId" = "correction"."adjustmentId"
+  )
+  SELECT COALESCE(SUM(CASE
+      WHEN "kind" IN ('OPENING', 'RECEIPT', 'RETURN')
+       AND "toPositionId" = "reservation"."positionId" THEN "quantity"
+      WHEN "kind" IN ('DISPATCH', 'CONSUMPTION')
+       AND "fromPositionId" = "reservation"."positionId" THEN -"quantity"
+      ELSE 0::numeric END), 0::numeric)
+    - COALESCE(SUM(CASE
+      WHEN "kind" = 'REVIEW_HOLD' AND "fromPositionId" = "reservation"."positionId" THEN "quantity"
+      WHEN "kind" = 'REVIEW_RELEASE' AND "fromPositionId" = "reservation"."positionId" THEN -"quantity"
+      ELSE 0::numeric END), 0::numeric)
+  INTO v_ceiling
+  FROM "effectiveLine" CROSS JOIN "public"."StockReservation" AS "reservation"
+  WHERE "reservation"."companyId" = NEW."companyId"
+    AND "reservation"."id" = NEW."reservationId"
+    AND "articleId" = v_article_id AND "stockUnit" = v_position_unit
+    AND "scaleSnapshot" = v_position_scale;
+
+  WITH "liveByReservation" AS (
+    SELECT "reservation"."id",
+      COALESCE(SUM(CASE WHEN "event"."kind" IN ('RESERVE', 'REPLACE')
+                        THEN "event"."quantity" ELSE -"event"."quantity" END) FILTER (
+        WHERE "event"."kind" NOT IN ('RESERVE', 'REPLACE') OR NOT EXISTS (
+          SELECT 1 FROM "public"."StockReservationEvidence" AS "replacement"
+          WHERE "replacement"."companyId" = "event"."companyId"
+            AND "replacement"."reservationId" = "event"."reservationId"
+            AND "replacement"."kind" = 'REPLACE'
+            AND "replacement"."replacesEvidenceId" = "event"."id")), 0::numeric) AS "live"
+    FROM "public"."StockReservation" AS "reservation"
+    LEFT JOIN "public"."StockReservationEvidence" AS "event"
+      ON "event"."companyId" = "reservation"."companyId"
+     AND "event"."reservationId" = "reservation"."id"
+    WHERE "reservation"."companyId" = NEW."companyId"
+      AND "reservation"."positionId" = (SELECT "currentReservation"."positionId"
+        FROM "public"."StockReservation" AS "currentReservation"
+        WHERE "currentReservation"."companyId" = NEW."companyId"
+          AND "currentReservation"."id" = NEW."reservationId")
+    GROUP BY "reservation"."id"
+  )
+  SELECT COALESCE(SUM("live"), 0::numeric) - v_live_before + v_live_after,
+    COALESCE(BOOL_OR(v_identified_unit_id IS NOT NULL
+      AND "reservation"."identifiedUnitId" = v_identified_unit_id
+      AND "id" <> NEW."reservationId" AND "live" > 0::numeric), false)
+  INTO v_scope_live_after, v_other_unit_live
+  FROM "liveByReservation" JOIN "public"."StockReservation" AS "reservation"
+    ON "reservation"."companyId" = NEW."companyId"
+   AND "reservation"."id" = "liveByReservation"."id";
+
+  v_valid := v_article_id IS NOT NULL
+    AND NEW."sequence" = v_max_sequence + 1
+    AND NEW."stockUnit" = v_position_unit AND NEW."scaleSnapshot" = v_position_scale
+    AND ((v_event_count = 0 AND NEW."kind" = 'RESERVE')
+      OR (v_event_count > 0 AND v_live_before > 0::numeric))
+    AND ((NEW."kind" = 'REPLACE' AND NEW."replacesEvidenceId" IS NOT NULL)
+      OR (NEW."kind" <> 'REPLACE' AND NEW."replacesEvidenceId" IS NULL))
+    AND (NEW."kind" <> 'CANCEL' OR NEW."quantity" = v_live_before)
+    AND v_live_after >= 0::numeric AND v_ceiling >= 0::numeric
+    AND v_scope_live_after >= 0::numeric AND v_scope_live_after <= v_ceiling
+    AND NOT COALESCE(v_other_unit_live, false);
+
+  IF v_valid IS TRUE THEN
+    RETURN NEW;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = '23514', MESSAGE = 'C14 invariant violation',
+      DETAIL = 'c14e1;schema=' || TG_TABLE_SCHEMA || ';table=' || TG_TABLE_NAME ||
+               ';operation=' || TG_OP || ';invariant=function:fn_stock_reservation_ceiling' ||
+               ';function=fn_stock_reservation_ceiling;branch=R0001' ||
+               ';family=AGGREGATE_OR_SERIALIZATION_GUARD',
+      HINT = 'messageId=C14_INV_FN_FN_STOCK_RESERVATION_CEILING',
+      CONSTRAINT = TG_NAME, SCHEMA = TG_TABLE_SCHEMA, TABLE = TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

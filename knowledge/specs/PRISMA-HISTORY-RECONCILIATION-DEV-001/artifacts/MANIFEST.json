@@ -1,0 +1,28 @@
+{
+  "purpose": "Immutable reconciliation evidence only; not active Prisma migration history and not a replacement for missing legacy migration artifacts.",
+  "sourceProvenance": {
+    "workspace": "C:/Users/franc/AppData/Local/Temp/opencode/prisma-fiscal-reconciliation-20260923/fiscal-reconciliation-migrations-clean",
+    "baseline": "Generated from the approved schema-only legacy DEV export after excluding only the session-wide pg_dump search_path command.",
+    "fiscalDelta": "Rebased from the approved FISCAL-02 fiscal-only SQL artifact after rejecting a broad unrelated Prisma diff."
+  },
+  "target": {
+    "database": "ossum_fiscal_reconciliation_dev_fixed_20260924",
+    "access": "Read-only migration metadata query"
+  },
+  "artifacts": [
+    {
+      "migrationName": "20260924000000_legacy_dev_reconciliation_baseline",
+      "source": "C:/Users/franc/AppData/Local/Temp/opencode/prisma-fiscal-reconciliation-20260923/fiscal-reconciliation-migrations-clean/20260924000000_legacy_dev_reconciliation_baseline/migration.sql",
+      "artifact": "artifacts/20260924000000_legacy_dev_reconciliation_baseline/migration.sql",
+      "sha256": "496696888e7431f980dceeb1d65e8710bcb83c9a94f82ffae50d14168e1883d0",
+      "targetChecksum": "496696888e7431f980dceeb1d65e8710bcb83c9a94f82ffae50d14168e1883d0"
+    },
+    {
+      "migrationName": "20260924002000_fiscal_tusfacturas_dev_rebased",
+      "source": "C:/Users/franc/AppData/Local/Temp/opencode/prisma-fiscal-reconciliation-20260923/fiscal-reconciliation-migrations-clean/20260924002000_fiscal_tusfacturas_dev_rebased/migration.sql",
+      "artifact": "artifacts/20260924002000_fiscal_tusfacturas_dev_rebased/migration.sql",
+      "sha256": "592a023de0aeb920cc564c3250bd1520315fa6e648f99090016ef8e116a187c8",
+      "targetChecksum": "592a023de0aeb920cc564c3250bd1520315fa6e648f99090016ef8e116a187c8"
+    }
+  ]
+}

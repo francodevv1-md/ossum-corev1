@@ -1,0 +1,3 @@
+ALTER TABLE "public"."StockReservationEvidence"
+ADD CONSTRAINT "ck_sre_qty_positive"
+CHECK (("quantity" > 0::numeric) IS TRUE);

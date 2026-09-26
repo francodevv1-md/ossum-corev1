@@ -1,0 +1,4 @@
+CREATE TRIGGER "trg_stock_lot_observation_append_only"
+BEFORE UPDATE OR DELETE ON "public"."StockLotObservation"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."fn_stock_lot_observation_append_only"();

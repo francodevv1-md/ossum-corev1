@@ -1,0 +1,1 @@
+export const execute = Object.freeze({ contractId: "ISW-CX12-09", physicalRelation: "public.cajas_consumption_confirmation", allowedBundleIds: ["WCB-08"], contractRowSha256: "64308eef76bd35640e078188616787731405164a0a2b7a5103d3754bd2712e7b" } as const)

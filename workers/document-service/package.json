@@ -1,0 +1,17 @@
+{
+  "name": "@ossum/document-service-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test src/document-routing.test.ts",
+    "types": "wrangler types",
+    "typecheck": "wrangler types && tsc --noEmit",
+    "dry-run": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.123.0"
+  }
+}

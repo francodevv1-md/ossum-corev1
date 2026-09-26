@@ -1,0 +1,23 @@
+import { getApiAuthContext } from "@/lib/api/auth-context";
+import { badRequest } from "@/lib/api/errors";
+import { created, errorResponse, ok } from "@/lib/api/responses";
+import { requireStockOperationAccess } from "@/lib/permissions/stock-operations";
+import prisma from "@/lib/prisma";
+import { acknowledgeCajasPhysicalDifference } from "@/lib/services/cajas-physical-preparation.service";
+import { cajasDifferenceAcknowledgementSchema } from "@/lib/validators/cajas";
+
+type Context = { params: Promise<{ companyId: string; surgeryId: string; assignmentId: string; lineId: string }> };
+
+export async function POST(request: Request, { params }: Context) {
+  try {
+    const { companyId, surgeryId, assignmentId, lineId } = await params;
+    const ctx = await getApiAuthContext(request, companyId);
+    requireStockOperationAccess(ctx);
+    let body: unknown;
+    try { body = await request.json(); } catch { throw badRequest("Invalid JSON body", "invalid_json_body"); }
+    const parsed = cajasDifferenceAcknowledgementSchema.safeParse(body);
+    if (!parsed.success) throw badRequest("Invalid difference acknowledgement body", "invalid_cajas_difference_acknowledgement_body");
+    const result = await acknowledgeCajasPhysicalDifference(prisma, ctx.companyId, surgeryId, assignmentId, lineId, ctx.actorUserId, parsed.data);
+    return result.replayed ? ok(result) : created(result);
+  } catch (error) { return errorResponse(error); }
+}

@@ -1,0 +1,8 @@
+3dcd78a622af2dc12beb99692483d636ea3a8a2eac58d56abc13e9192412d24d  PROPOSAL.md
+db888dccc3f241ed4b23b121b5183534121f55a3d67b9ce495cad15fc2fcb154  01-check-ck-srp-values.sqlfrag
+86b71ecf828689d267996309a59be5960870bd3d1fe2e1f6f4e999d8180c39ca  02-check-ck-spp-values.sqlfrag
+bc84eaa83c4a02d0c36e887db7cc7e17fc862da16c0e32ae926b27af4373fa21  03-check-ck-scr-scope-key.sqlfrag
+e8d902fcf3f1dfec86b4e73d2b3112c5be3cb698389399b6572c037664fe50c2  04-check-ck-scr-target.sqlfrag
+9a7daeb4910ef10af1b9476527168d3e5297610fef4e258e622535af3950cd32  05-check-ck-pr-version.sqlfrag
+07274aa135229d0a42b796077183d5a4e8841cf7f8d2b71d29a9109ef4a355bf  rendering-manifest.cj1
+# detached-proposal-root-sha256: 696efbaf1c5034e920ec95c2f69b89794d169b9727e4062c629362ace0d3e0c0

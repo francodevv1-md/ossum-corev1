@@ -1,0 +1,45 @@
+CREATE FUNCTION "public"."fn_stock_reservation_position_guard"() RETURNS trigger
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path = ''
+AS $c14fn$
+DECLARE
+  v_coherent boolean;
+BEGIN
+  SELECT
+    EXISTS (
+      SELECT 1
+      FROM "public"."StockPosition" AS "position"
+      WHERE "position"."companyId" = NEW."companyId"
+        AND "position"."id" = NEW."positionId"
+        AND (NEW."identifiedUnitId" IS NULL
+             OR "position"."identifiedUnitId" = NEW."identifiedUnitId")
+    )
+    AND (
+      NEW."identifiedUnitId" IS NULL
+      OR EXISTS (
+        SELECT 1 FROM "public"."StockIdentifiedUnitOccupancy" AS "occupancy"
+        WHERE "occupancy"."companyId" = NEW."companyId"
+          AND "occupancy"."identifiedUnitId" = NEW."identifiedUnitId"
+          AND "occupancy"."currentPositionId" = NEW."positionId")
+    )
+  INTO v_coherent;
+
+  IF v_coherent IS TRUE THEN
+    RETURN NEW;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = '23514',
+      MESSAGE = 'C14 invariant violation',
+      DETAIL = 'c14e1;schema=' || TG_TABLE_SCHEMA ||
+               ';table=' || TG_TABLE_NAME ||
+               ';operation=' || TG_OP ||
+               ';invariant=function:fn_stock_reservation_position_guard' ||
+               ';function=fn_stock_reservation_position_guard' ||
+               ';branch=R0001' ||
+               ';family=ROW_OR_CROSS_ROW_GUARD',
+      HINT = 'messageId=C14_INV_FN_FN_STOCK_RESERVATION_POSITION_GUARD',
+      CONSTRAINT = TG_NAME,
+      SCHEMA = TG_TABLE_SCHEMA,
+      TABLE = TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

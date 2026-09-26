@@ -1,0 +1,5 @@
+ALTER TABLE "public"."cajas_reservation_correlation"
+ADD CONSTRAINT "ck_crc_quantity_shape" CHECK ((
+  ("quantity" IS NULL AND "stock_unit" IS NULL AND "scale_snapshot" IS NULL)
+  OR ("quantity" > 0 AND "stock_unit" IS NOT NULL AND "scale_snapshot" BETWEEN 0 AND 4)
+) IS TRUE);

@@ -1,0 +1,42 @@
+{
+  "approvalGate": {
+    "approval4740IsExecutionAuthority": false,
+    "catalogAndVectorsFinalized": true,
+    "occurrenceLedgerRequired": true,
+    "exactExecutionApprovalRequired": true,
+    "executionApprovalBlocksBeforeRoot": true,
+    "unresolvedCxBlocksBeforeRoot": false
+  },
+  "childEnvironment": {
+    "allowedKeys": ["CHECKPOINT_DISABLE", "NO_COLOR", "PRISMA_HIDE_UPDATE_MESSAGE", "SystemRoot", "TEMP", "TMP", "TZ", "WINDIR"],
+    "fixed": {"CHECKPOINT_DISABLE": "1", "NO_COLOR": "1", "PRISMA_HIDE_UPDATE_MESSAGE": "1", "TZ": "UTC"},
+    "rootRelative": {"TEMP": "scratch/tmp", "TMP": "scratch/tmp"},
+    "systemRoot": "C:\\Windows"
+  },
+  "gitEnvironment": {
+    "allowedKeys": ["GCM_INTERACTIVE", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_OPTIONAL_LOCKS", "GIT_TERMINAL_PROMPT", "LC_ALL", "SystemRoot", "TZ", "WINDIR"],
+    "fixed": {"GCM_INTERACTIVE": "Never", "GIT_CONFIG_GLOBAL": "NUL", "GIT_CONFIG_NOSYSTEM": "1", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C", "TZ": "UTC"},
+    "inheritsProcessEnvironment": false
+  },
+  "explicitTradeoff": {
+    "acceptedBy": "Franco",
+    "authority": "Engram #4739",
+    "osLevelNetworkDenial": false,
+    "statement": "No OS-level network sandbox is claimed. File-to-file Prisma commands remain constrained by external cwd, sanitized environment, exact argv, and repository guards."
+  },
+  "filesystem": {
+    "approvedParent": "C:\\Users\\franc\\AppData\\Local\\Temp\\opencode",
+    "externalRoot": "C:\\Users\\franc\\AppData\\Local\\Temp\\opencode\\c14-est-b8608a92",
+    "failIfRootExists": true,
+    "rejectReparsePoints": true,
+    "reparseProbe": {
+      "acceptedNonReparseExit": 1,
+      "acceptedNonReparseMessageCode": 4390,
+      "executable": "C:\\Windows\\System32\\fsutil.exe",
+      "shell": false
+    },
+    "repository": "E:\\OSSUM_COR_PROJECT",
+    "scratchOnlyMutable": true
+  },
+  "forbiddenEnvironmentPatterns": ["PATH", "PATHEXT", "COMSPEC", "NODE_OPTIONS", "DIRECT_URL", "DATABASE_URL", "*_URL", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "PRISMA_* except fixed flags", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "profile/app-data variables"]
+}

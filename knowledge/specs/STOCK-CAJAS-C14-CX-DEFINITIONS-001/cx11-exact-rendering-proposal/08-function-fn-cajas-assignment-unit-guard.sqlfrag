@@ -1,0 +1,30 @@
+CREATE FUNCTION "public"."fn_cajas_assignment_unit_guard"() RETURNS trigger
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path = ''
+AS $c14fn$
+DECLARE v_valid boolean;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM "public"."StockIdentifiedUnit" AS "unit"
+    WHERE ("unit"."companyId", "unit"."articleId", "unit"."id") = (NEW."company_id", NEW."box_article_id", NEW."box_identified_unit_id")
+  ) AND (NEW."active_slot" IS DISTINCT FROM 1 OR NOT EXISTS (
+    SELECT 1 FROM "public"."StockReservation" AS "reservation"
+    WHERE "reservation"."companyId" = NEW."company_id"
+      AND "reservation"."identifiedUnitId" = NEW."box_identified_unit_id"
+      AND (SELECT COALESCE(SUM(CASE
+        WHEN "event"."kind" IN ('RESERVE','REPLACE') AND NOT EXISTS (
+          SELECT 1 FROM "public"."StockReservationEvidence" AS "replacement"
+          WHERE ("replacement"."companyId", "replacement"."reservationId", "replacement"."replacesEvidenceId") = ("event"."companyId", "event"."reservationId", "event"."id")
+        ) THEN "event"."quantity"
+        WHEN "event"."kind" IN ('RELEASE','CANCEL','APPLY_TO_DISPATCH') THEN -"event"."quantity" ELSE 0 END),0)
+        FROM "public"."StockReservationEvidence" AS "event"
+        WHERE ("event"."companyId", "event"."reservationId") = ("reservation"."companyId", "reservation"."id")) > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM "public"."cajas_reservation_correlation" AS "correlation"
+        WHERE ("correlation"."company_id", "correlation"."assignment_id", "correlation"."stock_reservation_id", "correlation"."stock_position_id") = (NEW."company_id", NEW."id", "reservation"."id", "reservation"."positionId")
+      )
+  )) INTO v_valid;
+  IF v_valid IS TRUE THEN RETURN NEW; ELSE
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='C14 invariant violation', DETAIL='c14e1;schema='||TG_TABLE_SCHEMA||';table='||TG_TABLE_NAME||';operation='||TG_OP||';invariant=function:fn_cajas_assignment_unit_guard;function=fn_cajas_assignment_unit_guard;branch=R0001;family=ROW_OR_CROSS_ROW_GUARD', HINT='messageId=C14_INV_FN_FN_CAJAS_ASSIGNMENT_UNIT_GUARD', CONSTRAINT=TG_NAME, SCHEMA=TG_TABLE_SCHEMA, TABLE=TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

@@ -1,0 +1,5 @@
+ALTER TABLE "public"."StockEvidenceLine"
+ADD CONSTRAINT "ck_sel_qty_positive"
+CHECK (
+  ("quantity" > 0::numeric) IS TRUE
+);

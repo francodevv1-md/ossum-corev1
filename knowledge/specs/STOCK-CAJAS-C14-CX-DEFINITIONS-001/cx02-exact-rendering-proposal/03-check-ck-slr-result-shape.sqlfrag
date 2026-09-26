@@ -1,0 +1,28 @@
+ALTER TABLE "public"."StockLotReview"
+ADD CONSTRAINT "ck_slr_result_shape"
+CHECK (
+  (
+    (
+      "result" = 'MATCH'
+      AND "resolutionObservationId" IS NULL
+      AND "canonicalLotId" IS NOT NULL
+    )
+    OR
+    (
+      "result" = 'DISCREPANCY'
+      AND "resolutionObservationId" IS NULL
+      AND "canonicalLotId" IS NULL
+    )
+    OR
+    (
+      "result" = 'RESOLVED_EQUIVALENT'
+      AND "resolutionObservationId" IS NOT NULL
+    )
+    OR
+    (
+      "result" = 'REJECTED'
+      AND "resolutionObservationId" IS NULL
+      AND "canonicalLotId" IS NULL
+    )
+  ) IS TRUE
+);

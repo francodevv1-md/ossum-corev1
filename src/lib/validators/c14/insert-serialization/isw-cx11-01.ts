@@ -1,0 +1,1 @@
+export const validate = Object.freeze({ contractId: "ISW-CX11-01", physicalRelation: "public.cajas_reservation_correlation", allowedBundleIds: ["WCB-03"], contractRowSha256: "6733673f240174a795b56e06c19384d1b9bedae7352fa01d8f655bcd455188f8" } as const)

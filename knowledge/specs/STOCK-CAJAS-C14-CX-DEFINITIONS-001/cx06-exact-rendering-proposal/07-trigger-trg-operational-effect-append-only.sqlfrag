@@ -1,0 +1,4 @@
+CREATE TRIGGER "trg_operational_effect_append_only"
+BEFORE UPDATE OR DELETE ON "public"."OperationalCommandEffect"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."fn_operational_effect_append_only"();

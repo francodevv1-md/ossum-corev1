@@ -1,0 +1,5 @@
+ALTER TABLE "public"."cajas_reservation_correlation"
+ADD CONSTRAINT "ck_crc_preparation_shape" CHECK ((
+  ("preparation_id" IS NULL AND "preparation_line_id" IS NULL)
+  OR ("preparation_id" IS NOT NULL AND "preparation_line_id" IS NOT NULL)
+) IS TRUE);

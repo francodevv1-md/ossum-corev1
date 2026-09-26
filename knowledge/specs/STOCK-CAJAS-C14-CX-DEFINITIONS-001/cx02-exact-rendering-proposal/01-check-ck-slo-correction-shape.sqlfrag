@@ -1,0 +1,13 @@
+ALTER TABLE "public"."StockLotObservation"
+ADD CONSTRAINT "ck_slo_correction_shape"
+CHECK (
+  (
+    ("recordKind" = 'ORIGINAL' AND "correctsObservationId" IS NULL)
+    OR
+    (
+      "recordKind" = 'CORRECTION'
+      AND "correctsObservationId" IS NOT NULL
+      AND "correctsObservationId" <> "id"
+    )
+  ) IS TRUE
+);

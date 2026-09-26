@@ -1,0 +1,23 @@
+ALTER TABLE "public"."OperationalCommandEffect"
+ADD CONSTRAINT "ck_oce_target_shape"
+CHECK (
+  (
+    (
+      "targetKind" = 'DOMAIN_ONLY'
+      AND "stockEvidenceId" IS NULL
+      AND "stockReservationEvidenceId" IS NULL
+    )
+    OR
+    (
+      "targetKind" = 'STOCK_EVIDENCE'
+      AND "stockEvidenceId" IS NOT NULL
+      AND "stockReservationEvidenceId" IS NULL
+    )
+    OR
+    (
+      "targetKind" = 'STOCK_RESERVATION_EVIDENCE'
+      AND "stockEvidenceId" IS NULL
+      AND "stockReservationEvidenceId" IS NOT NULL
+    )
+  ) IS TRUE
+);

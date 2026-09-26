@@ -1,0 +1,5 @@
+CREATE CONSTRAINT TRIGGER "ctrg_cajas_dispatch_min_line_on_dispatch"
+AFTER INSERT ON "public"."cajas_dispatch"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION "public"."fn_cajas_dispatch_min_line"();

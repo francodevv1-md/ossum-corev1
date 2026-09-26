@@ -1,0 +1,32 @@
+{
+  "commandCapture": {
+    "directoryPattern": "commands/CNNNN-<slug>",
+    "requiredFiles": ["request.json", "result.json", "stdout.bin", "stderr.bin", "stdout.sha256", "stderr.sha256"],
+    "rawBytesAlwaysPresent": true,
+    "requestFields": ["argv", "artifactLinks", "category", "cwd", "environmentKeys", "executable", "expectedOutputPolicy", "id", "started", "timeoutMilliseconds"],
+    "resultFields": ["artifactLinks", "code", "durationMilliseconds", "ended", "error", "id", "signal", "stderrBytes", "stderrSha256", "stdoutBytes", "stdoutSha256", "timedOut"]
+  },
+  "completion": {
+    "detachedRoot": "completion.sha256",
+    "finalEventExcludedFromPayloadInventory": true,
+    "order": ["manifest.json", "immutable payloads including run.json finalization=PENDING", "hashes.sha256", "completion.json verdict=PASS", "completion.sha256", "events/0003-review-held.json binding completion root"]
+  },
+  "cxManifestFields": ["id", "c14Child", "attachmentAfter", "coversSnapshots", "purpose", "sourceAuthorities", "namedObjects", "namedInvariants", "semanticQuestions", "extensionCount", "checkCount", "functionCount", "triggerCount", "exclusionCount", "constraintTriggerCount", "predicateCount", "branchCount", "dependencyCount", "eventCount", "minimumLineEventCount", "occurrenceLedgerCount", "occurrenceLedgerSha256", "lowerLines", "pointLines", "upperLines", "catalogVersion", "unresolved", "splitRequired", "prohibitedOverlap", "reviewStatus", "notes"],
+  "cxOccurrenceLedger": {
+    "categories": ["object", "predicate", "branch", "dependency", "event"],
+    "fields": ["ledgerVersion", "id", "cx", "category", "citation", "data", "sha256"],
+    "path": "bindings/cx-occurrences.jsonl",
+    "perCxVectorBindings": ["occurrenceLedgerCount", "occurrenceLedgerSha256"]
+  },
+  "eventFields": ["actor", "closureRoot", "evidenceState", "ordinal", "previousSha256", "reason", "state", "utc"],
+  "events": ["events/0001-reserved.json", "events/0002-running.json", "events/0003-review-held.json"],
+  "immutable": ["run.lock", "runner/runner.mjs", "runner/runner.sha256", "run.json", "protocol.json", "manifest.json", "quarantine-manifest.json", "projection-manifest.json", "inputs/S00.prisma..S24.prisma", "projections/P00.prisma..P24.prisma", "ps/PS01/raw.sql..PS24/raw.sql", "cx/CX01/manifest.json..CX13/manifest.json", "commands/**", "reports/**", "hashes.sha256", "completion.json", "completion.sha256"],
+  "projectionManifestFields": ["bytes", "captureIds", "enumReferences", "exclusions", "formattedSha256", "formatPass1Sha256", "formatPass2Sha256", "id", "inverseRemovals", "inventory", "preFormatBytes", "preFormatSha256", "retainedStageSet", "sourceBlob", "sourceCommit"],
+  "manifestFields": ["approvalBindings", "bindingSetRoot", "expectedEvidencePaths", "exclusions", "finalC13", "isolation", "nonAuthority", "ownerLock", "paths", "runner", "toolchain"],
+  "parserTestReportFields": ["caseInventoryHash", "cases[id,result,resultSha256,status]", "mode", "overallVerdict", "version"],
+  "protocolFields": ["allowedCli", "bindingSetRoot", "commandBinding", "commandBindingSha256", "commandTemplates", "commandTemplatesSha256", "constants", "documentationSources", "parentEstimationBlob", "stopRules", "topologyBlob", "versions"],
+  "reports": ["counts.csv", "operations.json", "no-op.json", "repo-guard.json", "repo-before.porcelain-v2-z", "repo-after.porcelain-v2-z", "split.json", "parser-tests.json"],
+  "runFields": ["commandIndex", "commandCount", "diffCount", "phaseVerdicts including finalization=PENDING", "projectionCount", "status=pre-final"],
+  "scratch": ["scratch/projections/P00.prisma..P24.prisma", "scratch/tmp/**"],
+  "writeContract": "Write immutable payloads with exclusive temporary sibling creation, fsync, atomic rename, and no overwrite. Only scratch/** may be mutated; only Prisma format may rewrite scratch projections."
+}

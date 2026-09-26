@@ -1,0 +1,55 @@
+CREATE FUNCTION "public"."fn_stock_quantity_scale_guard"() RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SECURITY INVOKER
+SET search_path = ''
+AS $c14fn$
+DECLARE
+  v_valid boolean;
+BEGIN
+  SELECT
+    NOT EXISTS (
+      SELECT 1
+      FROM (VALUES (NEW."fromPositionId"), (NEW."toPositionId")) AS "referencedPosition"("positionId")
+      WHERE "referencedPosition"."positionId" IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "public"."StockPosition" AS "position"
+          WHERE ("position"."companyId", "position"."id") = (NEW."companyId", "referencedPosition"."positionId")
+            AND ("position"."articleId", "position"."stockUnit", "position"."quantityScale") = (NEW."articleId", NEW."stockUnit", NEW."scaleSnapshot")
+        )
+    )
+    AND (
+      NEW."reservationId" IS NULL
+      OR EXISTS (
+        SELECT 1
+        FROM "public"."StockReservation" AS "reservation"
+        JOIN "public"."StockPosition" AS "reservedPosition"
+          ON "reservedPosition"."companyId" = "reservation"."companyId"
+         AND "reservedPosition"."id" = "reservation"."positionId"
+        WHERE ("reservation"."companyId", "reservation"."id") = (NEW."companyId", NEW."reservationId")
+          AND ("reservedPosition"."articleId", "reservedPosition"."stockUnit", "reservedPosition"."quantityScale") = (NEW."articleId", NEW."stockUnit", NEW."scaleSnapshot")
+      )
+    )
+  INTO v_valid;
+
+  IF v_valid IS TRUE THEN
+    RETURN NEW;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = '23514',
+      MESSAGE = 'C14 invariant violation',
+      DETAIL = 'c14e1;schema=' || TG_TABLE_SCHEMA ||
+               ';table=' || TG_TABLE_NAME ||
+               ';operation=' || TG_OP ||
+               ';invariant=function:fn_stock_quantity_scale_guard' ||
+               ';function=fn_stock_quantity_scale_guard' ||
+               ';branch=R0001' ||
+               ';family=ROW_OR_CROSS_ROW_GUARD',
+      HINT = 'messageId=C14_INV_FN_FN_STOCK_QUANTITY_SCALE_GUARD',
+      CONSTRAINT = TG_NAME,
+      SCHEMA = TG_TABLE_SCHEMA,
+      TABLE = TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

@@ -1,0 +1,216 @@
+CREATE FUNCTION "public"."fn_stock_evidence_line_parent_guard"() RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SECURITY INVOKER
+SET search_path = ''
+AS $c14fn$
+DECLARE
+  v_valid boolean;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM "public"."StockEvidence" AS "evidence"
+    LEFT JOIN "public"."StockEvidence" AS "baseEvidence"
+      ON "baseEvidence"."companyId" = "evidence"."companyId"
+     AND "baseEvidence"."id" = COALESCE("evidence"."correctsEvidenceId", "evidence"."reversesEvidenceId")
+    LEFT JOIN "public"."StockEvidenceLine" AS "baseLine"
+      ON "baseLine"."companyId" = "baseEvidence"."companyId"
+     AND "baseLine"."evidenceId" = "baseEvidence"."id"
+     AND "baseLine"."lineNumber" = NEW."lineNumber"
+    WHERE "evidence"."companyId" = NEW."companyId"
+      AND "evidence"."id" = NEW."evidenceId"
+      AND (
+        (
+          "evidence"."recordKind" = 'ORIGINAL'
+          AND "evidence"."kind" IN ('OPENING', 'RECEIPT', 'DISPATCH', 'RETURN', 'CONSUMPTION', 'COUNT_OBSERVATION', 'REVIEW_HOLD', 'REVIEW_RELEASE')
+          AND "baseEvidence"."id" IS NULL
+        )
+        OR
+        (
+          "evidence"."recordKind" IN ('CORRECTION', 'REVERSAL')
+          AND "baseEvidence"."id" IS NOT NULL
+          AND "baseEvidence"."id" <> "evidence"."id"
+          AND "baseEvidence"."recordKind" = 'ORIGINAL'
+          AND "baseEvidence"."kind" IN ('OPENING', 'RECEIPT', 'DISPATCH', 'RETURN', 'CONSUMPTION', 'COUNT_OBSERVATION', 'REVIEW_HOLD', 'REVIEW_RELEASE')
+          AND "baseEvidence"."correctsEvidenceId" IS NULL
+          AND "baseEvidence"."reversesEvidenceId" IS NULL
+          AND ("evidence"."sourceDomain", "evidence"."sourceEntityType", "evidence"."sourceEntityId") = ("baseEvidence"."sourceDomain", "baseEvidence"."sourceEntityType", "baseEvidence"."sourceEntityId")
+          AND "evidence"."activationBoundaryId" IS NOT DISTINCT FROM "baseEvidence"."activationBoundaryId"
+          AND "evidence"."acceptedAt" >= "baseEvidence"."acceptedAt"
+          AND "baseLine"."id" IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "public"."StockEvidence" AS "otherAdjustment"
+            WHERE "otherAdjustment"."companyId" = "baseEvidence"."companyId"
+              AND "otherAdjustment"."id" <> "evidence"."id"
+              AND (
+                "otherAdjustment"."correctsEvidenceId" = "baseEvidence"."id" OR "otherAdjustment"."reversesEvidenceId" = "baseEvidence"."id"
+              )
+          )
+        )
+      )
+      AND (
+        (
+          COALESCE("baseEvidence"."kind", "evidence"."kind") IN ('OPENING', 'RECEIPT', 'RETURN')
+          AND NEW."fromPositionId" IS NULL
+          AND NEW."toPositionId" IS NOT NULL
+        )
+        OR
+        (
+          COALESCE("baseEvidence"."kind", "evidence"."kind") IN ('DISPATCH', 'CONSUMPTION', 'COUNT_OBSERVATION', 'REVIEW_HOLD', 'REVIEW_RELEASE')
+          AND NEW."fromPositionId" IS NOT NULL
+          AND NEW."toPositionId" IS NULL
+        )
+        OR
+        (
+          "evidence"."recordKind" = 'REVERSAL'
+          AND "baseEvidence"."kind" IN ('OPENING', 'RECEIPT', 'RETURN')
+          AND NEW."fromPositionId" = "baseLine"."toPositionId"
+          AND NEW."toPositionId" IS NULL
+        )
+        OR
+        (
+          "evidence"."recordKind" = 'REVERSAL'
+          AND "baseEvidence"."kind" IN ('DISPATCH', 'CONSUMPTION')
+          AND NEW."fromPositionId" IS NULL
+          AND NEW."toPositionId" = "baseLine"."fromPositionId"
+        )
+      )
+      AND (
+        COALESCE("baseEvidence"."kind", "evidence"."kind") <> 'OPENING'
+        OR EXISTS (
+          SELECT 1
+          FROM "public"."StockActivationBoundary" AS "boundary"
+          WHERE "boundary"."companyId" = "evidence"."companyId"
+            AND "boundary"."id" = COALESCE("baseEvidence"."activationBoundaryId", "evidence"."activationBoundaryId")
+            AND "boundary"."positionId" = COALESCE("baseLine"."toPositionId", NEW."toPositionId")
+            AND "evidence"."acceptedAt" >= "boundary"."cutoffAt"
+        )
+      )
+      AND (
+        COALESCE("baseEvidence"."kind", "evidence"."kind") = 'OPENING'
+        OR "evidence"."activationBoundaryId" IS NULL
+      )
+      AND (
+        "evidence"."recordKind" = 'ORIGINAL'
+        OR (
+          (NEW."articleId", NEW."stockUnit", NEW."scaleSnapshot") = ("baseLine"."articleId", "baseLine"."stockUnit", "baseLine"."scaleSnapshot")
+          AND (NEW."reservationId", NEW."sourceLineId") IS NOT DISTINCT FROM ("baseLine"."reservationId", "baseLine"."sourceLineId")
+          AND (
+            (
+              "evidence"."recordKind" = 'CORRECTION'
+              AND NEW."fromPositionId" IS NOT DISTINCT FROM "baseLine"."fromPositionId"
+              AND NEW."toPositionId" IS NOT DISTINCT FROM "baseLine"."toPositionId"
+            )
+            OR
+            (
+              "evidence"."recordKind" = 'REVERSAL'
+              AND NEW."quantity" = "baseLine"."quantity"
+              AND NEW."lotCodeSnapshot" IS NOT DISTINCT FROM "baseLine"."lotCodeSnapshot"
+              AND NEW."expirationDateSnapshot" IS NOT DISTINCT FROM "baseLine"."expirationDateSnapshot"
+              AND NEW."serialNumberSnapshot" IS NOT DISTINCT FROM "baseLine"."serialNumberSnapshot"
+              AND NEW."identifiedCodeSnapshot" IS NOT DISTINCT FROM "baseLine"."identifiedCodeSnapshot"
+              AND (
+                (
+                  "baseEvidence"."kind" IN ('OPENING', 'RECEIPT', 'RETURN')
+                  AND NEW."fromPositionId" = "baseLine"."toPositionId"
+                  AND NEW."toPositionId" IS NULL
+                )
+                OR
+                (
+                  "baseEvidence"."kind" IN ('DISPATCH', 'CONSUMPTION')
+                  AND NEW."fromPositionId" IS NULL
+                  AND NEW."toPositionId" = "baseLine"."fromPositionId"
+                )
+                OR
+                (
+                  "baseEvidence"."kind" IN ('COUNT_OBSERVATION', 'REVIEW_HOLD', 'REVIEW_RELEASE')
+                  AND NEW."fromPositionId" = "baseLine"."fromPositionId"
+                  AND NEW."toPositionId" IS NULL
+                )
+              )
+            )
+          )
+        )
+      )
+      AND (
+        "evidence"."recordKind" = 'REVERSAL'
+        OR EXISTS (
+          SELECT 1
+          FROM "public"."StockPosition" AS "tracePosition"
+          LEFT JOIN "public"."StockLot" AS "traceLot"
+            ON "traceLot"."companyId" = "tracePosition"."companyId"
+           AND "traceLot"."articleId" = "tracePosition"."articleId"
+           AND "traceLot"."id" = "tracePosition"."lotId"
+          LEFT JOIN "public"."StockLotObservation" AS "traceObservation"
+            ON "traceObservation"."companyId" = "traceLot"."companyId"
+           AND "traceObservation"."articleId" = "traceLot"."articleId"
+           AND "traceObservation"."id" = "traceLot"."primaryObservationId"
+          LEFT JOIN "public"."StockIdentifiedUnitCurrentConfiguration" AS "traceConfiguration"
+            ON "traceConfiguration"."companyId" = "tracePosition"."companyId"
+           AND "traceConfiguration"."identifiedUnitId" = "tracePosition"."identifiedUnitId"
+          WHERE "tracePosition"."companyId" = NEW."companyId"
+            AND "tracePosition"."articleId" = NEW."articleId"
+            AND "tracePosition"."id" = COALESCE(NEW."fromPositionId", NEW."toPositionId")
+            AND (
+              (
+                "tracePosition"."traceMode" = 'NONE'
+                AND NEW."lotCodeSnapshot" IS NULL
+                AND NEW."expirationDateSnapshot" IS NULL
+                AND NEW."serialNumberSnapshot" IS NULL
+                AND NEW."identifiedCodeSnapshot" IS NULL
+              )
+              OR
+              (
+                "tracePosition"."traceMode" = 'LOT'
+                AND NEW."lotCodeSnapshot" = "traceObservation"."displayLotCode"
+                AND NEW."expirationDateSnapshot" IS NOT DISTINCT FROM "traceObservation"."expirationDate"
+                AND NEW."serialNumberSnapshot" IS NULL
+                AND NEW."identifiedCodeSnapshot" IS NULL
+              )
+              OR
+              (
+                "tracePosition"."traceMode" = 'IDENTIFIED_UNIT'
+                AND NEW."lotCodeSnapshot" IS NULL
+                AND NEW."expirationDateSnapshot" IS NULL
+                AND NEW."serialNumberSnapshot" IS NOT DISTINCT FROM "traceConfiguration"."serialNumber"
+                AND NEW."identifiedCodeSnapshot" = "traceConfiguration"."internalCode"
+              )
+            )
+        )
+      )
+      AND (
+        NEW."reservationId" IS NULL
+        OR (
+          COALESCE("baseEvidence"."kind", "evidence"."kind") = 'DISPATCH'
+          AND EXISTS (
+            SELECT 1
+            FROM "public"."StockReservation" AS "reservation"
+            WHERE "reservation"."companyId" = NEW."companyId"
+              AND "reservation"."id" = NEW."reservationId"
+              AND "reservation"."positionId" = COALESCE("baseLine"."fromPositionId", NEW."fromPositionId")
+          )
+        )
+      )
+  ) INTO v_valid;
+
+  IF v_valid IS TRUE THEN
+    RETURN NEW;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = '23514',
+      MESSAGE = 'C14 invariant violation',
+      DETAIL = 'c14e1;schema=' || TG_TABLE_SCHEMA ||
+               ';table=' || TG_TABLE_NAME ||
+               ';operation=' || TG_OP ||
+               ';invariant=function:fn_stock_evidence_line_parent_guard' ||
+               ';function=fn_stock_evidence_line_parent_guard' ||
+               ';branch=R0001' ||
+               ';family=ROW_OR_CROSS_ROW_GUARD',
+      HINT = 'messageId=C14_INV_FN_FN_STOCK_EVIDENCE_LINE_PARENT_GUARD',
+      CONSTRAINT = TG_NAME,
+      SCHEMA = TG_TABLE_SCHEMA,
+      TABLE = TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

@@ -1,0 +1,111 @@
+{
+  "bindingVersion": "c14-est-bindings-v5-occurrence-ledger",
+  "executionApproval": null,
+  "externalRoot": "C:\\Users\\franc\\AppData\\Local\\Temp\\opencode\\c14-est-b8608a92",
+  "finalC13": {
+    "commit": "0faf2f55e178f1b111c5ae108380a505a68c8feb",
+    "migrationCount": 18,
+    "migrationTree": "5c6e4b9e6e4e7fd5a632d3fb68a2dc161f62ad9c",
+    "parent": "609aea48ccc6910aa864b09f324030f06010d4aa",
+    "schemaBlob": "47313a8a85ac71ac56df93ce212593820cb95a13",
+    "schemaBytes": 192607,
+    "schemaSha256": "32f6e414ccfe315ea1338d37badbc92db8255ae278211b09be1c7c3a78fdafb7",
+    "tree": "a967f808fdc0a7662d7ce45b472301422210038a"
+  },
+  "fsutil": {
+    "bytes": 280040,
+    "path": "C:\\Windows\\System32\\fsutil.exe",
+    "sha256": "3fca44b7ce971031c08296647821e04dc7aa62c0f5846a3a0dc7015d5a4bc501"
+  },
+  "git": {
+    "bytes": 46480,
+    "path": "C:\\Program Files\\Git\\cmd\\git.exe",
+    "sha256": "3cbd024d9d11ef08bd6a0cb5a973613c50825b4952bc6006f3f4222f436091e5"
+  },
+  "node": {
+    "bytes": 91673600,
+    "path": "C:\\Program Files\\nodejs\\node.exe",
+    "sha256": "91ec09dda8f20556f366110859f106ab189d45f8f6a2bd092e6785174ad4a0fa",
+    "version": "25.2.1"
+  },
+  "packageLock": {
+    "blob": "6f9d004d10d00b6f6219eddd4b238736a56e852a",
+    "bytes": 653272,
+    "path": "package-lock.json",
+    "sha256": "e1d0056af65a849290caea24ff7159844c23f4faa2785a0d087ec2cc3e06d593"
+  },
+  "packageManifest": {
+    "blob": "cb9ab0d7910f4e1b74ccf62b93098ad710fde5e0",
+    "bytes": 4412,
+    "path": "package.json",
+    "sha256": "c0ca25dbc959c3487be4df2efbc8390f44b735a58446186b5296eff0888acd38"
+  },
+  "prisma": {
+    "cli": {
+      "bytes": 2662793,
+      "path": "E:\\OSSUM_COR_PROJECT\\node_modules\\prisma\\build\\index.js",
+      "sha256": "0367633ed980170cac67d10f9c4fecbc495806d3465af2bf5b8018bf1232470d"
+    },
+    "client": {
+      "integrity": "sha512-HFp3Dawv/3sU3JtlPha90IB+48lS7zHiH4LKZPjmcE8YH5P9DOXGPvo8dqOtO7MqLDd1p2hOWMcFlRT1DMblHw==",
+      "packageBytes": 8511,
+      "packagePath": "E:\\OSSUM_COR_PROJECT\\node_modules\\@prisma\\client\\package.json",
+      "packageSha256": "a64669ec1b457f2651b3de564db6b9604e89460cb349641afffa73b0bbf3939a",
+      "version": "7.8.0"
+    },
+    "engine": {
+      "bytes": 20978176,
+      "commit": "3c6e192761c0362d496ed980de936e2f3cebcd3a",
+      "path": "E:\\OSSUM_COR_PROJECT\\node_modules\\@prisma\\engines\\schema-engine-windows.exe",
+      "sha256": "29c2811f9918e84e38e8d166726bdaceeea7aa58d62398fdb0761d8ea2b08c8e"
+    },
+    "package": {
+      "bin": "build/index.js",
+      "integrity": "sha512-yfN4yrw7HV9kEJhoy1+jgah0jafEIQsf7uWouSsM8MvJtlubsk+kM7AIBWZ8+GJl74Yj3c+nbYqBkMOxtsZ3Lw==",
+      "packageBytes": 5502,
+      "packagePath": "E:\\OSSUM_COR_PROJECT\\node_modules\\prisma\\package.json",
+      "packageSha256": "d98a88695435d693b66c27d9e8e1b083fc5e544890ce2bdfe755b9f90846e35b",
+      "version": "7.8.0"
+    },
+    "shim": {
+      "bytes": 326,
+      "evidenceOnly": true,
+      "path": "E:\\OSSUM_COR_PROJECT\\node_modules\\.bin\\prisma.cmd",
+      "sha256": "318295660573ab116b8d6ca312c716ddbe4d3544c6ea7928ccd3871d0933e600"
+    }
+  },
+  "repository": {
+    "packageLockPath": "E:\\OSSUM_COR_PROJECT\\package-lock.json",
+    "packageManifestPath": "E:\\OSSUM_COR_PROJECT\\package.json",
+    "path": "E:\\OSSUM_COR_PROJECT",
+    "s00Commit": "02a50044d879248236805bb47b5782845a5f5bd8",
+    "s00SchemaBlob": "a92e6c2a42b70685e8d2e9076313f1b064858034"
+  },
+  "snapshots": [
+    ["S00", "02a50044d879248236805bb47b5782845a5f5bd8", "a92e6c2a42b70685e8d2e9076313f1b064858034"],
+    ["S01", "c93119f21fb90e7eed8c96152c85667b2cccdea7", "163f0ebce9623a2bdd47b347ede7cc57f58b2d5c"],
+    ["S02", "bac87f4edad8e8f6735377abe7d62739200de5c1", "99f0841bb77a10993c679d715d24da9e6b4ce203"],
+    ["S03", "2b8285584c12d8e8fcc9726dd88601c162523990", "430d74f3697ec9e39abbeae27bb3894753f8acfc"],
+    ["S04", "604347ecd7859bd316d036f60a69777734d4b4b5", "afe5e552387fc801bfe7fc23db86fbac4de7e125"],
+    ["S05", "cf85099786c5839d24a7e64149daa2f7c3acfe24", "0f751eaf9eab6ccb2a016a235ad59ef4867eff04"],
+    ["S06", "66165aefa077073335e9821fd10752cfc1c37e59", "2433f98922be3684efd512ad0515adbd4621dc73"],
+    ["S07", "0fc8f326345bc5b477c28e7dfc9095c5a8f9fc44", "eeb2d8510dced1e51a6922e62657204d3020395e"],
+    ["S08", "1a116002c83adaee1e9864ab0e34e4212ff390ee", "17cef1f796f8bba68330de0b3c3880164cb5c137"],
+    ["S09", "2ffb60aae18985d1f1d13094c290906c3105de99", "7224292c3c34f094fa8eed617f37291675ed35d9"],
+    ["S10", "ee8d9e4fb4465984b2832fb4b044f4c73eab13ae", "e920c20a69e249c10a3cab5c76185501225a1446"],
+    ["S11", "849f4938d6e62e5e0b5a41e2fcaa241e4c2980c2", "e770fe98de1439e963175b24512c14abe4ed39d7"],
+    ["S12", "93c9b72758954ad5f1ac9ed8567fc3462fa847cf", "ed45d81b89c7ea448497a4cde01539c2f7d91490"],
+    ["S13", "77326b249cfe8ba580a39b2b2011b7d68bcb3599", "988f72cb688b5aa6d1c4de5340ec9887dcfffad0"],
+    ["S14", "156d82d2916c43f878782cabb17d4623aba5bee1", "df5a2ab5ec94027a2a873b0a4a97e12dd2405e05"],
+    ["S15", "980194449633c927eb22e20dec4467aba7f1c95b", "b68cb2676253636234e2ef2d7a6aa47d659f01e5"],
+    ["S16", "b8fc9e667ec6901178ba1274d897c007a698482a", "ec170b6fbd65238d0e465ab105458bf472e4372e"],
+    ["S17", "ab444b61b585a49149994acb4338f44a16996365", "6a2fa2f6c1a6044a2fa3bcc9cfa455719638bb76"],
+    ["S18", "abf1bd27a86a44facde580b39496c1bfb655fa91", "4bf945809f476d20ed8303dff30bb6fa1778853a"],
+    ["S19", "cb4b0e5c9bd19dada42a1fcd9c8d29be89e56f19", "d08d3a35ae3fec4cf1641255b51adbdd672b0806"],
+    ["S20", "406c86b33750e76cba937f305725b4960fdbfa5f", "0697da95236ccfc35128db626c0ac82c2cf637b3"],
+    ["S21", "53f9d0ff5863224856ed9871f5986663cfbf4713", "751ef97e7e41d16dc7976ac544e0be97159b5e1c"],
+    ["S22", "fa6a200783f451ff6b61218987c22188d5341766", "48ac493f53e12bd672d0f9d9aae0e257ed2638d3"],
+    ["S23", "609aea48ccc6910aa864b09f324030f06010d4aa", "af7e0c6ca32bf5efba3f11f42e92c55dab8944ca"],
+    ["S24", "0faf2f55e178f1b111c5ae108380a505a68c8feb", "47313a8a85ac71ac56df93ce212593820cb95a13"]
+  ]
+}

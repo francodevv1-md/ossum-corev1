@@ -1,0 +1,6 @@
+25a6593e561e4c758dca0d072e98fa0fec2b2f2b92175c44a9bf481b62e5dbaa  PROPOSAL.md
+b003341b39302b71ae9c772b0cede0b779616e6da5628926d4b90d4fdd51bd7f  01-check-ck-sab-valid-window.sqlfrag
+da13657507d61fe2a4e04ccff156f3c86c5f406659f2eddc29644038f5b38577  02-check-ck-sop-quantity-nonnegative.sqlfrag
+1886f2b5eb8acb1f354d8c84f0db69884f4f94aa61558a0727b9841fc77a1815  03-check-ck-sop-scale-snapshot.sqlfrag
+9f8daa610d7d70a804c93ed9e919afdac03b01894341ac66d2763c10230d3bc5  rendering-manifest.cj1
+# detached-proposal-root-sha256: 42f2141e2c59d04d7dc92d119dd07f5df10cc281fe382426f50f41d107255744

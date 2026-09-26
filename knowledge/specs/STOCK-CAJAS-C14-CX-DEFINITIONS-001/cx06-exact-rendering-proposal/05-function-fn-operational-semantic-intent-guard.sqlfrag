@@ -1,0 +1,46 @@
+CREATE FUNCTION "public"."fn_operational_semantic_intent_guard"() RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SECURITY INVOKER
+SET search_path = ''
+AS $c14fn$
+DECLARE
+  v_coherent boolean;
+BEGIN
+  SELECT NOT EXISTS (
+    SELECT 1
+    FROM "public"."OperationalCommandAcceptance" AS "acceptedCommand"
+    WHERE "acceptedCommand"."companyId" = NEW."companyId"
+      AND "acceptedCommand"."domain" = NEW."domain"
+      AND "acceptedCommand"."sourceOperationId" = NEW."sourceOperationId"
+      AND "acceptedCommand"."checkpoint" = NEW."checkpoint"
+      AND "acceptedCommand"."scopeKey" = NEW."scopeKey"
+      AND "acceptedCommand"."id" <> NEW."id"
+      AND (
+        "acceptedCommand"."intentHash" IS DISTINCT FROM NEW."intentHash"
+        OR "acceptedCommand"."resultEntityType" IS DISTINCT FROM NEW."resultEntityType"
+        OR "acceptedCommand"."resultEntityId" IS DISTINCT FROM NEW."resultEntityId"
+      )
+  )
+  INTO v_coherent;
+
+  IF v_coherent IS TRUE THEN
+    RETURN NEW;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = '23514',
+      MESSAGE = 'C14 invariant violation',
+      DETAIL = 'c14e1;schema=' || TG_TABLE_SCHEMA ||
+               ';table=' || TG_TABLE_NAME ||
+               ';operation=' || TG_OP ||
+               ';invariant=function:fn_operational_semantic_intent_guard' ||
+               ';function=fn_operational_semantic_intent_guard' ||
+               ';branch=R0001' ||
+               ';family=ROW_OR_CROSS_ROW_GUARD',
+      HINT = 'messageId=C14_INV_FN_FN_OPERATIONAL_SEMANTIC_INTENT_GUARD',
+      CONSTRAINT = TG_NAME,
+      SCHEMA = TG_TABLE_SCHEMA,
+      TABLE = TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

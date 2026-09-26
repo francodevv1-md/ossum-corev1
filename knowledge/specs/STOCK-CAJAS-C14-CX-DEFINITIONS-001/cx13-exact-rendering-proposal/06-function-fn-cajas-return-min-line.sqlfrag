@@ -1,0 +1,16 @@
+CREATE FUNCTION "public"."fn_cajas_return_min_line"() RETURNS trigger
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path = ''
+AS $c14fn$
+DECLARE v_valid boolean;
+BEGIN
+  IF TG_TABLE_NAME = 'cajas_return_confirmation' THEN
+    SELECT EXISTS (SELECT 1 FROM "public"."cajas_return_line" AS "line" WHERE ("line"."company_id","line"."return_confirmation_id")=(NEW."company_id",NEW."id")) INTO v_valid;
+  ELSE
+    SELECT EXISTS (SELECT 1 FROM "public"."cajas_return_line" AS "line" WHERE ("line"."company_id","line"."return_confirmation_id")=(OLD."company_id",OLD."return_confirmation_id"))
+      AND (TG_OP <> 'UPDATE' OR (NEW."company_id",NEW."return_confirmation_id")=(OLD."company_id",OLD."return_confirmation_id") OR EXISTS (SELECT 1 FROM "public"."cajas_return_line" AS "line" WHERE ("line"."company_id","line"."return_confirmation_id")=(NEW."company_id",NEW."return_confirmation_id"))) INTO v_valid;
+  END IF;
+  IF v_valid IS TRUE THEN RETURN NULL; ELSE
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='C14 invariant violation', DETAIL='c14e1;schema='||TG_TABLE_SCHEMA||';table='||TG_TABLE_NAME||';operation='||TG_OP||';invariant=function:fn_cajas_return_min_line;function=fn_cajas_return_min_line;branch=R0001;family=MINIMUM_LINE', HINT='messageId=C14_INV_FN_FN_CAJAS_RETURN_MIN_LINE', CONSTRAINT=TG_NAME, SCHEMA=TG_TABLE_SCHEMA, TABLE=TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

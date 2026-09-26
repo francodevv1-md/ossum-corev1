@@ -1,0 +1,1 @@
+export const execute = Object.freeze({ bundleId: "WCB-10", contractIds: ["ISW-CX12-04"], payloadSectionIds: ["differenceResolution"], bundleRowSha256: "2cb5f05f3decc9915ff4dbe37749e2e09076c56b7ec78224b7ef2ccf5ad657fc", productState: "INERT" } as const)

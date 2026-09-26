@@ -1,0 +1,3 @@
+ALTER TABLE "public"."cajas_box_formula"
+ADD CONSTRAINT "ck_cbf_next_version_positive"
+CHECK (("next_version_number" > 0) IS TRUE);

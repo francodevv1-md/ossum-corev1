@@ -1,0 +1,5 @@
+CREATE CONSTRAINT TRIGGER "ctrg_cajas_return_min_line_on_line"
+AFTER UPDATE OR DELETE ON "public"."cajas_return_line"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION "public"."fn_cajas_return_min_line"();

@@ -1,0 +1,9 @@
+ALTER TABLE "public"."StockEvidenceLine"
+ADD CONSTRAINT "ck_sel_position_shape"
+CHECK (
+  (
+    ("fromPositionId" IS NOT NULL AND "toPositionId" IS NULL)
+    OR
+    ("fromPositionId" IS NULL AND "toPositionId" IS NOT NULL)
+  ) IS TRUE
+);

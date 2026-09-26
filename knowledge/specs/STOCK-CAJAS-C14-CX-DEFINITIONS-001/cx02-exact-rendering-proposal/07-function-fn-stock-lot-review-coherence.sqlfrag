@@ -1,0 +1,70 @@
+CREATE FUNCTION "public"."fn_stock_lot_review_coherence"() RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SECURITY INVOKER
+SET search_path = ''
+AS $c14fn$
+DECLARE
+  v_coherent boolean;
+BEGIN
+  SELECT
+    EXISTS (
+      SELECT 1
+      FROM "public"."StockLotObservation" AS "leftObservation"
+      WHERE "leftObservation"."companyId" = NEW."companyId"
+        AND "leftObservation"."articleId" = NEW."articleId"
+        AND "leftObservation"."id" = NEW."leftObservationId"
+        AND "leftObservation"."normalizedLotCode" = NEW."normalizedLotCode"
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM "public"."StockLotObservation" AS "rightObservation"
+      WHERE "rightObservation"."companyId" = NEW."companyId"
+        AND "rightObservation"."articleId" = NEW."articleId"
+        AND "rightObservation"."id" = NEW."rightObservationId"
+        AND "rightObservation"."normalizedLotCode" = NEW."normalizedLotCode"
+    )
+    AND (
+      NEW."resolutionObservationId" IS NULL
+      OR EXISTS (
+        SELECT 1
+        FROM "public"."StockLotObservation" AS "resolutionObservation"
+        WHERE "resolutionObservation"."companyId" = NEW."companyId"
+          AND "resolutionObservation"."articleId" = NEW."articleId"
+          AND "resolutionObservation"."id" = NEW."resolutionObservationId"
+          AND "resolutionObservation"."normalizedLotCode" = NEW."normalizedLotCode"
+      )
+    )
+    AND (
+      NEW."canonicalLotId" IS NULL
+      OR EXISTS (
+        SELECT 1
+        FROM "public"."StockLot" AS "canonicalLot"
+        WHERE "canonicalLot"."companyId" = NEW."companyId"
+          AND "canonicalLot"."articleId" = NEW."articleId"
+          AND "canonicalLot"."id" = NEW."canonicalLotId"
+          AND "canonicalLot"."normalizedLotCode" = NEW."normalizedLotCode"
+      )
+    )
+  INTO v_coherent;
+
+  IF v_coherent IS TRUE THEN
+    RETURN NEW;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = '23514',
+      MESSAGE = 'C14 invariant violation',
+      DETAIL = 'c14e1;schema=' || TG_TABLE_SCHEMA ||
+               ';table=' || TG_TABLE_NAME ||
+               ';operation=' || TG_OP ||
+               ';invariant=function:fn_stock_lot_review_coherence' ||
+               ';function=fn_stock_lot_review_coherence' ||
+               ';branch=R0001' ||
+               ';family=ROW_OR_CROSS_ROW_GUARD',
+      HINT = 'messageId=C14_INV_FN_FN_STOCK_LOT_REVIEW_COHERENCE',
+      CONSTRAINT = TG_NAME,
+      SCHEMA = TG_TABLE_SCHEMA,
+      TABLE = TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

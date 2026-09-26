@@ -1,0 +1,5 @@
+ALTER TABLE "public"."cajas_assignment"
+ADD CONSTRAINT "ck_ca_active_lifecycle" CHECK ((
+  ("active_slot" = 1 AND "ended_at" IS NULL AND "ended_by_id" IS NULL AND "end_cause" IS NULL AND "end_command_acceptance_id" IS NULL)
+  OR ("active_slot" IS NULL AND "ended_at" IS NOT NULL AND "ended_by_id" IS NOT NULL AND "end_cause" IS NOT NULL AND "end_command_acceptance_id" IS NOT NULL)
+) IS TRUE);

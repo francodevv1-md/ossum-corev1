@@ -1,0 +1,51 @@
+{
+  "allowed": {
+    "format": ["format", "--schema", "<external-projection-path>"],
+    "migrateDiff": ["migrate", "diff", "--from-schema", "<external-previous-projection-path>", "--to-schema", "<external-projection-path>", "--script"],
+    "validate": ["validate", "--schema", "<external-projection-path>"]
+  },
+  "capture": {
+    "directory": "commands/CNNNN-<slug>",
+    "files": ["request.json", "result.json", "stdout.bin", "stderr.bin", "stdout.sha256", "stderr.sha256"],
+    "gitMaterializationCommands": 94,
+    "parserSelfTestCommands": 1,
+    "prismaCommands": 99,
+    "totalCommandsIncludingTwoRepositoryGuards": 196
+  },
+  "bindingValidation": {
+    "catalogUnits": 11,
+    "customObjects": 168,
+    "finalizedCx": 13,
+    "maximumForecastLines": 264,
+    "occurrenceCategories": ["object", "predicate", "branch", "dependency", "event"],
+    "occurrenceLedger": "bindings/cx-occurrences.jsonl",
+    "occurrences": 610,
+    "requiredAddendumHash": "a860049af04a6ff07fbe9fae6ddb512a8ef0adc8",
+    "runRequiresDetachedRootApproval": true
+  },
+  "environments": {
+    "gitKeys": ["GCM_INTERACTIVE", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_OPTIONAL_LOCKS", "GIT_TERMINAL_PROMPT", "LC_ALL", "SystemRoot", "TZ", "WINDIR"],
+    "parserSelfTestKeys": ["CHECKPOINT_DISABLE", "NO_COLOR", "PRISMA_HIDE_UPDATE_MESSAGE", "SystemRoot", "TEMP", "TMP", "TZ", "WINDIR"],
+    "prismaKeys": ["CHECKPOINT_DISABLE", "NO_COLOR", "PRISMA_HIDE_UPDATE_MESSAGE", "SystemRoot", "TEMP", "TMP", "TZ", "WINDIR"]
+  },
+  "readOnlyVerification": {
+    "gitInvocations": 50,
+    "mode": "verify-projections",
+    "writes": 0
+  },
+  "parserSelfTest": {
+    "argv": ["<exact-runner-path>", "parser-self-test"],
+    "caseIds": ["prisma-nested-comments", "prisma-malformed-source", "projection-excluded-inverse", "projection-retained-target", "sql-safe-create-table", "sql-standard-function-blocked", "sql-escaped-function-blocked", "sql-dollar-procedure-blocked", "sql-trigger-blocked", "sql-line-classes", "sql-no-op-evidence", "prisma-semantic-identity"],
+    "cwd": "<external-root>",
+    "executable": "C:\\Program Files\\nodejs\\node.exe",
+    "expectedVerdict": "PASS",
+    "mode": "parser-self-test",
+    "shell": false
+  },
+  "launcher": {
+    "argvPrefix": ["<verified-prisma-cli-js>"],
+    "executable": "C:\\Program Files\\nodejs\\node.exe",
+    "options": {"cwd": "<external-root>", "shell": false}
+  },
+  "prohibited": ["cmd.exe", "powershell", "npx", "prisma.cmd execution", "shell", "PATH lookup", "process.env inheritance", "text redirection", "migrate dev", "migrate deploy", "migrate status", "migrate resolve", "db *", "datasource URL", "config source"]
+}

@@ -1,0 +1,31 @@
+ALTER TABLE "public"."StockCompatibilityReference"
+ADD CONSTRAINT "ck_scr_target"
+CHECK (
+  (
+    (
+      "disposition" = 'DETERMINISTICALLY_MAPPABLE'
+      AND "articleId" IS NOT NULL
+    )
+    OR
+    (
+      "disposition" = 'DESCRIPTIVE_SNAPSHOT_ONLY'
+      AND "articleId" IS NULL
+      AND "positionId" IS NULL
+      AND "identifiedUnitId" IS NULL
+    )
+    OR
+    (
+      "disposition" = 'UNRESOLVED_LEGACY'
+      AND "articleId" IS NULL
+      AND "positionId" IS NULL
+      AND "identifiedUnitId" IS NULL
+    )
+    OR
+    (
+      "disposition" = 'INCOMPATIBLE_REJECTED'
+      AND "articleId" IS NULL
+      AND "positionId" IS NULL
+      AND "identifiedUnitId" IS NULL
+    )
+  ) IS TRUE
+);

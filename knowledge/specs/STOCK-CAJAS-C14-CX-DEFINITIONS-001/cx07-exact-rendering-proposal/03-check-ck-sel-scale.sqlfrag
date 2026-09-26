@@ -1,0 +1,5 @@
+ALTER TABLE "public"."StockEvidenceLine"
+ADD CONSTRAINT "ck_sel_scale"
+CHECK (
+  ("scaleSnapshot" BETWEEN 0 AND 4) IS TRUE
+);

@@ -1,0 +1,140 @@
+CREATE FUNCTION "public"."fn_stock_unit_config_current_guard"() RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SECURITY INVOKER
+SET search_path = ''
+AS $c14fn$
+DECLARE
+  v_valid boolean;
+BEGIN
+  SELECT
+    EXISTS (
+      SELECT 1
+      FROM "public"."StockIdentifiedUnitConfigurationVersion" AS "targetVersion"
+      LEFT JOIN "public"."StockIdentifiedUnitConfigurationVersion" AS "priorVersion"
+        ON TG_OP = 'UPDATE'
+       AND "priorVersion"."companyId" = OLD."companyId"
+       AND "priorVersion"."identifiedUnitId" = OLD."identifiedUnitId"
+       AND "priorVersion"."id" = OLD."configurationVersionId"
+      WHERE "targetVersion"."companyId" = NEW."companyId"
+        AND "targetVersion"."identifiedUnitId" = NEW."identifiedUnitId"
+        AND "targetVersion"."id" = NEW."configurationVersionId"
+        AND "targetVersion"."internalCode" = NEW."internalCode"
+        AND "targetVersion"."serialNumber" IS NOT DISTINCT FROM NEW."serialNumber"
+        AND (
+          (
+            TG_OP = 'INSERT'
+            AND "targetVersion"."versionNumber" = 1
+            AND "targetVersion"."previousVersionId" IS NULL
+            AND NEW."version" = 1
+          )
+          OR
+          (
+            TG_OP = 'UPDATE'
+            AND NEW."companyId" = OLD."companyId"
+            AND NEW."identifiedUnitId" = OLD."identifiedUnitId"
+            AND "targetVersion"."previousVersionId" = OLD."configurationVersionId"
+            AND "targetVersion"."versionNumber" = "priorVersion"."versionNumber" + 1
+            AND NEW."version" = OLD."version" + 1
+          )
+        )
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM "public"."StockReservation" AS "reservation"
+      JOIN "public"."StockPosition" AS "reservationPosition"
+        ON "reservationPosition"."companyId" = "reservation"."companyId"
+       AND "reservationPosition"."id" = "reservation"."positionId"
+      WHERE "reservation"."companyId" = NEW."companyId"
+        AND (
+          "reservation"."identifiedUnitId" = NEW."identifiedUnitId"
+          OR "reservationPosition"."identifiedUnitId" = NEW."identifiedUnitId"
+        )
+        AND (
+          SELECT COALESCE(
+            SUM(
+              CASE
+                WHEN "reservationEvent"."kind" IN ('RESERVE', 'REPLACE')
+                 AND NOT EXISTS (
+                   SELECT 1
+                   FROM "public"."StockReservationEvidence" AS "replacementEvent"
+                   WHERE "replacementEvent"."companyId" = "reservationEvent"."companyId"
+                     AND "replacementEvent"."reservationId" = "reservationEvent"."reservationId"
+                     AND "replacementEvent"."replacesEvidenceId" = "reservationEvent"."id"
+                 )
+                  THEN "reservationEvent"."quantity"
+                WHEN "reservationEvent"."kind" IN ('RELEASE', 'CANCEL', 'APPLY_TO_DISPATCH')
+                  THEN -"reservationEvent"."quantity"
+                ELSE 0
+              END
+            ),
+            0
+          )
+          FROM "public"."StockReservationEvidence" AS "reservationEvent"
+          WHERE "reservationEvent"."companyId" = "reservation"."companyId"
+            AND "reservationEvent"."reservationId" = "reservation"."id"
+        ) > 0
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM "public"."cajas_assignment" AS "assignment"
+      WHERE "assignment"."company_id" = NEW."companyId"
+        AND "assignment"."box_identified_unit_id" = NEW."identifiedUnitId"
+        AND "assignment"."active_slot" = 1
+        AND "assignment"."ended_at" IS NULL
+        AND "assignment"."ended_by_id" IS NULL
+        AND "assignment"."end_cause" IS NULL
+        AND "assignment"."end_command_acceptance_id" IS NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM "public"."StockIdentifiedUnitOccupancy" AS "occupancy"
+      JOIN "public"."StockPosition" AS "position"
+        ON "position"."companyId" = "occupancy"."companyId"
+       AND "position"."id" = "occupancy"."currentPositionId"
+       AND "position"."identifiedUnitId" = "occupancy"."identifiedUnitId"
+      JOIN "public"."StockContext" AS "context"
+        ON "context"."companyId" = "position"."companyId"
+       AND "context"."id" = "position"."contextId"
+      WHERE "occupancy"."companyId" = NEW."companyId"
+        AND "occupancy"."identifiedUnitId" = NEW."identifiedUnitId"
+        AND "context"."kind" = 'EXTERNAL_CUSTODY'
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM "public"."cajas_disposition" AS "disposition"
+      JOIN "public"."cajas_dispatch_line" AS "dispatchLine"
+        ON "dispatchLine"."company_id" = "disposition"."company_id"
+       AND "dispatchLine"."dispatch_id" = "disposition"."dispatch_id"
+       AND "dispatchLine"."id" = "disposition"."dispatch_line_id"
+      JOIN "public"."StockPosition" AS "dispositionPosition"
+        ON "dispositionPosition"."companyId" = "dispatchLine"."company_id"
+       AND "dispositionPosition"."id" = "dispatchLine"."stock_position_id"
+      WHERE "disposition"."company_id" = NEW."companyId"
+        AND "dispositionPosition"."identifiedUnitId" = NEW."identifiedUnitId"
+        AND "disposition"."kind" = 'UNDER_REVIEW'
+      GROUP BY "disposition"."company_id", "disposition"."dispatch_line_id"
+      HAVING SUM("disposition"."accounting_sign" * "disposition"."quantity") > 0
+    )
+  INTO v_valid;
+
+  IF v_valid IS TRUE THEN
+    RETURN NEW;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = '23514',
+      MESSAGE = 'C14 invariant violation',
+      DETAIL = 'c14e1;schema=' || TG_TABLE_SCHEMA ||
+               ';table=' || TG_TABLE_NAME ||
+               ';operation=' || TG_OP ||
+               ';invariant=function:fn_stock_unit_config_current_guard' ||
+               ';function=fn_stock_unit_config_current_guard' ||
+               ';branch=R0001' ||
+               ';family=ROW_OR_CROSS_ROW_GUARD',
+      HINT = 'messageId=C14_INV_FN_FN_STOCK_UNIT_CONFIG_CURRENT_GUARD',
+      CONSTRAINT = TG_NAME,
+      SCHEMA = TG_TABLE_SCHEMA,
+      TABLE = TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

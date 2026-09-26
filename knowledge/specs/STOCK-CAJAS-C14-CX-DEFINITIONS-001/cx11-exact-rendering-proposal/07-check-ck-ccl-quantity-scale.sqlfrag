@@ -1,0 +1,4 @@
+ALTER TABLE "public"."cajas_control_line"
+ADD CONSTRAINT "ck_ccl_quantity_scale" CHECK ((
+  "quantity" > 0 AND "scale_snapshot" BETWEEN 0 AND 4
+) IS TRUE);

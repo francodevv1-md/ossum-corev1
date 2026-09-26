@@ -1,0 +1,5 @@
+ALTER TABLE "public"."cajas_preparation_line"
+ADD CONSTRAINT "ck_cpl_values" CHECK ((
+  "quantity" > 0 AND "dispatched_quantity" >= 0 AND "dispatched_quantity" <= "quantity"
+  AND "scale_snapshot" BETWEEN 0 AND 4 AND "version" > 0
+) IS TRUE);

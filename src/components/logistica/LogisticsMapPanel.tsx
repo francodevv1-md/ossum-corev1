@@ -1,0 +1,21 @@
+"use client"
+
+import dynamic from "next/dynamic"
+import { useState } from "react"
+import { MapPinned } from "lucide-react"
+
+import type { LogisticsGeo } from "@/lib/services/logistics-geography"
+
+const LogisticsMapCanvas = dynamic(() => import("@/components/logistica/LogisticsMapCanvas"), { ssr: false, loading: () => <div className="h-[52svh] min-h-80 animate-pulse border border-[var(--ossum-line)] bg-slate-100 sm:h-[440px]" /> })
+
+type Marker = { surgery: { id: string; reference: string | null }; institution: { id: string; name: string } | null; geo: LogisticsGeo }
+type Vehicle = { id: string; name: string; routeAvailable?: boolean; state: "fresh" | "stale" | "unknown"; position: { latitude: number; longitude: number; recordedAt: string; speedKmh: number | null } | null }
+type Route = { vehicle: { id: string; name: string }; feed: "active" | "unconfigured" | "unavailable"; points: Array<{ latitude: number; longitude: number; recordedAt: string; speedKmh: number | null }> }
+export function LogisticsMapPanel({ markers = [], excluded = 0, vehicles = [], feed = "unconfigured", route, routeLoading = false, routeError = null, onShowRoute, onHideRoute, onOpen }: { markers?: Marker[]; excluded?: number; vehicles?: Vehicle[]; feed?: "active" | "unconfigured" | "unavailable"; route?: Route | null; routeLoading?: boolean; routeError?: string | null; onShowRoute: (vehicleId: string, hours: number) => void; onHideRoute: () => void; onOpen: (surgeryId: string) => void }) {
+  const [vehicleId, setVehicleId] = useState("")
+  const [hours, setHours] = useState("6")
+  const changeVehicle = (value: string) => { setVehicleId(value); onHideRoute() }
+  const mappedVehicles = vehicles.filter((vehicle) => vehicle.routeAvailable !== false)
+  const routeStatus = routeError ?? (route?.feed === "unconfigured" ? "La conexión de flota todavía no está configurada." : route?.feed === "unavailable" ? "La señal de flota no está disponible ahora." : route ? route.points.length < 2 ? "No hay puntos suficientes para trazar un recorrido." : `${route.points.length} puntos del recorrido.` : "Elegí una unidad para consultar su recorrido.")
+  return <section aria-label="Mapa de destinos logísticos" className="space-y-2"><div className="flex items-start gap-2"><MapPinned className="mt-0.5 size-4 text-[var(--ossum-action)]" aria-hidden="true" /><div><h2 className="text-sm font-semibold text-[var(--ossum-navy)]">Mapa de destinos y flota</h2><p className="text-xs text-slate-600">Los destinos usan ubicaciones persistidas y validadas. La flota muestra la última señal disponible.</p></div></div><div className="flex flex-wrap items-end gap-2 border border-[var(--ossum-line)] bg-white p-2"><label className="text-xs font-medium text-slate-600">Unidad<select aria-label="Unidad para recorrido" className="ml-1 h-9 rounded border border-[var(--ossum-line)] bg-white px-2 text-sm" value={vehicleId} onChange={(event) => changeVehicle(event.target.value)}><option value="">Elegí una unidad</option>{mappedVehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name}</option>)}</select></label><label className="text-xs font-medium text-slate-600">Últimas<select aria-label="Horas de recorrido" className="ml-1 h-9 rounded border border-[var(--ossum-line)] bg-white px-2 text-sm" value={hours} onChange={(event) => setHours(event.target.value)}>{[1, 3, 6, 12, 24].map((value) => <option key={value} value={value}>{value} h</option>)}</select></label><button type="button" className="min-h-9 border border-[var(--ossum-action)] bg-[var(--ossum-action)] px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" disabled={!vehicleId || routeLoading} onClick={() => onShowRoute(vehicleId, Number(hours))}>{routeLoading ? "Cargando…" : "Mostrar recorrido"}</button>{route && <button type="button" className="min-h-9 border border-[var(--ossum-line)] px-3 text-sm font-medium text-slate-700" onClick={onHideRoute}>Ocultar recorrido</button>}<span role="status" className="text-xs text-slate-600">{routeStatus}</span></div><LogisticsMapCanvas markers={markers} excluded={excluded} vehicles={vehicles} feed={feed} route={route?.points ?? []} onOpen={onOpen} /></section>
+}

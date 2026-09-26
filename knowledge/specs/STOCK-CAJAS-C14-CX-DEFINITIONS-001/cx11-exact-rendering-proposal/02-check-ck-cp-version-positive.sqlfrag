@@ -1,0 +1,2 @@
+ALTER TABLE "public"."cajas_preparation"
+ADD CONSTRAINT "ck_cp_version_positive" CHECK (("version" > 0) IS TRUE);

@@ -1,0 +1,4 @@
+ALTER TABLE "public"."StockActivationBoundary"
+ADD CONSTRAINT "ex_sab_position_window"
+EXCLUDE USING gist ("companyId" WITH =, "positionId" WITH =, tstzrange("cutoffAt", COALESCE("validUntil", 'infinity'::timestamptz), '[)') WITH &&)
+NOT DEFERRABLE;

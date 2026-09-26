@@ -1,0 +1,5 @@
+ALTER TABLE "public"."StockIdentifiedUnitCurrentConfiguration"
+ADD CONSTRAINT "ck_siucc_version_positive"
+CHECK (
+  ("version" > 0) IS TRUE
+);

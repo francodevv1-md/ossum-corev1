@@ -1,0 +1,23 @@
+CREATE FUNCTION "public"."fn_stock_policy_current_guard"() RETURNS trigger
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path = ''
+AS $c14fn$
+DECLARE v_valid boolean;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM "public"."StockArticlePolicyVersion" AS "target"
+    LEFT JOIN "public"."StockArticlePolicyVersion" AS "prior"
+      ON TG_OP = 'UPDATE' AND "prior"."companyId" = OLD."companyId"
+     AND "prior"."eligibilityId" = OLD."id" AND "prior"."id" = OLD."currentPolicyVersionId"
+    WHERE "target"."companyId" = NEW."companyId" AND "target"."eligibilityId" = NEW."id"
+      AND "target"."id" = NEW."currentPolicyVersionId"
+      AND ((TG_OP = 'INSERT' AND "target"."versionNumber" = 1 AND "target"."previousVersionId" IS NULL AND NEW."version" = 1)
+        OR (TG_OP = 'UPDATE' AND NEW."companyId" = OLD."companyId" AND NEW."organizationId" = OLD."organizationId"
+          AND NEW."articleId" = OLD."articleId" AND "target"."previousVersionId" = OLD."currentPolicyVersionId"
+          AND "target"."versionNumber" = "prior"."versionNumber" + 1 AND NEW."version" = OLD."version" + 1))
+  ) INTO v_valid;
+  IF v_valid IS TRUE THEN RETURN NEW; ELSE
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='C14 invariant violation', DETAIL='c14e1;schema='||TG_TABLE_SCHEMA||';table='||TG_TABLE_NAME||';operation='||TG_OP||';invariant=function:fn_stock_policy_current_guard;function=fn_stock_policy_current_guard;branch=R0001;family=ROW_OR_CROSS_ROW_GUARD', HINT='messageId=C14_INV_FN_FN_STOCK_POLICY_CURRENT_GUARD', CONSTRAINT=TG_NAME, SCHEMA=TG_TABLE_SCHEMA, TABLE=TG_TABLE_NAME;
+  END IF;
+END;
+$c14fn$;

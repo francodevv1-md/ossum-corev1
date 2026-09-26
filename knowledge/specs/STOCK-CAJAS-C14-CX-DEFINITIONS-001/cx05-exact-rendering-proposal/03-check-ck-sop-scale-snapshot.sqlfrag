@@ -1,0 +1,5 @@
+ALTER TABLE "public"."StockOpeningPosition"
+ADD CONSTRAINT "ck_sop_scale_snapshot"
+CHECK (
+  (("scaleSnapshot" >= 0) AND ("scaleSnapshot" <= 4)) IS TRUE
+);

@@ -1,0 +1,27 @@
+export const REMITO_DOCUMENT_THEME = {
+  brand: {
+    logoAlt: "Districorr",
+    logoFileName: "districorr-document-logo.png",
+    logoPublicPath: "/logos/districorr-document-logo.png",
+    subtitle: "Distribuidora Quirúrgica · OSSUM COR",
+  },
+  documentTitle: "Remito de salida",
+  fontFamily: "Inter",
+  colors: {
+    ink: "#1a1a2e",
+    heading: "#0f172a",
+    text: "#1e293b",
+    body: "#334155",
+    muted: "#64748b",
+    quiet: "#94a3b8",
+    accent: "#2563eb",
+    line: "#e2e8f0",
+    strongLine: "#cbd5e1",
+    softLine: "#f1f5f9",
+    softSurface: "#f8fafc",
+    preview: "#e8edf2",
+    warningBackground: "#fffbeb",
+    warningBorder: "#fde68a",
+    warningText: "#92400e",
+  },
+} as const

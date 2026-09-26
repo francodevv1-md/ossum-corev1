@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ossum-document-service-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-16",
+  "observability": {
+    "enabled": true
+  },
+  "r2_buckets": [
+    {
+      "binding": "DOCUMENTS",
+      "bucket_name": "ossum-cor-documents-dev"
+    }
+  ],
+  "queues": {
+    "consumers": [
+      {
+        "queue": "ossum-document-processing-dev",
+        "dead_letter_queue": "ossum-document-processing-dlq-dev",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 3
+      }
+    ]
+  },
+  "vars": {
+    "AZURE_DOCUMENT_INTELLIGENCE_API_VERSION": "2024-11-30"
+  },
+  "secrets": {
+    "required": [
+      "AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT",
+      "AZURE_DOCUMENT_INTELLIGENCE_API_KEY"
+    ]
+  }
+}

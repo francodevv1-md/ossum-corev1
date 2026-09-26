@@ -1,0 +1,327 @@
+{
+  "approvalStatus": "approved-documentary",
+  "authority": [
+    "BINDING_FINALIZATION_ADDENDUM.md:a860049af04a6ff07fbe9fae6ddb512a8ef0adc8",
+    "Engram:#4318-r1+#4319-r2+#4321",
+    "Engram:#4324-r3+#4329",
+    "Engram:#4771;RECOMMENDED_PACKAGES.md:0fd2959cd149d3c37b4162cdb2c232dd9dd35a71",
+    "Engram:#4767;RECOMMENDED_PACKAGES.md:0fd2959cd149d3c37b4162cdb2c232dd9dd35a71",
+    "Engram:#4769;RECOMMENDED_PACKAGES.md:0fd2959cd149d3c37b4162cdb2c232dd9dd35a71",
+    "STOCK-CAJAS-C14-TOPOLOGY-AMENDMENT-001:b8608a922d2d9adf5d776673252f709c52d4a518"
+  ],
+  "catalogVersion": "c14-cx-catalog-v1-a860049a",
+  "executionBlocked": true,
+  "forecastFormula": "transactionProvenanceScaffold + sum(object counts * object-unit physicalLines) + predicateCount*predicate.physicalLines + branchCount*branch.physicalLines + dependencyCount*dependency.physicalLines + eventCount*event.physicalLines",
+  "hashContract": "SHA-256 over exact UTF-8/LF authority, template, and recursively key-sorted fixture bytes, each with one terminal LF where stated",
+  "occurrenceLedgerContract": {
+    "categories": [
+      "object",
+      "predicate",
+      "branch",
+      "dependency",
+      "event"
+    ],
+    "ledgerVersion": "c14-cx-occurrences-v1",
+    "perOccurrenceHash": "SHA256(canonical recursively key-sorted core JSON with one terminal LF)",
+    "pinpointCitationsRequired": true,
+    "vectorsDerivedFromLedger": true
+  },
+  "requiredTemplateFields": [
+    "canonicalUtf8LfBytes",
+    "placeholderGrammar",
+    "zeroOccurrenceFixture",
+    "oneOccurrenceFixture",
+    "renderedBytes",
+    "physicalLines",
+    "deltaCalculation",
+    "namedAuthorityCitation",
+    "sourceSha256",
+    "templateSha256",
+    "fixtureSha256"
+  ],
+  "units": {
+    "branch": {
+      "canonicalUtf8LfBytes": "  WHEN {{condition}} THEN {{result}};\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "ebf5b8e67ee7d227fdc68342165d086ebe486ec45f427a21185aa41ee53d95ed",
+      "namedAuthorityCitation": "D9 Alternative A approved by #4754; J1/P3/D3 approved ledgers",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "  WHEN approved_condition THEN approved_result;\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "condition": "approved mutually exclusive condition",
+        "result": "approved accept/reject/action result"
+      },
+      "renderedBytes": {
+        "one": "  WHEN approved_condition THEN approved_result;\n",
+        "zero": ""
+      },
+      "sourceSha256": "5469b77f0de0a8bde74617a1d95e473d1c2d27622c05cbf7d38c4cc02af395e4",
+      "templateSha256": "3bf61371ef427a98848ca3862357d3085845d1e49ece5df564f0fa5e64fe7d99",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "check": {
+      "canonicalUtf8LfBytes": "ALTER TABLE {{owner}} ADD CONSTRAINT {{name}} CHECK ({{predicate}});\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "bd810496469ee5990e31f897735c108370c03c9ee450701df342aad745ba678b",
+      "namedAuthorityCitation": "C04 #4318r1/#4319r2 named CHECK registry; D9 object contract",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "ALTER TABLE approved_owner ADD CONSTRAINT approved_check CHECK (approved_predicate);\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "name": "approved constraint identifier",
+        "owner": "approved table identifier",
+        "predicate": "approved rendered Boolean expression"
+      },
+      "renderedBytes": {
+        "one": "ALTER TABLE approved_owner ADD CONSTRAINT approved_check CHECK (approved_predicate);\n",
+        "zero": ""
+      },
+      "sourceSha256": "751296985b9ab7ae1c8d8de740104bf1cfcf0828fcfd08166e3f28fb85009a4b",
+      "templateSha256": "4a9b1db88f7e908a13d4fa5c4a7f4c8350d9fc1b5254d38aa6ecc4f715bc6381",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "constraintTrigger": {
+      "canonicalUtf8LfBytes": "CREATE CONSTRAINT TRIGGER {{name}} AFTER {{event}} ON {{owner}} DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION {{function}}();\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "7bf98ab15c401cd512165107cc19f86fc4516e91531ff3cc9cc53d452a1a5761",
+      "namedAuthorityCitation": "D7/D9 and Addendum D exact minimum-line event matrix",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "CREATE CONSTRAINT TRIGGER approved_constraint_trigger AFTER INSERT ON approved_owner DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION approved_function();\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "event": "one approved event keyword or OR-list",
+        "function": "approved family function identifier",
+        "name": "approved constraint-trigger identifier",
+        "owner": "approved table identifier"
+      },
+      "renderedBytes": {
+        "one": "CREATE CONSTRAINT TRIGGER approved_constraint_trigger AFTER INSERT ON approved_owner DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION approved_function();\n",
+        "zero": ""
+      },
+      "sourceSha256": "acc60ec5f4cdc0098dd1b6678e57909c507bb357e2a1fb8a49cdc13395093630",
+      "templateSha256": "1a51fe9f227392cfa33cccfa39bc0c3536d2dc5078bb6cb2e6f8541a2bab94dd",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "dependency": {
+      "canonicalUtf8LfBytes": "-- dependency {{from}} -> {{to}}\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "aaa7c01e29f47b79762c6a128724930dd8e61cb3b661d0502404ee121fdb1eab",
+      "namedAuthorityCitation": "D9 Alternative A approved by #4754",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "-- dependency approved_source -> approved_target\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "from": "manifest object identity",
+        "to": "referenced catalog object identity"
+      },
+      "renderedBytes": {
+        "one": "-- dependency approved_source -> approved_target\n",
+        "zero": ""
+      },
+      "sourceSha256": "2b7b031159af3ff7375e8a3c6dc40a1208fca516801cdadd1b6f2e3d2df06c77",
+      "templateSha256": "b148b29aef413265c9cb2694bb6d38f95e031ea39ee89638f527198e3fe77ae8",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "event": {
+      "canonicalUtf8LfBytes": "-- event {{trigger}}:{{event}}\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "e39250c6ff424cfe534f2c06ac67932c820773e6b622dbe639df20ca02578131",
+      "namedAuthorityCitation": "D9 Alternative A approved by #4754; Addendum D",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "-- event approved_trigger:INSERT\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "event": "one trigger event keyword",
+        "trigger": "approved trigger identity"
+      },
+      "renderedBytes": {
+        "one": "-- event approved_trigger:INSERT\n",
+        "zero": ""
+      },
+      "sourceSha256": "8d75785bb5b897ec7ba493a1eddee0712d94c30c4f46f7a533d651a57141e2f6",
+      "templateSha256": "8773da2364616e4cf261dde5e304024d2179add8fc496770399f9cc08e5d13fb",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "exclusion": {
+      "canonicalUtf8LfBytes": "ALTER TABLE {{owner}} ADD CONSTRAINT {{name}} EXCLUDE USING gist ({{expression}}) NOT DEFERRABLE;\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "799d6701aa47121618a73612dbc29da7330daf41813ccc92dfce0b7cd0a76b75",
+      "namedAuthorityCitation": "C04 #4319r2 §1.6; #4762; Addendum B",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "ALTER TABLE approved_owner ADD CONSTRAINT approved_exclusion EXCLUDE USING gist (approved_expression) NOT DEFERRABLE;\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "expression": "approved GiST exclusion expression",
+        "name": "approved exclusion identifier",
+        "owner": "approved table identifier"
+      },
+      "renderedBytes": {
+        "one": "ALTER TABLE approved_owner ADD CONSTRAINT approved_exclusion EXCLUDE USING gist (approved_expression) NOT DEFERRABLE;\n",
+        "zero": ""
+      },
+      "sourceSha256": "5761d1b6dc74f0207684615dd78083b7daf5f5e9914a906a1a4c8028df9a7d3a",
+      "templateSha256": "29cbd6ff3f04083002377590c6e5406e531a0b75ee3de4c5aa069abb0a6f626c",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "extension": {
+      "canonicalUtf8LfBytes": "CREATE EXTENSION {{name}} WITH SCHEMA {{schema}} VERSION '{{version}}';\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "4ee1d592f866357c94dab9592af3f369c064fcfa8f6c6faa91aa712caa0c3cc5",
+      "namedAuthorityCitation": "Addendum B; C05 #4324r3 CX01",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "CREATE EXTENSION btree_gist WITH SCHEMA public VERSION 'catalog-selected';\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "name": "approved extension identifier",
+        "schema": "approved schema identifier",
+        "version": "catalog-selected version literal"
+      },
+      "renderedBytes": {
+        "one": "CREATE EXTENSION btree_gist WITH SCHEMA public VERSION 'catalog-selected';\n",
+        "zero": ""
+      },
+      "sourceSha256": "df0e60daecea5389c40c4eff6bcce2e552f95c0d674074e44c7c328a7ba7305d",
+      "templateSha256": "7cb803f38b67cf081d78da8c2f7302937aed05a6d17b7b9ca78a2abc979e2fd8",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "function": {
+      "canonicalUtf8LfBytes": "CREATE FUNCTION {{name}}() RETURNS trigger\nLANGUAGE plpgsql\nAS $fn$\nBEGIN\n{{body}}\nEND;\n$fn$;\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "3ce1ab4528b511ed86014f9aaf38adb566fac2537aedce7408aed9cd0720e75e",
+      "namedAuthorityCitation": "D1 Alternative A approved by #4754; D9 object contract",
+      "oneOccurrenceFixture": {
+        "physicalLines": 7,
+        "renderedBytes": "CREATE FUNCTION approved_function() RETURNS trigger\nLANGUAGE plpgsql\nAS $fn$\nBEGIN\nRETURN NEW;\nEND;\n$fn$;\n"
+      },
+      "physicalLines": 7,
+      "placeholderGrammar": {
+        "body": "approved canonical body lines",
+        "name": "approved function identifier"
+      },
+      "renderedBytes": {
+        "one": "CREATE FUNCTION approved_function() RETURNS trigger\nLANGUAGE plpgsql\nAS $fn$\nBEGIN\nRETURN NEW;\nEND;\n$fn$;\n",
+        "zero": ""
+      },
+      "sourceSha256": "772a9af5a1baed2c8cca9862073a78a6af918ec572500c3b8652716480959b9d",
+      "templateSha256": "c7eb6aaf014abe4bdbb04e998427e40f261c73c0bef471d9071b5af83a9afd3e",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "predicate": {
+      "canonicalUtf8LfBytes": "  PERFORM assert_true({{expression}});\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "92aa448d11efeb7e0a4a97bb6be0fbf686363847d1fbb32f978e1b0d0850b776",
+      "namedAuthorityCitation": "D9 Alternative A approved by #4754",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "  PERFORM assert_true(approved_atomic_test);\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "expression": "one approved atomic Boolean test"
+      },
+      "renderedBytes": {
+        "one": "  PERFORM assert_true(approved_atomic_test);\n",
+        "zero": ""
+      },
+      "sourceSha256": "2b7b031159af3ff7375e8a3c6dc40a1208fca516801cdadd1b6f2e3d2df06c77",
+      "templateSha256": "a250768081aa23f47c7ed3cd37c92127a08b4f0c23acfb1384a139650a72b87f",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "transactionProvenanceScaffold": {
+      "canonicalUtf8LfBytes": "-- {{source}} / {{child}}\nBEGIN;\nCOMMIT;\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "18363ba53085337bf7b92895766a242f80e839e0f4ab01b5b6d15e4db4c84213",
+      "namedAuthorityCitation": "C05 #4324r3 §§5-8; D9 object/render contract",
+      "oneOccurrenceFixture": {
+        "physicalLines": 3,
+        "renderedBytes": "-- approved-source / C14-01\nBEGIN;\nCOMMIT;\n"
+      },
+      "physicalLines": 3,
+      "placeholderGrammar": {
+        "child": "C14 child ID",
+        "source": "semicolon-free authority label"
+      },
+      "renderedBytes": {
+        "one": "-- approved-source / C14-01\nBEGIN;\nCOMMIT;\n",
+        "zero": ""
+      },
+      "sourceSha256": "b5990c78c29cb2b6a0003367ffe96d02fa5ed56b1e3c9c54ddf427832e7f35d0",
+      "templateSha256": "4e8fef2dd9664e767c8871a9df255ce666a5e93767efe5248fb3b7edabc7763e",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    },
+    "trigger": {
+      "canonicalUtf8LfBytes": "CREATE TRIGGER {{name}} {{timing}} {{events}} ON {{owner}} FOR EACH ROW EXECUTE FUNCTION {{function}}();\n",
+      "deltaCalculation": "oneOccurrencePhysicalLines - zeroOccurrencePhysicalLines",
+      "fixtureSha256": "aee4f11dafb1e895dd8597c0df3b4a242980bf4c3e7f90f0099ad9048a143fda",
+      "namedAuthorityCitation": "C04 named guard registry; D1/D9 approved counting",
+      "oneOccurrenceFixture": {
+        "physicalLines": 1,
+        "renderedBytes": "CREATE TRIGGER approved_trigger BEFORE INSERT ON approved_owner FOR EACH ROW EXECUTE FUNCTION approved_function();\n"
+      },
+      "physicalLines": 1,
+      "placeholderGrammar": {
+        "events": "approved OR-separated event keywords",
+        "function": "approved function identifier",
+        "name": "approved trigger identifier",
+        "owner": "approved table identifier",
+        "timing": "approved BEFORE or AFTER timing"
+      },
+      "renderedBytes": {
+        "one": "CREATE TRIGGER approved_trigger BEFORE INSERT ON approved_owner FOR EACH ROW EXECUTE FUNCTION approved_function();\n",
+        "zero": ""
+      },
+      "sourceSha256": "26f9f6b9440eba98e1b4b87315fd6b3421c866968216b98f8dd8dd7ba9311dfd",
+      "templateSha256": "accdcb9356106155acf727091be99811e0bdc8b7a73fd0fb50abdb92d8a9b9f9",
+      "zeroOccurrenceFixture": {
+        "physicalLines": 0,
+        "renderedBytes": ""
+      }
+    }
+  },
+  "unresolved": false
+}

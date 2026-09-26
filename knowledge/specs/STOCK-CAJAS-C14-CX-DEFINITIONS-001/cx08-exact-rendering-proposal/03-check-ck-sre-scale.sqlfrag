@@ -1,0 +1,3 @@
+ALTER TABLE "public"."StockReservationEvidence"
+ADD CONSTRAINT "ck_sre_scale"
+CHECK (("scaleSnapshot" BETWEEN 0 AND 4) IS TRUE);

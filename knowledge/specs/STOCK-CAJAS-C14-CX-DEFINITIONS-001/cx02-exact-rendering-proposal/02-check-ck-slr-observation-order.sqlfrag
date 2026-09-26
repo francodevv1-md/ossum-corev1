@@ -1,0 +1,5 @@
+ALTER TABLE "public"."StockLotReview"
+ADD CONSTRAINT "ck_slr_observation_order"
+CHECK (
+  ("leftObservationId" COLLATE "C" < "rightObservationId" COLLATE "C") IS TRUE
+);

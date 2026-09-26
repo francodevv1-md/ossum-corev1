@@ -1,0 +1,9 @@
+a3167dcd21a15e437178ea976bd780eb13ed2a96f485e471ab9d07f1d5c44703  PROPOSAL.md
+e11b8496b2c0f4a8633791a381028f26c56724ad75beb86c76f5d4165265ab01  01-check-ck-siucv-version-positive.sqlfrag
+9846c3d66b96e69788c6fcae4383427e1cd22bd0a82df047186410ba5278451a  02-check-ck-siucc-version-positive.sqlfrag
+d1b137bbe1ef75740e8d4873b8318f5e68082c227375228417875222a566db8e  03-function-fn-stock-unit-config-append-only.sqlfrag
+f8f2b55552ee62883aaa6f17ff13e16cf4f80b88fae905b188a46a6fa01e1bed  04-function-fn-stock-unit-config-current-guard.sqlfrag
+90d24ac47c0a4ffcc6e6139b60528a9c81200cfe69348ef6acbc5c84d74751d3  05-trigger-trg-stock-unit-config-append-only.sqlfrag
+25dc5018828247fc40d0e7c87848027ad28f26725c68a6671c24e53865e828fb  06-trigger-trg-stock-unit-config-current-guard.sqlfrag
+48291eb59eef22fb2af8df6e750bf6f01c31026951eca9b1f732d03c6943aa0d  rendering-manifest.cj1
+# detached-proposal-root-sha256: 84cbe49683bfaaac0bf997e44002f66b203a7510a01f2282ecd9174faccf2d3c
