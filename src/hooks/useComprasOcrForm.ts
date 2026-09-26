@@ -24,6 +24,7 @@ import {
 import type { FacturaCompra, Proveedor, RemitoProveedor, StockItem } from "@/types"
 
 export type ComprasOcrTipo = "remito-proveedor" | "factura-compra"
+export type ProveedorOption = Pick<Proveedor, "id" | "name">
 
 export type Phase = "upload" | "results"
 
@@ -51,16 +52,17 @@ function confidenceLevel(c: number): "low" | "medium" | "high" {
 
 export interface UseComprasOcrFormOptions {
   tipo: ComprasOcrTipo
+  supplierOptions?: readonly ProveedorOption[]
   persistToStore?: boolean
   onSuccess?: (payload?: Omit<RemitoProveedor, "id"> | Omit<FacturaCompra, "id">) => void | Promise<void>
   onBackendPersisted?: (payload: Omit<RemitoProveedor, "id"> | Omit<FacturaCompra, "id">) => void | Promise<void>
   onCompleted?: () => void
 }
 
-export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBackendPersisted, onCompleted }: UseComprasOcrFormOptions) {
+export function useComprasOcrForm({ tipo, supplierOptions, persistToStore = true, onSuccess, onBackendPersisted, onCompleted }: UseComprasOcrFormOptions) {
   const { activeCompany } = useAuth()
   const store = useOrtoTrackStore()
-  const proveedores = store.proveedores.filter((p) => p.active)
+  const proveedores = supplierOptions ?? store.proveedores.filter((p) => p.active)
   const stockItems = store.stock
 
   const [phase, setPhase] = React.useState<Phase>("upload")
@@ -72,6 +74,7 @@ export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBa
   const [cuit, setCuit] = React.useState("")
   const [numero, setNumero] = React.useState("")
   const [fecha, setFecha] = React.useState("")
+  const [fechaError, setFechaError] = React.useState<string | null>(null)
   const [ordenCompraRef, setOrdenCompraRef] = React.useState("")
   const [tipoFactura, setTipoFactura] = React.useState("")
   const [total, setTotal] = React.useState("")
@@ -105,6 +108,7 @@ export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBa
     setCuit("")
     setNumero("")
     setFecha("")
+    setFechaError(null)
     setOrdenCompraRef("")
     setTipoFactura("")
     setTotal("")
@@ -235,6 +239,11 @@ export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBa
     setLinkedStockIds({})
   }, [])
 
+  const updateFecha = React.useCallback((value: string) => {
+    setFecha(value)
+    if (value) setFechaError(null)
+  }, [])
+
   const updateItem = React.useCallback((index: number, patch: Partial<ItemRow>) => {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)))
   }, [])
@@ -338,7 +347,9 @@ export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBa
       return
     }
     if (!fecha.trim()) {
-      toast.error("Indicá la fecha del documento antes de guardar.")
+      const message = "Indicá la fecha del documento antes de guardar."
+      setFechaError(message)
+      toast.error(message)
       return
     }
     if (!persistToStore && !onBackendPersisted) {
@@ -477,6 +488,7 @@ export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBa
     tipo,
     cuit,
     fecha,
+    setFechaError,
     ordenCompraRef,
     items,
     observaciones,
@@ -509,6 +521,7 @@ export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBa
     cuit,
     numero,
     fecha,
+    fechaError,
     ordenCompraRef,
     tipoFactura,
     total,
@@ -533,7 +546,7 @@ export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess, onBa
     setProveedorName,
     setCuit,
     setNumero,
-    setFecha,
+    setFecha: updateFecha,
     setOrdenCompraRef,
     setTipoFactura,
     setTotal,

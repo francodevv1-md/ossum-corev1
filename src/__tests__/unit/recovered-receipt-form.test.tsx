@@ -1,10 +1,10 @@
 import { act, renderHook } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-const mocks = vi.hoisted(() => ({ createFacturaCompra: vi.fn(), createRemitoProveedor: vi.fn(), success: vi.fn() }))
+const mocks = vi.hoisted(() => ({ createFacturaCompra: vi.fn(), createRemitoProveedor: vi.fn(), success: vi.fn(), error: vi.fn() }))
 vi.mock("@/components/auth/AuthProvider", () => ({ useAuth: () => ({ activeCompany: { id: "company" } }) }))
 vi.mock("@/lib/api/client", () => ({ apiFetch: vi.fn(), ApiClientError: class extends Error {} }))
 vi.mock("@/lib/store", () => ({ useOrtoTrackStore: () => ({ proveedores: [], stock: [], createFacturaCompra: mocks.createFacturaCompra, createRemitoProveedor: mocks.createRemitoProveedor }) }))
-vi.mock("sonner", () => ({ toast: { success: mocks.success, error: vi.fn(), warning: vi.fn() } }))
+vi.mock("sonner", () => ({ toast: { success: mocks.success, error: mocks.error, warning: vi.fn() } }))
 import { useComprasOcrForm } from "@/hooks/useComprasOcrForm"
 
 describe("recovered receipt confirmation contract", () => {
@@ -27,6 +27,19 @@ describe("recovered receipt confirmation contract", () => {
     expect(mocks.createRemitoProveedor).not.toHaveBeenCalled()
     expect(hook.result.current.numero).toBe("")
     expect(mocks.success).toHaveBeenCalledTimes(1)
+  })
+  it("uses supplied backend supplier choices instead of the local store", async () => {
+    const confirmed = vi.fn().mockResolvedValue(undefined)
+    const hook = renderHook(() => useComprasOcrForm({ tipo: "remito-proveedor", persistToStore: false, onBackendPersisted: confirmed, supplierOptions: [{ id: "backend-supplier", name: "Backend Supplier" }] }))
+    act(() => {
+      hook.result.current.setProveedorId("backend-supplier")
+      hook.result.current.setNumero("R-003")
+      hook.result.current.setFecha("2026-09-16")
+      hook.result.current.setItems([{ codigo: "A", descripcion: "Article", cantidad: "2" }])
+    })
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ proveedorId: "backend-supplier", proveedorName: "Backend Supplier" }))
+    expect(mocks.createRemitoProveedor).not.toHaveBeenCalled()
   })
   it("retains input and reports failure instead of falsely announcing success", async () => {
     const hook = form(vi.fn().mockRejectedValue(new Error("Receipt rejected")))
@@ -97,5 +110,18 @@ describe("recovered receipt confirmation contract", () => {
     expect(hook.result.current.error).toBe("Se requiere una confirmación de persistencia backend.")
     expect(mocks.createFacturaCompra).not.toHaveBeenCalled()
     expect(mocks.success).not.toHaveBeenCalled()
+  })
+  it("blocks confirmation and exposes a date-specific error when the date is missing", async () => {
+    const confirmed = vi.fn().mockResolvedValue(undefined)
+    const hook = renderHook(() => useComprasOcrForm({ tipo: "remito-proveedor", persistToStore: false, onBackendPersisted: confirmed }))
+    act(() => {
+      hook.result.current.setProveedorName("Supplier")
+      hook.result.current.setNumero("R-004")
+      hook.result.current.setItems([{ codigo: "A", descripcion: "Article", cantidad: "2" }])
+    })
+    await act(async () => { await hook.result.current.handleConfirm() })
+    expect(hook.result.current.fechaError).toBe("Indicá la fecha del documento antes de guardar.")
+    expect(confirmed).not.toHaveBeenCalled()
+    expect(mocks.error).toHaveBeenCalledWith("Indicá la fecha del documento antes de guardar.")
   })
 })

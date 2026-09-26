@@ -29,9 +29,9 @@ import { AiUploadZone } from "@/components/cirugias/AiUploadZone"
 import { CreateArticleModal } from "@/components/compras/CreateArticleModal"
 import { CreateProveedorModal } from "@/components/compras/CreateProveedorModal"
 import { ArticleSearchInput } from "@/components/compras/ArticleSearchInput"
-import { useComprasOcrForm, type ComprasOcrTipo } from "@/hooks/useComprasOcrForm"
+import { useComprasOcrForm, type ComprasOcrTipo, type ProveedorOption } from "@/hooks/useComprasOcrForm"
 import { cn } from "@/lib/utils"
-import type { FacturaCompra, Proveedor, RemitoProveedor } from "@/types"
+import type { FacturaCompra, RemitoProveedor } from "@/types"
 
 // ─── OSSUM brand surface (scoped) ────────────────────────────────────────────
 const NAVY = "bg-[var(--ossum-navy)] text-white"
@@ -62,12 +62,14 @@ type Mode = "ia" | "manual"
 export function ComprasOcrWorkspace({
   tipo,
   backHref,
+  supplierOptions,
   persistToStore = true,
   onDocumentConfirmed,
   onRemitoConfirmed,
 }: {
   tipo: ComprasOcrTipo
   backHref: string
+  supplierOptions?: readonly ProveedorOption[]
   persistToStore?: boolean
   onDocumentConfirmed?: (payload: Omit<RemitoProveedor, "id"> | Omit<FacturaCompra, "id">) => void | Promise<void>
   onRemitoConfirmed?: (payload: Omit<RemitoProveedor, "id">) => void | Promise<void>
@@ -75,6 +77,7 @@ export function ComprasOcrWorkspace({
   const router = useRouter()
   const form = useComprasOcrForm({
     tipo,
+    supplierOptions,
     persistToStore,
     onCompleted: () => router.push(backHref),
     onBackendPersisted: async (payload) => {
@@ -241,7 +244,7 @@ export function ComprasOcrWorkspace({
                             <SelectValue placeholder="Elegir proveedor…" />
                           </SelectTrigger>
                           <SelectContent>
-                            {form.proveedores.map((p: Proveedor) => (
+                            {form.proveedores.map((p) => (
                               <SelectItem key={p.id} value={p.id}>
                                 {p.name}
                               </SelectItem>
@@ -289,13 +292,16 @@ export function ComprasOcrWorkspace({
                       />
                     </CompactField>
 
-                    <CompactField label="Fecha">
+                    <CompactField label="Fecha *">
                       <Input
                         type="date"
                         value={form.fecha}
                         onChange={(e) => form.setFecha(e.target.value)}
-                        className={fieldClass}
+                        aria-invalid={Boolean(form.fechaError)}
+                        aria-describedby={form.fechaError ? "document-date-error" : undefined}
+                        className={cn(fieldClass, form.fechaError && "border-[var(--ossum-danger)]")}
                       />
+                      {form.fechaError && <p id="document-date-error" className="mt-1 text-xs text-[var(--ossum-danger)]">{form.fechaError}</p>}
                     </CompactField>
 
                     {!isRemito && (

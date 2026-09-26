@@ -388,10 +388,18 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
 
 // ─── Main page ────────────────────────────────────────────
 
+type CanonicalArticle = { id: string; sku: string; description: string; articleType?: string | null; brand?: string | null; manufacturer?: string | null; family?: string | null; unit: string; identifiers: Array<{ type: string; value: string }> }
+type BalanceMap = Record<string, { available: number; reserved: number }>
+
 export default function StockPage() {
   const { activeCompany } = useAuth()
   const activeCompanyId = activeCompany?.id
-  const [canonicalArticles, setCanonicalArticles] = useState<Array<{ id: string; sku: string; description: string; articleType?: string | null; brand?: string | null; manufacturer?: string | null; family?: string | null; unit: string; identifiers: Array<{ type: string; value: string }> }>>([])
+  const activeCompanyIdRef = useRef(activeCompanyId)
+  useEffect(() => { activeCompanyIdRef.current = activeCompanyId }, [activeCompanyId])
+  const [canonicalState, setCanonicalState] = useState<{ companyId?: string; rows: CanonicalArticle[] }>({ rows: [] })
+  const [balanceState, setBalanceState] = useState<{ companyId?: string; values: BalanceMap }>({ values: {} })
+  const canonicalArticles = useMemo(() => canonicalState.companyId === activeCompanyId ? canonicalState.rows : [], [activeCompanyId, canonicalState])
+  const balances = useMemo(() => balanceState.companyId === activeCompanyId ? balanceState.values : {}, [activeCompanyId, balanceState])
   const [search, setSearch] = useState("")
   const [depositFilter, setDepositFilter] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("")
@@ -426,8 +434,9 @@ export default function StockPage() {
   const loadCanonicalArticles = useCallback(async () => {
     if (!activeCompanyId) return
     try {
-      const result = await apiFetch<typeof canonicalArticles>(`/api/companies/${encodeURIComponent(activeCompanyId)}/articles?take=100`)
-      setCanonicalArticles(result)
+      const result = await apiFetch<CanonicalArticle[]>(`/api/companies/${encodeURIComponent(activeCompanyId)}/articles?take=100`)
+      if (activeCompanyIdRef.current !== activeCompanyId) return
+      setCanonicalState({ companyId: activeCompanyId, rows: result })
     } catch { /* Existing mock list remains usable when API is unavailable. */ }
   }, [activeCompanyId])
 
@@ -436,17 +445,28 @@ export default function StockPage() {
     const load = async () => {
       if (!activeCompanyId) return
       try {
-        const result = await apiFetch<typeof canonicalArticles>(`/api/companies/${encodeURIComponent(activeCompanyId)}/articles?take=100`)
-        if (!cancelled) setCanonicalArticles(result)
+        const result = await apiFetch<CanonicalArticle[]>(`/api/companies/${encodeURIComponent(activeCompanyId)}/articles?take=100`)
+        if (!cancelled) setCanonicalState({ companyId: activeCompanyId, rows: result })
       } catch { /* Existing mock list remains usable when API is unavailable. */ }
     }
     void load()
     return () => { cancelled = true }
   }, [activeCompanyId])
+  useEffect(() => {
+    let cancelled = false
+    if (!activeCompanyId) return () => { cancelled = true }
+    void apiFetch<Array<{ availableQuantity: { toString(): string }; reservedQuantity: { toString(): string }; position: { articleId: string; eligibilityByArticle: { article: { id: string; sku: string; description: string; unit: string; brand: string | null } } } }>>(`/api/companies/${encodeURIComponent(activeCompanyId)}/stock/balances`).then((rows) => {
+      if (cancelled) return
+      setBalanceState({ companyId: activeCompanyId, values: rows.reduce<BalanceMap>((result, row) => { const current = result[row.position.articleId] ?? { available: 0, reserved: 0 }; current.available += Number(row.availableQuantity); current.reserved += Number(row.reservedQuantity); result[row.position.articleId] = current; return result }, {}) })
+      const articles = [...new Map(rows.map((row) => [row.position.articleId, row.position.eligibilityByArticle.article])).values()]
+      setCanonicalState((current) => { const existing = current.companyId === activeCompanyId ? current.rows : []; return { companyId: activeCompanyId, rows: [...existing, ...articles.filter((article) => !existing.some((item) => item.id === article.id)).map((article) => ({ ...article, identifiers: [] }))] } })
+    }).catch(() => { if (!cancelled) setBalanceState({ companyId: activeCompanyId, values: {} }) })
+    return () => { cancelled = true }
+  }, [activeCompanyId])
 
   const canonicalStockItems = useMemo<StockItem[]>(() => canonicalArticles.map((article) => ({
-    id: article.id, code: article.sku, name: article.description, descriptionExtra: "", family: (article.family || "Insumos") as Family, category: "", rubro: "", seccion: "", linea: "", brand: article.brand || "", type: article.articleType || "Otro", unit: article.unit, unitBuy: article.unit, manufacturer: article.manufacturer || "", gtin: article.identifiers.find((item) => item.type === "GTIN_EAN")?.value || "", pm: "", sterile: false, preferredSupplier: "", cost: 0, price: 0, available: 0, reserved: 0, inTransit: 0, min: 0, state: "Pendiente", masterStatus: "Activo", control: "cantidad", lots: [], movements: [], articleType: (article.articleType || "Otro") as StockItem["articleType"], suppliers: [],
-  })), [canonicalArticles])
+    id: article.id, code: article.sku, name: article.description, descriptionExtra: "", family: (article.family || "Insumos") as Family, category: "", rubro: "", seccion: "", linea: "", brand: article.brand || "", type: article.articleType || "Otro", unit: article.unit, unitBuy: article.unit, manufacturer: article.manufacturer || "", gtin: article.identifiers.find((item) => item.type === "GTIN_EAN")?.value || "", pm: "", sterile: false, preferredSupplier: "", cost: 0, price: 0, available: balances[article.id]?.available ?? 0, reserved: balances[article.id]?.reserved ?? 0, inTransit: 0, min: 0, state: "Pendiente", masterStatus: "Activo", control: "cantidad", lots: [], movements: [], articleType: (article.articleType || "Otro") as StockItem["articleType"], suppliers: [],
+  })), [balances, canonicalArticles])
   const allStockItems = useMemo(() => [...STOCK_ITEMS.filter((item) => !canonicalArticles.some((article) => article.id === item.id)), ...canonicalStockItems], [canonicalArticles, canonicalStockItems])
 
   const visibleColumns = useMemo<StockColumn[]>(() => {

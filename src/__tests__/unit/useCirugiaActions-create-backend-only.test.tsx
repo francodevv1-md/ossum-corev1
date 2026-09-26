@@ -151,6 +151,29 @@ describe("useCirugiaActions create flow backend-only", () => {
     }} />)
   })
 
+  it("does not post when any required contact id is absent", async () => {
+    act(() => {
+      actions.setNewForm({
+        ...EMPTY_NEW_FORM,
+        patient: "Paciente Test",
+        patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+      })
+    })
+
+    let result = true
+    await act(async () => {
+      result = await actions.handleNewSurgery()
+    })
+
+    expect(result).toBe(false)
+    expect(apiFetchMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Seleccione paciente, médico, institución y cliente / pagador antes de crear la cirugía"
+    )
+  })
+
   it("no inyecta cirugía local si el refresh backend falla después del POST", async () => {
     apiFetchMock.mockResolvedValue({ id: "db-1", visibleNumber: "CX-9001" })
     fetchBackendActiveSurgeriesMock.mockRejectedValue(new Error("backend caído"))
@@ -160,6 +183,9 @@ describe("useCirugiaActions create flow backend-only", () => {
         ...EMPTY_NEW_FORM,
         patient: "Paciente Test",
         patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+        clientContactId: "payer-1",
       })
     })
 
@@ -187,6 +213,9 @@ describe("useCirugiaActions create flow backend-only", () => {
         ...EMPTY_NEW_FORM,
         patient: "Paciente Test",
         patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+        clientContactId: "payer-1",
       })
     })
 
@@ -208,6 +237,64 @@ describe("useCirugiaActions create flow backend-only", () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it("forwards materialShippingDate and coordinatorContactId in the POST body", async () => {
+    apiFetchMock.mockResolvedValue({ id: "db-1", visibleNumber: "CX-9001" })
+    fetchBackendActiveSurgeriesMock.mockResolvedValue([makeBackendSurgery("CX-9001")])
+
+    act(() => {
+      actions.setNewForm({
+        ...EMPTY_NEW_FORM,
+        patient: "Paciente Test",
+        patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+        clientContactId: "payer-1",
+        coordinadorContactId: "coordinator-1",
+        fechaEnvioMaterial: "2026-07-08",
+      })
+    })
+
+    let result = false
+    await act(async () => {
+      result = await actions.handleNewSurgery()
+    })
+
+    expect(result).toBe(true)
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+    const [, init] = apiFetchMock.mock.calls[0] as [string, { method: string; body: string }]
+    expect(init.method).toBe("POST")
+    const body = JSON.parse(init.body) as Record<string, unknown>
+    expect(body.coordinatorContactId).toBe("coordinator-1")
+    expect(body.materialShippingDate).toBe("2026-07-08T00:00:00.000Z")
+  })
+
+  it("sends null materialShippingDate and coordinatorContactId when the form leaves them empty", async () => {
+    apiFetchMock.mockResolvedValue({ id: "db-1", visibleNumber: "CX-9001" })
+    fetchBackendActiveSurgeriesMock.mockResolvedValue([makeBackendSurgery("CX-9001")])
+
+    act(() => {
+      actions.setNewForm({
+        ...EMPTY_NEW_FORM,
+        patient: "Paciente Test",
+        patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+        clientContactId: "payer-1",
+      })
+    })
+
+    let result = false
+    await act(async () => {
+      result = await actions.handleNewSurgery()
+    })
+
+    expect(result).toBe(true)
+    const [, init] = apiFetchMock.mock.calls[0] as [string, { method: string; body: string }]
+    const body = JSON.parse(init.body) as Record<string, unknown>
+    expect(body.coordinatorContactId).toBeNull()
+    expect(body.materialShippingDate).toBeNull()
+  })
+
   it("ignora una segunda creación concurrente mientras el primer POST sigue en curso", async () => {
     const refreshedSurgeries = [makeBackendSurgery("CX-9001")]
     let resolvePost!: (value: { id: string; visibleNumber: string }) => void
@@ -223,6 +310,9 @@ describe("useCirugiaActions create flow backend-only", () => {
         ...EMPTY_NEW_FORM,
         patient: "Paciente Test",
         patientContactId: "patient-1",
+        surgeonContactId: "doctor-1",
+        institutionContactId: "institution-1",
+        clientContactId: "payer-1",
       })
     })
 

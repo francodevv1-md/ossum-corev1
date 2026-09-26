@@ -38,7 +38,9 @@ export type SurgeryApiRow = {
   source: string | null
   notes: string | null
   visibleNumber: string | null
+  patientId: string | null
   patientName: string | null
+  doctorId: string | null
   doctorName: string | null
   institutionName: string | null
   institutionId: string | null
@@ -321,7 +323,9 @@ export function mapApiSurgeryToRow(apiSurgery: RawSurgeryApiRecord): SurgeryApiR
     source: pickString(apiSurgery, ["source"]),
     notes: typeof apiSurgery.notes === "string" ? apiSurgery.notes : null,
     visibleNumber: pickString(apiSurgery, ["visibleNumber"]),
+    patientId: pickString(apiSurgery, ["patientId"]),
     patientName: pickNestedName(apiSurgery, ["patient", "paciente"], ["patientName", "patient", "paciente"]),
+    doctorId: pickString(apiSurgery, ["doctorId"]),
     doctorName: pickNestedName(apiSurgery, ["doctor", "medico"], ["doctorName", "surgeonName", "doctor", "medico"]),
     institutionName: pickNestedName(apiSurgery, ["institution", "institucion"], ["institutionName", "institution", "institucion"]),
     institutionId: pickString(apiSurgery, ["institutionId"]),
@@ -489,8 +493,10 @@ export function mapApiSurgeryRowToSurgery(
     backendCxStatus: row.cxStatus ?? row.status ?? undefined,
     visibleNumber,
     patient: row.patientName ?? existing?.patient ?? "Paciente sin nombre",
+    patientContactId: row.patientId ?? undefined,
     patientDni: existing?.patientDni ?? "",
     surgeon: row.doctorName ?? existing?.surgeon ?? "—",
+    surgeonContactId: row.doctorId ?? undefined,
     institution: row.institutionName ?? existing?.institution ?? "—",
     institutionContactId: row.institutionId ?? undefined,
     institutionCity: existing?.institutionCity ?? "",
