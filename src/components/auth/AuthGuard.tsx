@@ -4,7 +4,6 @@ import React, { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppShellProvider } from "@/components/layout/app-shell"
-import { Header } from "@/components/layout/header"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Sidebar } from "@/components/layout/sidebar"
 import { StoreHydration } from "@/components/StoreHydration"
@@ -43,8 +42,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       <TooltipProvider delayDuration={300}>
         {!isCirugiasRoute && <Sidebar />}
         <MainLayout>
-          <Header />
-          <main className={cn("flex min-h-0 flex-1 flex-col", isCirugiasRoute ? "pt-0" : "pt-2 lg:pt-3")}>
+          <main className={cn("flex min-h-0 flex-1 flex-col", isCirugiasRoute ? "pt-0" : "pt-1 lg:pt-2")}>
             <div
               className={cn(
                 "flex min-h-0 flex-1 flex-col",

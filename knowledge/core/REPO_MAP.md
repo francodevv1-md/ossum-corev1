@@ -31,7 +31,7 @@ Tipo: mapa para ahorrar tokens; basado en lectura real del repo (no en planifica
 
 | Script | Comando | Uso |
 |---|---|---|
-| `dev` | `next dev -p 3000 2>&1 \| tee dev.log` | Dev server (en Windows falla por `tee`; workaround: `npx next dev -p 3000`). |
+| `dev` | `next dev --hostname 127.0.0.1 --port 3000` | Dev server multiplataforma, limitado a loopback para QA local. |
 | `build` | `next build --webpack` | Build Next.js (no Vite/Turbopack). |
 | `typecheck` | `next typegen && tsc --noEmit` | Gen types + check TS. |
 | `lint` | `eslint .` | Lint whole repo. |

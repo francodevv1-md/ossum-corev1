@@ -1,16 +1,25 @@
 import { getApiAuthContext } from "../../../../../../../lib/api/auth-context";
 import { requireCompanyMutationAccess } from "../../../../../../../lib/api/guards";
-import { notFound } from "../../../../../../../lib/api/errors";
+import { badRequest, notFound } from "../../../../../../../lib/api/errors";
 import { errorResponse, ok } from "../../../../../../../lib/api/responses";
 import prisma from "../../../../../../../lib/prisma";
 import {
   PRESUPUESTO_MUTATION_ROLES,
-  emitirPresupuesto,
+  emitDraft,
 } from "../../../../../../../lib/services/presupuesto.service";
+import { presupuestoExpectedRevisionSchema } from "../../../../../../../lib/validators/presupuesto";
 
 type RouteContext = {
   params: Promise<{ companyId: string; presupuestoId: string }>;
 };
+
+async function parseJsonBody(request: Request) {
+  try {
+    return await request.json();
+  } catch {
+    throw badRequest("Invalid JSON body", "invalid_json_body");
+  }
+}
 
 export async function POST(request: Request, { params }: RouteContext) {
   try {
@@ -21,10 +30,13 @@ export async function POST(request: Request, { params }: RouteContext) {
     const ctx = await getApiAuthContext(request, companyId);
     requireCompanyMutationAccess(ctx, PRESUPUESTO_MUTATION_ROLES);
 
-    const result = await emitirPresupuesto({
+    const parsed = presupuestoExpectedRevisionSchema.safeParse(await parseJsonBody(request));
+    if (!parsed.success) throw badRequest(parsed.error.issues[0]?.message, "invalid_presupuesto_body");
+    const result = await emitDraft({
       companyId: ctx.companyId,
       presupuestoId,
-      updatedById: ctx.actorUserId,
+      expectedRevision: parsed.data.expectedRevision,
+      actorUserId: ctx.actorUserId,
       prisma,
     });
     return ok(result);

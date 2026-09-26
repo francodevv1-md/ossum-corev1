@@ -23,6 +23,8 @@ import type {
   Surgery, RemitoEstado, DestinatarioTipo,
   DestinatarioSnapshot,
 } from "@/types"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
+import { toLegacyPresupuestoProjection } from "@/lib/api/presupuestos"
 
 // ─── Local types for the form ─────────────────────────────────────
 
@@ -55,6 +57,11 @@ const DESTINATARIO_CONFIG: Record<DestinatarioTipo, { label: string; icon: React
 
 export function RemitoFormDialog({ open, onOpenChange, surgery }: RemitoFormDialogProps) {
   const store = useOrtoTrackStore()
+  const presupuestoAuthority = usePresupuestos(
+    { surgeryId: surgery?.backendId ?? surgery?.id, take: 100 },
+    open && Boolean(surgery),
+  )
+  const { current: currentPresupuesto, draft: draftPresupuesto } = presupuestoAuthority
 
   // ── Form state ──
   const [destinatarioTipo, setDestinatarioTipo] = useState<DestinatarioTipo | "">("")
@@ -65,9 +72,9 @@ export function RemitoFormDialog({ open, onOpenChange, surgery }: RemitoFormDial
 
   // ── Derived data ──
   const presupuesto = useMemo(() => {
-    if (!surgery?.presupuestoId) return null
-    return store.presupuestos.find((p) => p.id === surgery.presupuestoId) || null
-  }, [surgery?.presupuestoId, store.presupuestos])
+    const authoritative = currentPresupuesto ?? draftPresupuesto
+    return authoritative ? toLegacyPresupuestoProjection(authoritative) : null
+  }, [currentPresupuesto, draftPresupuesto])
 
   const preparacionesPendientes = useMemo(() => {
     if (!surgery) return []
@@ -162,7 +169,7 @@ export function RemitoFormDialog({ open, onOpenChange, surgery }: RemitoFormDial
 
     store.createRemito({
       surgeryId: surgery.id,
-      presupuestoId: surgery.presupuestoId,
+      presupuestoId: presupuesto?.id,
       fechaEmision: estado === "emitido" ? new Date().toISOString().split("T")[0] : "",
       usuarioEmisor: store.users.find((u) => u.id === store.currentUserId)?.name || "",
       destinatarioTipo,
@@ -180,13 +187,15 @@ export function RemitoFormDialog({ open, onOpenChange, surgery }: RemitoFormDial
     setItems([])
     setObservaciones("")
     onOpenChange(false)
-  }, [surgery, destinatarioTipo, destinatarioContactId, destinatarioSnapshot, items, observaciones, store, onOpenChange])
+  }, [surgery, presupuesto, destinatarioTipo, destinatarioContactId, destinatarioSnapshot, items, observaciones, store, onOpenChange])
 
   const isValid = destinatarioTipo && destinatarioSnapshot && items.length > 0 && items.every((it) => it.descripcion?.trim() && it.cantidad > 0)
 
   // ── Reset form when dialog opens/closes ──
   useEffect(() => {
     if (!open) {
+      // Closing the controlled dialog is the reset boundary for abandoned drafts.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDestinatarioTipo("")
       setDestinatarioContactId("")
       setDestinatarioSnapshot(null)
@@ -209,6 +218,7 @@ export function RemitoFormDialog({ open, onOpenChange, surgery }: RemitoFormDial
             Cirugía {surgery.expedienteNumber ?? surgery.id} — {surgery.patient}
           </DialogDescription>
         </DialogHeader>
+        {presupuestoAuthority.error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">{presupuestoAuthority.error}</p>}
 
         <ScrollArea className="max-h-[65vh] pr-2">
           <div className="grid gap-6 py-4">

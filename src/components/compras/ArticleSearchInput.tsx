@@ -11,11 +11,15 @@ import type { StockItem } from "@/types"
 
 const MAX_RESULTS = 8
 
+export type ArticleSearchItem = Pick<StockItem, "id" | "name" | "code"> & Partial<Pick<StockItem, "category" | "brand" | "supplier">>
+
 export type ArticleSearchInputProps = {
+  /** Identificador del campo para asociar una etiqueta visible. */
+  id?: string
   /** StockItemId seleccionado, si hay. */
   value?: string
   /** Callback cuando se selecciona un artículo. */
-  onSelect: (item: StockItem) => void
+  onSelect: (item: ArticleSearchItem) => void
   /** Callback cuando se desvincula. */
   onClear?: () => void
   /** Nombre del proveedor para narrowing (opcional). */
@@ -28,9 +32,12 @@ export type ArticleSearchInputProps = {
   compact?: boolean
   /** disabled. */
   disabled?: boolean
+  /** Catálogo acotado. Si se omite, usa el Stock disponible. */
+  items?: readonly ArticleSearchItem[]
 }
 
 export function ArticleSearchInput({
+  id,
   value: selectedId,
   onSelect,
   onClear,
@@ -39,8 +46,10 @@ export function ArticleSearchInput({
   initialQuery = "",
   compact = false,
   disabled = false,
+  items,
 }: ArticleSearchInputProps) {
   const stockItems = useOrtoTrackStore((s) => s.stock)
+  const availableItems = items ?? stockItems
 
   // ponytail: query reset handled by key={selectedId} on the input — avoids setState-in-effect.
   const [query, setQuery] = React.useState(initialQuery)
@@ -48,7 +57,7 @@ export function ArticleSearchInput({
   const [highlight, setHighlight] = React.useState(0)
   const containerRef = React.useRef<HTMLDivElement | null>(null)
 
-  const selected = selectedId ? stockItems.find((s) => s.id === selectedId) : null
+  const selected = selectedId ? availableItems.find((s) => s.id === selectedId) : null
 
   // Cerrar al click fuera
   React.useEffect(() => {
@@ -64,16 +73,16 @@ export function ArticleSearchInput({
 
   // Filtrar y rankear resultados
   const results = React.useMemo(() => {
-    if (!query.trim() || selected) return []
+    if (selected) return []
     const q = normalizarDescripcion(query)
-    if (!q) return []
 
     // Narrowing por proveedor
     const provNorm = proveedorName ? normalizarDescripcion(proveedorName) : ""
     const byProveedor = provNorm
-      ? stockItems.filter((s) => normalizarDescripcion(s.supplier) === provNorm)
+      ? availableItems.filter((s) => normalizarDescripcion(s.supplier ?? "") === provNorm)
       : null
-    const pool = byProveedor && byProveedor.length > 0 ? byProveedor : stockItems
+    const pool = byProveedor && byProveedor.length > 0 ? byProveedor : availableItems
+    if (!q) return pool.slice(0, MAX_RESULTS)
 
     const scored = pool
       .map((s) => {
@@ -88,7 +97,7 @@ export function ArticleSearchInput({
       .slice(0, MAX_RESULTS)
 
     return scored.map((x) => x.item)
-  }, [query, selected, stockItems, proveedorName])
+  }, [query, selected, availableItems, proveedorName])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open || results.length === 0) return
@@ -115,15 +124,16 @@ export function ArticleSearchInput({
   if (selected) {
     return (
       <div
+        id={id}
+        role="group"
+        aria-label="Artículo seleccionado"
         className={cn(
-          "flex items-center gap-1 rounded border border-emerald-300 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-          compact ? "h-6" : "h-7"
+          "flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+          compact ? "h-6 px-1.5 py-0.5 text-[10px]" : "h-11 px-3 text-sm"
         )}
       >
         <Link2 className="size-3 shrink-0" />
-        <span className="truncate" title={selected.code}>
-          {selected.name.length > 28 ? selected.name.slice(0, 28) + "…" : selected.name}
-        </span>
+        {compact ? <span className="truncate" title={`${selected.code} · ${selected.name}`}>{selected.name.length > 28 ? selected.name.slice(0, 28) + "…" : selected.name}</span> : <><span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-xs dark:bg-emerald-900/60">{selected.code}</span><span className="truncate">{selected.name}</span></>}
         {!disabled && onClear && (
           <button
             type="button"
@@ -143,10 +153,11 @@ export function ArticleSearchInput({
       <div className="relative">
         <PackageSearch className="pointer-events-none absolute left-1.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
+          id={id}
           type="text"
           className={cn(
             "pl-7 pr-2",
-            compact ? "h-7 text-xs" : "h-9 text-sm",
+            compact ? "h-7 text-xs" : "h-11 text-sm",
             disabled && "opacity-50"
           )}
           value={query}
@@ -155,7 +166,7 @@ export function ArticleSearchInput({
             setOpen(true)
             setHighlight(0)
           }}
-          onFocus={() => query && setOpen(true)}
+          onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
@@ -179,11 +190,10 @@ export function ArticleSearchInput({
                 setQuery("")
               }}
             >
-              <div className="flex flex-col">
-                <span className="font-medium">{item.name}</span>
-                <span className="text-[10px] text-muted-foreground">
-                  {item.code} · {item.category} · {item.brand}
-                </span>
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground">{item.code}</span>
+              <div className="min-w-0 flex flex-col">
+                <span className="truncate font-medium">{item.name}</span>
+                {(item.category || item.brand) && <span className="truncate text-[10px] text-muted-foreground">{[item.category, item.brand].filter(Boolean).join(" · ")}</span>}
               </div>
             </button>
           ))}

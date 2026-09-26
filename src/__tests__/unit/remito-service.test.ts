@@ -3,19 +3,27 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Prisma } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { createRemitoTokenKeyring } from "@/lib/remito-verification/token";
+import { authorize, WCB06_CONTRACT_IDS } from "@/lib/permissions/c14/authorize-insert-writer";
 
 const { createAuditEvent } = vi.hoisted(() => ({
   createAuditEvent: vi.fn(),
 }));
+const c14 = vi.hoisted(() => ({ execute: vi.fn(), append: vi.fn(), correlation: vi.fn(() => "0198a000-0000-7000-8000-000000000001"), transaction: vi.fn(() => "0198a000-0000-7000-8000-000000000002") }));
 
 vi.mock("@/lib/audit", () => ({
   createAuditEvent,
 }));
+vi.mock("@/lib/services/c14/bundles/wcb-06", () => ({ execute: c14.execute }));
+vi.mock("@/lib/services/c14/durable-attempt-audit", () => ({ appendDurableAttemptEvent: c14.append, deriveDurableEventId: (_id: string, ordinal: number) => `event-${ordinal}`, newCorrelationId: c14.correlation, newTransactionId: c14.transaction }));
 
 import {
   createRemito,
   deleteRemito,
   emitirRemito,
+  getRemito,
+  listRemitos,
   registrarDevolucion,
   updateRemitoDraft,
   updateRemitoState,
@@ -32,7 +40,7 @@ function buildRemito(over: Record<string, any> = {}) {
     branchId: "branch-1",
     issuedBranchId: "branch-1",
     documentType: "REMITO_SALIDA",
-    surgeryId: "sx-1",
+    surgeryId: null,
     origin: "manual",
     salidaReason: "cirugia",
     boxId: null,
@@ -52,6 +60,12 @@ function buildRemito(over: Record<string, any> = {}) {
     metadata: null,
     createdAt: new Date("2026-07-07T10:00:00.000Z"),
     updatedAt: new Date("2026-07-07T10:00:00.000Z"),
+    scanLocator: null,
+    branch: null,
+    issuedBranch: null,
+    surgery: null,
+    createdBy: null,
+    cajasDispatches: [],
     items: [
       { id: "item-1", description: "Tornillo 4.0", quantity: new Prisma.Decimal(10) },
       { id: "item-2", description: "Placa LCP", quantity: new Prisma.Decimal(2) },
@@ -68,9 +82,167 @@ function makeP2034() {
   });
 }
 
+const issuanceDependencies = {
+  keyring: createRemitoTokenKeyring({
+    activeTokenKeyVersion: 1,
+    keys: { "1": Buffer.alloc(32, 7).toString("base64url") },
+  }),
+  randomBytes: (size: number) => Buffer.alloc(size, 9),
+  randomId: (() => {
+    let id = 0;
+    return () => `test-id-${++id}`;
+  })(),
+  now: () => new Date("2026-07-07T10:00:00.000Z"),
+};
+
+function addIssuancePersistenceMocks(tx: Record<string, any>) {
+  Object.assign(tx, {
+    company: { findUnique: vi.fn().mockResolvedValue({ name: "Company", taxId: "30-12345678-9" }) },
+    remitoScanLocator: { create: vi.fn().mockResolvedValue(undefined) },
+    remitoVerificationPublication: { create: vi.fn().mockResolvedValue(undefined) },
+    remitoVerificationAccess: { create: vi.fn().mockResolvedValue(undefined) },
+  });
+  tx.auditEvent.create.mockResolvedValue(undefined);
+  return tx;
+}
+
 beforeEach(() => {
   createAuditEvent.mockReset();
   createAuditEvent.mockResolvedValue(undefined);
+  c14.execute.mockReset(); c14.execute.mockResolvedValue({ replayed: false });
+  c14.append.mockReset(); c14.append.mockResolvedValue({ eventSha256: "a".repeat(64) });
+});
+
+describe("Remito list/detail projection", () => {
+  it("exposes the company-scoped locator as nullable remitoShortCode in lists", async () => {
+    const row = buildRemito({
+      scanLocator: { companyId: "company-1", locator: "RM1-04HM-ASW9-NF6Y-ZZPW-M" },
+    });
+    const findMany = vi.fn().mockResolvedValue([row]);
+    const result = await listRemitos({
+      companyId: "company-1",
+      prisma: { remito: { findMany } } as unknown as PrismaClient,
+    });
+
+    expect(result[0]).toMatchObject({
+      id: "remito-1",
+      remitoShortCode: "RM1-04HM-ASW9-NF6Y-ZZPW-M",
+    });
+    expect(result[0]).not.toHaveProperty("scanLocator");
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { companyId: "company-1" },
+      select: expect.objectContaining({
+        scanLocator: { select: { companyId: true, locator: true } },
+      }),
+    }));
+  });
+
+  it("projects linked surgery and creator labels for inspector and printing", async () => {
+    const row = buildRemito({
+      scanLocator: null,
+      branch: { name: "Depósito Central" },
+      issuedBranch: { name: "Sucursal Corrientes" },
+      surgery: {
+        visibleNumber: "CX-0521",
+        description: "Cirugía de prueba",
+        surgeryDate: new Date("2026-08-14T08:00:00.000Z"),
+        scheduledDate: null,
+        patient: { firstName: "Paciente", lastName: "Prueba", legalName: null },
+        doctor: { firstName: "Dra.", lastName: "García", legalName: null },
+        institution: { firstName: null, lastName: null, legalName: "Hospital Perrando" },
+        payer: { firstName: null, lastName: null, legalName: "Cliente OS" },
+      },
+      createdBy: { firstName: "Admin", lastName: "DEV" },
+    });
+    const result = await getRemito({ companyId: "company-1", remitoId: "remito-1", prisma: { remito: { findFirst: vi.fn().mockResolvedValue(row) } } as unknown as PrismaClient });
+
+    expect(result).toMatchObject({
+      surgeryLabel: "CX-0521",
+      surgeryPatientName: "Paciente Prueba",
+      surgeryDoctorName: "Dra. García",
+      surgeryInstitutionName: "Hospital Perrando",
+      surgeryClientName: "Cliente OS",
+      createdByName: "Admin DEV",
+    });
+  });
+
+  it("returns null for a missing locator in the company-scoped detail projection", async () => {
+    const findFirst = vi.fn().mockResolvedValue(buildRemito({ scanLocator: null }));
+    const result = await getRemito({
+      companyId: "company-1",
+      remitoId: "remito-1",
+      prisma: { remito: { findFirst } } as unknown as PrismaClient,
+    });
+
+    expect(result.remitoShortCode).toBeNull();
+    expect(result).not.toHaveProperty("scanLocator");
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "remito-1", companyId: "company-1" },
+    }));
+  });
+
+  it("projects only ORIGINAL Caja dispatch snapshots into public detail items", async () => {
+    const row = buildRemito({
+      cajasDispatches: [{
+        lines: [{
+          skuSnapshot: "SKU-SNAPSHOT",
+          descriptionSnapshot: "Pinza snapshot",
+          quantity: new Prisma.Decimal(2),
+          stockUnit: "unidad",
+          lotCodeSnapshot: "LOT-1",
+          expirationDateSnapshot: new Date("2028-01-01T00:00:00.000Z"),
+          serialNumberSnapshot: "SER-1",
+          identifiedCodeSnapshot: "UNIT-001",
+        }],
+      }],
+    });
+    const findFirst = vi.fn().mockResolvedValue(row);
+
+    const result = await getRemito({
+      companyId: "company-1",
+      remitoId: "remito-1",
+      prisma: { remito: { findFirst } } as unknown as PrismaClient,
+    });
+
+    expect(result.detailItems).toEqual([expect.objectContaining({
+      groupLabel: "Caja / Fórmula 1",
+      sku: "SKU-SNAPSHOT",
+      description: "Pinza snapshot",
+      lotNumber: "LOT-1",
+      expirationDate: "2028-01-01T00:00:00.000Z",
+      serialNumber: "SER-1",
+      identifiedCode: "UNIT-001",
+    })]);
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "remito-1", companyId: "company-1" },
+      select: expect.objectContaining({
+        cajasDispatches: expect.objectContaining({
+          where: { recordKind: "ORIGINAL" },
+          orderBy: { sequence: "asc" },
+          select: expect.objectContaining({
+            lines: expect.objectContaining({
+              where: { recordKind: "ORIGINAL" },
+              orderBy: { lineNumber: "asc" },
+            }),
+          }),
+        }),
+      }),
+    }));
+    expect(JSON.stringify(result.detailItems)).not.toMatch(/assignmentId|boxIdentifiedUnitId|remitoId|item-1|raw-/);
+  });
+
+  it("falls back explicitly to summary item snapshots when no ORIGINAL dispatch line exists", async () => {
+    const result = await getRemito({
+      companyId: "company-1",
+      remitoId: "remito-1",
+      prisma: { remito: { findFirst: vi.fn().mockResolvedValue(buildRemito()) } } as unknown as PrismaClient,
+    });
+
+    expect(result.detailItems).toEqual([
+      expect.objectContaining({ groupLabel: null, description: "Tornillo 4.0", identifiedCode: null }),
+      expect.objectContaining({ groupLabel: null, description: "Placa LCP", identifiedCode: null }),
+    ]);
+  });
 });
 
 // â”€â”€â”€ createRemito â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -217,8 +389,46 @@ describe("createRemito", () => {
 
 // â”€â”€â”€ emitirRemito â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 describe("emitirRemito", () => {
+  it("derives surgical lineage in the Serializable transaction and invokes WCB-06 bijectively", async () => {
+    const old = process.env.OSSUM_C14_WCB06_ENABLED; process.env.OSSUM_C14_WCB06_ENABLED = "true";
+    const item = { id: "item-1", itemId: null, sku: "SKU-1", description: "Tornillo", quantity: new Prisma.Decimal(2), unit: "UNIT", boxId: null, presupuestoItemId: null, lotNumber: null, serialNumber: null, expirationDate: null, returnedQuantity: new Prisma.Decimal(0), metadata: null, createdAt: new Date(), updatedAt: new Date() };
+    const position = { id: "position-1", articleId: "article-1", identifiedUnitId: null, traceMode: "NONE", stockUnit: "UNIT", quantityScale: 0, lot: null, identifiedUnit: null };
+    const prepLine = { id: "prep-line-1", isActive: true, articleId: position.articleId, stockPositionId: position.id, quantity: new Prisma.Decimal(2), stockUnit: "UNIT", scaleSnapshot: 0 };
+    const controlLine = { id: "control-line-1", sourcePreparationId: "prep-1", sourcePreparationLineId: prepLine.id, articleId: position.articleId, stockPositionId: position.id, quantity: new Prisma.Decimal(2), stockUnit: "UNIT", scaleSnapshot: 0, skuSnapshot: "SKU-1", descriptionSnapshot: "Tornillo", traceCapture: null };
+    const reservation = { id: "reservation-1", position, projection: { status: "ACTIVE", activeQuantity: new Prisma.Decimal(2), version: 1 } };
+    const assignment = { id: "assignment-1", boxIdentifiedUnitId: "box-unit-1", dispatches: [], preparations: [{ id: "prep-1", version: 1, requiresRecontrol: false, lines: [prepLine], latestControl: { id: "control-1", result: "CLEAN", sourcePreparationVersion: 1, lines: [controlLine] }, reservationCorrelations: [{ preparationLineId: prepLine.id, stockPositionId: position.id, quantity: new Prisma.Decimal(2), stockUnit: "UNIT", scaleSnapshot: 0, stockReservation: reservation }] }] };
+    const current = buildRemito({ surgeryId: "sx-1", items: [item] });
+    const tx = addIssuancePersistenceMocks({ $executeRaw: vi.fn(), $queryRaw: vi.fn().mockResolvedValue([{ next: 1 }]), remito: { findFirst: vi.fn().mockResolvedValue(current), update: vi.fn(async ({ data }) => ({ ...current, ...data })) }, cajasAssignment: { findMany: vi.fn().mockResolvedValue([assignment]) }, auditEvent: { create: vi.fn() } });
+    const prismaMock = { remito: { findFirst: vi.fn().mockResolvedValue({ surgeryId: "sx-1" }) }, $transaction: vi.fn(async (cb: any, options?: unknown) => options ? cb(tx) : cb({ durableAttemptAuditEvent: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn() } })) } as any;
+    const authorizationProof = await authorize({ userCompanyAccess: { findFirst: vi.fn().mockResolvedValue({ id: "m1", role: "admin", userId: "user-1", companyId: "company-1", isActive: true }) } } as never,
+      { actorId: "user-1", companyId: "company-1", bundleId: "WCB-06", contractIds: WCB06_CONTRACT_IDS });
+    try {
+      await emitirRemito({ companyId: "company-1", remitoId: "remito-1", updatedById: "user-1", prisma: prismaMock, issuanceDependencies, idempotencyKey: "transport-1", authorizationProof });
+    } finally { process.env.OSSUM_C14_WCB06_ENABLED = old; }
+    expect(c14.execute).toHaveBeenCalledWith(tx, expect.objectContaining({ companyId: "company-1", actorId: "user-1", dispatchLines: [expect.objectContaining({ remitoItemId: "item-1", sourceControlLineId: "control-line-1", stockPositionId: "position-1" })], stockEvidenceLines: [expect.objectContaining({ sourceLineId: "item-1", reservationId: "reservation-1" })] }), expect.objectContaining({ attemptId: expect.any(String), semanticKeySha256: expect.any(String) }));
+    expect(c14.append).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects surgical issuance while WCB-06 is disabled without opening a transaction", async () => {
+    const prismaMock = { remito: { findFirst: vi.fn().mockResolvedValue({ surgeryId: "sx-1" }) }, $transaction: vi.fn() } as any;
+    await expect(emitirRemito({ companyId: "company-1", remitoId: "remito-1", updatedById: "user-1", prisma: prismaMock, issuanceDependencies }))
+      .rejects.toMatchObject({ code: "remito_stock_dispatch_disabled", status: 409 });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("durably records AUTH_DENIED before opening a surgical transaction", async () => {
+    const old = process.env.OSSUM_C14_WCB06_ENABLED; process.env.OSSUM_C14_WCB06_ENABLED = "true";
+    const prismaMock = { remito: { findFirst: vi.fn().mockResolvedValue({ surgeryId: "sx-1" }) }, durableAttemptAuditEvent: { findMany: vi.fn().mockResolvedValue([]) }, $transaction: vi.fn() } as any;
+    try {
+      await expect(emitirRemito({ companyId: "company-1", remitoId: "remito-1", updatedById: "user-1", prisma: prismaMock, issuanceDependencies }))
+        .rejects.toMatchObject({ code: "remito_dispatch_authorization_required", status: 403 });
+    } finally { process.env.OSSUM_C14_WCB06_ENABLED = old; }
+    expect(c14.append).toHaveBeenCalledWith(prismaMock, expect.objectContaining({ eventKind: "AUTH_DENIED", attemptOrdinal: null, transactionId: null, sqlstate: null, domainCommitState: "NOT_STARTED" }));
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
   it("assigns next visibleNumber and transitions to Emitido", async () => {
-    const tx = {
+    const tx = addIssuancePersistenceMocks({
       $executeRaw: vi.fn().mockResolvedValue(0),
       $queryRaw: vi.fn().mockResolvedValue([{ next: BigInt(7) }]),
       remito: {
@@ -226,7 +436,7 @@ describe("emitirRemito", () => {
         update: vi.fn(),
       },
       auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
-    };
+    });
     tx.remito.update.mockImplementation(async ({ data }) =>
       buildRemito({
         state: data.state as string,
@@ -235,6 +445,7 @@ describe("emitirRemito", () => {
       })
     );
     const prismaMock = {
+      remito: { findFirst: vi.fn().mockResolvedValue({ surgeryId: null }) },
       $transaction: vi.fn(async (cb: any, options?: unknown) => cb(tx)),
     } as any;
 
@@ -243,6 +454,7 @@ describe("emitirRemito", () => {
       remitoId: "remito-1",
       updatedById: "user-1",
       prisma: prismaMock,
+      issuanceDependencies,
     });
 
     expect(prismaMock.$transaction).toHaveBeenCalledWith(
@@ -265,14 +477,16 @@ describe("emitirRemito", () => {
     expect(result.visibleNumber).toBe(7);
     expect(result.issuedAt).toBeInstanceOf(Date);
     // audit: remito.issued
-    expect(createAuditEvent).toHaveBeenCalledWith(
+    expect(tx.auditEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        companyId: "company-1",
-        userId: "user-1",
-        entityType: "Remito",
-        action: "remito.issued",
-        oldValue: { state: "Borrador" },
-        newValue: { state: "Emitido", visibleNumber: 7 },
+        data: expect.objectContaining({
+          companyId: "company-1",
+          userId: "user-1",
+          entityType: "Remito",
+          action: "remito.issued",
+          oldValue: { state: "Borrador" },
+          newValue: expect.objectContaining({ state: "Emitido", visibleNumber: 7 }),
+        }),
       })
     );
   });
@@ -288,6 +502,7 @@ describe("emitirRemito", () => {
       auditEvent: { create: vi.fn() },
     };
     const prismaMock = {
+      remito: { findFirst: vi.fn().mockResolvedValue({ surgeryId: null }) },
       $transaction: vi.fn(async (cb: any) => cb(tx)),
     } as any;
 
@@ -297,6 +512,7 @@ describe("emitirRemito", () => {
         remitoId: "remito-1",
         updatedById: "user-1",
         prisma: prismaMock,
+        issuanceDependencies,
       })
     ).rejects.toMatchObject({ code: "remito_not_borrador" });
     expect(tx.$queryRaw).not.toHaveBeenCalled();
@@ -304,18 +520,23 @@ describe("emitirRemito", () => {
   });
 
   it("retries on P2034 serialization conflict then succeeds", async () => {
-    const tx = {
+    const tx = addIssuancePersistenceMocks({
       $executeRaw: vi.fn().mockResolvedValue(0),
       $queryRaw: vi.fn().mockResolvedValue([{ next: BigInt(3) }]),
       remito: {
         findFirst: vi.fn().mockResolvedValue(buildRemito({ state: "Borrador" })),
-        update: vi.fn().mockResolvedValue(buildRemito({ state: "Emitido", visibleNumber: 3 })),
+        update: vi.fn().mockImplementation(async ({ data }) => buildRemito({
+          state: "Emitido",
+          visibleNumber: 3,
+          issuedAt: data.issuedAt,
+        })),
       },
       auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
-    };
+    });
 
     let attempt = 0;
     const prismaMock = {
+      remito: { findFirst: vi.fn().mockResolvedValue({ surgeryId: null }) },
       $transaction: vi.fn(async (cb: any, _opts?: unknown) => {
         attempt += 1;
         if (attempt === 1) {
@@ -332,6 +553,7 @@ describe("emitirRemito", () => {
       remitoId: "remito-1",
       updatedById: "user-1",
       prisma: prismaMock,
+      issuanceDependencies,
     });
 
     expect(prismaMock.$transaction.mock.calls.length).toBe(2);
@@ -516,8 +738,37 @@ describe("updateRemitoDraft", () => {
         updatedById: "user-1",
         prisma: prismaMock,
       })
-    ).rejects.toMatchObject({ code: "remito_not_borrador", status: 409 });
+    ).rejects.toMatchObject({ code: "remito_not_editable", status: 409 });
     expect(tx.remito.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("updates an Entregado remito while preserving its state and auditing the correction", async () => {
+    const current = buildRemito({ state: "Entregado", deliveredAt: new Date("2026-07-08T10:00:00.000Z") });
+    const resultRow = buildRemito({ ...current, metadata: { note: "corrected" } });
+    const tx = {
+      remito: {
+        findFirst: vi.fn().mockResolvedValueOnce(current).mockResolvedValueOnce(resultRow),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      remitoItem: { deleteMany: vi.fn(), createMany: vi.fn() },
+      auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
+    };
+    const prismaMock = { $transaction: vi.fn(async (cb: any) => cb(tx)) } as any;
+
+    const result = await updateRemitoDraft({
+      companyId: "company-1",
+      remitoId: "remito-1",
+      metadata: { note: "corrected" },
+      expectedUpdatedAt: current.updatedAt,
+      updatedById: "user-1",
+      prisma: prismaMock,
+    });
+
+    expect(tx.remito.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: "remito-1", companyId: "company-1", state: "Entregado", updatedAt: current.updatedAt }),
+    }));
+    expect(result.state).toBe("Entregado");
+    expect(createAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "remito.updated" }));
   });
 
   it("rejects surgeryId from another company before updating draft", async () => {

@@ -13,8 +13,9 @@ import type { FilterChip, SearchChip, DateFilter } from "@/lib/cirugias.types"
 import { ALL_STATES, FACTURACION_OPTIONS } from "@/lib/cirugias.constants"
 import { getFacturacionStatus } from "@/lib/cirugias.utils"
 import { normalizeAccents } from "@/lib/utils"
+import type { PresupuestoApiRow } from "@/lib/api/presupuestos"
 
-export function useCirugiasFilters() {
+export function useCirugiasFilters(getPresupuestos: (surgery: Surgery) => PresupuestoApiRow[] = () => []) {
   const store = useOrtoTrackStore()
 
   // ── Filter state ──
@@ -138,12 +139,14 @@ export function useCirugiasFilters() {
       case "general": {
         // General search: search across all text fields (accent-insensitive)
         const q = normalizeAccents(chip.value)
+        const presupuesto = getPresupuestos(surgery)[0]
+        const prId = presupuesto ? `${presupuesto.id} ${presupuesto.visibleNumber ?? ""}` : ""
         return (
           normalizeAccents(surgery.patient || "").includes(q) ||
           normalizeAccents(surgery.surgeon || "").includes(q) ||
           normalizeAccents(surgery.institution || "").includes(q) ||
           normalizeAccents(surgery.client || "").includes(q) ||
-          normalizeAccents(surgery.prNumber || "").includes(q) ||
+          normalizeAccents(prId).includes(q) ||
           normalizeAccents(surgery.expedienteNumber || "").includes(q) ||
           normalizeAccents(surgery.id).includes(q)
         )
@@ -151,7 +154,7 @@ export function useCirugiasFilters() {
       default:
         return false
     }
-  }, [store])
+  }, [store, getPresupuestos])
 
   // ── CHATZAI-025: Apply search chips filtering (AND across fields, OR within same field) ──
   const applySearchChips = useCallback((data: Surgery[], chips: SearchChip[]): Surgery[] => {
@@ -207,7 +210,8 @@ export function useCirugiasFilters() {
       // Legacy simple search — always searches patient; extended fields via "Buscar también en" (accent-insensitive)
       const q = normalizeAccents(search)
       filtered = filtered.filter((s) => {
-        const prId = store.getPresupuestosBySurgeryId(s.id)[0]?.id || ""
+        const presupuesto = getPresupuestos(s)[0]
+        const prId = presupuesto ? `${presupuesto.id} ${presupuesto.visibleNumber ?? ""}` : ""
         const nrId = store.getRemitosBySurgeryId(s.id)[0]?.id || ""
         const fvNum = s.facturaNumber || store.getComprobantesBySurgeryId(s.id).find(c => c.type === "FV")?.number || ""
 
@@ -215,7 +219,7 @@ export function useCirugiasFilters() {
         if (!match && searchInMedico) match = normalizeAccents(s.surgeon || "").includes(q)
         if (!match && searchInInstitucion) match = normalizeAccents(s.institution || "").includes(q)
         if (!match && searchInCliente) match = normalizeAccents(s.client || "").includes(q)
-        if (!match && searchInPR) match = normalizeAccents(s.prNumber || "").includes(q) || normalizeAccents(prId).includes(q)
+        if (!match && searchInPR) match = normalizeAccents(prId).includes(q)
         if (!match && searchInExpediente) match = normalizeAccents(s.expedienteNumber || "").includes(q)
         if (!match && searchInNR) match = normalizeAccents(nrId).includes(q)
         if (!match && searchInFV) match = normalizeAccents(fvNum).includes(q)
@@ -350,9 +354,9 @@ export function useCirugiasFilters() {
       filtered = filtered.filter((s) => !s.date || s.date === "")
     }
     if (conPrFilter === "con") {
-      filtered = filtered.filter((s) => !!s.prNumber || store.getPresupuestosBySurgeryId(s.id).length > 0)
+      filtered = filtered.filter((s) => getPresupuestos(s).length > 0)
     } else if (conPrFilter === "sin") {
-      filtered = filtered.filter((s) => !s.prNumber && store.getPresupuestosBySurgeryId(s.id).length === 0)
+      filtered = filtered.filter((s) => getPresupuestos(s).length === 0)
     }
     if (conConsumoFilter === "con") {
       filtered = filtered.filter((s) => !!store.getConsumoBySurgeryId(s.id))
@@ -366,7 +370,7 @@ export function useCirugiasFilters() {
     }
 
     return filtered
-  }, [search, searchChips, kpiFilter, stateFilters, classFilters, clientFilters, institutionFilters, prepFilters, docFilters, factFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter, facturacionStatus, store, searchInMedico, searchInInstitucion, searchInCliente, searchInPR, searchInExpediente, searchInNR, searchInFV, applySearchChips, getSurgeryDateForType])
+  }, [search, searchChips, kpiFilter, stateFilters, classFilters, clientFilters, institutionFilters, prepFilters, docFilters, factFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter, facturacionStatus, store, searchInMedico, searchInInstitucion, searchInCliente, searchInPR, searchInExpediente, searchInNR, searchInFV, applySearchChips, getSurgeryDateForType, getPresupuestos])
 
   // ── Active filter chips ──
   const activeFilterChips = useMemo((): FilterChip[] => {

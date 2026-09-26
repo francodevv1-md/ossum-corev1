@@ -459,7 +459,7 @@ describe("FileSystemMailStage1Repository", () => {
     // Verify file exists and content matches
     const fullPath = path.join(TEST_RUNTIME_DIR, fsPath)
     const content = await fs.readFile(fullPath)
-    expect(content.equals(buffer)).toBe(true)
+    expect(Array.from(content)).toEqual(Array.from(buffer))
   })
 
   it("getCompanyDocument throws for non-ENOENT errors (bad JSON)", async () => {

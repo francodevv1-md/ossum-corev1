@@ -1,67 +1,75 @@
-// OSSUM COR — Presupuesto service unit tests (Fase 1C)
-// Mocking Prisma manually (vitest). No DB needed.
-
-import { beforeEach, describe, expect, it, vi } from "vitest";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Prisma } from "@prisma/client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createAuditEvent } = vi.hoisted(() => ({
-  createAuditEvent: vi.fn(),
-}));
-
-vi.mock("@/lib/audit", () => ({
-  createAuditEvent,
-}));
+const { createAuditEvent } = vi.hoisted(() => ({ createAuditEvent: vi.fn() }));
+vi.mock("@/lib/audit", () => ({ createAuditEvent }));
 
 import {
-  PresupuestoError,
-  createPresupuesto,
-  createPresupuestoVersion,
-  deletePresupuesto,
-  emitirPresupuesto,
+  createFamilyDraft,
+  createRevisionDraft,
+  emitDraft,
   recalculatePresupuestoTotals,
-  updatePresupuestoState,
+  replaceDraft,
+  toPresupuestoDto,
 } from "@/lib/services/presupuesto.service";
+import { presupuestoItemCreateSchema } from "@/lib/validators/presupuesto";
 
-function buildPresupuesto(over: Record<string, any> = {}) {
+function record(over: Record<string, unknown> = {}) {
   return {
-    id: "presupuesto-1",
-    visibleNumber: null,
+    id: "budget-1",
+    visibleNumber: 4,
     companyId: "company-1",
-    surgeryId: "sx-1",
+    familyId: "family-1",
+    surgeryId: "surgery-1",
+    branchId: "branch-1",
+    clientContactId: "client-1",
+    payerContactId: "payer-1",
     parentPresupuestoId: null,
+    sourcePresupuestoId: null,
     versionNumber: 1,
-    state: "Borrador" as string,
-    title: "Cotización inicial",
+    slot: "CURRENT",
+    revision: 3,
+    state: "Aprobado",
+    title: "Implantes",
     currency: "ARS",
-    subtotal: new Prisma.Decimal(0),
-    discountTotal: new Prisma.Decimal(0),
-    taxTotal: new Prisma.Decimal(0),
-    total: new Prisma.Decimal(0),
-    validUntil: null,
-    issuedAt: null,
-    approvedAt: null,
+    documentDate: new Date("2026-08-31T00:00:00Z"),
+    paymentTerms: "Contado",
+    priceListCode: "GENERAL",
+    legend: "Commercial legend",
+    notes: null,
+    generalDiscountRate: new Prisma.Decimal(10),
+    commercialSnapshot: { pricingMode: "FIRM" },
+    subtotal: new Prisma.Decimal(200),
+    discountTotal: new Prisma.Decimal(20),
+    taxTotal: new Prisma.Decimal(37.8),
+    total: new Prisma.Decimal(217.8),
+    validUntil: new Date("2026-09-30T00:00:00Z"),
+    issuedAt: new Date("2026-08-31T00:00:00Z"),
+    approvedAt: new Date("2026-08-31T01:00:00Z"),
     rejectedAt: null,
     createdById: "user-1",
-    updatedById: null,
+    updatedById: "user-1",
     metadata: null,
-    createdAt: new Date("2026-07-07T10:00:00.000Z"),
-    updatedAt: new Date("2026-07-07T10:00:00.000Z"),
-    items: [
-      {
-        id: "item-1",
-        sku: "SKU-1",
-        description: "Tornillo 4.0",
-        quantity: new Prisma.Decimal(2),
-        unit: "u",
-        unitPrice: new Prisma.Decimal(100),
-        discount: new Prisma.Decimal(10),
-        tax: new Prisma.Decimal(39.9),
-        total: new Prisma.Decimal(229.9),
-        metadata: null,
-      },
-    ],
+    createdAt: new Date("2026-08-31T00:00:00Z"),
+    updatedAt: new Date("2026-08-31T01:00:00Z"),
+    items: [{
+      id: "item-1",
+      position: 0,
+      sku: "SKU-1",
+      description: "Implante",
+      quantity: new Prisma.Decimal(2),
+      unit: "unidad",
+      unitPrice: new Prisma.Decimal(100),
+      discountRate: new Prisma.Decimal(0),
+      discount: new Prisma.Decimal(20),
+      taxRate: new Prisma.Decimal(21),
+      tax: new Prisma.Decimal(37.8),
+      total: new Prisma.Decimal(217.8),
+      metadata: null,
+    }],
     ...over,
-  };
+  } as any;
 }
 
 beforeEach(() => {
@@ -70,213 +78,246 @@ beforeEach(() => {
 });
 
 describe("recalculatePresupuestoTotals", () => {
-  it("calculates totals from decimal-friendly strings", () => {
+  it("uses Decimal rates and applies line then apportioned general discount before VAT", () => {
     const result = recalculatePresupuestoTotals([
-      { description: "A", quantity: "2.5", unitPrice: "100.25", discount: "10", tax: "21" },
-      { description: "B", quantity: "1", unitPrice: "50", discount: "0", tax: "10.5" },
-    ]);
+      { description: "A", quantity: "2", unitPrice: "100", discountRate: "10", taxRate: "21" },
+      { description: "B", quantity: "1", unitPrice: "50", discountRate: "0", taxRate: "10.5" },
+    ], "5");
 
-    expect(result.subtotal.toString()).toBe("300.625");
-    expect(result.discountTotal.toString()).toBe("10");
-    expect(result.taxTotal.toString()).toBe("31.5");
-    expect(result.total.toString()).toBe("322.125");
-    expect(result.items[0].total.toString()).toBe("261.625");
+    expect(result.subtotal.toString()).toBe("250");
+    expect(result.discountTotal.toString()).toBe("31.5");
+    expect(result.taxTotal.toString()).toBe("40.8975");
+    expect(result.total.toString()).toBe("259.3975");
+    expect(result.items.map((item) => item.position)).toEqual([0, 1]);
+  });
+
+  it("quantizes persisted operands and totals to Decimal scale 4 before summing", () => {
+    const result = recalculatePresupuestoTotals([
+      { description: "A", quantity: "1.234567", unitPrice: "10.123456", discountRate: "3.333333", taxRate: "21.987654" },
+      { description: "B", quantity: "2.000009", unitPrice: "0.333355", discountRate: "0", taxRate: "10.5" },
+    ], "1.234567");
+
+    const persisted = [result.generalDiscountRate, result.subtotal, result.discountTotal, result.taxTotal, result.total,
+      ...result.items.flatMap((item) => [item.quantity, item.unitPrice, item.discountRate, item.discount, item.taxRate, item.tax, item.total])];
+    expect(persisted.every((value) => value.decimalPlaces() <= 4)).toBe(true);
+    expect(result.total.equals(result.items.reduce((sum, item) => sum.plus(item.total), new Prisma.Decimal(0)))).toBe(true);
+  });
+
+  it("rejects non-finite decimal values at both validation and service boundaries", () => {
+    expect(presupuestoItemCreateSchema.safeParse({ description: "A", quantity: "Infinity", unitPrice: "1" }).success).toBe(false);
+    expect(presupuestoItemCreateSchema.safeParse({ description: "A", quantity: "1", unitPrice: "NaN" }).success).toBe(false);
+    expect(() => recalculatePresupuestoTotals([{ description: "A", quantity: "Infinity", unitPrice: "1" }])).toThrow("Invalid decimal value");
   });
 });
 
-describe("createPresupuesto", () => {
-  it("validates surgery company, computes totals and creates Borrador", async () => {
-    const tx = { presupuesto: { create: vi.fn() } };
-    tx.presupuesto.create.mockImplementation(async ({ data }) =>
-      buildPresupuesto({
-        state: data.state,
-        subtotal: data.subtotal,
-        discountTotal: data.discountTotal,
-        taxTotal: data.taxTotal,
-        total: data.total,
-        items: data.items.create,
-      })
-    );
-    const prismaMock = {
-      surgery: { findFirst: vi.fn().mockResolvedValue({ id: "sx-1" }) },
-      $transaction: vi.fn(async (cb: any) => cb(tx)),
-    } as any;
+describe("canonical projection", () => {
+  it("serializes decimals/dates and derives actions from authoritative state and slot", () => {
+    const dto = toPresupuestoDto(record());
+    expect(dto.total).toBe("217.8");
+    expect(dto.documentDate).toBe("2026-08-31T00:00:00.000Z");
+    expect(dto.actions).toEqual(["annul", "revise"]);
+  });
+});
 
-    const result = await createPresupuesto({
-      companyId: "company-1",
-      surgeryId: "sx-1",
-      items: [{ description: "Tornillo", quantity: "2", unitPrice: "100", discount: "5", tax: "10" }],
-      createdById: "user-1",
-      prisma: prismaMock,
+describe("createFamilyDraft", () => {
+  it("fails closed if a linked-family uniqueness conflict cannot be audited", async () => {
+    const race = new Prisma.PrismaClientKnownRequestError("family race", {
+      code: "P2002",
+      clientVersion: "7.8.0",
     });
+    const prisma = { $transaction: vi.fn().mockRejectedValue(race) } as any;
+    createAuditEvent.mockRejectedValueOnce(new Error("conflict audit unavailable"));
 
-    expect(prismaMock.surgery.findFirst).toHaveBeenCalledWith({
-      where: { id: "sx-1", companyId: "company-1" },
-      select: { id: true },
-    });
-    expect(tx.presupuesto.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          companyId: "company-1",
-          state: "Borrador",
-          subtotal: expect.any(Prisma.Decimal),
-          total: expect.any(Prisma.Decimal),
-        }),
-      })
-    );
-    expect(result.total.toString()).toBe("205");
-    expect(createAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "presupuesto_created", entityType: "Presupuesto" })
-    );
-  });
-
-  it("rejects empty items", async () => {
-    const prismaMock = { surgery: { findFirst: vi.fn() }, $transaction: vi.fn() } as any;
-    await expect(
-      createPresupuesto({ companyId: "company-1", items: [], prisma: prismaMock })
-    ).rejects.toMatchObject({ code: "presupuesto_empty_items" });
+    await expect(createFamilyDraft({
+      companyId: "company-1", surgeryId: "surgery-1", actorUserId: "user-1", prisma,
+      branchId: "branch-1", clientContactId: "client-1", payerContactId: "payer-1",
+      documentDate: new Date(), paymentTerms: "Contado", priceListCode: "GENERAL", legend: "Commercial legend", validUntil: new Date(),
+      commercial: { pricingMode: "FIRM", firmPrice: { coordinator: "A", quotationContact: "B", includedMaterials: [], excludedMaterials: [], availability: "Now", operationalClarifications: "None", surgicalAssumptions: "Known" } },
+      items: [{ description: "A", quantity: "1", unitPrice: "1" }],
+    })).rejects.toThrow("conflict audit unavailable");
+    expect(createAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      companyId: "company-1", userId: "user-1", entityId: "surgery-1", action: "presupuesto_conflict",
+      metadata: expect.objectContaining({ command: "createFamilyDraft", surgeryId: "surgery-1" }),
+    }));
   });
 });
 
-describe("emitirPresupuesto", () => {
-  it("assigns visibleNumber and state Emitido", async () => {
-    const tx = {
-      $executeRaw: vi.fn().mockResolvedValue(0),
-      $queryRaw: vi.fn().mockResolvedValue([{ next: BigInt(9) }]),
-      presupuesto: {
-        findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Borrador" })),
-        update: vi.fn().mockImplementation(async ({ data }) =>
-          buildPresupuesto({ state: data.state, visibleNumber: data.visibleNumber, issuedAt: data.issuedAt })
-        ),
-      },
-    };
-    const prismaMock = { $transaction: vi.fn(async (cb: any) => cb(tx)) } as any;
-
-    const result = await emitirPresupuesto({
-      companyId: "company-1",
-      presupuestoId: "presupuesto-1",
-      updatedById: "user-1",
-      prisma: prismaMock,
-    });
-
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
-    expect(tx.presupuesto.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "presupuesto-1" },
-        data: expect.objectContaining({ visibleNumber: 9, state: "Emitido" }),
-      })
-    );
-    expect(result.visibleNumber).toBe(9);
-    expect(result.state).toBe("Emitido");
-  });
-});
-
-describe("updatePresupuestoState", () => {
-  it("rejects invalid transitions", async () => {
-    const prismaMock = {
-      presupuesto: { findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Rechazado" })) },
-      $transaction: vi.fn(),
-    } as any;
-
-    await expect(
-      updatePresupuestoState({
-        companyId: "company-1",
-        presupuestoId: "presupuesto-1",
-        newState: "Aprobado",
-        updatedById: "user-1",
-        prisma: prismaMock,
-      })
-    ).rejects.toMatchObject({ code: "invalid_presupuesto_transition", status: 409 });
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-  });
-});
-
-describe("createPresupuestoVersion", () => {
-  it("copies items and marks source Reemplazado", async () => {
-    const source = buildPresupuesto({
-      id: "presupuesto-1",
-      state: "Aprobado",
-      items: [
-        {
-          sku: "SKU-1",
-          description: "Tornillo",
-          quantity: new Prisma.Decimal(2),
-          unit: "u",
-          unitPrice: new Prisma.Decimal(100),
-          discount: new Prisma.Decimal(0),
-          tax: new Prisma.Decimal(21),
-          total: new Prisma.Decimal(221),
-          metadata: null,
-        },
-      ],
+describe("createRevisionDraft", () => {
+  it("copies the immutable current snapshot without replacing the source", async () => {
+    const source = record();
+    const created = record({
+      id: "budget-2",
+      visibleNumber: null,
+      sourcePresupuestoId: source.id,
+      parentPresupuestoId: source.id,
+      versionNumber: 2,
+      slot: "DRAFT",
+      revision: 1,
+      state: "Borrador",
     });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "family-1" }]),
       presupuesto: {
         findFirst: vi.fn().mockResolvedValue(source),
         aggregate: vi.fn().mockResolvedValue({ _max: { versionNumber: 1 } }),
-        update: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Reemplazado" })),
-        create: vi.fn().mockImplementation(async ({ data }) =>
-          buildPresupuesto({
-            id: "presupuesto-2",
-            parentPresupuestoId: data.parentPresupuestoId,
-            versionNumber: data.versionNumber,
-            state: data.state,
-            items: data.items.create,
-          })
-        ),
+        create: vi.fn().mockResolvedValue(created),
+        update: vi.fn(),
+        updateMany: vi.fn(),
       },
     };
-    const prismaMock = { $transaction: vi.fn(async (cb: any) => cb(tx)) } as any;
+    const prisma = { $transaction: vi.fn((work: any) => work(tx)) } as any;
 
-    const result = await createPresupuestoVersion({
+    const result = await createRevisionDraft({
       companyId: "company-1",
-      sourcePresupuestoId: "presupuesto-1",
-      updatedById: "user-1",
-      prisma: prismaMock,
+      presupuestoId: source.id,
+      expectedRevision: 3,
+      actorUserId: "user-1",
+      prisma,
     });
 
-    expect(tx.presupuesto.update).toHaveBeenCalledWith({
-      where: { id: "presupuesto-1" },
-      data: { state: "Reemplazado", updatedById: "user-1" },
+    expect(result.state).toBe("Borrador");
+    expect(tx.presupuesto.update).not.toHaveBeenCalled();
+    expect(tx.presupuesto.updateMany).not.toHaveBeenCalled();
+    expect(tx.presupuesto.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ sourcePresupuestoId: source.id, slot: "DRAFT", state: "Borrador" }),
+    }));
+    expect(createAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "presupuesto_revision_draft_created" }));
+  });
+
+  it("does not accept the mutation when transactional audit fails", async () => {
+    const source = record();
+    const persisted = [source];
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "family-1" }]),
+      presupuesto: {
+        findFirst: vi.fn().mockResolvedValue(source),
+        aggregate: vi.fn().mockResolvedValue({ _max: { versionNumber: 1 } }),
+        create: vi.fn().mockImplementation(async () => {
+          const created = record({ id: "budget-2", slot: "DRAFT", state: "Borrador" });
+          persisted.push(created);
+          return created;
+        }),
+      },
+    };
+    createAuditEvent.mockRejectedValueOnce(new Error("audit failed"));
+    const prisma = { $transaction: vi.fn(async (work: any) => {
+      const snapshot = [...persisted];
+      try {
+        return await work(tx);
+      } catch (error) {
+        persisted.splice(0, persisted.length, ...snapshot);
+        throw error;
+      }
+    }) } as any;
+
+    await expect(createRevisionDraft({
+      companyId: "company-1",
+      presupuestoId: source.id,
+      expectedRevision: 3,
+      actorUserId: "user-1",
+      prisma,
+    })).rejects.toThrow("audit failed");
+    expect(persisted.map((item) => item.id)).toEqual([source.id]);
+  });
+
+  it("audits accepted revisions with actor, lineage, complete header, and item evidence", async () => {
+    const source = record();
+    const created = record({
+      id: "budget-2", visibleNumber: null, sourcePresupuestoId: source.id,
+      parentPresupuestoId: source.id, versionNumber: 2, slot: "DRAFT", revision: 1, state: "Borrador",
     });
-    expect(result.id).toBe("presupuesto-2");
-    expect(result.parentPresupuestoId).toBe("presupuesto-1");
-    expect(result.versionNumber).toBe(2);
-    expect(result.items).toHaveLength(1);
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "family-1" }]),
+      presupuesto: {
+        findFirst: vi.fn().mockResolvedValue(source),
+        aggregate: vi.fn().mockResolvedValue({ _max: { versionNumber: 1 } }),
+        create: vi.fn().mockResolvedValue(created),
+      },
+    };
+    const prisma = { $transaction: vi.fn((work: any) => work(tx)) } as any;
+
+    await createRevisionDraft({ companyId: "company-1", presupuestoId: source.id, expectedRevision: 3, actorUserId: "user-1", prisma });
+
+    expect(createAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      companyId: "company-1",
+      userId: "user-1",
+      entityId: "budget-2",
+      oldValue: expect.objectContaining({ familyId: "family-1", branchId: "branch-1", items: [expect.objectContaining({ id: "item-1", description: "Implante" })] }),
+      newValue: expect.objectContaining({ familyId: "family-1", parentPresupuestoId: source.id, sourcePresupuestoId: source.id, createdById: "user-1", items: [expect.objectContaining({ description: "Implante" })] }),
+    }));
   });
 });
 
-describe("deletePresupuesto", () => {
-  it("deletes only Borrador", async () => {
-    const tx = { presupuesto: { delete: vi.fn().mockResolvedValue({ id: "presupuesto-1" }) } };
-    const prismaMock = {
-      presupuesto: { findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Borrador" })) },
-      $transaction: vi.fn(async (cb: any) => cb(tx)),
-    } as any;
+describe("replaceDraft", () => {
+  it("returns a deterministic stale conflict, records it, and performs no update", async () => {
+    const stale = record({ slot: "DRAFT", state: "Borrador", revision: 2 });
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "family-1" }]),
+      presupuesto: { findFirst: vi.fn().mockResolvedValue(stale), updateMany: vi.fn() },
+    };
+    const prisma = { $transaction: vi.fn((work: any) => work(tx)) } as any;
 
-    const result = await deletePresupuesto({
+    await expect(replaceDraft({
       companyId: "company-1",
-      presupuestoId: "presupuesto-1",
-      prisma: prismaMock,
-    });
-    expect(result).toEqual({ id: "presupuesto-1", deleted: true });
+      presupuestoId: stale.id,
+      expectedRevision: 1,
+      actorUserId: "user-1",
+      prisma,
+      branchId: "branch-1",
+      clientContactId: "client-1",
+      payerContactId: "payer-1",
+      documentDate: new Date(),
+      paymentTerms: "Contado",
+      priceListCode: "GENERAL",
+      legend: "Commercial legend",
+      validUntil: new Date(),
+      commercial: { pricingMode: "FIRM", firmPrice: { coordinator: "A", quotationContact: "B", includedMaterials: [], excludedMaterials: [], availability: "Now", operationalClarifications: "None", surgicalAssumptions: "Known" } },
+      items: [{ description: "A", quantity: "1", unitPrice: "1" }],
+    })).rejects.toMatchObject({ status: 409, code: "presupuesto_conflict" });
+
+    expect(tx.presupuesto.updateMany).not.toHaveBeenCalled();
+    expect(createAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "presupuesto_conflict" }));
   });
 
-  it("refuses delete when state !== Borrador", async () => {
-    const prismaMock = {
-      presupuesto: { findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Emitido" })) },
-      $transaction: vi.fn(),
-    } as any;
-    await expect(
-      deletePresupuesto({ companyId: "company-1", presupuestoId: "presupuesto-1", prisma: prismaMock })
-    ).rejects.toMatchObject({ code: "presupuesto_not_deletable", status: 409 });
-  });
+  it("fails closed when the required conflict audit cannot be recorded", async () => {
+    const stale = record({ slot: "DRAFT", state: "Borrador", revision: 2 });
+    const tx = { $queryRaw: vi.fn().mockResolvedValue([{ id: "family-1" }]), presupuesto: { findFirst: vi.fn().mockResolvedValue(stale), updateMany: vi.fn() } };
+    const prisma = { $transaction: vi.fn((work: any) => work(tx)) } as any;
+    createAuditEvent.mockRejectedValueOnce(new Error("conflict audit unavailable"));
 
-  it("PresupuestoError carries code and status", () => {
-    const e = new PresupuestoError("x", "boom", 409);
-    expect(e.code).toBe("x");
-    expect(e.status).toBe(409);
-    expect(e).toBeInstanceOf(Error);
+    await expect(replaceDraft({
+      companyId: "company-1", presupuestoId: stale.id, expectedRevision: 1, actorUserId: "user-1", prisma,
+      branchId: "branch-1", clientContactId: "client-1", payerContactId: "payer-1",
+      documentDate: new Date(), paymentTerms: "Contado", priceListCode: "GENERAL", legend: "Commercial legend", validUntil: new Date(),
+      commercial: { pricingMode: "FIRM", firmPrice: { coordinator: "A", quotationContact: "B", includedMaterials: [], excludedMaterials: [], availability: "Now", operationalClarifications: "None", surgicalAssumptions: "Known" } },
+      items: [{ description: "A", quantity: "1", unitPrice: "1" }],
+    })).rejects.toThrow("conflict audit unavailable");
+    expect(tx.presupuesto.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("emitDraft", () => {
+  it("audits the post-replacement snapshot of the prior current version", async () => {
+    const draft = record({ id: "budget-2", visibleNumber: 5, sourcePresupuestoId: "budget-1", parentPresupuestoId: "budget-1", versionNumber: 2, slot: "DRAFT", revision: 1, state: "Borrador" });
+    const current = record({ id: "budget-1", state: "Emitido", revision: 2 });
+    const replaced = record({ id: "budget-1", state: "Reemplazado", slot: "HISTORY", revision: 3 });
+    const emitted = record({ ...draft, state: "Emitido", slot: "CURRENT", revision: 2 });
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "family-1" }]),
+      presupuesto: {
+        findFirst: vi.fn().mockResolvedValueOnce(draft).mockResolvedValueOnce(current).mockResolvedValueOnce(emitted),
+        update: vi.fn().mockResolvedValue(replaced),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const prisma = { $transaction: vi.fn((work: any) => work(tx)) } as any;
+
+    await emitDraft({ companyId: "company-1", presupuestoId: draft.id, expectedRevision: 1, actorUserId: "user-1", prisma });
+
+    expect(createAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "presupuesto_emitted",
+      oldValue: expect.objectContaining({ priorCurrent: expect.objectContaining({ id: "budget-1", state: "Emitido", revision: 2 }) }),
+      newValue: expect.objectContaining({ priorCurrent: expect.objectContaining({ id: "budget-1", state: "Reemplazado", slot: "HISTORY", revision: 3 }) }),
+    }));
   });
 });

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
+import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { useOrtoTrackStore } from "@/lib/store"
 // TooltipProvider is provided by the root layout — no page-level provider needed
@@ -13,12 +14,14 @@ import { useColumnVisibility } from "@/hooks/useColumnVisibility"
 import { useCirugiaActions } from "@/hooks/useCirugiaActions"
 import { useCirugiasSorting } from "@/hooks/useCirugiasSorting"
 import { useBackendActiveSurgeries } from "@/hooks/useBackendActiveSurgeries"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
 
 // Utils
 import { computeKpis, getFacturacionStatus, resolveKpiFilter } from "@/lib/cirugias.utils"
 import { CIRUGIAS_COLUMNS } from "@/lib/cirugias.constants"
 import { getCircuitProgress } from "@/lib/circuit-progress"
 import { deriveCxOperationsDisplay } from "@/lib/cx-operations-derived"
+import { toLegacyPresupuestoProjection } from "@/lib/api/presupuestos"
 
 // Toolbar & Filters
 import { CirugiasToolbar } from "@/components/cirugias/CirugiasToolbar"
@@ -73,9 +76,15 @@ const ViewCustomizationDialog = dynamic(
 export default function CirugiasPage() {
   const { activeCompany } = useAuth()
   const store = useOrtoTrackStore()
+  const searchParams = useSearchParams()
 
   // ── Hooks ──
-  const filters = useCirugiasFilters()
+  const presupuestoAuthority = usePresupuestos({ take: 500 })
+  const getCanonicalPresupuestos = useMemo(() => (surgery: typeof store.surgeries[number]) =>
+    presupuestoAuthority.presupuestos.filter((item) => item.surgeryId === (surgery.backendId ?? surgery.id)),
+    [presupuestoAuthority.presupuestos],
+  )
+  const filters = useCirugiasFilters(getCanonicalPresupuestos)
   const selection = useCirugiaSelection()
   const columns = useColumnVisibility({ companyId: activeCompany?.id })
   const actions = useCirugiaActions()
@@ -85,6 +94,16 @@ export default function CirugiasPage() {
   const [viewCustomizationOpen, setViewCustomizationOpen] = useState(false)
   const [showOperationPresets, setShowOperationPresets] = useState(true)
   const presetOwnershipRef = useRef<CxOperationPresetOwnership | null>(null)
+
+  useEffect(() => {
+    const requestedId = searchParams.get("id")?.trim()
+    if (!requestedId) return
+    const requestedSurgery = store.surgeries.find((candidate) => candidate.id === requestedId || candidate.backendId === requestedId || candidate.visibleNumber === requestedId)
+    if (!requestedSurgery) return
+    selection.setSelectedSurgeryId(requestedSurgery.id)
+    selection.setExpTab("ficha")
+    selection.setPanelState("expanded")
+  }, [searchParams, selection, store.surgeries])
 
   useEffect(() => {
     const handleOpenDeleteDialog = (event: Event) => {
@@ -136,6 +155,15 @@ export default function CirugiasPage() {
       : filteredData
     return sorting.sortData(attentionFiltered)
   }, [store.surgeries, filters.filterData, filters.needsAttention, sorting.sortData, coordinatorCases, closureSignalsMap])
+
+  const tableData = useMemo(() => filtered.map((surgery) => {
+    const presupuesto = getCanonicalPresupuestos(surgery)[0]
+    return {
+      ...surgery,
+      presupuestoId: presupuesto?.id,
+      prNumber: presupuesto?.visibleNumber == null ? undefined : `P-${String(presupuesto.visibleNumber).padStart(4, "0")}`,
+    }
+  }), [filtered, getCanonicalPresupuestos])
 
   const presetSetters = {
     setNeedsAttention: filters.setNeedsAttention,
@@ -190,7 +218,10 @@ export default function CirugiasPage() {
         s.id,
         getCircuitProgress(
           s,
-          store.getPresupuestosBySurgeryId,
+          (id) => {
+            const surgery = store.getSurgeryById(id)
+            return surgery ? getCanonicalPresupuestos(surgery).map(toLegacyPresupuestoProjection) : []
+          },
           store.getRemitosBySurgeryId,
           store.getConsumoBySurgeryId,
           store.getDocStatus,
@@ -200,7 +231,7 @@ export default function CirugiasPage() {
     ),
     [
       store.surgeries,
-      store.getPresupuestosBySurgeryId,
+      getCanonicalPresupuestos,
       store.getRemitosBySurgeryId,
       store.getConsumoBySurgeryId,
       store.getDocStatus,
@@ -250,6 +281,7 @@ export default function CirugiasPage() {
       </div>
     ) : (
      <div className="flex min-h-0 flex-1 flex-col bg-slate-100/70 dark:bg-slate-950">
+        {presupuestoAuthority.error && <div className="mx-2 mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">No se pudieron cargar los presupuestos: {presupuestoAuthority.error}</div>}
         {/* ── EXPANDED VIEW: Full Expediente replaces everything ── */}
         {selection.panelState === "expanded" && selection.selectedSurgery ? (
           <ExpedienteFullView
@@ -400,7 +432,7 @@ export default function CirugiasPage() {
             <div className="mx-1 -mt-px flex min-h-0 flex-1 flex-col border border-slate-300 border-t-0 bg-white dark:border-slate-800 dark:bg-slate-950 lg:mx-2">
               <div className="min-h-0 min-w-0 flex-1">
                 <CirugiasTable
-                data={filtered}
+                 data={tableData}
                 selectedSurgeryId={selection.selectedSurgeryId}
                 visibleCols={columns.visibleCols}
                 sortKey={sorting.sortKey}
@@ -409,7 +441,11 @@ export default function CirugiasPage() {
                 getDocStatus={store.getDocStatus}
                 getConsumoState={(id: string) => store.getConsumoBySurgeryId(id)?.state ?? null}
                 getFacturacionStatus={facturacionStatusFor}
-                getPrId={(id: string) => store.getPresupuestosBySurgeryId(id)[0]?.id}
+                getPrId={(id: string) => {
+                  const surgery = store.getSurgeryById(id)
+                  const presupuesto = surgery ? getCanonicalPresupuestos(surgery)[0] : undefined
+                  return presupuesto?.visibleNumber == null ? presupuesto?.id : `P-${String(presupuesto.visibleNumber).padStart(4, "0")}`
+                }}
                 onSelect={selection.selectSurgery}
                 onOpenExpediente={selection.openExpediente}
                 onOpenPresupuestoDialog={actions.openPresupuestoDialog}

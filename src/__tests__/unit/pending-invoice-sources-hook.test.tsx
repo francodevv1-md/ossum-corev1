@@ -1,10 +1,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const mocks = vi.hoisted(() => ({ useAuth: vi.fn(), fetchPresupuestos: vi.fn(), fetchConsumos: vi.fn() }))
+const mocks = vi.hoisted(() => ({ useAuth: vi.fn(), fetchPresupuestos: vi.fn(), fetchConsumos: vi.fn(), fetchBackendActiveSurgeries: vi.fn() }))
 vi.mock("@/components/auth/AuthProvider", () => ({ useAuth: mocks.useAuth }))
 vi.mock("@/lib/api/presupuestos", () => ({ fetchPresupuestos: mocks.fetchPresupuestos }))
 vi.mock("@/lib/api/consumos", () => ({ fetchConsumos: mocks.fetchConsumos }))
+vi.mock("@/lib/api/backend-surgeries", () => ({ fetchBackendActiveSurgeries: mocks.fetchBackendActiveSurgeries }))
 
 import { derivePendingInvoiceCandidates, usePendingInvoiceSources } from "@/hooks/usePendingInvoiceSources"
 import type { ConsumoApiRow } from "@/lib/api/consumos"
@@ -18,6 +19,29 @@ describe("pending invoice sources", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.useAuth.mockReturnValue({ activeCompany: { id: "company-a" } })
+    mocks.fetchBackendActiveSurgeries.mockResolvedValue([])
+  })
+
+  it("adds human-readable case and document labels without replacing backend ids", () => {
+    const presupuesto = { ...budget("budget-1", "surgery-1"), visibleNumber: 17, title: "Prótesis de cadera" }
+    const consumoRow = { ...consumo("consumo-1", "surgery-1"), visibleNumber: 8 }
+    const [row] = derivePendingInvoiceCandidates("company-a", [presupuesto], [consumoRow], [], [{
+      id: "CX-2041",
+      backendId: "surgery-1",
+      visibleNumber: "CX-2041",
+      patient: "Ana Pérez",
+      institution: "Hospital Central",
+    } as never])
+
+    expect(row).toEqual(expect.objectContaining({
+      surgeryId: "surgery-1",
+      surgeryNumber: "CX-2041",
+      patientName: "Ana Pérez",
+      institutionName: "Hospital Central",
+      presupuestoNumber: "P-0017",
+      consumoNumber: "C-0008",
+      title: "Prótesis de cadera",
+    }))
   })
 
   it("prefers validated consumption, suppresses its budget, and excludes active origins", () => {
@@ -41,6 +65,17 @@ describe("pending invoice sources", () => {
     await waitFor(() => expect(mocks.fetchPresupuestos).toHaveBeenCalledTimes(2))
     expect(mocks.fetchPresupuestos).toHaveBeenNthCalledWith(2, "company-a", { state: "Aprobado", take: 500, skip: 500 })
     expect(mocks.fetchConsumos).toHaveBeenNthCalledWith(2, "company-a", { state: "Validado", take: 500, skip: 500 })
+  })
+
+  it("keeps core pending sources available when optional surgery labels fail", async () => {
+    mocks.fetchPresupuestos.mockResolvedValueOnce([budget("budget-1", "surgery-1")])
+    mocks.fetchConsumos.mockResolvedValueOnce([])
+    mocks.fetchBackendActiveSurgeries.mockRejectedValueOnce(new Error("surgeries unavailable"))
+
+    const { result } = renderHook(() => usePendingInvoiceSources([]))
+
+    await waitFor(() => expect(result.current.candidates[0]?.presupuestoId).toBe("budget-1"))
+    expect(result.current.error).toBeNull()
   })
 
   it("drops stale source responses immediately after company change", async () => {

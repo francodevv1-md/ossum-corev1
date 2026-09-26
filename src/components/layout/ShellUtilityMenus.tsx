@@ -8,6 +8,7 @@ import {
   getAvailabilityRequestCandidate,
   getNotificationAppearance,
   getNotificationEntryId,
+  isCoordinatorAssignmentNotification,
 } from "@/components/notifications/notificationAppearance"
 import { NotificationListItem } from "@/components/notifications/NotificationListItem"
 import { useAuth } from "@/components/auth/AuthProvider"
@@ -16,7 +17,7 @@ import {
   NotificationStateSurface,
 } from "@/components/notifications/NotificationStateSurface"
 import { cn } from "@/lib/utils"
-import { buildNotificationExpedienteLink } from "@/lib/expediente-navigation"
+import { buildNotificationCirugiaLink, buildNotificationExpedienteLink } from "@/lib/expediente-navigation"
 import { toast } from "sonner"
 import {
   DropdownMenu,
@@ -31,9 +32,13 @@ import type { InternalNotificationListItem } from "@/lib/api/notifications"
 
 interface NotificationMenuProps {
   buttonClassName?: string
+  label?: string
+  title?: string
+  dropdownSide?: "top" | "right" | "bottom" | "left"
+  dropdownAlign?: "start" | "center" | "end"
 }
 
-export function NotificationMenu({ buttonClassName }: NotificationMenuProps) {
+export function NotificationMenu({ buttonClassName, label, title, dropdownSide, dropdownAlign = "end" }: NotificationMenuProps) {
   const router = useRouter()
   const { features } = useAuth()
   const availabilityRequestsEnabled = features.availabilityRequests
@@ -72,12 +77,11 @@ export function NotificationMenu({ buttonClassName }: NotificationMenuProps) {
       const requestCandidate = availabilityRequestsEnabled
         ? getAvailabilityRequestCandidate(notification)
         : null
-      router.push(requestCandidate
-        ? `/notificaciones?accion=informar-disponibilidad&solicitud=${encodeURIComponent(requestCandidate)}`
-        : buildNotificationExpedienteLink({
-            surgeryId: notification.surgeryId,
-            entryId: getNotificationEntryId(notification),
-          }))
+       router.push(requestCandidate
+         ? `/notificaciones?accion=informar-disponibilidad&solicitud=${encodeURIComponent(requestCandidate)}`
+         : isCoordinatorAssignmentNotification(notification)
+           ? buildNotificationCirugiaLink(notification.surgeryId)
+           : buildNotificationExpedienteLink({ surgeryId: notification.surgeryId, entryId: getNotificationEntryId(notification) }))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo actualizar la notificación")
     }
@@ -97,25 +101,39 @@ export function NotificationMenu({ buttonClassName }: NotificationMenuProps) {
         <Button
           variant="ghost"
           size="icon"
-          className={cn("relative size-8 rounded-sm", buttonClassName)}
+          className={cn(
+            "relative size-8 rounded-sm transition-all active:scale-[0.97]",
+            label && "h-[34px] w-full justify-start gap-2 rounded-md px-2.5",
+            buttonClassName,
+          )}
           aria-label="Notificaciones"
+          title={title}
         >
-          <Bell className="size-3.5" />
+          <Bell className={cn("size-3.5", label && "size-4 shrink-0")} />
+          {label && <span className="min-w-0 flex-1 truncate">{label}</span>}
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white shadow-sm shadow-destructive/30 transition-transform duration-150 ease-out motion-reduce:transition-none">
+            <span className={cn(
+              "flex items-center justify-center rounded-full bg-destructive font-bold text-white",
+              !open && "notif-badge-pulse",
+              label
+                ? "static h-[18px] min-w-[18px] shrink-0 px-1 text-[10px]"
+                : "absolute -top-0.5 -right-0.5 size-3.5 text-[9px] shadow-sm shadow-destructive/30",
+            )}>
               {unreadCount}
             </span>
           )}
         </Button>
       </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[20.5rem] rounded-3xl border-border/70 bg-background/95 p-0 shadow-xl shadow-black/5 backdrop-blur sm:w-[22rem]">
+        <DropdownMenuContent side={dropdownSide} align={dropdownAlign} className="w-[20.5rem] rounded-3xl border-border/70 bg-background/95 p-0 shadow-xl shadow-black/5 backdrop-blur sm:w-[22rem]">
           <DropdownMenuLabel className="flex items-start justify-between gap-3 border-b border-border/60 bg-muted/20 px-3.5 py-3 sm:px-4 sm:py-3.5">
             <div className="min-w-0 flex-1">
             <span className="text-sm font-semibold">Notificaciones</span>
             <p className="mt-0.5 text-[11px] font-normal leading-4 text-muted-foreground">
               {unreadCount > 0
-                ? `${unreadCount} pendientes para revisar.`
-                : "Todo al día en menciones y novedades operativas."}
+                ? unreadCount === 1
+                  ? "1 notificación nueva para revisar."
+                  : `${unreadCount} notificaciones nuevas para revisar.`
+                : "Estás al día, no hay nada pendiente."}
             </p>
             {unreadCount > 0 ? (
               <Button
@@ -140,7 +158,7 @@ export function NotificationMenu({ buttonClassName }: NotificationMenuProps) {
                     type="button"
                     variant={categoryFilter === option.key ? "default" : "ghost"}
                     size="sm"
-                    className="h-7 rounded-xl px-2.5 text-[11px]"
+                    className="h-7 rounded-xl px-2.5 text-[11px] transition-transform duration-150 ease-out active:scale-[0.95] motion-reduce:transition-none motion-reduce:active:scale-100"
                     onClick={() => setCategoryFilter(option.key as "all" | "mention" | "operational")}
                   >
                     {option.label}
@@ -184,7 +202,7 @@ export function NotificationMenu({ buttonClassName }: NotificationMenuProps) {
                 <DropdownMenuItem
                   key={notification.id}
                   className={cn(
-                     "group mb-1.5 flex cursor-pointer flex-col items-start rounded-2xl border px-3 py-3 text-left transition-[background-color,border-color,transform,box-shadow,opacity] duration-150 ease-out hover:-translate-y-px hover:shadow-sm hover:shadow-black/[0.04] active:scale-[0.995] motion-reduce:transform-none motion-reduce:transition-none last:mb-0 focus:translate-x-px data-[highlighted]:translate-x-px sm:px-3.5",
+                     "group mb-1.5 flex cursor-pointer flex-col items-start rounded-2xl border px-3 py-3 text-left transition-[background-color,border-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md hover:shadow-black/[0.06] active:scale-[0.985] motion-reduce:transform-none motion-reduce:transition-none last:mb-0 focus:translate-x-0.5 data-[highlighted]:translate-x-0.5 sm:px-3.5",
                      unread ? cn("border-border/70", appearance.unreadCardClassName) : "border-border/50 bg-background/95"
                    )}
                   onSelect={(event) => {
@@ -215,7 +233,7 @@ export function NotificationMenu({ buttonClassName }: NotificationMenuProps) {
             router.push("/notificaciones")
           }}
         >
-          <span>Ver inbox completo</span>
+          <span>Ver todas las notificaciones</span>
           <span className="inline-flex items-center gap-1 text-muted-foreground">
             {hiddenCount > 0 ? `+${hiddenCount}` : `${resolvedTotalCount}`}
             <ChevronRight className="size-3.5" />

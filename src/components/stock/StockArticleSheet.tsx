@@ -4,7 +4,6 @@ import React, { useRef, useState } from "react"
 import {
   Boxes,
   CircleDot,
-  Container,
   FileText,
   HelpCircle,
   ImagePlus,
@@ -12,7 +11,6 @@ import {
   Package,
   Paperclip,
   QrCode,
-  Save,
   ScrollText,
   ShoppingCart,
   Tag,
@@ -33,11 +31,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   ARTICLE_TYPES,
   ARTICLE_TYPE_LABEL,
-  FAMILY_STYLE,
+  getFamilyStyle,
   TRACE_METHODS,
   TRACE_SUGGESTION,
-  articleBoxSummary,
-  articleBoxes,
   fmtDate,
   fmtMoney,
   fmtQty,
@@ -54,13 +50,12 @@ import {
 import { FamilyThumb } from "@/components/stock/StockColumns"
 import { ExistenciasTable, MovimientosTable } from "@/components/stock/StockArticleTabs"
 import { ArticleCodesDialog } from "@/components/stock/ArticleCodesDialog"
-import { BoxFichaSheet } from "@/components/stock/BoxFicha"
 
 // ─── Tabs ─────────────────────────────────────────────────
 
 export type FichaTab =
   | "general" | "identificacion" | "stock" | "compras"
-  | "comercial" | "trazabilidad" | "cajas" | "adjuntos" | "historial"
+  | "comercial" | "trazabilidad" | "adjuntos" | "historial"
 
 export const FICHA_TABS: Array<{ id: FichaTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: "general", label: "General", icon: Package },
@@ -69,7 +64,6 @@ export const FICHA_TABS: Array<{ id: FichaTab; label: string; icon: React.Compon
   { id: "compras", label: "Compras", icon: ShoppingCart },
   { id: "comercial", label: "Comercial", icon: CircleDot },
   { id: "trazabilidad", label: "Trazabilidad", icon: ScrollText },
-  { id: "cajas", label: "Cajas", icon: Container },
   { id: "adjuntos", label: "Adjuntos", icon: Paperclip },
   { id: "historial", label: "Historial", icon: FileText },
 ]
@@ -229,7 +223,6 @@ interface FichaCtx {
 
 function GeneralTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
   const sections = fichaSections(ctx.articleType)
-  const boxSummary = articleBoxSummary(item.id)
   return (
     <div className="space-y-5">
       {/* 1. Datos principales */}
@@ -240,7 +233,7 @@ function GeneralTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
           <Field label="Descripción" className="sm:col-span-2" hint="Nombre completo del artículo en listados y documentos."><Input defaultValue={item.name} className="h-8 text-xs" /></Field>
           <Field label="Descripción corta" hint="Versión abreviada para etiquetas y espacios reducidos."><Input defaultValue={item.shortDesc ?? ""} className="h-8 text-xs" /></Field>
           <Field label="Categoría" hint="Clasificación funcional (Implantes, Descartable, Instrumental…)."><Input defaultValue={item.category} className="h-8 text-xs" /></Field>
-          <Field label="Familia" hint="Agrupación por familia o patología (Trauma, Cadera, Rodilla…)."><Input defaultValue={FAMILY_STYLE[item.family].label} className="h-8 text-xs" /></Field>
+          <Field label="Familia" hint="Agrupación por familia o patología (Trauma, Cadera, Rodilla…)."><Input defaultValue={getFamilyStyle(item.family).label} className="h-8 text-xs" /></Field>
           <Field label="Marca" hint="Marca comercial del producto."><Input defaultValue={item.brand} className="h-8 text-xs" /></Field>
           <Field label="Fabricante" hint="Empresa que fabrica el producto."><Input defaultValue={item.manufacturer} className="h-8 text-xs" /></Field>
           <Field label="Unidad base" hint="Unidad de medida de referencia del stock.">
@@ -309,22 +302,6 @@ function GeneralTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
           </div>
         </div>
       </section>
-
-      {/* Cajas: referencia derivada (no editable) */}
-      {boxSummary.total > 0 && (
-        <section className="flex items-center justify-between gap-3 rounded-md border border-[var(--ossum-line)] bg-[var(--ossum-surface)] px-4 py-2.5">
-          <div className="flex items-center gap-1.5 text-xs text-gray-700">
-            <Container className="size-3.5 text-[var(--ossum-navy)]" />
-            <span>
-              <span className="font-medium text-[var(--ossum-navy)]">Cajas:</span>{" "}
-              presente en {boxSummary.total} {boxSummary.total === 1 ? "caja" : "cajas"} · {boxSummary.complete} {boxSummary.complete === 1 ? "completa" : "completas"} · {boxSummary.missing} con faltantes
-            </span>
-          </div>
-          <Button variant="ghost" size="sm" className="h-7 shrink-0 text-xs text-[var(--ossum-action)] hover:bg-[#eef0ff]" onClick={() => ctx.setTab("cajas")}>
-            Ver relaciones →
-          </Button>
-        </section>
-      )}
 
       {/* 3. Datos secundarios (condicionales por tipo) */}
       {sections.instrumental && (
@@ -537,54 +514,6 @@ function TrazabilidadTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
   )
 }
 
-function CajasTab({ item, onOpenBox }: { item: StockItem; onOpenBox: (boxId: string) => void }) {
-  const rows = articleBoxes(item.id)
-  const summary = articleBoxSummary(item.id)
-  return (
-    <div className="space-y-4">
-      <div className="rounded-md border border-[var(--ossum-line)] bg-[var(--ossum-surface)] px-4 py-2.5">
-        <p className="text-xs text-gray-700">
-          Presente en <b>{summary.total}</b> {summary.total === 1 ? "caja" : "cajas"} · <b>{summary.complete}</b> {summary.complete === 1 ? "completa" : "completas"} · <b>{summary.missing}</b> con faltantes
-        </p>
-      </div>
-
-      <div className="overflow-hidden rounded-md border border-[var(--ossum-line)]">
-        <table className="w-full text-xs">
-          <thead className="bg-[var(--ossum-navy)] text-white">
-            <tr>
-              {["Caja", "Plantilla", "Relación", "Cantidad esperada", "Cantidad actual", "Estado"].map((label) => (
-                <th key={label} className={`px-3 py-1.5 text-left font-medium ${label === "Cantidad esperada" || label === "Cantidad actual" ? "text-right" : ""}`}>{label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.boxId} className="border-t border-[var(--ossum-line)]">
-                <td className="px-3 py-1.5">
-                  <button type="button" className="font-mono text-xs font-medium text-[var(--ossum-action)] hover:underline" onClick={() => onOpenBox(r.boxId)}>
-                    {r.boxId}
-                  </button>
-                </td>
-                <td className="px-3 py-1.5 text-gray-600">{r.templateName} <span className="text-gray-400">· {r.templateVersion}</span></td>
-                <td className="px-3 py-1.5 text-gray-600">{r.relation}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-gray-600">{fmtQty(r.quantityIdeal)}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums font-medium text-gray-800">{fmtQty(r.quantityActual)}</td>
-                <td className="px-3 py-1.5">
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${r.state === "Completa" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{r.state}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="text-[11px] text-gray-400">
-        Cantidad esperada = plantilla de caja. Cantidad actual = derivada de existencias y movimientos. Las diferencias se resuelven con movimiento, reposición, baja o incidencia — no se editan aquí.
-      </p>
-    </div>
-  )
-}
-
 function AdjuntosTab() {
   return <EmptyState icon={Paperclip} title="Sin adjuntos" hint="Arrastrá certificados, fichas técnicas, imágenes o PDF del artículo." />
 }
@@ -613,14 +542,13 @@ function HistorialTab({ item }: { item: StockItem }) {
   )
 }
 
-function FichaTabContent({ item, tab, ctx, onOpenBox }: { item: StockItem; tab: FichaTab; ctx: FichaCtx; onOpenBox: (boxId: string) => void }) {
+function FichaTabContent({ item, tab, ctx }: { item: StockItem; tab: FichaTab; ctx: FichaCtx }) {
   switch (tab) {
     case "identificacion": return <IdentificacionTab item={item} ctx={ctx} />
     case "stock": return <StockTab item={item} ctx={ctx} />
     case "compras": return <ComprasTab item={item} />
     case "comercial": return <ComercialTab item={item} />
     case "trazabilidad": return <TrazabilidadTab item={item} ctx={ctx} />
-    case "cajas": return <CajasTab item={item} onOpenBox={onOpenBox} />
     case "adjuntos": return <AdjuntosTab />
     case "historial": return <HistorialTab item={item} />
     default: return <GeneralTab item={item} ctx={ctx} />
@@ -675,12 +603,10 @@ export function StockArticleFicha({ item, initialTab = "general", onCancel }: {
   const [active, setActive] = useState(item.masterStatus === "Activo")
   const [image, setImage] = useState<string | null>(null)
   const [codesOpen, setCodesOpen] = useState(false)
-  const [openBox, setOpenBox] = useState<string | null>(null)
 
   const ctx: FichaCtx = { articleType, method, expiry, active, setArticleType, setMethod, setExpiry, setActive, setTab }
 
-  const hasBoxes = articleBoxes(item.id).length > 0
-  const visibleTabs = FICHA_TABS.filter((t) => t.id !== "cajas" || hasBoxes)
+  const visibleTabs = FICHA_TABS
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -750,7 +676,7 @@ export function StockArticleFicha({ item, initialTab = "general", onCancel }: {
       {/* Content + contextual panel */}
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-y-auto px-4 py-3">
-          <FichaTabContent item={item} tab={tab} ctx={ctx} onOpenBox={setOpenBox} />
+          <FichaTabContent item={item} tab={tab} ctx={ctx} />
         </div>
         <aside className="hidden w-[256px] shrink-0 overflow-y-auto border-l border-[var(--ossum-line)] bg-[var(--ossum-surface)] px-3.5 py-3 lg:block">
           <ContextPanel item={item} method={method} expiry={expiry} />
@@ -758,15 +684,12 @@ export function StockArticleFicha({ item, initialTab = "general", onCancel }: {
       </div>
 
       {/* Footer sticky */}
-      <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--ossum-line)] bg-white px-4 py-2.5">
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" className="h-8 bg-[var(--ossum-action)] text-xs text-white hover:bg-[#1830a8]" onClick={() => toast.success("Cambios guardados (demo)")}>
-          <Save className="size-3.5" /> Guardar cambios
-        </Button>
+      <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--ossum-line)] bg-white px-4 py-2.5">
+        <p className="text-[11px] text-gray-500">Vista de consulta. La edición integral de esta ficha todavía no está conectada.</p>
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onCancel}>Cerrar</Button>
       </footer>
 
       <ArticleCodesDialog item={item} open={codesOpen} onOpenChange={setCodesOpen} />
-      <BoxFichaSheet boxId={openBox} open={Boolean(openBox)} onOpenChange={(v) => { if (!v) setOpenBox(null) }} />
     </div>
   )
 }

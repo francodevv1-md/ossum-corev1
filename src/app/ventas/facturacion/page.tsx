@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useMemo, useState, type FormEvent } from "react"
-import { AlertCircle, Banknote, FilePlus2, FileText, FolderOpen, Info, Mail, Receipt, Send } from "lucide-react"
+import { AlertCircle, Banknote, FilePlus2, FileSearch, FileText, FolderOpen, Info, Mail, Receipt, Send } from "lucide-react"
 import { toast } from "sonner"
 
 import { useAuth } from "@/components/auth/AuthProvider"
 import { CobroFormDialog } from "@/components/cobros/CobroFormDialog"
+import { FiscalEvidenceDialog } from "@/components/facturacion/FiscalEvidenceDialog"
 import { SendExistingFinancialDocumentDialog } from "@/components/email/SendExistingFinancialDocumentDialog"
 import { useExpedienteDrawer } from "@/components/layout/app-shell"
 import { SearchInput, StateBadge, StatsCard, SurgeryDrawer } from "@/components/shared"
@@ -73,10 +74,16 @@ export default function FacturacionPage() {
   const [draftError, setDraftError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [paymentSelection, setPaymentSelection] = useState<{ companyId: string; invoice: InvoiceApiRow } | null>(null)
+  const [fiscalEvidenceSelection, setFiscalEvidenceSelection] = useState<{ companyId: string; invoice: InvoiceApiRow } | null>(null)
   const [emailOpen, setEmailOpen] = useState(false)
   const [storedSurgeries, setStoredSurgeries] = useState<{ companyId: string; rows: Awaited<ReturnType<typeof fetchBackendActiveSurgeries>> }>({ companyId: "", rows: [] })
   const surgeries = storedSurgeries.companyId === activeCompany?.id ? storedSurgeries.rows : []
   const paymentInvoice = paymentSelection && paymentSelection.companyId === invoicesApi.companyId ? paymentSelection.invoice : null
+  const fiscalEvidenceSelectionForActiveCompany = fiscalEvidenceSelection?.companyId === invoicesApi.companyId ? fiscalEvidenceSelection : null
+
+  useEffect(() => {
+    return () => setFiscalEvidenceSelection(null)
+  }, [invoicesApi.companyId])
 
   useEffect(() => {
     const companyId = activeCompany?.id
@@ -288,17 +295,20 @@ export default function FacturacionPage() {
                                     <Send className="size-3" /> Emitir
                                   </Button>
                                 ) : null}
-                                {canCollect ? (
+                                 {canCollect ? (
                                   <Button size="sm" variant="outline" onClick={() => invoicesApi.companyId && setPaymentSelection({ companyId: invoicesApi.companyId, invoice })}>
                                     <Banknote className="size-3" /> Cobrar
                                   </Button>
-                                ) : null}
-                                {invoice.surgeryId ? (
+                                 ) : null}
+                                 <Button size="sm" variant="ghost" onClick={() => invoicesApi.companyId && setFiscalEvidenceSelection({ companyId: invoicesApi.companyId, invoice })}>
+                                   <FileSearch className="size-3" /> Evidencia fiscal
+                                 </Button>
+                                 {invoice.surgeryId ? (
                                   <Button
                                     size="icon"
                                     variant="ghost"
                                     aria-label={`Ver ${surgeryLabel(invoice.surgeryId)}`}
-                                    onClick={() => openExpediente(invoice.surgeryId!)}
+                                    onClick={() => { if (invoice.surgeryId) openExpediente(invoice.surgeryId) }}
                                   >
                                     <FolderOpen className="size-4" />
                                   </Button>
@@ -339,9 +349,9 @@ export default function FacturacionPage() {
                 <SelectTrigger id="invoice-surgery"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Sin cirugía vinculada</SelectItem>
-                  {surgeries.filter((surgery) => surgery.backendId).map((surgery) => (
-                    <SelectItem key={surgery.backendId} value={surgery.backendId!}>{surgery.id} · {surgery.patient}</SelectItem>
-                  ))}
+                  {surgeries.map((surgery) => surgery.backendId ? (
+                    <SelectItem key={surgery.backendId} value={surgery.backendId}>{surgery.id} · {surgery.patient}</SelectItem>
+                  ) : null)}
                 </SelectContent>
               </Select>
             </div>
@@ -364,6 +374,15 @@ export default function FacturacionPage() {
         onSubmit={registerPayment}
         submitting={paymentsApi.mutatingId === "__create__"}
       />
+
+      {fiscalEvidenceSelectionForActiveCompany ? <FiscalEvidenceDialog
+        key={fiscalEvidenceSelectionForActiveCompany.invoice.id}
+        companyId={fiscalEvidenceSelectionForActiveCompany.companyId}
+        invoiceId={fiscalEvidenceSelectionForActiveCompany.invoice.id}
+        invoiceLabel={invoiceNumber(fiscalEvidenceSelectionForActiveCompany.invoice)}
+        open
+        onOpenChange={(open) => { if (!open) setFiscalEvidenceSelection(null) }}
+      /> : null}
 
       {emailOpen ? <SendExistingFinancialDocumentDialog kind="invoice" onOpenChange={setEmailOpen} /> : null}
       <SurgeryDrawer />

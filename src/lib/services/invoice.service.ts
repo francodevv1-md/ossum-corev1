@@ -8,6 +8,7 @@ import type { PrismaClient, Invoice as PrismaInvoice } from "@prisma/client";
 import { createAuditEvent } from "../audit";
 import { badRequest, notFound } from "../api/errors";
 import { requireCompanyId } from "../tenant";
+import { assertFiscalCancellationAllowed } from "./fiscal.service";
 
 export const INVOICE_BASES = ["presupuesto", "consumo", "manual", "mixto"] as const;
 export type InvoiceBase = (typeof INVOICE_BASES)[number];
@@ -644,6 +645,7 @@ export async function updateInvoiceState(input: UpdateInvoiceStateInput) {
     const currentState = current.state as InvoiceState;
     if (currentState === newState) throw new InvoiceError("invoice_state_unchanged", `Invoice state is already ${newState}`, 409);
     if (!((INVOICE_TRANSITIONS[currentState] ?? []) as readonly string[]).includes(newState)) throw new InvoiceError("invalid_invoice_transition", `Invalid invoice state transition: ${currentState} -> ${newState}`, 409);
+    if (newState === "Anulada") await assertFiscalCancellationAllowed(tx, companyId, input.invoiceId);
     const result = await tx.invoice.update({ where: { id: input.invoiceId }, data: { state: newState, cancelledAt: newState === "Anulada" ? new Date() : undefined, updatedById }, select: invoiceReadSelect });
     if (newState === "Anulada" && currentState !== "Borrador" && current.consumoId) {
       await transitionLinkedConsumoForInvoice({ tx, companyId, consumoId: current.consumoId, invoiceId: current.id, targetState: "Validado", updatedById });

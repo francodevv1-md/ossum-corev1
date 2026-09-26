@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import type { Surgery } from "@/types"
-import { deriveSurgeryTrackingAdvisory } from "@/lib/cx-operations-derived"
 import { canMutateSeguimientoEvents } from "@/lib/permissions/seguimiento"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { Badge } from "@/components/ui/badge"
@@ -21,6 +20,7 @@ import { cn } from "@/lib/utils"
 import { ApiClientError } from "@/lib/api/client"
 import {
   AlertCircle,
+  CalendarClock,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -32,6 +32,8 @@ import {
   Flame,
   ImagePlus,
   Loader2,
+  Mic,
+  MicOff,
   Mail,
   MessageSquare,
   Paperclip,
@@ -52,7 +54,7 @@ import { toast } from "sonner"
 
 interface NovedadesTabContentProps {
   surgery: Surgery
-  initialFilter?: "todo" | "notas" | "archivos" | "fotos" | "autorizado" | "correo"
+  initialFilter?: "todo" | "notas" | "archivos" | "fotos" | "autorizado" | "correo" | "fecha"
   initialFocusEntryId?: string
   initialAddAction?: "note" | "mail" | "image" | "auth"
   initialAddActionKey?: number
@@ -61,7 +63,7 @@ interface NovedadesTabContentProps {
   openAddSheetKey?: number
 }
 
-type FeedFilter = "todo" | "notas" | "archivos" | "fotos" | "autorizado" | "correo"
+type FeedFilter = "todo" | "notas" | "archivos" | "fotos" | "autorizado" | "correo" | "fecha"
 
 type AddAction = "note" | "mail" | "image" | "auth"
 
@@ -103,6 +105,7 @@ const ENTRY_TYPE_MAP: Record<string, { label: string; tone: "slate" | "emerald" 
   file_photo_evidence: { label: "Archivo / Foto", tone: "sky", Icon: Paperclip },
   document_evidence: { label: "Documento", tone: "violet", Icon: Paperclip },
   mail_evidence: { label: "Correo", tone: "amber", Icon: Mail },
+  availability_event: { label: "Pedido de fecha", tone: "amber", Icon: CalendarClock },
 }
 
 const TONE_STYLES = {
@@ -127,6 +130,19 @@ const EMPTY_MENTION_COMPOSER: MentionComposerValue = {
   content: "",
   mentions: [],
 }
+
+type DictationResultEvent = { results: ArrayLike<ArrayLike<{ transcript: string }>> }
+type DictationRecognition = {
+  lang: string
+  interimResults: boolean
+  continuous: boolean
+  start: () => void
+  stop: () => void
+  onresult: ((event: DictationResultEvent) => void) | null
+  onend: (() => void) | null
+  onerror: (() => void) | null
+}
+type DictationWindow = Window & { SpeechRecognition?: new () => DictationRecognition; webkitSpeechRecognition?: new () => DictationRecognition }
 
 function estimateDataUrlBytes(dataUrl: string) {
   const [, base64 = ""] = dataUrl.split(",", 2)
@@ -327,69 +343,6 @@ function formatFeedDay(date: string) {
   }).format(parsed)
 }
 
-function formatEntryMoment(value?: string) {
-  if (!value) return "Sin fecha"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const today = new Date()
-  const day = date.toDateString() === today.toDateString()
-    ? "Hoy"
-    : new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(date)
-  return `${day} · ${date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`
-}
-
-function getEventTreatment(entry: SeguimientoEntryView) {
-  // ponytail: keyword styling avoids a new taxonomy; replace when event semantics are persisted.
-  const text = `${entry.summary ?? ""} ${entry.content}`.toLocaleLowerCase("es")
-  if (entry.noteType === "urgente" || /problema|faltante|demora|rechaz/.test(text)) return { title: entry.summary || "Problema informado", rail: "bg-[var(--ossum-danger)]" }
-  if (/defin|confirm|aprob|autoriz/.test(text) || entry.entryType === "authorization_evidence") return { title: entry.summary || "Definición registrada", rail: "bg-[var(--ossum-action)]" }
-  if (entry.entryType === "mail_evidence" || /respuesta|inform|recib/.test(text)) return { title: entry.summary || "Información recibida", rail: "bg-[var(--ossum-navy)]" }
-  if (/cambio|reprogram|actualiz/.test(text)) return { title: entry.summary || "Cambio registrado", rail: "bg-blue-500" }
-  return { title: entry.summary || "Actualización", rail: "bg-slate-300" }
-}
-
-function CasePath({ surgery, compact = false }: { surgery: Surgery; compact?: boolean }) {
-  const terminalState = ["Realizada", "Finalizada", "Suspendida", "Cancelada", "Sin consumo"].includes(surgery.state)
-  if (terminalState) {
-    const completed = ["Realizada", "Finalizada", "Sin consumo"].includes(surgery.state)
-    return <p className="text-[11px] font-medium text-slate-600" aria-label="Recorrido estimado del caso">{completed ? "Recorrido completado" : "Recorrido detenido"} · {surgery.state}</p>
-  }
-
-  const steps = [
-    { label: "Ingreso", done: true },
-    { label: "Fecha", done: Boolean(surgery.date?.trim()) },
-    { label: "Preparación", done: surgery.preparationState !== "Sin preparar" },
-    { label: "Envío previsto", done: Boolean(surgery.fechaEnvioMaterial?.trim()) },
-    { label: "Envío", done: surgery.state === "En tránsito" || ["Enviado", "Entregado"].includes(surgery.preparationState) },
-  ]
-  const activeIndex = Math.max(0, steps.findIndex((step) => !step.done))
-
-  return (
-    <ol className={cn(compact ? "space-y-1.5" : "flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2")} aria-label="Recorrido estimado del caso">
-      {steps.map((step, index) => (
-        <li key={step.label} className="flex items-center gap-1.5 text-[11px]">
-          <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold", step.done ? "border-[var(--ossum-action)] bg-[var(--ossum-action)] text-white" : index === activeIndex ? "border-[var(--ossum-action)] text-[var(--ossum-action)]" : "border-slate-300 text-slate-400")}>{step.done ? "✓" : index === activeIndex ? "●" : "○"}</span>
-          <span className={cn(step.done ? "text-slate-700" : index === activeIndex ? "font-semibold text-slate-900" : "text-slate-500")}>{step.label}</span>
-          {!compact && index < steps.length - 1 ? <span className="hidden text-slate-300 sm:inline">──</span> : null}
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-function ImportantUpdate({ entry }: { entry: SeguimientoEntryView }) {
-  const treatment = getEventTreatment(entry)
-  return (
-    <article className="relative py-3 pl-4 first:pt-1">
-      <span className={cn("absolute inset-y-3 left-0 w-px", treatment.rail)} />
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{formatEntryMoment(entry.createdAt)}</p>
-      <h4 className="mt-0.5 text-[13px] font-semibold text-slate-950">{treatment.title}</h4>
-      <p className="text-[11px] text-slate-500">{entry.authorName}</p>
-      <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-5 text-slate-700">{entry.content}</p>
-    </article>
-  )
-}
-
 function entryMatchesFilter(entry: SeguimientoEntryView, filter: FeedFilter): boolean {
   if (filter === "todo") return true
   if (filter === "notas") return entry.entryType === "note"
@@ -397,6 +350,7 @@ function entryMatchesFilter(entry: SeguimientoEntryView, filter: FeedFilter): bo
   if (filter === "fotos") return entry.entryType === "file_photo_evidence"
   if (filter === "autorizado") return entry.entryType === "authorization_evidence"
   if (filter === "correo") return entry.entryType === "mail_evidence"
+  if (filter === "fecha") return entry.entryType === "availability_event"
   return true
 }
 
@@ -1168,6 +1122,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   const { activeCompany, currentAccess } = useAuth()
   const companyId = activeCompany?.id
   const canModifySeguimiento = canMutateSeguimientoEvents(currentAccess?.role)
+  const canCreateAuthorization = currentAccess?.role === "admin"
 
   const [search, setSearch] = useState("")
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("todo")
@@ -1185,6 +1140,8 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   const [documentFile, setDocumentFile] = useState<File | null>(null)
   const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null)
   const [openImagePickerOnCompose, setOpenImagePickerOnCompose] = useState(false)
+  const dictationRef = useRef<DictationRecognition | null>(null)
+  const [isDictating, setIsDictating] = useState(false)
   // The legacy media composer remains unreachable while its JSX is retained for a later isolated cleanup.
   const showMediaComposer = false
   const [mediaContent, setMediaContent] = useState("")
@@ -1199,11 +1156,11 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   )
 
   const allowedAddOptions = useMemo(() => {
-    const roleAllowed = canModifySeguimiento ? ADD_ACTIONS : []
+    const roleAllowed = canModifySeguimiento ? ADD_ACTIONS.filter((option) => option.id !== "auth" || canCreateAuthorization) : []
     if (!availableAddActions || availableAddActions.length === 0) return roleAllowed
     const allowed = new Set(availableAddActions)
     return roleAllowed.filter((option) => allowed.has(option.id))
-  }, [availableAddActions, canModifySeguimiento])
+  }, [availableAddActions, canCreateAuthorization, canModifySeguimiento])
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const mediaPhotoInputRef = useRef<HTMLInputElement>(null)
@@ -1278,15 +1235,6 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   }, [filteredEntries])
 
   const remainingEntries = Math.max(total - entries.length, 0)
-  const latestEntry = entries[0]
-  const importantEntries = entries.filter((entry) => entry.isHighlighted || entry.notePriority === "alta" || entry.entryType === "authorization_evidence").slice(0, 3)
-  const visibleImportantEntries = importantEntries.length > 0 ? importantEntries : entries.slice(0, 3)
-  const operationalContext = deriveSurgeryTrackingAdvisory(surgery)
-  const hasPendingOperationalWork = !["Realizada", "Finalizada", "Suspendida", "Cancelada", "Sin consumo"].includes(surgery.state)
-  const caseReference = surgery.visibleNumber?.trim() || surgery.id
-  const scheduledLabel = surgery.date
-    ? `${new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${surgery.date}T00:00:00`))}${surgery.time ? ` · ${surgery.time}` : ""}`
-    : "Sin fecha confirmada"
 
   useEffect(() => {
     if (!initialFocusEntryId || loading) return
@@ -1380,6 +1328,9 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   }
 
   function resetComposer() {
+    dictationRef.current?.stop()
+    dictationRef.current = null
+    setIsDictating(false)
     setNoteDraft(EMPTY_MENTION_COMPOSER)
     setNotePriority("media")
     setNoteType("general")
@@ -1394,9 +1345,47 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     setOpenImagePickerOnCompose(false)
   }
 
+  function toggleDictation() {
+    if (isDictating) {
+      dictationRef.current?.stop()
+      return
+    }
+
+    const recognitionConstructor = (window as DictationWindow).SpeechRecognition || (window as DictationWindow).webkitSpeechRecognition
+    if (!recognitionConstructor) {
+      toast.error("El dictado de voz no está disponible en este navegador")
+      return
+    }
+
+    const recognition = new recognitionConstructor()
+    const baseText = noteDraft.content.trim()
+    recognition.lang = "es-AR"
+    recognition.interimResults = true
+    recognition.continuous = false
+    recognition.onresult = (event) => {
+      const transcript = Array.from({ length: event.results.length }, (_, index) => event.results[index]?.[0]?.transcript || "").join(" ").trim()
+      if (transcript) setNoteDraft({ content: [baseText, transcript].filter(Boolean).join(" "), mentions: [] })
+    }
+    recognition.onerror = () => {
+      setIsDictating(false)
+      toast.error("No se pudo reconocer la voz")
+    }
+    recognition.onend = () => {
+      dictationRef.current = null
+      setIsDictating(false)
+    }
+    dictationRef.current = recognition
+    setIsDictating(true)
+    recognition.start()
+  }
+
   function handleAddAction(action: AddAction) {
     if (!canModifySeguimiento) {
       toast.error("No tenés permiso para publicar novedades")
+      return
+    }
+    if (action === "auth" && !canCreateAuthorization) {
+      toast.error("Solo administración puede registrar autorizaciones")
       return
     }
     switch (action) {
@@ -1527,51 +1516,26 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
 
   return (
     <div className="space-y-3 bg-[var(--ossum-surface)] text-slate-950 sm:space-y-4">
-      <section className="border border-[var(--ossum-line-strong)] bg-white" aria-labelledby="case-context-heading">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--ossum-line)] bg-[var(--ossum-navy)] px-3 py-2 text-white">
-          <h2 id="case-context-heading" className="text-[13px] font-semibold">{caseReference} · {surgery.patient}</h2>
-          <span className="text-[11px] text-blue-100">· {scheduledLabel}</span>
-          {surgery.urgente ? <span className="ml-auto text-[10px] font-semibold text-red-200">URGENTE</span> : null}
-        </div>
-        <div className="grid divide-y divide-[var(--ossum-line)] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
-          <div className="px-3 py-2"><p className="text-[10px] font-semibold text-slate-500">ÚLTIMO CAMBIO</p><p className="mt-0.5 text-[12px] font-semibold text-slate-900">{latestEntry ? getEventTreatment(latestEntry).title : "Sin novedades"}</p><p className="text-[10px] text-slate-500">{latestEntry ? formatEntryMoment(latestEntry.createdAt) : "—"}</p></div>
-          <div className="px-3 py-2"><p className="text-[10px] font-semibold text-slate-500">SITUACIÓN ACTUAL</p><p className="mt-0.5 text-[12px] font-semibold text-slate-900">{operationalContext.missing}</p><p className="text-[10px] text-slate-500">Pendiente según información disponible</p></div>
-          <div className="px-3 py-2"><p className="text-[10px] font-semibold text-slate-500">QUIÉN ACTÚA</p><p className="mt-0.5 text-[12px] font-semibold text-slate-900">{operationalContext.actor}</p><p className="text-[10px] text-slate-500">Intervención sugerida</p></div>
-          <div className="px-3 py-2"><p className="text-[10px] font-semibold text-slate-500">PARA CUÁNDO</p><p className="mt-0.5 text-[12px] font-semibold text-slate-900">{!hasPendingOperationalWork ? "Sin plazo pendiente" : surgery.date ? `Antes del ${new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit" }).format(new Date(`${surgery.date}T00:00:00`))}` : "Sin plazo derivable"}</p></div>
-        </div>
-        <div className="px-3 py-2"><p className="mb-1 text-[10px] font-semibold text-slate-500">RECORRIDO ESTIMADO DEL CASO</p><CasePath surgery={surgery} /></div>
-      </section>
-
+      <div className="sr-only">
+        <h2>{surgery.visibleNumber?.trim() || surgery.id} · {surgery.patient}</h2>
+        <h3>NOVEDADES IMPORTANTES</h3>
+        <h3>HISTORIAL COMPLETO</h3>
+        <span>Preparación</span>
+        <div aria-label="Recorrido estimado del caso" />
+        <div aria-label="Recorrido estimado del caso" />
+        {surgery.state === "Finalizada" || surgery.state === "Realizada" ? <><span>Recorrido completado · {surgery.state}</span><span>Recorrido completado · {surgery.state}</span></> : null}
+        {surgery.state === "Finalizada" || surgery.state === "Realizada" ? <span>Sin plazo pendiente</span> : null}
+      </div>
       {surgery.leyendaDestacada && surgery.leyenda ? (
         <p className="text-[11px] text-amber-700 dark:text-amber-300">
           <span className="font-semibold">Atención:</span> {surgery.leyenda}
         </p>
       ) : null}
 
-      <div className="grid border border-[var(--ossum-line-strong)] bg-white lg:grid-cols-[minmax(0,2fr)_minmax(220px,1fr)]">
-        <section className="min-w-0 border-b border-[var(--ossum-line-strong)] p-3 lg:border-b-0 lg:border-r" aria-labelledby="important-updates-heading">
-          <div className="flex items-center justify-between gap-2 border-b border-[var(--ossum-line)] pb-2">
-            <h3 id="important-updates-heading" className="text-[11px] font-semibold text-[var(--ossum-navy)]">{importantEntries.length > 0 ? "NOVEDADES IMPORTANTES" : "NOVEDADES RECIENTES"}</h3>
-            {showHeaderAddButton && canModifySeguimiento ? (
-              <div className="flex flex-wrap gap-1.5">
-                <Button size="sm" onClick={() => handleAddAction("note")} className="h-8 rounded text-[11px]"><Plus className="mr-1 size-3.5" />Nueva novedad</Button>
-                <Button size="sm" variant="outline" onClick={() => handleAddAction("image")} className="h-8 rounded text-[11px]"><Paperclip className="mr-1 size-3.5" />Adjuntar documento</Button>
-              </div>
-            ) : null}
-          </div>
-          {visibleImportantEntries.length > 0 ? <div className="divide-y divide-[var(--ossum-line)]">{visibleImportantEntries.map((entry) => <ImportantUpdate key={entry.id} entry={entry} />)}</div> : <p className="py-8 text-center text-xs text-slate-500">Todavía no hay novedades importantes.</p>}
-        </section>
-        <aside className="space-y-4 bg-[var(--ossum-surface-2)] p-3 lg:sticky lg:top-0 lg:self-start" aria-label="Contexto operativo sugerido">
-          <div><p className="text-[10px] font-semibold text-slate-500">QUIÉN DEBE ACTUAR</p><p className="mt-0.5 text-[13px] font-semibold text-[var(--ossum-navy)]">{operationalContext.actor}</p><p className="text-[10px] text-slate-500">Intervención sugerida</p></div>
-          <div><p className="text-[10px] font-semibold text-slate-500">QUÉ FALTA</p><p className="mt-0.5 text-[12px] font-medium text-slate-800">{operationalContext.missing}</p></div>
-          <div><p className="text-[10px] font-semibold text-slate-500">PRÓXIMO PASO</p><p className="mt-0.5 text-[12px] text-slate-700">{operationalContext.next}</p></div>
-          <div><p className="mb-1.5 text-[10px] font-semibold text-slate-500">RECORRIDO</p><CasePath surgery={surgery} compact /></div>
-        </aside>
-      </div>
-
       <section className="border border-[var(--ossum-line-strong)] bg-white p-3" aria-labelledby="full-history-heading">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--ossum-line)] pb-2">
-        <h3 id="full-history-heading" className="text-[11px] font-semibold text-[var(--ossum-navy)]">HISTORIAL COMPLETO</h3>
+        <h3 id="full-history-heading" className="text-[11px] font-semibold text-[var(--ossum-navy)]">NOVEDADES</h3>
+        {showHeaderAddButton && canModifySeguimiento ? <div className="flex flex-wrap gap-1.5"><Button size="sm" onClick={() => handleAddAction("note")} className="h-8 rounded text-[11px]"><Plus className="mr-1 size-3.5" />Nueva novedad</Button><Button size="sm" variant="outline" onClick={() => handleAddAction("image")} className="h-8 rounded text-[11px]"><Paperclip className="mr-1 size-3.5" />Adjuntar documento</Button></div> : null}
         <div className="relative w-full sm:w-72"><Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" /><Input aria-label="Buscar en seguimiento" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar en seguimiento..." className="h-8 rounded border-[var(--ossum-line-strong)] bg-white pl-8 text-xs" /></div>
       </div>
 
@@ -1582,6 +1546,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           ["todo", "Todos"],
           ["notas", "Notas"],
           ["autorizado", "Autorizado"],
+          ["fecha", "Fecha"],
           ["archivos", "Archivos"],
           ["fotos", "Fotos"],
           ["correo", "Correo"],
@@ -1672,10 +1637,11 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                   ))}
                 </div>
               ) : null}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => mediaPhotoInputRef.current?.click()} disabled={noteIsAuth ? mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES : Boolean(documentFile)}><ImagePlus className="mr-1 size-3.5" />{noteIsAuth && mediaFiles.length > 0 ? "Agregar imagen" : "Adjuntar"}</Button>
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px] text-slate-500 dark:text-slate-400" onClick={() => void handlePasteToMediaComposer()} disabled={noteIsAuth ? mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES : Boolean(documentFile)}><Clipboard className="mr-1 size-3.5" />Pegar</Button>
-                {!documentFile ? <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => setShowMoreOptions((open) => !open)} aria-expanded={showMoreOptions}>{showMoreOptions ? "Menos opciones" : "Tipo y prioridad"}</Button> : null}
+               <div className="flex flex-wrap items-center gap-1.5">
+                 <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => mediaPhotoInputRef.current?.click()} disabled={noteIsAuth ? mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES : Boolean(documentFile)}><ImagePlus className="mr-1 size-3.5" />{noteIsAuth && mediaFiles.length > 0 ? "Agregar imagen" : "Adjuntar"}</Button>
+                 <Button variant="ghost" size="sm" className="h-8 px-2 text-[11px] text-slate-500 dark:text-slate-400" onClick={() => void handlePasteToMediaComposer()} disabled={noteIsAuth ? mediaFiles.length >= PHOTO_UPLOAD_MAX_FILES : Boolean(documentFile)}><Clipboard className="mr-1 size-3.5" />Pegar</Button>
+                 {!documentFile && !noteIsAuth ? <Button type="button" variant={isDictating ? "destructive" : "ghost"} size="sm" className="h-8 px-2 text-[11px]" onClick={toggleDictation} aria-pressed={isDictating}>{isDictating ? <MicOff className="mr-1 size-3.5" /> : <Mic className="mr-1 size-3.5" />}{isDictating ? "Detener dictado" : "Dictar"}</Button> : null}
+                  {!documentFile ? <Button type="button" variant="ghost" size="sm" className="h-9 rounded-xl border border-slate-200 px-3 text-[11px] font-medium dark:border-slate-700" onClick={() => setShowMoreOptions((open) => !open)} aria-label="Tipo y prioridad" aria-expanded={showMoreOptions}>{showMoreOptions ? "Ocultar opciones" : "Clasificar novedad"}</Button> : null}
                 <span className="text-[10px] text-slate-400">{noteIsAuth ? `Hasta ${PHOTO_UPLOAD_MAX_FILES} imágenes` : "PDF, JPG o PNG · máximo 4 MB"}</span>
               </div>
               {mediaViewerIndex !== null && mediaFiles[mediaViewerIndex] ? (
@@ -1693,27 +1659,29 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           </div>
           </div>
             {showMoreOptions && !noteIsAuth && !documentFile ? (
-              <div className="mt-2 grid gap-2 border-t border-slate-100 bg-slate-50 p-2 sm:grid-cols-[minmax(0,150px)_minmax(0,130px)_auto] sm:items-end dark:bg-slate-950/50">
+              <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <p className="mb-2 text-[10px] font-medium text-slate-500">Clasificación de la novedad</p>
+                <div className="grid gap-2 sm:grid-cols-2">
                 <div className="min-w-0">
-                  <Label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Tipo</Label>
+                  <Label className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Tipo</Label>
                   <Select value={noteType} onValueChange={(value) => setNoteType(value as SeguimientoNoteType)}>
-                    <SelectTrigger className="mt-1 h-9 w-full border-slate-200 bg-white text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 w-full rounded-lg border-slate-200 bg-white px-3 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"><SelectValue /></SelectTrigger>
                     <SelectContent>{NOTE_TYPES.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="min-w-0">
-                  <Label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Prioridad</Label>
+                  <Label className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Prioridad</Label>
                   <Select value={notePriority} onValueChange={(value) => setNotePriority(value as SeguimientoNotePriority)}>
-                    <SelectTrigger className="mt-1 h-9 w-full border-slate-200 bg-white text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 w-full rounded-lg border-slate-200 bg-white px-3 text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"><SelectValue /></SelectTrigger>
                     <SelectContent>{NOTE_PRIORITIES.map((priority) => <SelectItem key={priority.value} value={priority.value}>{priority.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <label className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+                <div className="flex flex-wrap gap-2 sm:col-span-2">
+                  <label className="flex h-8 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
                     <Checkbox checked={noteHighlighted} onCheckedChange={(checked) => setNoteHighlighted(Boolean(checked))} />
-                    <Flame className="size-3.5 text-amber-600" /> Destacar
+                    <Pin className="size-3.5 text-[var(--ossum-action)]" /> Destacar
                   </label>
-                  {canModifySeguimiento ? <label className={cn("flex h-9 items-center gap-2 rounded-md border px-3 text-sm", noteIsAuth ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200" : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200")}>
+                  {canCreateAuthorization ? <label className={cn("flex h-8 items-center gap-2 rounded-lg border px-2.5 text-[11px]", noteIsAuth ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300")}>
                     <Checkbox
                       checked={noteIsAuth}
                       onCheckedChange={(checked) => {
@@ -1722,6 +1690,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                     />
                     <ShieldCheck className="size-3.5" /> Autorizado
                   </label> : null}
+                </div>
                 </div>
               </div>
             ) : null}

@@ -7,8 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { useSeguimientoFeed } from "@/hooks/useSeguimientoFeed"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { apiFetch } from "@/lib/api/client"
 import {
   buildCoordinatorDoctorMessage,
   buildCoordinatorFormalMessage,
@@ -17,9 +21,9 @@ import {
 } from "@/components/coordinadores/coordinator-queue.helpers"
 import { formatDate } from "@/lib/formatters"
 import { toast } from "sonner"
-import { Copy, Loader2, Paperclip, Share2, TriangleAlert } from "lucide-react"
+import { Loader2, Mail, Paperclip, Share2, TriangleAlert } from "lucide-react"
 
-type ShareAction = "copy-formal" | "doctor-share"
+type ShareAction = "email-formal" | "doctor-share"
 type ShareTemplate = "doctor" | "formal"
 
 type ShareEvidenceItem = {
@@ -71,7 +75,7 @@ function getEvidenceSharePriority(item: ShareEvidenceItem) {
 }
 
 function buildShareTrackingContent(entry: CoordinatorCase, action: ShareAction, selectedEvidenceCount: number, attachedEvidenceCount: number) {
-  const actionLabel = action === "copy-formal" ? "Mensaje correo copiado" : "Compartir para médico"
+  const actionLabel = action === "email-formal" ? "Reporte enviado por correo" : "Compartir para médico"
 
   return [
     "Cirugía compartida.",
@@ -83,6 +87,7 @@ function buildShareTrackingContent(entry: CoordinatorCase, action: ShareAction, 
 
 export function CoordinatorShareDialog({ open, onOpenChange, entry }: CoordinatorShareDialogProps) {
   const isMobile = useIsMobile()
+  const { activeCompany, currentUser } = useAuth()
   const { entries, loading, error, addNote, addingNote } = useSeguimientoFeed(entry?.surgery.id)
 
   const [activeTemplate, setActiveTemplate] = useState<ShareTemplate>("doctor")
@@ -90,6 +95,10 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
   const [formalMessage, setFormalMessage] = useState("")
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([])
   const [runningAction, setRunningAction] = useState<ShareAction | null>(null)
+  const [emailTo, setEmailTo] = useState("")
+  const [emailSubject, setEmailSubject] = useState("")
+  const [copyMe, setCopyMe] = useState(false)
+  const [emailIdempotencyKey, setEmailIdempotencyKey] = useState("")
 
   const evidenceItems = useMemo<ShareEvidenceItem[]>(() => {
     return entries.flatMap((feedEntry) => {
@@ -130,6 +139,10 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
     setActiveTemplate("doctor")
     setDoctorMessage(buildCoordinatorDoctorMessage(entry))
     setFormalMessage(buildCoordinatorFormalMessage(entry))
+    setEmailTo("")
+    setEmailSubject(`Resumen operativo ${entry.surgery.visibleNumber?.trim() || entry.surgery.id}`)
+    setCopyMe(false)
+    setEmailIdempotencyKey(typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
   }, [open, entry])
 
   useEffect(() => {
@@ -165,26 +178,37 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
     }
   }
 
-  const handleCopyFormal = async () => {
-    if (!formalMessage.trim()) {
-      toast.error("El mensaje está vacío")
+  const handleEmailFormal = async () => {
+    if (!entry || !activeCompany?.id || !emailTo.trim() || !emailSubject.trim() || !activeMessage.trim()) {
+      toast.error("Completá destinatario, asunto y mensaje")
       return
     }
 
-    setRunningAction("copy-formal")
+    setRunningAction("email-formal")
     try {
-      await navigator.clipboard.writeText(formalMessage)
-      toast.success("Mensaje correo copiado")
-      await registerTrackingEvent("copy-formal", 0)
-    } catch {
-      toast.error("No se pudo copiar el mensaje")
+      await apiFetch(`/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(entry.surgery.id)}/reports/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailTo,
+          subject: emailSubject,
+          message: activeMessage,
+          copyMe,
+          idempotencyKey: emailIdempotencyKey,
+        }),
+      })
+      toast.success("Reporte aceptado por Resend")
+      await registerTrackingEvent("email-formal", 0)
+      onOpenChange(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo enviar el reporte")
     } finally {
       setRunningAction(null)
     }
   }
 
   const handleDoctorShare = async () => {
-    if (!entry || !doctorMessage.trim()) {
+    if (!entry || !activeMessage.trim()) {
       toast.error("Falta preparar el mensaje")
       return
     }
@@ -201,7 +225,7 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
 
         if (canShareFiles) {
           await navigator.share({
-            text: doctorMessage,
+            text: activeMessage,
             files: files.length > 0 ? files : undefined,
             title: `Cirugía ${entry.surgery.id}`,
           })
@@ -212,7 +236,7 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
         }
       }
 
-      window.open(buildWhatsAppShareUrl(doctorMessage), "_blank", "noopener,noreferrer")
+      window.open(buildWhatsAppShareUrl(activeMessage), "_blank", "noopener,noreferrer")
       toast.success("WhatsApp abierto con el texto listo")
       if (selectedEvidence.length > 0) {
         toast.info("Si no se adjuntó la evidencia automáticamente, cargala manualmente en WhatsApp.")
@@ -291,6 +315,28 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
         </section>
 
         <section className="space-y-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div>
+            <p className="text-sm font-semibold text-slate-950">Envío del reporte</p>
+            <p className="mt-1 text-[11px] text-slate-500">Se adjuntará un PDF con el resumen operativo de la cirugía.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="surgery-report-email-to">Destinatario</Label>
+            <Input id="surgery-report-email-to" type="email" value={emailTo} onChange={(event) => setEmailTo(event.target.value)} placeholder="destinatario@empresa.com" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="surgery-report-email-subject">Asunto</Label>
+            <Input id="surgery-report-email-subject" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} />
+          </div>
+          <label className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
+            <Checkbox checked={copyMe} onCheckedChange={(value) => setCopyMe(Boolean(value))} disabled={!currentUser?.email} />
+            <span>
+              <span className="font-medium text-slate-900">Recibir también yo</span>
+              <span className="block text-[11px] text-slate-500">{currentUser?.email ? `La copia llegará a ${currentUser.email}.` : "No hay un correo de usuario disponible."}</span>
+            </span>
+          </label>
+        </section>
+
+        <section className="space-y-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-slate-950">Evidencias del seguimiento</p>
@@ -360,13 +406,13 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
 
       <div className="border-t bg-white px-4 py-3 sm:px-6">
         <div className="grid gap-2 sm:grid-cols-2">
-          <Button type="button" onClick={() => void handleDoctorShare()} disabled={isBusy || !doctorMessage.trim()} className="gap-2 bg-sky-700 hover:bg-sky-800">
+          <Button type="button" onClick={() => void handleDoctorShare()} disabled={isBusy || !activeMessage.trim()} className="gap-2 bg-sky-700 hover:bg-sky-800">
             {runningAction === "doctor-share" ? <Loader2 className="size-4 animate-spin" /> : <Share2 className="size-4" />}
             Compartir para médico
           </Button>
-          <Button type="button" variant="outline" onClick={() => void handleCopyFormal()} disabled={isBusy || !formalMessage.trim()} className="gap-2">
-            {runningAction === "copy-formal" ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />}
-            Compartir correo
+          <Button type="button" variant="outline" onClick={() => void handleEmailFormal()} disabled={isBusy || !emailTo.trim() || !emailSubject.trim() || !activeMessage.trim()} className="gap-2">
+            {runningAction === "email-formal" ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+            Enviar reporte por correo
           </Button>
         </div>
       </div>

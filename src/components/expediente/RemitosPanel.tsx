@@ -3,15 +3,16 @@
 import React, { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ArrowLeftRight, ChevronDown, ChevronRight, Eye, FileText, Loader2, Printer, RotateCcw, Send, Truck } from "lucide-react"
+import { ArrowLeftRight, ChevronDown, ChevronRight, Eye, FileText, Loader2, Printer, ReceiptText, RotateCcw, Send, Truck } from "lucide-react"
 import { formatDate } from "@/lib/formatters"
 import { buildOperationalRemitoPrintHtml } from "@/lib/remito-print-template"
 import { LOGISTICS_STATE_OUTLINED_COLORS } from "@/lib/shared-constants"
 import { cn } from "@/lib/utils"
 import type { RemitoState } from "@/lib/api/remitos"
+import { fetchRemitoPrintCodes, type RemitoPrintCodesDto } from "@/lib/api/remito-print-codes"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { Surgery, Box } from "@/types"
 
 export type RemitosPanelItem = {
@@ -21,17 +22,42 @@ export type RemitosPanelItem = {
   sentQuantity: number
   returnedQuantity: number
   consumedQuantity: number
+  lotNumber?: string | null
+  serialNumber?: string | null
+  expirationDate?: string | null
+}
+
+export type RemitosPanelDetailItem = {
+  code: string
+  name: string
+  quantity: number
+  unit?: string | null
+  lotNumber?: string | null
+  serialNumber?: string | null
+  expirationDate?: string | null
+  identifiedCode?: string | null
+  groupLabel?: string | null
 }
 
 export type RemitosPanelRemito = {
   apiId: string
+  companyId: string
+  remitoShortCode: string | null
   id: string
   surgeryId: string
   boxId?: string | null
   destination: string
   date: string
   state: string
+  surgeryLabel?: string | null
+  surgeryPatientName?: string | null
+  surgeryDoctorName?: string | null
+  surgeryInstitutionName?: string | null
+  surgeryClientName?: string | null
+  surgeryDate?: string | null
+  createdByName?: string | null
   items: RemitosPanelItem[]
+  detailItems?: RemitosPanelDetailItem[]
 }
 
 interface RemitosPanelProps {
@@ -174,20 +200,27 @@ function RemitoItemTable({ items }: { items: RemitosPanelItem[] }) {
   )
 }
 
-function buildRemitoPrintHtml(remito: RemitosPanelRemito, surgery: Surgery) {
+type PrintFormat = "a4" | "thermal80"
+
+function buildRemitoPrintHtml(remito: RemitosPanelRemito, surgery: Surgery, printCodes?: RemitoPrintCodesDto, format: PrintFormat = "a4") {
   return buildOperationalRemitoPrintHtml({
     title: `Remito ${remito.id}`,
+    format,
     documentNumber: remito.id,
     state: remito.state,
     origin: "Cirugía / Expediente",
     issuedAt: formatDate(remito.date),
     destinationName: remito.destination || surgery.institution,
-    surgeryLabel: surgery.expedienteNumber || surgery.id,
-    patient: surgery.patient,
-    institution: surgery.institution,
+    surgeryLabel: remito.surgeryLabel ?? surgery.expedienteNumber,
+    patient: remito.surgeryPatientName ?? surgery.patient,
+    institution: remito.surgeryInstitutionName ?? surgery.institution,
+    doctor: remito.surgeryDoctorName ?? surgery.surgeon,
+    client: remito.surgeryClientName ?? surgery.client,
+    surgeryDate: remito.surgeryDate ?? `${surgery.date}${surgery.time ? ` ${surgery.time}` : ""}`,
+    createdBy: remito.createdByName,
     boxId: remito.boxId,
-    internalId: remito.apiId,
     observations: surgery.notes,
+    printCodes,
     includeReturned: true,
     includeConsumedOpen: true,
     items: remito.items.map((item) => {
@@ -200,19 +233,53 @@ function buildRemitoPrintHtml(remito: RemitosPanelRemito, surgery: Surgery) {
         returnedQuantity: item.returnedQuantity,
         consumedQuantity: item.consumedQuantity,
         openQuantity: remaining,
+        lotNumber: item.lotNumber,
+        serialNumber: item.serialNumber,
+        expirationDate: item.expirationDate,
       }
     }),
+    detailItems: (remito.detailItems ?? remito.items).map((item) => ({
+      code: item.code,
+      description: item.name,
+      quantity: "quantity" in item ? item.quantity : item.sentQuantity,
+      unit: "unit" in item ? item.unit : "unidad",
+      lotNumber: item.lotNumber,
+      serialNumber: item.serialNumber,
+      expirationDate: item.expirationDate,
+      identifiedCode: "identifiedCode" in item ? item.identifiedCode : null,
+      groupLabel: "groupLabel" in item ? item.groupLabel : null,
+    })),
   })
 }
 
-function openRemitoPrint(remito: RemitosPanelRemito, surgery: Surgery) {
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=980,height=720")
-  if (!printWindow) return
+async function openRemitoPrint(remito: RemitosPanelRemito, surgery: Surgery, format: PrintFormat) {
+  if (remito.state === "Borrador") {
+    toast.error("Los códigos de impresión no están disponibles")
+    return
+  }
+  const printWindow = window.open("", "_blank", format === "thermal80" ? "noopener,noreferrer,width=420,height=720" : "noopener,noreferrer,width=980,height=720")
+  if (!printWindow) {
+    toast.error("El navegador bloqueó la ventana de impresión")
+    return
+  }
+  let printCodes: RemitoPrintCodesDto | undefined
+  if (remito.remitoShortCode) {
+    try {
+      printCodes = await fetchRemitoPrintCodes(remito.companyId, remito.remitoShortCode)
+    } catch {
+      printWindow.close()
+      toast.error("No se pudieron cargar el QR y el código de barras. Volvé a intentar.")
+      return
+    }
+  } else {
+    printWindow.close()
+    toast.error("Este remito todavía no tiene códigos de impresión disponibles.")
+    return
+  }
   printWindow.document.open()
-  printWindow.document.write(buildRemitoPrintHtml(remito, surgery))
+  printWindow.document.write(buildRemitoPrintHtml(remito, surgery, printCodes, format))
   printWindow.document.close()
   printWindow.focus()
-  printWindow.print()
 }
 
 function RemitoDetailDialog({ remito, open, onOpenChange }: { remito: RemitosPanelRemito | null; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -281,7 +348,7 @@ function RemitoCard({
   defaultOpen: boolean
   mutating: boolean
   onView: (remito: RemitosPanelRemito) => void
-  onPrint: (remito: RemitosPanelRemito) => void
+  onPrint: (remito: RemitosPanelRemito, format: PrintFormat) => void
   onEmit?: (remito: RemitosPanelRemito) => Promise<unknown>
   onTransition?: (remito: RemitosPanelRemito, state: RemitoState) => Promise<unknown>
 }) {
@@ -337,7 +404,10 @@ function RemitoCard({
         <td className="border border-[#c5d0d6] px-1 py-1" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap justify-end gap-1">
             <Button variant="outline" size="sm" className="h-11 min-w-11 touch-manipulation rounded-[2px] border-[#8fa8b8] px-2 text-[10px]" onClick={() => onView(remito)} aria-label={`Ver remito ${remito.id}`}><Eye className="size-3" />Ver</Button>
-            <Button variant="outline" size="sm" className="h-11 min-w-11 touch-manipulation rounded-[2px] border-[#8fa8b8] px-2 text-[10px]" onClick={() => onPrint(remito)} aria-label={`Generar PDF del remito ${remito.id}`}><Printer className="size-3" />PDF</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-11 min-w-11 touch-manipulation rounded-[2px] border-[#8fa8b8] px-2 text-[10px]" aria-label={`Imprimir remito ${remito.id}`}><Printer className="size-3" />Imprimir<ChevronDown className="size-3" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56"><DropdownMenuItem onSelect={() => onPrint(remito, "a4")}><Printer />Remito A4 / PDF</DropdownMenuItem><DropdownMenuItem onSelect={() => onPrint(remito, "thermal80")}><ReceiptText />Ticket térmico 80 mm</DropdownMenuItem></DropdownMenuContent>
+            </DropdownMenu>
             {remito.state === "Borrador" && onEmit ? (
               <Button size="sm" className="h-11 min-w-11 touch-manipulation rounded-[2px] px-2 text-[10px]" onClick={() => void handleEmit()} disabled={mutating} aria-label={`Emitir remito ${remito.id}`}>{mutating ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}Emitir</Button>
             ) : null}
@@ -453,7 +523,7 @@ export function RemitosPanel({ surgery, remitos, box, mutatingId, onEmit, onTran
                     defaultOpen={index === 0}
                     mutating={mutatingId === remito.apiId}
                     onView={handleView}
-                    onPrint={(target) => openRemitoPrint(target, surgery)}
+                    onPrint={(target, format) => void openRemitoPrint(target, surgery, format)}
                     onEmit={onEmit}
                     onTransition={onTransition}
                   />

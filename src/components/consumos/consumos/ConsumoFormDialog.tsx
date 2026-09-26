@@ -16,6 +16,8 @@ import { canValidateConsumo } from "@/lib/consumoValidation"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Truck, PenLine } from "lucide-react"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
+import { toLegacyPresupuestoProjection } from "@/lib/api/presupuestos"
 
 type ConsumoFormSource = "remito" | "manual"
 
@@ -39,7 +41,15 @@ export function ConsumoFormDialog({
   const store = useOrtoTrackStore()
   const surgery = store.getSurgeryById(surgeryId)
   const remitos = store.getRemitosBySurgeryId(surgeryId)
-  const presupuestoVigente = store.getPresupuestoVigenteBySurgeryId?.(surgeryId)
+  const presupuestoAuthority = usePresupuestos(
+    { surgeryId: surgery?.backendId ?? surgery?.id, take: 100 },
+    open && Boolean(surgery),
+  )
+  const { current: currentPresupuesto, draft: draftPresupuesto } = presupuestoAuthority
+  const presupuestoVigente = useMemo(() => {
+    const authoritative = currentPresupuesto ?? draftPresupuesto
+    return authoritative ? toLegacyPresupuestoProjection(authoritative) : undefined
+  }, [currentPresupuesto, draftPresupuesto])
 
   const [items, setItems] = useState<ConsumoItem[]>([])
   const [justificacion, setJustificacion] = useState("")
@@ -174,6 +184,7 @@ export function ConsumoFormDialog({
             {surgery ? `${surgery.id} — ${surgery.patient} — ${surgery.institution}` : surgeryId}
           </DialogDescription>
         </DialogHeader>
+        {presupuestoAuthority.error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">{presupuestoAuthority.error}</p>}
 
         <div className="space-y-4 py-2">
           {/* Remito selector (only for remito mode) */}

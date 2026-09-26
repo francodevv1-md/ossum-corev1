@@ -19,6 +19,7 @@ export type InternalNotificationListItem = {
   createdAt: Date
   updatedAt: Date
   actorName: string
+  patientName: string | null
 }
 
 export type InternalNotificationCategoryCounts = {
@@ -62,12 +63,14 @@ export interface MarkAllInternalNotificationsReadInput {
 
 export type OperationalInternalNotificationEventType =
   | "coordinator_assigned"
+  | "surgery_date_requested"
   | "surgery_date_assigned"
   | "surgery_rescheduled"
   | "surgery_marked_urgent"
 
 const OPERATIONAL_NOTIFICATION_EVENT_TYPES: OperationalInternalNotificationEventType[] = [
   "coordinator_assigned",
+  "surgery_date_requested",
   "surgery_date_assigned",
   "surgery_rescheduled",
   "surgery_marked_urgent",
@@ -126,6 +129,19 @@ export interface EmitAvailabilityPivotTransferNotificationsInput {
 
 function buildActorDisplayName(firstName: string, lastName: string, email: string) {
   return `${firstName} ${lastName}`.trim() || email
+}
+
+function buildPatientDisplayName(
+  contact: { firstName: string | null; lastName: string | null; legalName: string | null } | null
+): string | null {
+  if (!contact) return null
+  const legal = contact.legalName?.trim()
+  if (legal) return legal
+  const full = [contact.firstName, contact.lastName]
+    .map((v) => v?.trim())
+    .filter((v): v is string => Boolean(v))
+    .join(" ")
+  return full || null
 }
 
 function buildPreview(content: string) {
@@ -303,6 +319,18 @@ function buildOperationalNotificationCopy(
         } satisfies Prisma.InputJsonValue,
       }
     }
+    case "surgery_date_requested":
+      return {
+        title: `${actorDisplayName} solicitó definir fecha de cirugía`,
+        body: `Caso ${input.surgeryId}${input.coordinatorName ? ` · Coordinador ${input.coordinatorName}` : ""}`,
+        metadata: {
+          channel: "operational",
+          eventType: input.eventType,
+          sourceEntityType: "seguimiento_entry",
+          actorDisplayName,
+          coordinatorName: input.coordinatorName ?? null,
+        } satisfies Prisma.InputJsonValue,
+      }
     case "surgery_rescheduled": {
       const previousLabel = formatScheduledLabel(input.previousScheduledDate, input.previousScheduledTime)
       const nextLabel = formatScheduledLabel(input.scheduledDate, input.scheduledTime)
@@ -340,7 +368,10 @@ function buildOperationalNotificationCopy(
 
 function mapNotificationRow(
   row: Prisma.InternalNotificationGetPayload<{
-    include: { actor: { select: { firstName: true; lastName: true; email: true } } }
+    include: {
+      actor: { select: { firstName: true; lastName: true; email: true } }
+      surgery: { select: { patient: { select: { firstName: true; lastName: true; legalName: true } } } }
+    }
   }>
 ): InternalNotificationListItem {
   return {
@@ -358,6 +389,7 @@ function mapNotificationRow(
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     actorName: buildActorDisplayName(row.actor.firstName, row.actor.lastName, row.actor.email),
+    patientName: buildPatientDisplayName(row.surgery?.patient ?? null),
   }
 }
 
@@ -503,7 +535,7 @@ export async function emitOperationalInternalNotifications(
   const actorDisplayName = await getActorDisplayName(prisma, input.actorUserId)
 
   const recipients =
-    input.eventType === "coordinator_assigned"
+    input.eventType === "coordinator_assigned" || input.eventType === "surgery_date_requested"
       ? await resolveCoordinatorRecipient(prisma, input.companyId, input.coordinatorName)
       : await resolveAdminRecipients(prisma, input.companyId)
 
@@ -738,6 +770,17 @@ export async function listInternalNotifications(
             email: true,
           },
         },
+        surgery: {
+          select: {
+            patient: {
+              select: {
+                firstName: true,
+                lastName: true,
+                legalName: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
       take,
@@ -784,6 +827,17 @@ export async function markInternalNotificationRead(
           email: true,
         },
       },
+      surgery: {
+        select: {
+          patient: {
+            select: {
+              firstName: true,
+              lastName: true,
+              legalName: true,
+            },
+          },
+        },
+      },
     },
   })
 
@@ -804,6 +858,17 @@ export async function markInternalNotificationRead(
           firstName: true,
           lastName: true,
           email: true,
+        },
+      },
+      surgery: {
+        select: {
+          patient: {
+            select: {
+              firstName: true,
+              lastName: true,
+              legalName: true,
+            },
+          },
         },
       },
     },

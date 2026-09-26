@@ -65,6 +65,15 @@ The candidate manifest is not live database truth, migration authority, replay e
 6. **Accepted evidence** means historically attributable evidence of an approved consequence. It is not an event-sourcing or table prescription.
 7. **Operational Stock** means the single authoritative post-opening Stock truth for an activated bounded scope; unresolved legacy is not operational Stock.
 8. **Exact decimal** means base-10 quantity arithmetic and comparison at the Article-approved scale without implicit critical rounding. It selects no language or database numeric type.
+9. **Operational article type** means exactly `STANDARD` or `COMPOSITE`; it is not a product classification.
+10. **Product classification** means Category → Subcategory → optional third level. Implant, instrument, disposable, equipment, and similar labels belong only to this axis.
+11. **Commercial and clinical axes** mean independent Brand, Manufacturer, optional Product Line, and Clinical Family classifications.
+12. **Composite evidence** means `CajasBoxFormula.currentVersionId` is present. This identifies a box model; `StockIdentifiedUnit` separately identifies a physical box.
+13. **Legacy XADMIN evidence** means Fabricado/Reventa, Departamento, Rubro, Sección, Marca, Línea, and source row facts retained without an automatic semantic claim until their mapping is explicitly accepted.
+
+### 3.1 Article taxonomy reconciliation
+
+For Article taxonomy only, the approved target separation in `ARTICLE-XADMIN-MIGRATION-MATRIX-001/MIGRATION_MATRIX.md` resolves any older E01 wording that treats implant, instrument, disposable, or equipment as operational Article types. Rubro is a curated Category migration candidate; Sección does not create a permanent independent axis from the available export; Sector remains unmapped pending authoritative source evidence. No requirement in this section selects schema, migration, backfill, API, UI, permissions, or data action.
 
 ## 4. Normative requirements
 

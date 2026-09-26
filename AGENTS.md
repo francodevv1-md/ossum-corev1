@@ -333,6 +333,41 @@ read-only / review / implementation / docs / QA / testing
 - business rule is unclear
 ```
 
+### 9.7 Tool map — ChatGPT / MiniMax / Antigravity (2026-09-22)
+
+Mapa de herramientas externas para trabajo en profundidad. No reemplaza §9.1–9.6: le da herramienta concreta a cada rol.
+
+```txt
+Franco → ChatGPT (orquestador / cerebro)
+            ├─ tareas UX/UI ──────→ Antigravity (diseñador UX/UI, maqueta ideas)
+            └─ apoyo / research ──→ MiniMax (acompañante: drafts, docs, QA, 2ª opinión)
+         ←── handoffs Caveman de ambos ── ChatGPT integra y cierra → Franco
+```
+
+- **ChatGPT — Orquestador:** descompone pedidos en tasks, asigna, revisa y mergea. Arquitectura, dominio, críticas. No maqueta.
+- **MiniMax — Acompañante:** exploración, research, drafts, docs, specs, QA/tests, contra-opinión. Tareas T0–T2 no críticas (coherente con §9.1).
+- **Antigravity — Diseñador UX/UI → maqueta ideas:** mockups, UI, polish, motion. Usa skills de `.agents/skills/` del workspace. Toca solo archivos de UI; no mete lógica de negocio.
+
+Reglas:
+
+- Franco habla con ChatGPT; los otros dos son sus manos. ChatGPT despacha con la plantilla §9.6.
+- Handoffs entre herramientas siempre en formato Caveman (§13).
+- `1 task = 1 owner = 1 set de archivos` (§9.2) vale entre herramientas: Antigravity y MiniMax nunca pisan el mismo archivo ni tocan archivos sensibles (§10).
+- Antigravity lee este `AGENTS.md` y sus skills del workspace directo. ChatGPT y MiniMax no leen el repo: al inicio de sesión se les pega el bloque bootstrap:
+
+```md
+# Bootstrap — OSSUM COR (pegar al inicio de sesión en ChatGPT/MiniMax)
+Sos parte del equipo de OSSUM COR (ERP multiempresa, circuito quirúrgico).
+Rol de esta sesión: [orquestador ChatGPT | acompañante MiniMax].
+Reglas del proyecto: leer/incorporar AGENTS.md del repo.
+Flujo: Franco pide → ChatGPT reparte → Antigravity (UX/UI) y MiniMax (apoyo)
+trabajan en paralelo → handoff Caveman a ChatGPT → ChatGPT integra y cierra
+con un único reporte a Franco.
+Límites: no producción, no datos reales, no destructivo, no commits/push/PR,
+no Auth/schema/migraciones fuera de paquete aprobado. ante duda: una pregunta
+precisa, no un menú.
+```
+
 ---
 
 ## 10. Archivos sensibles
@@ -405,6 +440,27 @@ Antes de cerrar cualquier tarea técnica:
 - Handoff generado.
 - Riesgos abiertos declarados.
 - Engram session_summary si corresponde.
+
+---
+
+## E2E Auth Session Policy
+
+Para E2E de flujos operativos autenticados:
+
+1. Auth es una precondición, no parte del E2E, salvo que la tarea pruebe explícitamente login/Auth.
+2. Al inicio de la sesión, abrir Chromium headed, permitir login manual y persistir inmediatamente un `storageState` fresco.
+3. Antes de ejecutar el E2E, validar el estado autenticado con un preflight mínimo: navegar a una ruta protegida o consultar `/api/me/companies`; debe responder autenticado/200.
+4. Reutilizar el mismo `storageState` durante toda la sesión.
+5. No volver a abrir Chromium ni recrear login entre retries mientras el estado siga válido.
+6. Si aparece `401`, `invalid_auth_token` o expiración, considerar el `storageState` vencido; no diagnosticar ni modificar Auth. Abrir Chromium headed nuevamente, completar login manual, generar un nuevo `storageState` y continuar desde el punto pendiente.
+7. Nunca escribir usuario, contraseña, cookies, JWT o tokens en prompts, tests, HANDOFF, Engram o repositorio.
+8. El `storageState` debe ser temporal/local, mantenerse fuera de Git y resolverse por variable de entorno (por ejemplo, `CORE_FLOW_STORAGE_STATE`).
+9. No modificar Auth para hacer pasar un E2E operativo.
+10. Un fallo previo al flujo causado únicamente por sesión expirada debe reportarse como `E2E blocked by expired authentication state` y no como regresión funcional del core-flow.
+
+Regla corta:
+
+`Fresh login once -> save storageState -> auth preflight -> reuse session -> run E2E`
 
 ---
 
@@ -487,6 +543,22 @@ Alcance autorizado: UI backend-authoritative de borradores y emisión operativa 
 Exclusiones: emisión fiscal, ARCA/AFIP, CAE, schema, migraciones, Auth/roles/seguridad, producción/staging, datos reales, deploy, push y PR.
 
 Evidencia operativa: Engram #6269 y `knowledge/specs/BILLING-PAYMENTS-OPERATIONAL-UI-DEV-001/TASK_BRIEF.md`.
+
+---
+
+## 17. Aprobación activa — Azure Authorization Wizard DEV 2026-08-17
+
+Franco aprobó explícitamente el pipeline DEV de autorización en `Nueva Cirugía → Datos del caso`: Azure Document Intelligence lee PDF/imágenes y el normalizador OpenAI recibe únicamente el texto OCR para proponer datos por campo.
+
+Alcance autorizado:
+
+- PDF/JPEG/PNG/BMP de hasta 4 MB, sin persistencia del archivo;
+- Azure `prebuilt-layout` para OCR/layout;
+- OpenAI para normalización al contrato de autorización existente;
+- revisión humana y aplicación explícita solo sobre campos vacíos;
+- pruebas, guardrails, UX asociada y commits locales del paquete.
+
+Exclusiones: escritura automática de Cirugía/Presupuesto, schema, migraciones, Auth/roles, secretos, producción/staging, deploy, push y PR. Evidencia: Engram #5558/#5563 y `knowledge/specs/AZURE-AUTHORIZATION-WIZARD-DEV-001/TASK_BRIEF.md`.
 
 ---
 

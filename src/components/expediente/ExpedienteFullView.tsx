@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ import { HistorialPanel } from "./HistorialPanel"
 import { ExpedienteCorreoTab } from "./correo/ExpedienteCorreoTab"
 import { EditFichaDrawer } from "./EditFichaDrawer"
 import { NovedadesTabContent } from "./NovedadesTabContent"
+import { CajasTabContent } from "./CajasTabContent"
 import { EXPEDIENTE_TABS, EXPEDIENTE_MORE_TABS } from "@/lib/cirugias.constants"
 import type { Surgery, SurgeryState, Presupuesto, Comprobante, Remito, Consumo, SurgeryNote, HistoryEntry, SurgeryDocumentChecklist, LogisticsDetail, InstrumentadorSurgery, Box, MaterialTransito } from "@/types"
 import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
@@ -26,6 +27,8 @@ import { ServerBackedFeatureBlockedState } from "./ServerBackedFeatureBlockedSta
 import { isLegacyMockSurgeryId } from "@/lib/store"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { ApiClientError, apiFetch } from "@/lib/api/client"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
+import { toLegacyPresupuestoProjection } from "@/lib/api/presupuestos"
 
 type ServerBackedAvailabilityState = "allowed" | "blocked"
 
@@ -64,19 +67,24 @@ interface ExpedienteFullViewProps {
 }
 
 export function ExpedienteFullView({
-  surgery, presupuestos, comprobantes, remitos, consumo, notes, history,
+  surgery, comprobantes, remitos, consumo, notes, history,
   docChecklist, logistics, docStatus, materialTransito, instrumentadorSurgery,
   box, resumenCobranza, facturacionStatus, expTab, setExpTab,
   onBack, onSetDialogSurgery, onSetFacturarDialogOpen,
   onSetNoteDialogOpen, onSetSuspendDialogOpen, onSetCancelDialogOpen,
   onSetChangeStateDialogOpen, onSetChangeDateDialogOpen, onSetNewState,
-  onRecover, onAutorizar: _onAutorizar, onOpenPresupuestoDialog, editingConsumo, setEditingConsumo,
+  onRecover, onOpenPresupuestoDialog, editingConsumo, setEditingConsumo,
 }: ExpedienteFullViewProps) {
   const { activeCompany } = useAuth()
   const [isEditFichaOpen, setIsEditFichaOpen] = useState(false)
   const [operationalFreshnessKey, setOperationalFreshnessKey] = useState(0)
   const [serverBackedAvailabilityBySurgeryId, setServerBackedAvailabilityBySurgeryId] = useState<Record<string, ServerBackedAvailabilityState>>({})
-  const presupuestoId = presupuestos[0]?.id
+  const presupuestoAuthority = usePresupuestos({ surgeryId: surgery.backendId ?? surgery.id, take: 100 })
+  const presupuestoId = (presupuestoAuthority.current ?? presupuestoAuthority.draft)?.id
+  const canonicalPresupuestos = useMemo<Presupuesto[]>(
+    () => presupuestoAuthority.presupuestos.map(toLegacyPresupuestoProjection),
+    [presupuestoAuthority.presupuestos],
+  )
   const remitoId = remitos[0]?.id
   const fvNumber = surgery.facturaNumber || comprobantes.find(c => c.type === "FV")?.number || undefined
   const consumoState = consumo?.state
@@ -251,7 +259,7 @@ export function ExpedienteFullView({
             <TabsContent value="ficha" className={tabContentClassName}>
               <FichaTabContent
                 surgery={surgery}
-                presupuestos={presupuestos}
+                presupuestos={canonicalPresupuestos}
                 comprobantes={comprobantes}
                 remitos={remitos}
                 notes={notes}
@@ -267,13 +275,14 @@ export function ExpedienteFullView({
               {shouldBlockServerBackedFeatures ? <ServerBackedFeatureBlockedState featureLabel="Seguimiento" isLegacyMockSurgery={isLegacyMockSurgery} /> : isServerBackedAvailabilityPending ? <ServerBackedFeatureBlockedState featureLabel="Seguimiento" state="verifying" /> : <NovedadesTabContent surgery={surgery} />}
             </TabsContent>
 
-            <TabsContent value="comercial" className={tabContentClassName}><ComercialTabContent surgery={surgery} presupuestos={presupuestos} onOpenPresupuestoDialog={onOpenPresupuestoDialog} remitos={remitos} box={box} comprobantes={comprobantes} resumenCobranza={resumenCobranza} /></TabsContent>
+            <TabsContent value="comercial" className={tabContentClassName}><ComercialTabContent surgery={surgery} presupuestos={canonicalPresupuestos} onOpenPresupuestoDialog={onOpenPresupuestoDialog} remitos={remitos} box={box} comprobantes={comprobantes} resumenCobranza={resumenCobranza} /></TabsContent>
             <TabsContent value="consumo" className={tabContentClassName}><ConsumoPanel surgery={surgery} consumo={consumo} remitos={remitos} box={box} editingConsumo={editingConsumo} setEditingConsumo={setEditingConsumo} freshnessKey={operationalFreshnessKey} onDevolucionConfirmed={refreshOperationalSurfaces} /></TabsContent>
             <TabsContent value="documentacion" className={tabContentClassName}><DocumentacionTrazabilidadTab surgery={surgery} docChecklist={docChecklist} docStatus={docStatus} remitos={remitos} consumo={consumo} box={box} freshnessKey={operationalFreshnessKey} /></TabsContent>
             <TabsContent value="logistica" className={tabContentClassName}><LogisticaTabContent surgery={surgery} logistics={logistics} box={box} remitos={remitos} materialTransito={materialTransito} freshnessKey={operationalFreshnessKey} /></TabsContent>
             <TabsContent value="correo" className={tabContentClassName}>
               {shouldBlockServerBackedFeatures ? <ServerBackedFeatureBlockedState featureLabel="Correo" isLegacyMockSurgery={isLegacyMockSurgery} /> : isServerBackedAvailabilityPending ? <ServerBackedFeatureBlockedState featureLabel="Correo" state="verifying" /> : <ExpedienteCorreoTab surgery={surgery} />}
             </TabsContent>
+            <TabsContent value="cajas" className={tabContentClassName}><CajasTabContent surgeryId={surgery.id} /></TabsContent>
             <TabsContent value="instrumentador" className={tabContentClassName}><InstrumentadorPanel surgery={surgery} instrumentadorSurgery={instrumentadorSurgery} /></TabsContent>
             <TabsContent value="historial" className={tabContentClassName}><HistorialPanel surgery={surgery} history={history} /></TabsContent>
           </div>

@@ -19,6 +19,8 @@ import { BaseFacturacionSelector } from "./BaseFacturacionSelector"
 import { ResumenEconomico } from "./ResumenEconomico"
 import { DiferenciasPopup, type DiferenciaAccion } from "./DiferenciasPopup"
 import type { BaseFacturacion, DiferenciaFactura } from "@/types"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
+import { toLegacyPresupuestoProjection } from "@/lib/api/presupuestos"
 
 // ── Data type emitted on confirm ──
 export interface FacturarDialogData {
@@ -59,13 +61,17 @@ export function FacturarDialog({
   // ── Computed data ──
   const surgery = surgeryId ? store.getSurgeryById(surgeryId) : undefined
   const consumo = surgeryId ? store.getConsumoBySurgeryId(surgeryId) : undefined
-  const presupuestos = surgeryId ? store.getPresupuestosBySurgeryId(surgeryId) : []
+  const presupuestoAuthority = usePresupuestos(
+    { surgeryId: surgery?.backendId ?? surgery?.id, take: 100 },
+    open && Boolean(surgery),
+  )
+  const { current: currentPresupuesto, draft: draftPresupuesto } = presupuestoAuthority
 
   // Presupuesto vigente: el que tiene versionStatus "vigente" o "aprobada", último creado
   const presupuestoVigente = useMemo(() => {
-    const vigentes = presupuestos.filter((p) => p.versionStatus === "vigente" || p.versionStatus === "aprobada")
-    return vigentes.length > 0 ? vigentes[vigentes.length - 1] : presupuestos[0]
-  }, [presupuestos])
+    const authoritative = currentPresupuesto ?? draftPresupuesto
+    return authoritative ? toLegacyPresupuestoProjection(authoritative) : undefined
+  }, [currentPresupuesto, draftPresupuesto])
 
   // Consumo valorizado
   const consumoValorizado = useMemo(
@@ -96,6 +102,8 @@ export function FacturarDialog({
   // ── Reset state when dialog opens ──
   React.useEffect(() => {
     if (open) {
+      // Opening the controlled dialog starts a fresh invoice attempt.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFacturaNumber("")
       setDiferenciasAceptadas(0)
       setObservado(null)
@@ -108,16 +116,6 @@ export function FacturarDialog({
   }, [open, suggestion])
 
   // ── Handlers ──
-  const handleFacturarClick = useCallback(() => {
-    if (tieneDiferencias) {
-      // DF-Fact-02: Popup obligatorio cuando delta ≠ 0
-      setDiferenciasPopupOpen(true)
-    } else {
-      // Delta = 0: facturar directamente
-      handleConfirmar()
-    }
-  }, [tieneDiferencias])
-
   const handleConfirmar = useCallback(() => {
     if (!facturaNumber.trim()) return
     onFacturar({
@@ -133,6 +131,16 @@ export function FacturarDialog({
       diferencias: diferencias.length > 0 ? diferencias : undefined,
     })
   }, [facturaNumber, baseFacturacion, montoFacturable, diferenciasAceptadas, presupuestoVigente, diferencias, onFacturar])
+
+  const handleFacturarClick = useCallback(() => {
+    if (tieneDiferencias) {
+      // DF-Fact-02: Popup obligatorio cuando delta ≠ 0
+      setDiferenciasPopupOpen(true)
+    } else {
+      // Delta = 0: facturar directamente
+      handleConfirmar()
+    }
+  }, [tieneDiferencias, handleConfirmar])
 
   const handleDiferenciaAccion = useCallback((accion: DiferenciaAccion) => {
     setDiferenciasPopupOpen(false)
@@ -176,6 +184,7 @@ export function FacturarDialog({
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {presupuestoAuthority.error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">{presupuestoAuthority.error}</p>}
             {/* Número de FV */}
             <div className="space-y-1.5">
               <Label className="text-sm">Número de factura *</Label>

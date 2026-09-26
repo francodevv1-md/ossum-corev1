@@ -68,6 +68,11 @@ export async function POST(request: Request, { params }: RouteContext) {
       mimeType: fileEntry.type,
       fileName: fileEntry.name,
       mode,
+      metadata: {
+        companyId: ctx.companyId,
+        actorUserId: ctx.actorUserId,
+        source: "new-surgery-authorization-panel",
+      },
     });
 
     const validated = AutorizacionAIResponseSchema.parse(result);

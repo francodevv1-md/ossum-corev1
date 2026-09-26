@@ -43,6 +43,10 @@ export function buildNotificationExpedienteLink(input: {
   )
 }
 
+export function buildNotificationCirugiaLink(surgeryId: string) {
+  return `/cirugias?${new URLSearchParams({ id: surgeryId }).toString()}`
+}
+
 export function normalizeExpedienteTabParam(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase()
 

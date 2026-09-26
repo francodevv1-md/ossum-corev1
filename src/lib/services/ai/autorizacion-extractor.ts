@@ -5,6 +5,7 @@ import {
 } from "@/lib/validators/autorizacion-ai";
 
 import { aiConfig } from "./config";
+import { readAuthorizationWithAzure } from "./azure-document-intelligence";
 import { buildAutorizacionPrompt } from "./prompts/autorizacion-prompt";
 import { getAIProvider } from "./utils/provider-factory";
 import { parseJsonResponse, toRawTextPreview } from "./utils/parse-json-response";
@@ -112,6 +113,39 @@ function buildDomainResponse(
 export async function extractAutorizacion(
   input: ExtractAutorizacionInput
 ): Promise<AutorizacionAIResponse> {
+  if (input.mode?.trim().toLowerCase() === "azure") {
+    const azureText = await readAuthorizationWithAzure({ buffer: input.buffer, mimeType: input.mimeType });
+    const provider = getAIProvider("openai");
+    const providerResponse = await provider.extract({
+      file: {
+        buffer: Buffer.from(`AZURE DOCUMENT INTELLIGENCE OCR OUTPUT:\n\n${azureText}`, "utf8"),
+        mimeType: "text/plain",
+        fileName: "azure-ocr.txt",
+      },
+      prompt: buildAutorizacionPrompt(),
+      timeoutMs: aiConfig.timeoutMs,
+      model: aiConfig.providers.openai.model,
+      metadata: input.metadata,
+    });
+    providerResponse.provider = "azure-document-intelligence+openai";
+    providerResponse.warnings = [
+      "Azure Document Intelligence realizó el OCR; OpenAI normalizó el texto detectado.",
+      ...(providerResponse.warnings ?? []),
+    ];
+
+    try {
+      return {
+        ...buildDomainResponse(providerResponse, parseJsonResponse(providerResponse.rawText)),
+        provider: "azure-document-intelligence+openai",
+      };
+    } catch (error) {
+      throw internalError(
+        error instanceof Error ? `Failed to parse Azure-normalized response: ${error.message}` : "Failed to parse Azure-normalized response",
+        "invalid_ai_provider_payload"
+      );
+    }
+  }
+
   const providerName = resolveProviderName(input.mode);
   const provider = getAIProvider(providerName);
   const prompt = buildAutorizacionPrompt();

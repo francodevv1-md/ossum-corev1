@@ -1,3 +1,5 @@
+import type { ContactAddressGeoInput } from "@/lib/validators/contact"
+
 // ===== Surgery States =====
 export type SurgeryState =
   | "Sin autorizar" | "Sin fecha" | "Pendiente" | "Autorizada"
@@ -256,7 +258,7 @@ export interface RemitoItem {
 }
 
 // ===== Presupuesto =====
-export type PresupuestoState = "Borrador" | "Enviado" | "Aprobado" | "Rechazado"
+export type PresupuestoState = "Borrador" | "Emitido" | "Aprobado" | "Rechazado" | "Vencido" | "Reemplazado" | "Anulado" | "Enviado"
 
 export interface Presupuesto {
   id: string
@@ -935,6 +937,7 @@ export interface Contacto {
   provincia?: string
   localidad?: string
   codigoPostal?: string
+  mainAddressGeo?: ContactAddressGeoInput
   /** Datos específicos del rol cliente (solo si el rol está activo) */
   datosClientePagador?: DatosClientePagador
   /** Datos específicos del grupo médicos (solo si pertenece al grupo) */

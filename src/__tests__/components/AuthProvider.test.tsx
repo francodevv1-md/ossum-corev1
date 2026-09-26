@@ -11,10 +11,6 @@ const mocks = vi.hoisted(() => ({
   unsubscribe: vi.fn(),
 }))
 
-vi.hoisted(() => {
-  process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID = "company-1"
-})
-
 vi.mock("next/navigation", () => ({
   usePathname: () => "/coordinadores",
   useRouter: () => ({ replace: mocks.replace }),
@@ -33,7 +29,6 @@ vi.mock("@/lib/auth/client", () => ({
 vi.mock("@/lib/api/client", () => ({ apiFetch: mocks.apiFetch }))
 
 vi.mock("@/components/layout/app-shell", () => ({ AppShellProvider: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
-vi.mock("@/components/layout/header", () => ({ Header: () => null }))
 vi.mock("@/components/layout/main-layout", () => ({ MainLayout: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 vi.mock("@/components/layout/sidebar", () => ({ Sidebar: () => null }))
 vi.mock("@/components/StoreHydration", () => ({ StoreHydration: () => null }))
@@ -66,6 +61,19 @@ const currentUserResponse = (availabilityRequests?: boolean) => ({
   ...(availabilityRequests === undefined ? {} : { features: { availabilityRequests } }),
 })
 
+const companiesResponse = {
+  companies: [{ id: "company-1", name: "Company" }],
+  singleCompanyId: "company-1",
+}
+
+function mockAuthenticatedApi(availabilityRequests?: boolean) {
+  mocks.apiFetch.mockImplementation((path: string) => {
+    if (path === "/api/me/companies") return Promise.resolve(companiesResponse)
+    if (path === "/api/companies/company-1/me") return Promise.resolve(currentUserResponse(availabilityRequests))
+    return Promise.reject(new Error(`Unexpected API path: ${path}`))
+  })
+}
+
 function renderProvider(children: React.ReactNode = <AuthState />) {
   return render(<AuthProvider>{children}</AuthProvider>)
 }
@@ -82,7 +90,7 @@ describe("AuthProvider initial session bootstrap", () => {
     vi.useFakeTimers()
     mocks.replace.mockReset()
     mocks.apiFetch.mockReset()
-    mocks.apiFetch.mockResolvedValue(currentUserResponse(false))
+    mockAuthenticatedApi(false)
     mocks.getSession.mockReset()
     mocks.signOut.mockReset()
     mocks.signOut.mockResolvedValue(undefined)
@@ -182,7 +190,7 @@ describe("AuthProvider availability feature projection", () => {
     [false, "availability-disabled"],
   ])("exposes a server-projected %s feature value", async (enabled, expected) => {
     mocks.getSession.mockResolvedValue({ data: { session: session("token-1") } })
-    mocks.apiFetch.mockResolvedValue(currentUserResponse(enabled))
+    mockAuthenticatedApi(enabled)
 
     renderProvider(<AvailabilityFeatureState />)
     await flushBootstrap()
@@ -192,7 +200,7 @@ describe("AuthProvider availability feature projection", () => {
 
   it("fails closed when the response omits the feature field", async () => {
     mocks.getSession.mockResolvedValue({ data: { session: session("token-1") } })
-    mocks.apiFetch.mockResolvedValue(currentUserResponse())
+    mockAuthenticatedApi()
 
     renderProvider(<AvailabilityFeatureState />)
     await flushBootstrap()
@@ -202,7 +210,9 @@ describe("AuthProvider availability feature projection", () => {
 
   it("fails closed when the current-user request fails", async () => {
     mocks.getSession.mockResolvedValue({ data: { session: session("token-1") } })
-    mocks.apiFetch.mockRejectedValue(new Error("request failed"))
+    mocks.apiFetch.mockImplementation((path: string) => path === "/api/me/companies"
+      ? Promise.resolve(companiesResponse)
+      : Promise.reject(new Error("request failed")))
 
     renderProvider(<AvailabilityFeatureState />)
     await flushBootstrap()
@@ -213,9 +223,13 @@ describe("AuthProvider availability feature projection", () => {
   it("resets the feature before loading a changed auth context", async () => {
     let resolveSecondRequest: (value: ReturnType<typeof currentUserResponse>) => void = () => undefined
     mocks.getSession.mockResolvedValue({ data: { session: session("token-1") } })
-    mocks.apiFetch
-      .mockResolvedValueOnce(currentUserResponse(true))
-      .mockReturnValueOnce(new Promise((resolve) => { resolveSecondRequest = resolve }))
+    let currentUserCalls = 0
+    mocks.apiFetch.mockImplementation((path: string) => {
+      if (path === "/api/me/companies") return Promise.resolve(companiesResponse)
+      currentUserCalls += 1
+      if (currentUserCalls === 1) return Promise.resolve(currentUserResponse(true))
+      return new Promise((resolve) => { resolveSecondRequest = resolve })
+    })
 
     renderProvider(<AvailabilityFeatureState />)
     await flushBootstrap()
@@ -237,7 +251,7 @@ describe("AuthProvider availability feature projection", () => {
 
   it("resets the feature when signing out", async () => {
     mocks.getSession.mockResolvedValue({ data: { session: session("token-1") } })
-    mocks.apiFetch.mockResolvedValue(currentUserResponse(true))
+    mockAuthenticatedApi(true)
 
     renderProvider(<AvailabilityFeatureState />)
     await flushBootstrap()

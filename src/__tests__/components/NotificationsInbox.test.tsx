@@ -237,7 +237,7 @@ describe("NotificationsInbox", () => {
   it("mantiene la navegación al contexto del caso", async () => {
     render(<NotificationsInbox />)
 
-    fireEvent.click(screen.getAllByRole("button", { name: /ver contexto/i })[0])
+    fireEvent.click(screen.getAllByRole("button", { name: /ver en el expediente/i })[0])
 
     await waitFor(() => {
       expect(markAsReadMock).toHaveBeenCalledWith("notif-1")
@@ -255,7 +255,7 @@ describe("NotificationsInbox", () => {
     useNotificationsMock.mockReturnValue({ ...state, companyId: "comp-1", items: [availabilityItem], totalCount: 1 })
     render(<NotificationsInbox />)
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: /ver contexto/i }))
+    fireEvent.click(screen.getByRole("button", { name: /ver en el expediente/i }))
     await waitFor(() => expect(pushMock).toHaveBeenCalled())
     expect(globalThis.fetch).not.toHaveBeenCalled()
   })
@@ -298,7 +298,7 @@ describe("NotificationsInbox", () => {
     const state = useNotificationsMock()
     useNotificationsMock.mockReturnValue({ ...state, companyId: "comp-1", items: [{ ...availabilityItem, metadata }], totalCount: 1 })
     render(<NotificationsInbox />)
-    fireEvent.click(screen.getByRole("button", { name: /ver contexto/i }))
+    fireEvent.click(screen.getByRole("button", { name: /ver en el expediente/i }))
     await waitFor(() => expect(pushMock).toHaveBeenCalled())
     expect(globalThis.fetch).not.toHaveBeenCalled()
   })
@@ -309,7 +309,7 @@ describe("NotificationsInbox", () => {
     expect(screen.getByText("Reprogramación")).toBeInTheDocument()
     expect(screen.getAllByText(/Nueva fecha 04\/07\/2026 · 10:00 · Antes 03\/07\/2026 · 09:00/).length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByRole("button", { name: /abrir expediente/i }))
+    fireEvent.click(screen.getByRole("button", { name: /abrir caso/i }))
 
     await waitFor(() => {
       expect(markAsReadMock).toHaveBeenCalledWith("notif-3")
@@ -322,7 +322,7 @@ describe("NotificationsInbox", () => {
   it("mantiene el deep-link a novedades para menciones reales de seguimiento", async () => {
     render(<NotificationsInbox />)
 
-    fireEvent.click(screen.getAllByRole("button", { name: /ver contexto/i })[0])
+    fireEvent.click(screen.getAllByRole("button", { name: /ver en el expediente/i })[0])
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith(buildExpedienteLink({
@@ -376,7 +376,7 @@ describe("NotificationsInbox", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /no leídas/i }))
 
-    expect(screen.getByText("No hay notificaciones sin leer.")).toBeInTheDocument()
+    expect(screen.getByText("Estás al día")).toBeInTheDocument()
     expect(screen.getByText("Cuando llegue algo nuevo, lo vas a ver primero acá.")).toBeInTheDocument()
   })
 

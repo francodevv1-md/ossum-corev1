@@ -1865,3 +1865,439 @@ Risks:
 
 Next:
 - Create the preservation commit from the full meaningful repository state, excluding secrets and transient artifacts; do not delete the worktree.
+
+---
+
+## 2026-07-29 — OPS-DOCUMENTATION-QA-IDENTITIES-DEV-001
+
+Done:
+- Se crearon tres identidades sintéticas en Supabase Auth DEV para QA autenticado de Documentación en Ficha CX.
+- Se vincularon a `Districorr DEV` mediante `User.supabaseAuthId` y `UserCompanyAccess` activo.
+- Se preservaron credenciales fuera del repositorio, en un archivo local con ACL restringida al usuario actual.
+
+Changed:
+- Supabase DEV `yywqcdromnmmelijvspi`: tres identidades Auth confirmadas.
+- PostgreSQL DEV: dos accesos `operator` y un acceso `coordinator` para la empresa `codevdistricorr100000000000`.
+- No se modificaron schema, migraciones, proveedor, dependencias ni código de aplicación.
+
+Files:
+- `knowledge/worklog/WORKLOG.md` — evidencia del hito T3.
+- `C:\Users\franc\AppData\Local\Temp\opencode\ossum-documentation-qa-identities.env` — credenciales QA locales, fuera de Git y con ACL restringida; su contenido no se registró.
+
+Validations:
+- Target Supabase y conexión DB verificados contra el project ref DEV aprobado.
+- `Districorr DEV` y el fixture sintético `CX-0006` / `devfxr20surgerysurgery00100000` atestados antes de la creación.
+- Login Supabase real: 3/3 PASS.
+- Lectura de documentación mediante auth context real: 3/3 HTTP 200.
+- Sondas no mutantes: `operator` y read-only devolvieron HTTP 403; `coordinator` superó el guard y alcanzó validación HTTP 400 con ID deliberadamente inválido.
+- Ninguna mutación documental fue aplicada durante la validación.
+
+Risks:
+- Las identidades operator y read-only comparten actualmente el rol `operator`; su separación es operativa para QA, no una diferencia adicional de permisos server-side.
+- El archivo local de credenciales debe mantenerse fuera de Git y eliminarse al retirar estas identidades DEV.
+- Browser QA ON/OFF/unset y la verificación final de Slice 3 siguen pendientes.
+
+Next:
+- Inyectar el archivo local de credenciales en las tres ejecuciones aisladas de Playwright.
+- Reiniciar el servidor entre ON, OFF y unset para evitar reutilizar un feature flag anterior.
+- Completar verificación de Slice 3 antes de cualquier commit o PR.
+
+## 2026-08-12 — REMITO-QR-BARCODE-001: arranque DEV del subsistema de verificación + UX/UI del remito impreso
+
+Done:
+- Se cableó el arranque del subsistema de verificación de remitos en runtime Node.js (el proxy Next 16 y las rutas API corren en nodejs, por lo que el estado de módulo se comparte con instrumentation).
+- Se creó src/lib/remito-verification/bootstrap.ts: parsea env, construye el keyring, instala installRemitoVerificationRuntime (keyring + orígenes https), installRemitoActivationRuntime (flags todas on + cohorte DEV) e installPublicRemitoVerificationRuntime (resolver de dirección confiable + rate key diaria + prisma).
+- Se creó instrumentation.ts (Next 16) que arranca el bootstrap solo cuando NEXT_RUNTIME=nodejs y el master switch OSSUM_ENABLE_REMITO_VERIFICATION_DEV=true; falla safe (el servidor nunca cae por config DEV rota; el subsistema queda dormido y las rutas fallan cerradas).
+- Se pulió el UX/UI del template de impresión del remito: tipografía system-ui, banda de header con pill de estado, tarjetas con bordes suaves, zebra en ítems, banda de códigos QR/Code128 más legible con quiet zone y caption, firmas más claras.
+- Se generó keyring HMAC DEV (32 bytes base64url) y rate key DEV, agregadas a .env (gitignored). Se documentaron las vars en .env.example con placeholders.
+
+Changed:
+- instrumentation.ts (nuevo).
+- src/lib/remito-verification/bootstrap.ts (nuevo).
+- src/__tests__/unit/remito-verification-bootstrap.test.ts (nuevo, 10 tests).
+- src/lib/remito-print-template.ts (UX/UI).
+- .env (vars DEV, gitignored).
+- .env.example (documentación de vars).
+
+Files:
+- instrumentation.ts
+- src/lib/remito-verification/bootstrap.ts
+- src/__tests__/unit/remito-verification-bootstrap.test.ts
+- src/lib/remito-print-template.ts
+- .env, .env.example
+
+Validations:
+- Bootstrap: 10/10 tests PASS (no-op off, fuera de DEV, sin DATABASE_URL, instalación completa, cohorte, rechazos de orígenes/keyring/company ids/rate key).
+- Template de impresión: 2/2 PASS (labels + short code, sin fuga de token/companyId/internalId).
+- Suite remito completa (print-code service, public proxy, activation, RemitosPage, RemitosPanel): 42/42 PASS.
+- Suite completa del repo: 2049 PASS | 17 skipped; los 2 FAIL (mail-stage1-api, seguimiento-event-guard) son artefacto de entorno (vitest no carga .env; importan @/lib/prisma al top-level) y pasan 34/34 con DATABASE_URL seteada. No tocan archivos míos.
+- 	sc --noEmit: mis archivos sin errores (el único error restante, vailability-dev-bootstrap.service.ts, es preexistente en el árbol).
+- prisma migrate status: "Database schema is up to date!" — las 19 migraciones (incluida 20260811000000_remito_qr_barcode_001) aplicadas.
+
+Risks:
+- La empresa DEV seteada en OSSUM_REMITO_ACTIVATION_COMPANY_IDS (codevdistricorr100000000000) debe existir, estar activa y tener 	axId válido; la huella RF1 lo exige al emitir. Si no coincide, la emisión fallará con "Remito issuer requires a valid taxId".
+- Los orígenes deben ser https: (exigencia estricta del print-code service). El QR interno apunta a https://localhost:3000; para que un teléfono resuelva la verificación pública hace falta HTTPS en dev (
+ext dev --experimental-https) o un túnel hacia el OSSUM_REMITO_PUBLIC_ORIGIN. El QR/barcode SÍ aparecen y son scannables aunque la URL no resuelva en el teléfono.
+- Validación browser end-to-end (emitir un remito en DEV e imprimir viendo los códigos) queda pendiente; requiere reinicio del server DEV para que instrumentation levante el runtime.
+
+Next:
+- Reiniciar
+ext dev para que instrumentation.ts instale el runtime; verificar el log de arranque del bootstrap.
+- Confirmar/ajustar el 	axId de la empresa DEV y el company id en .env.
+- Emitir un remito en DEV e imprimir; validar que QR interno, QR público y Code128 aparecen y escanean.
+- (Futuro) gestionar HTTPS dev o túnel para resolver la verificación pública desde un teléfono.
+
+---
+
+## 2026-08-25 — CAJAS-ASSIGNMENT-PREPARATION-DEV-001
+
+Done:
+- Se implementó la asignación company-scoped de una Caja física identificada a una Cirugía desde el Expediente.
+- El comando crea atómicamente auditoría, aceptación idempotente, asignación activa, preparación y líneas esperadas copiadas de la fórmula vigente.
+- Se serializaron asignaciones y reservas sobre `StockIdentifiedUnit` para cerrar la carrera confirmada por revisión independiente.
+
+Changed:
+- Nuevo GET/POST `/api/companies/:companyId/surgeries/:surgeryId/cajas`.
+- Nuevo tab `Más → Cajas` con estados operativos, permisos y protección contra respuestas stale.
+- `reservePreparation` rechaza una unidad identificada con asignación de Caja activa después de adquirir el lock compartido.
+- El read model devuelve la preparación de mayor versión.
+
+Files:
+- `src/lib/services/cajas-assignment-preparation.service.ts`
+- `src/lib/services/preparation.service.ts`
+- `src/app/api/companies/[companyId]/surgeries/[surgeryId]/cajas/route.ts`
+- `src/components/expediente/CajasTabContent.tsx`
+- `src/components/expediente/ExpedienteFullView.tsx`
+- `src/lib/permissions/stock-operations-policy.ts`
+- `src/lib/permissions/stock-operations.ts`
+- `src/lib/validators/cajas.ts`
+- `src/lib/cirugias.constants.ts`
+- Tests y artefactos en `knowledge/specs/CAJAS-ASSIGNMENT-PREPARATION-DEV-001/`.
+
+Validations:
+- 23/23 tests enfocados PASS; 10/10 regresiones adyacentes de preparación PASS.
+- ESLint enfocado: 0 errores; permanece un warning preexistente en `ExpedienteFullView.tsx`.
+- Build Next.js PASS.
+- Smoke DEV: `CX-0005` + `CAJA-DEMO-001`, 5 líneas esperadas y replay idempotente PASS.
+- Validación DEV posterior: lock ejecutado y denegación de unidad ya asignada sin mutaciones previas PASS.
+- Revisión independiente final: PASS.
+
+Risks:
+- Browser QA autenticado no ejecutado por falta de sesión DEV disponible dentro del paquete.
+- `tsc --noEmit` global continúa fallando por errores preexistentes fuera del write set; no reportó errores en los archivos del paquete.
+
+Next:
+- Validar visualmente el tab Cajas cuando haya una sesión DEV autenticada disponible.
+
+---
+
+## 2026-08-26 — SUPPLIER-RECEIPT-FLOW-DEV-001
+
+Done:
+- Recepción dejó de ser un módulo raíz y pasó a ser una etapa interna de Remitos de proveedor.
+- La carga del remito se reutiliza para iniciar o retomar la recepción sin pedir nuevamente número ni PDF.
+- La cola destaca pendientes, faltantes, excedentes, artículos sin identificar y escaneos incongruentes; los remitos cargados conservan visible el estado final de recepción.
+- La reapertura hidrata escaneos pendientes y trazabilidad guiada.
+- Se corrigió la conciliación para que un escaneo reutilice la línea esperada del remito en lugar de crear un falso excedente.
+
+Changed:
+- Nueva navegación interna Remitos cargados → Cola de recepción → detalle operativo.
+- `/recepciones` redirige al embudo interno y el sidebar ya no expone Recepción de artículos.
+- GET de detalle operativo y proyección de bloqueos pendientes añadidos a GoodsReceipt sin cambios de schema.
+
+Files:
+- `src/app/compras/remitos-proveedor/**`
+- `src/app/recepciones/page.tsx`
+- `src/app/api/companies/[companyId]/receipts/**`
+- `src/components/stock/ReceiptOperationalWorkspace.tsx`
+- `src/components/layout/sidebar.tsx`
+- `src/lib/services/receipt.service.ts`
+- Tests y artefactos en `knowledge/specs/SUPPLIER-RECEIPT-FLOW-DEV-001/`.
+
+Validations:
+- 29/29 tests enfocados PASS.
+- ESLint enfocado y diff check PASS.
+- TypeScript global conserva errores preexistentes fuera del paquete; ningún error pertenece al flujo modificado.
+- Revisión independiente final PASS.
+
+Risks:
+- Remitos de proveedor continúa en Zustand/localStorage transicional mientras GoodsReceipt ya es PostgreSQL-backed.
+- Browser QA visual quedó bloqueado por la pantalla de autenticación; no se alteró Auth.
+
+Next:
+- Ejecutar smoke visual autenticado desktop/mobile y una recepción física completa con remito real y SC415.
+
+---
+
+## 2026-08-26 — CAJAS-UNIT-LOG-DEV-001
+
+Done:
+- Cada caja física expone Usos/CX derivados de cirugías realizadas o finalizadas donde estuvo asignada.
+- El instrumental utilizado se deriva del despacho vigente neto, sin carga manual duplicada.
+- Expediente → Cajas permite registrar problemas, envíos y regresos de reparación por instrumental.
+- La ficha de unidad muestra cronología, problemas y recurrencia de reparaciones por identidad de artículo.
+
+Changed:
+- Nueva evidencia append-only `CajasUnitLogEntry`, tenant-scoped, auditada e idempotente.
+- Nueva migración DEV y endpoint de excepciones dentro del host operativo de Cajas.
+- Historial de unidad ampliado a todas sus asignaciones, con correcciones/reversiones neteadas.
+
+Files:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260826123000_cajas_unit_log_v1/migration.sql`
+- `src/lib/services/cajas-assignment-preparation.service.ts`
+- `src/lib/services/cajas-operational.service.ts`
+- `src/app/api/companies/[companyId]/surgeries/[surgeryId]/cajas/log/route.ts`
+- `src/components/expediente/CajasTabContent.tsx`
+- `src/components/boxes/PhysicalUnitDetail.tsx`
+- Tests y artefactos en `knowledge/specs/CAJAS-UNIT-LOG-DEV-001/`.
+
+Validations:
+- Prisma format/validate/generate PASS; migración aplicada en DB DEV descartable y schema al día.
+- 38/38 tests enfocados PASS; ESLint y diff check PASS.
+- Smoke PostgreSQL DEV: problema + envío a reparación persistidos y recuperados desde evidencia.
+- Revisión independiente final PASS después de dos ciclos Diagnose.
+
+Risks:
+- Browser QA autenticado quedó bloqueado por Auth; no se alteraron credenciales ni sesión.
+- La única asignación DEV disponible pertenece a una cirugía pendiente, por lo que correctamente no suma Uso/CX.
+- Rentabilidad monetaria permanece excluida hasta definir costos e ingresos atribuibles.
+
+Next:
+- Validar visualmente Expediente → Cajas y ficha de unidad cuando exista una sesión DEV autenticada.
+
+---
+
+## 2026-08-26 — CAJAS-UNIT-BOARD-DEV-001
+
+Done:
+- Unidades físicas pasó de un índice por modelo a un tablero por unidad.
+- Cada fila expone Usos/CX, última cirugía, problemas reportados y señal de reparación según la bitácora.
+- Modelo e historial conservan accesos explícitos; el historial completo sigue cargándose de forma lazy.
+
+Changed:
+- La proyección operacional agrega métricas con una sola consulta company-scoped, sin N+1.
+- Desktop y mobile comparten una única lista responsive y un mismo orden accesible.
+- Los empates de timestamp se ordenan de forma determinista por ID.
+
+Files:
+- `src/components/boxes/BoxesOperationalIndex.tsx`
+- `src/features/boxes/presentation/boxes-presentation-fixtures.ts`
+- `src/lib/services/cajas-operational.service.ts`
+- Tests y artefactos en `knowledge/specs/CAJAS-UNIT-BOARD-DEV-001/`.
+
+Validations:
+- 52/52 tests de Cajas PASS; ESLint enfocado y diff check PASS.
+- Detector de diseño PASS.
+- Revisión independiente final PASS.
+
+Risks:
+- Browser QA autenticado sigue bloqueado por falta de sesión DEV; no se alteró Auth.
+- `tsc --noEmit` global conserva errores preexistentes fuera del paquete y no reportó errores en los archivos modificados.
+
+Next:
+- Ejecutar smoke visual autenticado desktop/mobile cuando haya una sesión DEV disponible.
+
+---
+
+## 2026-08-26 — ARTICLES-CAJAS-LIVE-UI-DEV-001
+
+Done:
+- Artículos y Cajas dejaron de mezclar respuestas API con fallbacks locales en sus superficies live.
+- Los errores, la ausencia de empresa y los reintentos se muestran sin confundir fallas con catálogos vacíos o registros inexistentes.
+- La ficha de artículo dejó de exponer relaciones de Cajas provenientes de `stock-mock` como información operativa.
+
+Changed:
+- Las cargas quedan aisladas por empresa y descartan respuestas obsoletas tras cambiar de compañía.
+- Cajas agrega error recuperable con reintento y el detalle resuelve explícitamente el estado sin empresa activa.
+- Se retiró copy visible de demostración sin mutar identificadores persistidos `DEMO-*`.
+
+Files:
+- `src/app/stock/page.tsx`
+- `src/components/stock/StockArticleView.tsx`
+- `src/components/stock/StockArticleSheet.tsx`
+- `src/app/cajas/page.tsx`
+- `src/app/cajas/[id]/page.tsx`
+- Tests y artefactos en `knowledge/specs/ARTICLES-CAJAS-LIVE-UI-DEV-001/`.
+
+Validations:
+- 27/27 tests enfocados de Artículos/Cajas PASS; ESLint enfocado y diff check PASS.
+- `tsc --noEmit` global conserva errores preexistentes fuera del paquete y no reportó errores en los archivos modificados.
+- Revisión independiente final PASS.
+
+Risks:
+- Browser QA autenticado no se ejecutó; no se usó Playwright ni se alteró Auth.
+- No existe aún una prueba directa del retry de Stock combinado con cambio de empresa; la protección por request ID fue revisada independientemente.
+
+Next:
+- Ejecutar smoke visual autenticado desktop/mobile cuando exista una sesión DEV disponible.
+
+---
+
+## 2026-08-26 — ARTICLE-XADMIN-TECHNICAL-DESIGN-001
+
+Done:
+- Se cerró el diseño técnico exacto para taxonomía de Artículos, evidencia XADMIN y compatibilidad de Cajas.
+- `articleType` queda diseñado como `STANDARD | COMPOSITE`; Producto, Familia clínica y ejes comerciales permanecen independientes.
+- El diseño preserva Fabricado/Reventa, deja Sector sin mapear y evita cambios de datos antes de compatibilidad Cajas.
+
+Changed:
+- Se definieron modelos, relaciones, constraints, aliases, jerarquía, contratos API, flujo UI, staging, backfill dry-run y rollout/rollback.
+- Se corrigieron tenancy de mappings, hashes archivo/fila, unicidad raíz, triggers jerárquicos y fallback visible de Cajas.
+
+Files:
+- `knowledge/specs/ARTICLE-XADMIN-TECHNICAL-DESIGN-001/TASK_BRIEF.md`
+- `knowledge/specs/ARTICLE-XADMIN-TECHNICAL-DESIGN-001/DESIGN.md`
+- `knowledge/specs/ARTICLE-XADMIN-TECHNICAL-DESIGN-001/LOCK.md`
+
+Validations:
+- `git diff --check` PASS.
+- Revisión independiente final PASS después de corregir cinco bloqueos confirmados.
+
+Risks:
+- Paquete exclusivamente documental; no autoriza schema, migración, API, UI, permisos, backfill ni datos DEV.
+
+Next:
+- Abrir un paquete de implementación separado con aprobación explícita y ownership nuevo.
+
+---
+
+## 2026-08-26 — ARTICLE-XADMIN-SCHEMA-DEV-001
+
+Done:
+- Se implementó la base aditiva de persistencia para catálogos de Artículos y evidencia XADMIN.
+- La migración quedó creada pero intencionalmente no aplicada.
+
+Changed:
+- Nuevos catálogos organization-scoped, aliases tipados, referencias nullable desde Article y staging/mappings XADMIN tenant-safe.
+- Constraints e índices cubren jerarquía máxima de tres niveles, hashes, targets tipados, evidencia inmutable y ausencia de hard delete.
+- Se agregó unicidad por organización + hash de archivo para garantizar idempotencia de importación.
+
+Files:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260826190000_article_xadmin_taxonomy_v1/migration.sql`
+- `src/__tests__/integration/article-xadmin-taxonomy-persistence-artifact.test.ts`
+- `knowledge/specs/ARTICLE-XADMIN-SCHEMA-DEV-001/`
+
+Validations:
+- Prisma format/validate/generate PASS.
+- Prueba enfocada 1/1 PASS y diff check PASS.
+- Revisión independiente final PASS.
+
+Risks:
+- La migración no fue ejecutada; DB y datos permanecen intactos.
+- `Article.articleType` legacy sigue sin cambios hasta un paquete posterior de compatibilidad Cajas/backfill.
+
+Next:
+- Solicitar aprobación separada antes de aplicar la migración a una DB DEV descartable o abrir otro slice.
+
+---
+
+## 2026-08-26 — ARTICLE-XADMIN-MIGRATION-DEV-001
+
+Done:
+- Se aplicó `20260826190000_article_xadmin_taxonomy_v1` a la DB descartable de desarrollo autorizada.
+- La identidad del target se confirmó como deployment tier `development` y Company `Districorr DEV`.
+
+Changed:
+- Prisma registró la única migración pendiente; no se ejecutaron otras migraciones.
+- La DB ahora contiene la topología aditiva de catálogos y staging XADMIN.
+
+Files:
+- `knowledge/specs/ARTICLE-XADMIN-MIGRATION-DEV-001/TASK_BRIEF.md`
+- `knowledge/specs/ARTICLE-XADMIN-MIGRATION-DEV-001/LOCK.md`
+- Historial `_prisma_migrations` de la DB DEV.
+
+Validations:
+- `prisma migrate status`: schema up to date.
+- `prisma validate`: PASS.
+- Nueve tablas nuevas accesibles y vacías.
+- Artículos legacy intactos: `Caja=10`, `Instrumental=12`, `null=6`; nuevas FKs en null.
+- Prueba enfocada PASS y revisión independiente final PASS.
+
+Risks:
+- Los catálogos permanecen vacíos hasta un futuro paquete autorizado de importación/mapeo.
+- No se hizo backfill ni cutover de `Article.articleType`.
+
+Next:
+- Abrir por separado compatibilidad Cajas/importación XADMIN/API/UI según prioridad de producto.
+
+---
+
+## 2026-08-27 — CAJAS-MAINTENANCE-CONTROL-DEV-001
+
+Done:
+- Se agregó control independiente de reparación y mantenimiento preventivo por caja física.
+- Se mantuvo la métrica existente de una utilización por Cirugía distinta realizada/finalizada con la caja asignada.
+- Se aplicó la migración autorizada a Districorr DEV.
+
+Changed:
+- Estados explícitos: Abierto → En reparación → Devuelto para control → Cerrado; Abierto → Cancelado.
+- Transiciones append-only, idempotentes, auditadas, company-scoped y con control de versión.
+- `/cajas` muestra mantenimiento activo, historial, creación y acciones permitidas sin modificar disponibilidad ni Cirugías.
+- La presentación ilustrativa queda fuera de producción y el flujo live no expone controles demo/prueba.
+
+Files:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260827010000_cajas_maintenance_control_v1/migration.sql`
+- `src/lib/services/cajas-maintenance.service.ts`
+- `src/lib/services/cajas-operational.service.ts`
+- `src/app/api/companies/[companyId]/cajas/units/[unitId]/maintenance/**`
+- `src/app/cajas/page.tsx`
+- `src/components/boxes/BoxesOperationalIndex.tsx`
+- `src/components/boxes/PhysicalUnitDetail.tsx`
+- `knowledge/specs/CAJAS-MAINTENANCE-CONTROL-DEV-001/`
+
+Validations:
+- Prisma migrate status/validate: PASS; 32 migraciones y schema actualizado.
+- Districorr DEV: 10 modelos/10 unidades legibles; tablas nuevas accesibles y sin datos sintéticos.
+- Suite enfocada: 9 archivos, 52/52 tests PASS.
+- ESLint enfocado, diff check, detector Impeccable y tres revisiones independientes finales: PASS.
+
+Risks:
+- Browser QA autenticado queda pendiente por falta de runtime/sesión localhost disponible.
+- El estado de mantenimiento es informativo en este slice; no bloquea automáticamente disponibilidad ni asignación.
+
+Next:
+- Ejecutar smoke visual desktop/mobile cuando exista una sesión DEV autenticada.
+- Mantener Artículos/catálogos bajo el ownership separado ya acordado.
+
+---
+
+## 2026-08-31 — PRESUPUESTO-AUTHORITY-UNIFICATION-DEV-001
+
+Done:
+- Prisma/API pasó a ser la única autoridad visible de Presupuestos en Ventas, Nueva Cirugía, Expediente y superficies dependientes.
+- Se completaron edición de borrador, inmutabilidad emitida, revisión versionada, reemplazo atómico, permisos, auditoría, aislamiento multiempresa y envío restringido a Emitido/Aprobado.
+- Se aplicaron las migraciones autorizadas a Districorr DEV descartable.
+
+Changed:
+- Se agregaron familia/versiones activas, snapshot comercial, concurrencia optimista y constraints company-scoped/lineage.
+- Se retiraron lecturas y escrituras visibles de Presupuesto desde Zustand/localStorage.
+- Se integraron PDF no fiscal, selector de correo, refresh persistente y retry de Nueva Cirugía.
+
+Files:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260831010000_presupuesto_authority_unification_dev_001/`
+- `prisma/migrations/20260831073000_presupuesto_authority_corrective_dev_001/`
+- `src/lib/services/presupuesto.service.ts`
+- `src/lib/api/presupuestos.ts`
+- `src/hooks/usePresupuestos.ts`
+- `src/app/ventas/presupuestos/page.tsx`
+- `src/components/presupuestos/`
+- `knowledge/specs/PRESUPUESTO-AUTHORITY-UNIFICATION-DEV-001/`
+
+Validations:
+- Prisma format/validate/generate y migration status: PASS; 34 migraciones al día.
+- Suite enfocada final: hasta 199 tests PASS; build PASS; ESLint del paquete sin errores; TypeScript de paths modificados sin diagnósticos.
+- Playwright autenticado Chromium: 1/1 PASS para Contacto → Cirugía → Presupuesto → refresh → emisión → aprobación → revisión → Expediente → PDF/email.
+- Revisión independiente final: PASS, sin bloqueos.
+
+Risks:
+- `npm run typecheck` global conserva errores baseline fuera del paquete.
+- Permanece compatibilidad Zustand dormante sin consumidores visibles; no gobierna datos operativos.
+- Los fixtures emitidos del smoke permanecen únicamente en DEV descartable.
+
+Next:
+- No hacer commit, push, deploy ni publicación sin pedido explícito.
+- Mantener producción, fiscal y Orden/Pedido fuera de este paquete.

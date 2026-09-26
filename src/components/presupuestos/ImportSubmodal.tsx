@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Import, Check, AlertCircle } from "lucide-react"
 import { useOrtoTrackStore } from "@/lib/store"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
 import type { FormItem } from "@/hooks/usePresupuestoForm"
 
 /**
@@ -30,28 +31,18 @@ interface ImportSubmodalProps {
 export function ImportSubmodal({ currentSurgeryId, onImportItems }: ImportSubmodalProps) {
   const [open, setOpen] = useState(false)
   const store = useOrtoTrackStore()
+  const { presupuestos } = usePresupuestos({ take: 100 })
 
-  // Get surgeries with presupuestos that have items
-  const surgeriesWithPR = useMemo(() => {
-    return store.surgeries.filter(
-      (s) =>
-        s.presupuestoId &&
-        s.state !== "Cancelada" &&
-        s.state !== "Suspendida" &&
-        s.id !== currentSurgeryId
-    )
-  }, [store.surgeries, currentSurgeryId])
-
-  // Get the presupuesto for each surgery
   const availablePresupuestos = useMemo(() => {
-    return surgeriesWithPR
-      .map((s) => {
-        const pr = store.presupuestos.find((p) => p.id === s.presupuestoId)
-        if (!pr || pr.items.length === 0) return null
-        return { surgery: s, presupuesto: pr }
+    return presupuestos
+      .filter((presupuesto) => presupuesto.surgeryId && presupuesto.slot !== "HISTORY" && presupuesto.items.length > 0)
+      .map((presupuesto) => {
+        const surgery = store.surgeries.find((item) => item.backendId === presupuesto.surgeryId || item.id === presupuesto.surgeryId)
+        if (!surgery || surgery.id === currentSurgeryId || surgery.backendId === currentSurgeryId || surgery.state === "Cancelada" || surgery.state === "Suspendida") return null
+        return { surgery, presupuesto }
       })
-      .filter(Boolean) as { surgery: typeof surgeriesWithPR[0]; presupuesto: NonNullable<ReturnType<typeof store.presupuestos.find>> }[]
-  }, [surgeriesWithPR, store.presupuestos])
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+  }, [currentSurgeryId, presupuestos, store.surgeries])
 
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
 
@@ -61,18 +52,16 @@ export function ImportSubmodal({ currentSurgeryId, onImportItems }: ImportSubmod
     if (!selected) return
 
     const items: FormItem[] = selected.presupuesto.items.map((pi) => ({
-      code: pi.code,
-      name: pi.name,
-      quantity: pi.quantity,
-      unitPrice: pi.unitPrice,
-      discountPercent: pi.discountPercent || 0,
-      // CHATZAI-017L: Preserve catalogItemId if item was linked
-      catalogItemId: pi.catalogItemId || "",
-      isArticuloLibre: !pi.catalogItemId, // derived: no catalog link → libre
-      descripcionLibre: pi.descripcionLibre || "",
-      // CHATZAI-025B: Preserve original ivaKey from imported item, fallback to "21"
-      ivaKey: pi.ivaKey || "21",
-      codeResolved: !!pi.catalogItemId,
+      code: pi.sku ?? "",
+      name: pi.description,
+      quantity: Number(pi.quantity),
+      unitPrice: Number(pi.unitPrice),
+      discountPercent: Number(pi.discountRate),
+      catalogItemId: "",
+      isArticuloLibre: true,
+      descripcionLibre: pi.description,
+      ivaKey: pi.taxRate,
+      codeResolved: false,
     }))
 
     onImportItems(items)
@@ -129,9 +118,7 @@ export function ImportSubmodal({ currentSurgeryId, onImportItems }: ImportSubmod
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         {presupuesto.items.length} artículos
-                        {presupuesto.items.filter(i => !i.catalogItemId).length > 0 &&
-                          ` · ${presupuesto.items.filter(i => !i.catalogItemId).length} Z`}
-                        {" · Total: "}{presupuesto.total.toLocaleString("es-AR")}
+                        {" · Total: "}{Number(presupuesto.total).toLocaleString("es-AR")}
                       </p>
                       <p className="text-[9px] text-muted-foreground/60 mt-0.5">
                         {surgery.institution} · {surgery.date}

@@ -5,9 +5,9 @@ import { errorResponse, ok } from "../../../../../../../lib/api/responses";
 import prisma from "../../../../../../../lib/prisma";
 import {
   PRESUPUESTO_MUTATION_ROLES,
-  updatePresupuestoState,
+  applyStateCommand,
 } from "../../../../../../../lib/services/presupuesto.service";
-import { presupuestoStateTransitionSchema } from "../../../../../../../lib/validators/presupuesto";
+import { presupuestoStateCommandSchema } from "../../../../../../../lib/validators/presupuesto";
 
 type RouteContext = {
   params: Promise<{ companyId: string; presupuestoId: string }>;
@@ -30,7 +30,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const ctx = await getApiAuthContext(request, companyId);
     requireCompanyMutationAccess(ctx, PRESUPUESTO_MUTATION_ROLES);
 
-    const parsed = presupuestoStateTransitionSchema.safeParse(await parseJsonBody(request));
+    const parsed = presupuestoStateCommandSchema.safeParse(await parseJsonBody(request));
     if (!parsed.success) {
       throw badRequest(
         parsed.error.issues[0]?.message ?? "Invalid state transition body",
@@ -38,11 +38,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       );
     }
 
-    const result = await updatePresupuestoState({
+    const result = await applyStateCommand({
       companyId: ctx.companyId,
       presupuestoId,
-      newState: parsed.data.newState,
-      updatedById: ctx.actorUserId,
+      command: parsed.data.command,
+      expectedRevision: parsed.data.expectedRevision,
+      actorUserId: ctx.actorUserId,
       prisma,
     });
     return ok(result);

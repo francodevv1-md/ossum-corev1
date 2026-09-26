@@ -20,6 +20,7 @@ import {
   type CreateSurgeryInput,
   type UpdateSurgeryInput,
 } from "../validators/surgery.validator";
+import { emitOperationalInternalNotifications } from "./internal-notifications.service";
 
 export type SurgeryActorContext = {
   actorUserId: string;
@@ -40,6 +41,14 @@ const SURGERY_VISIBLE_NUMBER_PREFIX = "CX-";
 const SURGERY_VISIBLE_NUMBER_PADDING = 4;
 const CREATE_SURGERY_MAX_RETRIES = 3;
 const LARGE_OFFSET_THRESHOLD = 10_000;
+
+function isSurgeryVisibleNumberTarget(target: unknown) {
+  if (target === "Surgery_companyId_visibleNumber_key") return true;
+  if (!Array.isArray(target) || target.length !== 2) return false;
+
+  const fields = target.map((field) => String(field).replaceAll('"', ""));
+  return fields.includes("companyId") && fields.includes("visibleNumber");
+}
 
 type ListSurgeriesOptions = {
   status?: string;
@@ -370,7 +379,7 @@ async function getNextSurgeryVisibleNumber(
 ): Promise<string> {
   const rows = await tx.$queryRaw<Array<{ maxNumber: string | bigint | number | null }>>`
     SELECT COALESCE(
-      MAX(CAST(SUBSTRING("visibleNumber" FROM ${SURGERY_VISIBLE_NUMBER_PREFIX.length + 1}) AS NUMERIC)),
+      MAX(CAST(SUBSTRING("visibleNumber" FROM CAST(${SURGERY_VISIBLE_NUMBER_PREFIX.length + 1} AS INTEGER)) AS NUMERIC)),
       0
     )::TEXT AS "maxNumber"
     FROM "Surgery"
@@ -392,6 +401,7 @@ async function assertSurgeryReferencesBelongToCompany(
     doctorId?: string | null;
     institutionId?: string | null;
     payerContactId?: string | null;
+    coordinatorContactId?: string | null;
     branchId?: string | null;
   }
 ): Promise<void> {
@@ -400,6 +410,7 @@ async function assertSurgeryReferencesBelongToCompany(
     data.doctorId,
     data.institutionId,
     data.payerContactId,
+    data.coordinatorContactId,
   ].filter((value): value is string => Boolean(value));
 
   await assertContactsBelongToCompany(prisma, companyId, contactIds);
@@ -730,6 +741,7 @@ export async function createSurgery(
     doctorId: validatedData.doctorId,
     institutionId: validatedData.institutionId,
     payerContactId: validatedData.payerContactId,
+    coordinatorContactId: validatedData.coordinatorContactId,
     branchId: validatedData.branchId,
   });
 
@@ -765,6 +777,17 @@ export async function createSurgery(
           },
         });
 
+        if (validatedData.coordinatorContactId) {
+          await tx.surgeryContactAssignment.create({
+            data: {
+              surgeryId: surgery.id,
+              contactId: validatedData.coordinatorContactId,
+              role: "coordinator",
+              isPrimary: true,
+            },
+          });
+        }
+
         await createAuditEvent({
           prisma: tx as unknown as PrismaClient,
           companyId: scopedCompanyId,
@@ -787,9 +810,10 @@ export async function createSurgery(
       const uniqueTarget = error instanceof Prisma.PrismaClientKnownRequestError
         ? error.meta?.target
         : null;
-      const isVisibleNumberTarget = Array.isArray(uniqueTarget)
-        ? uniqueTarget.length === 2 && uniqueTarget.includes("companyId") && uniqueTarget.includes("visibleNumber")
-        : uniqueTarget === "Surgery_companyId_visibleNumber_key";
+      const adapterTarget = error instanceof Prisma.PrismaClientKnownRequestError
+        ? (error.meta?.driverAdapterError as { cause?: { constraint?: { fields?: unknown } } } | undefined)?.cause?.constraint?.fields
+        : null;
+      const isVisibleNumberTarget = isSurgeryVisibleNumberTarget(uniqueTarget) || isSurgeryVisibleNumberTarget(adapterTarget);
       const retryableAllocationConflict = error instanceof Prisma.PrismaClientKnownRequestError && (
         error.code === "P2034" ||
         (generatedVisibleNumber && error.code === "P2002" && isVisibleNumberTarget)
@@ -804,6 +828,57 @@ export async function createSurgery(
   }
 
   throw new Error("Failed to create surgery after retrying transactional visible number allocation");
+}
+
+export async function assignSurgeryCoordinator(
+  prisma: PrismaClient,
+  context: SurgeryActorContext,
+  surgeryId: string,
+  input: { contactId?: string | null; coordinatorName?: string | null },
+) {
+  const scopedContext = await assertActorCanMutateSurgery(prisma, context);
+  const scopedCompanyId = requireCompanyId(scopedContext.companyId);
+  const currentSurgery = await prisma.surgery.findFirst({
+    where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null },
+    select: { id: true, visibleNumber: true },
+  });
+  if (!currentSurgery) throw new Error(`Surgery ${surgeryId} not found in company ${scopedCompanyId}`);
+
+  const contactId = input.contactId?.trim() || null;
+  if (contactId) await assertContactsBelongToCompany(prisma, scopedCompanyId, [contactId]);
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.surgeryContactAssignment.deleteMany({ where: { surgeryId, role: "coordinator" } });
+    const assignment = contactId
+      ? await tx.surgeryContactAssignment.create({ data: { surgeryId, contactId, role: "coordinator", isPrimary: true } })
+      : null;
+    await createAuditEvent({
+      prisma: tx as unknown as PrismaClient,
+      companyId: scopedCompanyId,
+      userId: scopedContext.actorUserId,
+      entityType: "Surgery",
+      entityId: surgeryId,
+      action: "surgery.coordinator_assigned",
+      module: scopedContext.module ?? "surgery",
+      oldValue: null,
+      newValue: { contactId, coordinatorName: input.coordinatorName ?? null },
+      metadata: auditMetadata(scopedContext),
+    });
+    return assignment;
+  });
+
+  if (contactId && input.coordinatorName) {
+    await emitOperationalInternalNotifications(prisma, {
+      companyId: scopedCompanyId,
+      surgeryId,
+      sourceEntityId: result?.id ?? `${surgeryId}:coordinator-assigned`,
+      actorUserId: scopedContext.actorUserId,
+      eventType: "coordinator_assigned",
+      coordinatorName: input.coordinatorName,
+    });
+  }
+
+  return result;
 }
 
 /** Update a surgery after validating company ownership and changed references. */

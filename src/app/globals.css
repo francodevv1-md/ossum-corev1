@@ -105,8 +105,8 @@
   --op-border-default: var(--ossum-line);
   --op-border-subtle: #eef0f3;
   --op-text-primary: var(--ossum-navy-soft);
-  --op-text-secondary: #4a5568;
-  --op-text-muted: #6b7280;
+   --op-text-secondary: #243246;
+   --op-text-muted: #4b5563;
   --op-text-disabled: #9ca3af;
   --op-text-inverse: #ffffff;
   --op-primary: var(--ossum-action);
@@ -205,6 +205,36 @@
   .op-text-secondary { color: var(--op-text-secondary); }
   .op-text-muted { color: var(--op-text-muted); }
 
+  /* Shared coordination controls: one restrained control language across list and detail. */
+  .op-btn-primary,
+  .op-btn-ghost,
+  .op-input {
+    border-radius: 0.75rem;
+    border: 1px solid var(--op-border-default);
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+  }
+  .op-btn-primary {
+    background: var(--op-primary);
+    border-color: var(--op-primary);
+    color: var(--op-text-inverse);
+    font-weight: 600;
+  }
+  .op-btn-primary:hover { background: var(--op-primary-hover); border-color: var(--op-primary-hover); }
+  .op-btn-ghost { background: var(--op-surface); color: var(--op-text-secondary); }
+  .op-btn-ghost:hover { background: var(--op-hover); color: var(--op-text-primary); }
+  .op-btn-primary:focus-visible,
+  .op-btn-ghost:focus-visible,
+  .op-input:focus-visible { outline: 2px solid var(--op-primary-highlight); outline-offset: 2px; }
+  .op-card { border: 1px solid var(--op-border-default); border-radius: 1rem; background: var(--op-surface); box-shadow: 0 10px 30px rgba(7, 25, 53, 0.1); }
+  .op-input { background: var(--op-surface); color: var(--op-text-primary); }
+  .op-input::placeholder { color: var(--op-text-muted); }
+  .op-seg-idle { background: var(--op-surface); border-color: var(--op-border-default); color: var(--op-text-secondary); }
+  .op-seg-idle:hover { background: var(--op-hover); color: var(--op-text-primary); }
+  .op-seg-active { background: var(--op-primary); border-color: var(--op-primary); color: var(--op-text-inverse); }
+  .op-tab-active { color: var(--op-primary); border-bottom: 2px solid var(--op-primary); }
+  .op-tab-idle { color: var(--op-text-muted); border-bottom: 2px solid transparent; }
+  .op-tab-idle:hover { color: var(--op-text-primary); }
+
   /* Operational situation pills — combine bg + border-color + text tone.
      Pair with a `border` utility when a visible border is desired. */
   .op-sit-danger {
@@ -282,4 +312,21 @@
 @keyframes ocr-fade-in {
   from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Notification badge pulse ──────────────────────────────────── */
+
+/* Gentle scale pulse to draw attention to unread count. Only active
+   when the dropdown is closed and there are unread notifications. */
+@keyframes notif-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+.notif-badge-pulse {
+  animation: notif-badge-pulse 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .notif-badge-pulse {
+    animation: none;
+  }
 }

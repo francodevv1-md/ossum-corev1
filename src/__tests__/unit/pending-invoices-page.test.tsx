@@ -32,6 +32,11 @@ vi.mock("@/hooks/usePendingInvoiceSources", () => ({ usePendingInvoiceSources: (
     surgeryId: "surgery-real",
     presupuestoId: "budget-real",
     consumoId: "consumo-real",
+    surgeryNumber: "CX-2041",
+    patientName: "Ana Pérez",
+    institutionName: "Hospital Central",
+    presupuestoNumber: "P-0017",
+    consumoNumber: "C-0008",
     currency: "ARS",
   }],
 }) }))
@@ -47,13 +52,23 @@ describe("PendientesFacturarPage", () => {
 
   it("creates from backend source ids and refreshes pending sources", async () => {
     render(<PendientesFacturarPage />)
+    fireEvent.click(screen.getByRole("button", { name: "Preparar factura para Ana Pérez" }))
     fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }))
-    fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }))
 
     await waitFor(() => expect(mocks.createFromSource).toHaveBeenCalledWith({ presupuestoId: "budget-real", consumoId: "consumo-real" }))
     expect(mocks.refreshSources).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole("button", { name: "Abrir expediente surgery-real" }))
+    fireEvent.click(screen.getByRole("button", { name: "Abrir expediente CX-2041" }))
     expect(mocks.openExpediente).toHaveBeenCalledWith("surgery-real")
+  })
+
+  it("shows operational labels instead of backend ids", () => {
+    render(<PendientesFacturarPage />)
+    expect(screen.getByText("CX-2041")).toBeInTheDocument()
+    expect(screen.getByText("Ana Pérez")).toBeInTheDocument()
+    expect(screen.getByText("Hospital Central")).toBeInTheDocument()
+    expect(screen.getByText("P-0017 · C-0008")).toBeInTheDocument()
+    expect(screen.queryByText("surgery-real")).not.toBeInTheDocument()
+    expect(screen.queryByText("budget-real")).not.toBeInTheDocument()
   })
 
   it("contains no local financial authority", () => {

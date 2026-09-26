@@ -7,6 +7,7 @@ export type CreateSurgeryInput = {
   doctorId?: string | null;
   institutionId?: string | null;
   payerContactId?: string | null;
+  coordinatorContactId?: string | null;
   classification?: string | null;
   description?: string | null;
   priority?: string | null;
@@ -265,7 +266,7 @@ export function parseIsoTimestamp(value: unknown, fieldName: string): Date {
   if (!match) {
     throw badRequest(`${fieldName} must be an ISO timestamp with an explicit offset`, "invalid_date_field");
   }
-  const parsed = new Date(value);
+  const parsed = new Date(value as string);
   const calendar = new Date(`${match[1]}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime()) || Number.isNaN(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== match[1] ||
     Number(match[2]) > 23 || Number(match[3]) > 59 || Number(match[4]) > 59 || Number(match[6] ?? 0) > 23 || Number(match[7] ?? 0) > 59) {
@@ -286,6 +287,7 @@ export function validateCreateSurgeryInput(
   validateOptionalNullableString(data.doctorId, "doctorId");
   validateOptionalNullableString(data.institutionId, "institutionId");
   validateOptionalNullableString(data.payerContactId, "payerContactId");
+  validateOptionalNullableString(data.coordinatorContactId, "coordinatorContactId");
   validateOptionalNullableString(data.classification, "classification");
   validateOptionalNullableString(data.description, "description");
   validateOptionalNullableString(data.source, "source");

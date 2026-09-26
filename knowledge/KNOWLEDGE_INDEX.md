@@ -39,6 +39,7 @@ Cada documento debe tener una función clara:
 - `PROJECT_BRIEF.md`: definición corta del producto, problema y objetivo.
 - `CURRENT_STATE.md`: estado real del prototipo/repo, límites y riesgos actuales.
 - `CANONICAL_DECISIONS.md`: lista corta de decisiones vigentes.
+- `GEORREFERENCIACION_ARGENTINA_MASTER.md`: norma maestra de identidad territorial, coordenadas, trazabilidad y auditoría geográfica.
 - `REPO_MAP.md`: mapa resumido del repo para ahorrar tokens.
 - `GLOSSARY.md`: glosario de términos de negocio y técnicos.
 
@@ -65,6 +66,7 @@ Cada documento debe tener una función clara:
 - `DATA_MODEL_RULES.md`: reglas de modelo de datos.
 - `MULTI_COMPANY_ACCESS.md`: multiempresa, permisos y aislamiento.
 - `AUDIT_EVENT_POLICY.md`: política de auditoría.
+- `ADR-FISCAL-POLICY-TUSFACTURAS-DEV.md`: política fiscal DEV y límite de integración con TusFacturasAPP.
 
 ---
 
@@ -119,5 +121,7 @@ Antes de tocar código, leer:
 4. `knowledge/core/CANONICAL_DECISIONS.md`
 5. `knowledge/core/CURRENT_STATE.md`
 6. Spec puntual de la tarea
+
+Si la tarea usa ubicación, dirección, coordenadas, mapas, rutas o geometrías, leer además `knowledge/core/GEORREFERENCIACION_ARGENTINA_MASTER.md` antes de diseñar o implementar.
 
 No cargar todo el Contexto Maestro salvo pedido explícito.

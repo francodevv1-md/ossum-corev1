@@ -2,9 +2,10 @@
 
 import React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useSidebar } from "./app-shell"
 import { UserMenu } from "./UserMenu"
+import { NotificationMenu } from "./ShellUtilityMenus"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -33,7 +34,6 @@ import {
   FileMinus,
   FilePlus,
   FileText,
-  FlaskConical,
   FolderOpen,
   Kanban,
   LayoutDashboard,
@@ -113,7 +113,6 @@ const NAV_GROUPS: NavGroup[] = [
     rootIcon: Package,
     items: [
       { label: "Cajas", href: "/cajas", icon: Box },
-      { label: "Cajas · Presentación", href: "/cajas/presentacion", icon: FlaskConical },
       { label: "Remitos", href: "/remitos", icon: Truck },
       { label: "Consumo", href: "/consumo", icon: Activity },
       { label: "Logística", href: "/logistica", icon: MapPin },
@@ -134,6 +133,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Forecast", href: "/compras/forecast", icon: BarChart3 },
       { label: "Órd. de Pago", href: "/compras/ordenes-pago", icon: Banknote },
       { label: "Mov. Compra", href: "/compras/movimientos", icon: ArrowLeftRight },
+      { label: "Remitos Proveedor", href: "/compras/remitos-proveedor", icon: Truck },
       { label: "Facturas Compra", href: "/compras/facturas-compra", icon: FileCheck },
     ],
   },
@@ -174,6 +174,7 @@ function matchesQuery(label: string, query: string) {
 
 export function Sidebar({ embedded = false }: { embedded?: boolean }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { currentAccess } = useAuth()
   const { sidebarState, setSidebarState, collapsedGroups, toggleGroup } = useSidebar()
   const [mobileOpen, setMobileOpen] = React.useState(false)
@@ -194,16 +195,22 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
   )
 
   React.useEffect(() => {
-    const focusSearch = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") return
-      event.preventDefault()
-      if (window.innerWidth < 1024) setMobileOpen(true)
-      if (!isExpanded) setSidebarState("expanded")
-      window.requestAnimationFrame(() => searchRef.current?.focus())
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return
+      const key = event.key.toLowerCase()
+      if (key === "k") {
+        event.preventDefault()
+        if (window.innerWidth < 1024) setMobileOpen(true)
+        if (!isExpanded) setSidebarState("expanded")
+        window.requestAnimationFrame(() => searchRef.current?.focus())
+      } else if (key === "j") {
+        event.preventDefault()
+        router.push("/notificaciones")
+      }
     }
-    window.addEventListener("keydown", focusSearch)
-    return () => window.removeEventListener("keydown", focusSearch)
-  }, [isExpanded, setSidebarState])
+    window.addEventListener("keydown", handleShortcut)
+    return () => window.removeEventListener("keydown", handleShortcut)
+  }, [isExpanded, setSidebarState, router])
 
   const desktopWidth = isHidden ? "0px" : isExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COMPACT
   const currentWidth = mobileOpen ? SIDEBAR_WIDTH_EXPANDED : desktopWidth
@@ -293,7 +300,13 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
         </div>
 
         {showExpandedContent && (
-          <div className="shrink-0 px-2.5 pb-2.5 pt-2">
+          <div className="shrink-0 space-y-2 px-2.5 pb-2.5 pt-2">
+            <NotificationMenu
+              label="Notificaciones"
+              dropdownSide="right"
+              dropdownAlign="start"
+              buttonClassName="border border-[#1D2FC0]/25 bg-[#EEF0FF] text-[#1D2FC0] font-medium hover:bg-[#1D2FC0] hover:text-white hover:border-[#1D2FC0] focus-visible:border-[#1D2FC0] focus-visible:ring-1 focus-visible:ring-[#1D2FC0]/25 data-[state=open]:bg-[#1D2FC0] data-[state=open]:text-white data-[state=open]:border-[#1D2FC0] dark:border-[#1D2FC0]/30 dark:bg-[#1D2FC0]/10 dark:text-[#1D2FC0] dark:hover:bg-[#1D2FC0] dark:hover:text-white dark:data-[state=open]:bg-[#1D2FC0] dark:data-[state=open]:text-white"
+            />
             <div className="flex h-[34px] items-center gap-2 rounded-md border border-[#DEE1E6] bg-white px-2.5 focus-within:border-[#1D2FC0] focus-within:ring-1 focus-within:ring-[#1D2FC0]/15 dark:border-border dark:bg-background">
               <Search className="size-3.5 shrink-0 text-[#858A94]" />
               <input
@@ -312,6 +325,17 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
                 <kbd className="whitespace-nowrap text-[9px] text-[#858A94]">Ctrl K</kbd>
               )}
             </div>
+          </div>
+        )}
+
+        {!showExpandedContent && (
+          <div className="shrink-0 border-b border-[#E2E4E8] py-1 dark:border-border">
+            <NotificationMenu
+              title="Notificaciones (Ctrl+J)"
+              dropdownSide="right"
+              dropdownAlign="start"
+              buttonClassName="mx-1.5 rounded-md bg-[#EEF0FF] text-[#1D2FC0] hover:bg-[#1D2FC0] hover:text-white data-[state=open]:bg-[#1D2FC0] data-[state=open]:text-white dark:bg-[#1D2FC0]/10 dark:text-[#1D2FC0] dark:hover:bg-[#1D2FC0] dark:hover:text-white dark:data-[state=open]:bg-[#1D2FC0] dark:data-[state=open]:text-white"
+            />
           </div>
         )}
 

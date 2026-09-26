@@ -9,7 +9,6 @@ import { SearchInput, SurgeryDrawer } from "@/components/shared"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -34,11 +33,13 @@ export default function PendientesFacturarPage() {
     const query = search.trim().toLocaleLowerCase("es")
     if (!query) return sourcesApi.candidates
     return sourcesApi.candidates.filter((candidate) => [
-      candidate.surgeryId,
-      candidate.presupuestoId,
-      candidate.consumoId ?? "",
-      candidate.kind,
-    ].some((value) => value.toLocaleLowerCase("es").includes(query)))
+      candidate.surgeryNumber,
+      candidate.patientName,
+      candidate.institutionName,
+      candidate.presupuestoNumber,
+      candidate.consumoNumber,
+      candidate.title,
+    ].some((value) => value?.toLocaleLowerCase("es").includes(query)))
   }, [search, sourcesApi.candidates])
 
   const createDraft = async () => {
@@ -56,22 +57,22 @@ export default function PendientesFacturarPage() {
   const error = sourcesApi.error ?? invoicesApi.error
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold">Pendientes de facturar</h1>
-        <p className="text-sm text-muted-foreground">Presupuestos aprobados y consumos validados listos para crear borradores.</p>
-      </div>
+    <div className="flex h-full min-h-0 flex-col bg-[var(--ossum-surface)]">
+      <header className="shrink-0 border-b border-[var(--ossum-line)] bg-white px-4 py-2">
+        <h1 className="text-base font-semibold text-[var(--ossum-navy)]">Pendientes de facturar</h1>
+        <p className="text-[11px] text-gray-400">{rows.length} caso{rows.length !== 1 ? "s" : ""} listo{rows.length !== 1 ? "s" : ""} para preparar factura</p>
+      </header>
 
-      <Alert>
+      <Alert className="m-3 mb-0 shrink-0 rounded-md border-[var(--ossum-line)] bg-white py-2">
         <Info className="size-4" />
-        <AlertTitle>Borradores operativos y no fiscales</AlertTitle>
+        <AlertTitle>Preparación sin emisión fiscal</AlertTitle>
         <AlertDescription>
-          Esta pantalla no emite comprobantes ni asigna números fiscales. La documentación puede mostrar alertas, pero nunca bloquea la facturación.
+          Crear un borrador organiza los datos para revisar la factura. No emite comprobantes ni asigna numeración fiscal.
         </AlertDescription>
       </Alert>
 
       {error ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="m-3 mb-0 shrink-0">
           <AlertCircle className="size-4" />
           <AlertTitle>No se pudieron cargar los pendientes</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center gap-2">
@@ -81,53 +82,57 @@ export default function PendientesFacturarPage() {
         </Alert>
       ) : null}
 
-      <Card>
-        <CardContent className="pt-4">
-          <SearchInput value={search} onChange={setSearch} placeholder="Cirugía, presupuesto o consumo" className="w-full sm:max-w-md" />
-        </CardContent>
-      </Card>
+      <div className="shrink-0 border-b border-[var(--ossum-line)] bg-white px-4 py-1.5">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar paciente, institución o número…" className="h-8 w-full text-xs sm:w-80" />
+      </div>
 
-      <Card>
-        <CardContent className="p-0">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {sourcesApi.loading || invoicesApi.loading ? (
-            <p className="p-10 text-center text-sm text-muted-foreground" role="status">Cargando fuentes backend…</p>
+            <p className="flex flex-1 items-center justify-center p-10 text-sm text-muted-foreground" role="status">Cargando casos pendientes…</p>
           ) : rows.length === 0 ? (
-            <p className="p-10 text-center text-sm text-muted-foreground">No hay fuentes backend pendientes de facturar.</p>
+            <div className="flex flex-1 flex-col items-center justify-center gap-1 p-10 text-center">
+              <p className="text-sm font-medium">No hay casos pendientes de facturar</p>
+              <p className="text-xs text-muted-foreground">Los presupuestos aprobados y consumos validados aparecerán acá.</p>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="m-3 flex-1 overflow-auto border border-[var(--ossum-line)] bg-white">
+              <table className="w-full min-w-[900px] border-separate border-spacing-0 text-xs">
                 <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Base</th>
-                    <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Cirugía backend</th>
-                    <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Fuente backend</th>
-                    <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Importe</th>
-                    <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Acciones</th>
+                  <tr>
+                    <th className="sticky top-0 z-10 bg-[var(--ossum-navy)] px-3 py-2 text-left font-medium text-white">Caso</th>
+                    <th className="sticky top-0 z-10 bg-[var(--ossum-navy)] px-3 py-2 text-left font-medium text-white">Paciente</th>
+                    <th className="sticky top-0 z-10 bg-[var(--ossum-navy)] px-3 py-2 text-left font-medium text-white">Institución</th>
+                    <th className="sticky top-0 z-10 bg-[var(--ossum-navy)] px-3 py-2 text-left font-medium text-white">Base de facturación</th>
+                    <th className="sticky top-0 z-10 bg-[var(--ossum-navy)] px-3 py-2 text-right font-medium text-white">Importe</th>
+                    <th className="sticky top-0 z-10 bg-[var(--ossum-navy)] px-3 py-2 text-right font-medium text-white">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((candidate) => (
-                    <tr key={candidate.key} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="px-3 py-2.5">
+                    <tr key={candidate.key} className="group transition-colors hover:bg-[var(--ossum-surface-2)]">
+                      <td className="border-b border-[var(--ossum-line)] px-3 py-2">
+                        <p className="font-mono text-[11px] font-semibold text-gray-800">{candidate.surgeryNumber ?? "Sin número visible"}</p>
+                      </td>
+                      <td className="border-b border-[var(--ossum-line)] px-3 py-2 font-medium text-gray-800">{candidate.patientName ?? "Sin informar"}</td>
+                      <td className="border-b border-[var(--ossum-line)] px-3 py-2 text-gray-600">{candidate.institutionName ?? "Sin informar"}</td>
+                      <td className="border-b border-[var(--ossum-line)] px-3 py-2">
                         <Badge variant={candidate.kind === "consumo" ? "info" : "secondary"}>
-                          {candidate.kind === "consumo" ? "Consumo + presupuesto" : "Presupuesto"}
+                          {candidate.kind === "consumo" ? "Consumo validado" : "Presupuesto aprobado"}
                         </Badge>
+                        <p className="mt-1 font-mono text-[11px] text-gray-500">
+                          {[candidate.presupuestoNumber, candidate.consumoNumber].filter(Boolean).join(" · ") || "Sin número visible"}
+                        </p>
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-xs">{candidate.surgeryId}</td>
-                      <td className="px-3 py-2.5 text-xs">
-                        <div><span className="text-muted-foreground">Presupuesto:</span> <span className="font-mono">{candidate.presupuestoId}</span></div>
-                        {candidate.consumoId ? <div><span className="text-muted-foreground">Consumo:</span> <span className="font-mono">{candidate.consumoId}</span></div> : null}
+                      <td className="border-b border-[var(--ossum-line)] px-3 py-2 text-right font-medium tabular-nums text-gray-800">
+                        {candidate.amount ? `${formatDecimalCurrency(candidate.amount, 4)} ${candidate.currency}` : "Al crear el borrador"}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-medium">
-                        {candidate.amount ? `${formatDecimalCurrency(candidate.amount, 4)} ${candidate.currency}` : "Se calculará en backend"}
-                      </td>
-                      <td className="px-3 py-2.5">
+                      <td className="border-b border-[var(--ossum-line)] px-3 py-2">
                         <div className="flex justify-end gap-1">
-                          <Button size="icon" variant="ghost" aria-label={`Abrir expediente ${candidate.surgeryId}`} onClick={() => openExpediente(candidate.surgeryId)}>
+                          <Button size="icon" variant="ghost" className="size-8" aria-label={`Abrir expediente ${candidate.surgeryNumber ?? "sin número visible"}`} onClick={() => openExpediente(candidate.surgeryId)}>
                             <FolderOpen className="size-4" />
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => setSelection({ companyId: candidate.companyId, candidate })}>
-                            <FilePlus2 className="size-3" /> Crear borrador
+                          <Button size="sm" aria-label={`Preparar factura para ${candidate.patientName ?? candidate.surgeryNumber ?? "caso sin identificar"}`} className="h-8 bg-[var(--ossum-action)] text-xs text-white hover:bg-[#1830a8]" onClick={() => setSelection({ companyId: candidate.companyId, candidate })}>
+                            <FilePlus2 className="size-3.5" /> Preparar factura
                           </Button>
                         </div>
                       </td>
@@ -137,28 +142,28 @@ export default function PendientesFacturarPage() {
               </table>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       <Dialog open={selected != null} onOpenChange={(open) => { if (!open) setSelection(null) }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Crear borrador operativo</DialogTitle>
+        <DialogContent className="p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-[var(--ossum-line)] px-6 py-4">
+            <DialogTitle className="text-base text-[var(--ossum-navy)]">Preparar factura</DialogTitle>
             <DialogDescription>
-              El backend cargará y valorará las líneas. No se emitirá una factura fiscal ni se asignará número.
+              Se creará un borrador para revisar. Esta acción no emite una factura fiscal.
             </DialogDescription>
           </DialogHeader>
           {selected ? (
-            <div className="space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
-              <p><span className="text-muted-foreground">Cirugía:</span> <span className="font-mono">{selected.surgeryId}</span></p>
-              <p><span className="text-muted-foreground">Presupuesto:</span> <span className="font-mono">{selected.presupuestoId}</span></p>
-              {selected.consumoId ? <p><span className="text-muted-foreground">Consumo:</span> <span className="font-mono">{selected.consumoId}</span></p> : null}
+            <div className="mx-6 my-5 grid gap-3 rounded-md border border-[var(--ossum-line)] bg-[var(--ossum-surface-2)] p-4 text-sm sm:grid-cols-2">
+              <div><p className="text-[11px] text-gray-500">Caso</p><p className="font-medium">{selected.surgeryNumber ?? "Sin número visible"}</p></div>
+              <div><p className="text-[11px] text-gray-500">Paciente</p><p className="font-medium">{selected.patientName ?? "Sin informar"}</p></div>
+              <div><p className="text-[11px] text-gray-500">Institución</p><p className="font-medium">{selected.institutionName ?? "Sin informar"}</p></div>
+              <div><p className="text-[11px] text-gray-500">Documentos</p><p className="font-mono text-xs">{[selected.presupuestoNumber, selected.consumoNumber].filter(Boolean).join(" · ") || "Sin número visible"}</p></div>
             </div>
           ) : null}
-          <DialogFooter>
+          <DialogFooter className="border-t border-[var(--ossum-line)] px-6 py-4">
             <Button variant="outline" onClick={() => setSelection(null)}>Cancelar</Button>
             <Button disabled={invoicesApi.mutatingId === "__create_source__"} onClick={() => void createDraft()}>
-              <Receipt className="size-4" /> Guardar borrador
+              <Receipt className="size-4" /> Crear borrador
             </Button>
           </DialogFooter>
         </DialogContent>

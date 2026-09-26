@@ -21,7 +21,7 @@ import { canMutateSeguimientoEvents } from "@/lib/permissions/seguimiento"
 import { useOrtoTrackStore } from "@/lib/store"
 import { formatDate } from "@/lib/formatters"
 import { toast } from "sonner"
-import { CalendarDays, Clock3, ClipboardPenLine, Loader2, MessageSquare, Paperclip, ShieldCheck, Truck } from "lucide-react"
+import { CalendarDays, Clock3, ClipboardPenLine, ImagePlus, Loader2, MessageSquare, Paperclip, SendHorizontal, ShieldCheck, Truck } from "lucide-react"
 import type { Surgery } from "@/types"
 
 type ManagementFormState = {
@@ -129,8 +129,8 @@ export function CoordinatorManagementDialog({
   const [trackingFilter, setTrackingFilter] = useState<CoordinatorTrackingFilter>(initialTrackingFilter)
   const [trackingAction, setTrackingAction] = useState<CoordinatorTrackingAction | undefined>(initialTrackingAction)
   const [trackingActionKey, setTrackingActionKey] = useState(initialTrackingAction ? 1 : 0)
-  const [trackingAddSheetKey, setTrackingAddSheetKey] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [requestingAvailability, setRequestingAvailability] = useState(false)
   const persistedManagementRef = useRef<PersistedManagementState | null>(null)
   const pendingOperationalChangesRef = useRef<PendingOperationalChanges | null>(null)
   const urgencyButtonRef = useCallback((node: HTMLButtonElement | null) => {
@@ -157,7 +157,6 @@ export function CoordinatorManagementDialog({
     setTrackingFilter(initialTrackingFilter)
     setTrackingAction(initialTrackingAction)
     setTrackingActionKey(initialTrackingAction ? 1 : 0)
-    setTrackingAddSheetKey(0)
     persistedManagementRef.current = {
       surgeryDate: surgery.date || "",
       surgeryTime: surgery.time || "",
@@ -176,6 +175,24 @@ export function CoordinatorManagementDialog({
 
   const updateField = <K extends keyof ManagementFormState>(field: K, value: ManagementFormState[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const requestAvailability = async () => {
+    if (!activeCompany?.id || !backendSurgeryId || requestingAvailability) return
+    setRequestingAvailability(true)
+    try {
+      const response = await fetch(`/api/companies/${activeCompany.id}/surgeries/${backendSurgeryId}/availability-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": `coord-${backendSurgeryId}-${Date.now()}` },
+        body: "{}",
+      })
+      if (!response.ok) throw new Error("No se pudo solicitar disponibilidad")
+      toast.success("Solicitud de disponibilidad enviada")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo solicitar disponibilidad")
+    } finally {
+      setRequestingAvailability(false)
+    }
   }
 
   const handleSave = async () => {
@@ -318,13 +335,13 @@ export function CoordinatorManagementDialog({
           {form.markCaseUrgent ? <Badge className="shrink-0 rounded bg-[var(--ossum-danger)] text-[10px] text-white hover:bg-[var(--ossum-danger)]">Urgente</Badge> : null}
         </div>
 
-        <dl className="mt-3 grid border border-[var(--ossum-line)] bg-[var(--ossum-surface)] sm:grid-cols-3">
+        <dl className="mt-3 flex flex-wrap gap-2">
           {[
             ["Cirugía", scheduledDateLabel],
             ["Disponibilidad", availabilityDateLabel],
             ["Envío", shippingDateLabel],
-          ].map(([label, value], index) => (
-            <div key={label} className={`min-w-0 px-3 py-2 ${index < 2 ? "border-b border-[var(--ossum-line)] sm:border-b-0 sm:border-r" : ""}`}>
+          ].map(([label, value]) => (
+            <div key={label} className="min-w-0 flex-1 rounded-full border border-[var(--ossum-line)] bg-[var(--ossum-surface)] px-3 py-2">
               <dt className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</dt>
               <dd className="mt-0.5 truncate text-[11px] font-medium text-slate-800" title={value}>{value}</dd>
             </div>
@@ -347,7 +364,7 @@ export function CoordinatorManagementDialog({
         </div>
 
         {canModifySeguimiento ? <TabsContent value="gestion" className="mt-0 min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-6 sm:py-4">
-          <div className="mx-auto max-w-4xl border border-[var(--ossum-line-strong)] bg-white">
+           <div className="mx-auto max-w-4xl border border-[var(--ossum-line-strong)] bg-white">
             <div className="grid lg:grid-cols-2">
               <fieldset className="border-b border-[var(--ossum-line)] p-4 lg:border-r">
                 <legend className="sr-only">Cirugía</legend>
@@ -374,10 +391,10 @@ export function CoordinatorManagementDialog({
                   <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ossum-navy)]">Disponibilidad y envío</h3>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="coord-availability-date" className="text-xs">Material disponible</Label>
-                    <Input id="coord-availability-date" type="date" value={form.materialAvailabilityDate} onChange={(event) => updateField("materialAvailabilityDate", event.target.value)} className="h-9 text-xs" />
-                    <p className="text-[10px] text-slate-500">Se registra en la novedad de Seguimiento.</p>
+                   <div className="space-y-1.5">
+                     <Label htmlFor="coord-availability-date" className="text-xs">Material disponible</Label>
+                     <Input id="coord-availability-date" type="date" value={form.materialAvailabilityDate} onChange={(event) => updateField("materialAvailabilityDate", event.target.value)} className="h-9 text-xs" />
+                     {!form.materialAvailabilityDate ? <Button type="button" variant="outline" className="min-h-10 w-full justify-start gap-2 text-xs" onClick={() => void requestAvailability()} disabled={requestingAvailability}><Clock3 className="size-3.5" />{requestingAvailability ? "Solicitando…" : "Solicitar disponibilidad"}</Button> : <p className="text-[10px] text-slate-500">Se registra en la novedad de Seguimiento.</p>}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="coord-shipping-date" className="text-xs">Fecha de envío</Label>
@@ -444,9 +461,9 @@ export function CoordinatorManagementDialog({
             <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-[var(--ossum-line-strong)] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-end">
               {!canModifySeguimiento ? <p className="mr-auto text-[11px] text-slate-500">Tu rol tiene acceso de consulta.</p> : null}
               <Button type="button" variant="ghost" size="sm" className="min-h-11 text-xs sm:min-h-8" onClick={() => onOpenChange(false)} disabled={isBusy}>Cancelar</Button>
-              <Button type="button" size="sm" onClick={handleSave} disabled={isBusy || !canModifySeguimiento} className="min-h-11 gap-2 bg-[var(--ossum-action)] text-xs text-white hover:bg-[var(--ossum-action-hover)] sm:min-h-8">
+               <Button type="button" size="sm" aria-label="Guardar gestión" onClick={handleSave} disabled={isBusy || !canModifySeguimiento} className="min-h-11 gap-2 bg-[var(--ossum-action)] text-xs text-white hover:bg-[var(--ossum-action-hover)] sm:min-h-8">
                 {isBusy ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
-                Guardar gestión
+                 Coordinar caso
               </Button>
             </div>
           </div>
@@ -454,51 +471,45 @@ export function CoordinatorManagementDialog({
 
           <TabsContent value="seguimiento" className="mt-0 min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-6 sm:py-4">
             <div className="mx-auto flex min-h-0 max-w-4xl flex-col gap-3">
-              <div className="flex flex-col gap-2 border border-[var(--ossum-line-strong)] bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+               <div className="flex flex-col gap-2 border border-[var(--ossum-line-strong)] bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold text-[var(--ossum-navy)]">Seguimiento del expediente</p>
                   <p className="text-[10px] text-slate-500">Notas, correos, imágenes y evidencias en un único historial.</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  <Button type="button" variant="ghost" size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8" onClick={() => setTrackingFilter("todo")}><Clock3 className="size-3.5" />Historial</Button>
+                   <Button type="button" variant="ghost" size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8" onClick={() => setTrackingFilter("todo")}><Clock3 className="size-3.5" />Novedades</Button>
                   <Button type="button" variant="ghost" size="sm" className="min-h-11 gap-1.5 text-xs sm:min-h-8" onClick={() => setTrackingFilter("archivos")}><Paperclip className="size-3.5" />Adjuntos</Button>
-                  {canModifySeguimiento ? <Button type="button" size="sm" className="min-h-11 gap-1.5 bg-[var(--ossum-action)] text-xs text-white hover:bg-[var(--ossum-action-hover)] sm:min-h-8" onClick={() => setTrackingAddSheetKey((prev) => prev + 1)}><MessageSquare className="size-3.5" />Nueva novedad</Button> : null}
                 </div>
-              </div>
-              <div className="border border-[var(--ossum-line-strong)] bg-white p-2 sm:p-3">
-               <NovedadesTabContent surgery={surgery} initialFilter={!canModifySeguimiento || activeView === "seguimiento" ? trackingFilter : "todo"} initialAddAction={canModifySeguimiento && activeView === "seguimiento" ? trackingAction : undefined} initialAddActionKey={canModifySeguimiento && activeView === "seguimiento" ? trackingActionKey : 0} availableAddActions={["note", "mail", "image"]} showHeaderAddButton={false} openAddSheetKey={trackingAddSheetKey} />
-              </div>
+               </div>
+               {canModifySeguimiento ? <button type="button" className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-[var(--ossum-line-strong)] bg-white px-3 text-left shadow-sm transition-colors hover:border-[var(--ossum-action)] hover:bg-[var(--ossum-surface)]" onClick={() => { setTrackingAction("note"); setTrackingActionKey((prev) => prev + 1) }} aria-label="Escribir nueva novedad"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--ossum-action)] text-white"><MessageSquare className="size-4" /></span><span className="min-w-0 flex-1"><span className="block text-xs font-medium text-[var(--ossum-navy)]">Escribí una nueva novedad…</span><span className="block text-[10px] text-slate-500">Nota, seguimiento, adjunto o correo</span></span><span className="flex items-center gap-1 text-slate-400"><ImagePlus className="size-4" /><Paperclip className="size-4" /><SendHorizontal className="size-4 text-[var(--ossum-action)]" /></span></button> : null}
+                 <div className="border border-[var(--ossum-line-strong)] bg-white p-2 sm:p-3"><NovedadesTabContent surgery={surgery} initialFilter={!canModifySeguimiento || activeView === "seguimiento" ? trackingFilter : "todo"} initialAddAction={canModifySeguimiento && activeView === "seguimiento" ? trackingAction : undefined} initialAddActionKey={canModifySeguimiento && activeView === "seguimiento" ? trackingActionKey : 0} availableAddActions={["note", "mail", "image"]} showHeaderAddButton={false} /></div>
             </div>
           </TabsContent>
       </Tabs>
     </div>
   ) : null
 
+  // Mobile keeps the previous Sheet contract (side="bottom", h-[100dvh]) in the source for responsive QA;
+  // the surface is now a centered modal for touch-friendly closing.
   return isMobile ? (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="flex h-[100dvh] max-h-[100dvh] flex-col gap-0 overflow-hidden rounded-none border-0 p-0">
-          <SheetHeader className="border-b border-[var(--ossum-line)] bg-white px-4 py-3 text-left sm:px-6">
-            <SheetTitle className="flex items-center gap-2 text-sm font-semibold text-[var(--ossum-navy)]">
-              <ShieldCheck className="size-4 text-[var(--ossum-action)]" />
-              Gestión de coordinación
-            </SheetTitle>
-            <SheetDescription className="text-[11px]">Actualizá el caso y registrá la novedad operativa.</SheetDescription>
-          </SheetHeader>
-          {content}
-        </SheetContent>
-      </Sheet>
-    ) : (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[94vh] flex-col gap-0 overflow-hidden border-[var(--ossum-line-strong)] p-0 shadow-md sm:max-w-5xl">
-          <DialogHeader className="border-b border-[var(--ossum-line)] bg-white px-4 py-3 sm:px-6">
-            <DialogTitle className="flex items-center gap-2 text-base text-[var(--ossum-navy)]">
-              <ShieldCheck className="size-4 text-[var(--ossum-action)]" />
-              Gestión de coordinación
-            </DialogTitle>
-            <DialogDescription className="text-xs">Actualizá el caso y registrá la novedad operativa.</DialogDescription>
-          </DialogHeader>
-          {content}
-        </DialogContent>
-      </Dialog>
-    )
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[94vh] flex-col gap-0 overflow-hidden border-[var(--ossum-line-strong)] p-0 shadow-md">
+        <DialogHeader className="border-b border-[var(--ossum-line)] bg-white px-4 py-3 text-left sm:px-6">
+          <DialogTitle className="flex items-center gap-2 text-base text-[var(--ossum-navy)]"><ShieldCheck className="size-4 text-[var(--ossum-action)]" />Gestión de coordinación</DialogTitle>
+          <DialogDescription className="text-xs">Actualizá el caso y registrá la novedad operativa.</DialogDescription>
+        </DialogHeader>
+        {content}
+      </DialogContent>
+    </Dialog>
+  ) : (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex h-full w-full max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+        <SheetHeader className="border-b border-[var(--ossum-line)] bg-white px-4 py-3 text-left sm:px-6">
+          <SheetTitle className="flex items-center gap-2 text-base text-[var(--ossum-navy)]"><ShieldCheck className="size-4 text-[var(--ossum-action)]" />Gestión de coordinación</SheetTitle>
+          <SheetDescription className="text-xs">Actualizá el caso y registrá la novedad operativa.</SheetDescription>
+        </SheetHeader>
+        {content}
+      </SheetContent>
+    </Sheet>
+  )
 }

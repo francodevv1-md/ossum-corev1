@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-export const ARTICLE_TRACEABILITY_POLICIES = ["NONE", "LOT", "LOT_EXPIRY", "SERIAL", "SERIAL_EXPIRY", "LOT_SERIAL_EXPIRY"] as const;
-export type ArticleTraceabilityPolicy = (typeof ARTICLE_TRACEABILITY_POLICIES)[number];
+export const ARTICLE_TRACEABILITY_REQUIREMENTS = ["NONE", "LOT", "SERIAL", "LOT_OR_SERIAL", "LOT_AND_SERIAL"] as const;
+export type ArticleTraceabilityRequirement = (typeof ARTICLE_TRACEABILITY_REQUIREMENTS)[number];
 
 export const articleIdentifierSchema = z.object({
   type: z.enum(["MANUFACTURER_REF", "GTIN_EAN", "GS1_AI_22", "SUPPLIER_CODE", "ALTERNATIVE_CODE", "OSSUM_CODE"]),
@@ -18,10 +18,16 @@ export const articleCreateSchema = z.object({
   brand: z.string().trim().optional(),
   manufacturer: z.string().trim().optional(),
   family: z.string().trim().optional(),
+  categoryId: z.string().trim().min(1).nullable().optional(),
+  clinicalFamilyId: z.string().trim().min(1).nullable().optional(),
+  brandId: z.string().trim().min(1).nullable().optional(),
+  manufacturerId: z.string().trim().min(1).nullable().optional(),
+  productLineId: z.string().trim().min(1).nullable().optional(),
   modelVariant: z.string().trim().optional(),
   measure: z.string().trim().optional(),
   unit: z.string().trim().min(1).default("u"),
-  traceabilityPolicy: z.enum(ARTICLE_TRACEABILITY_POLICIES).default("NONE"),
+  traceabilityRequirement: z.enum(ARTICLE_TRACEABILITY_REQUIREMENTS).default("NONE"),
+  expirationRequired: z.boolean().default(false),
   identifiers: z.array(articleIdentifierSchema).default([]),
   supplierMappings: z.array(z.object({ supplierId: z.string().trim().min(1), supplierCode: z.string().trim().min(1) })).default([]),
 });

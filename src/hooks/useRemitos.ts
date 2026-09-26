@@ -55,8 +55,8 @@ export function useRemitos(filters?: ListRemitosParams) {
       const data = await fetchRemitos(companyId, filters)
       setRemitos(data)
       setSelectedRemito((current) => {
-        if (!current) return data[0] ?? null
-        return data.find((remito) => remito.id === current.id) ?? data[0] ?? null
+        if (!current) return null
+        return data.find((remito) => remito.id === current.id) ?? null
       })
       setReady(true)
     } catch (err) {

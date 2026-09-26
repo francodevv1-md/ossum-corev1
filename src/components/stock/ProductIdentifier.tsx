@@ -40,6 +40,8 @@ export function ProductIdentifier({ resolve, onContinue, onRegister, className =
   const [cameraOpen, setCameraOpen] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [manualValue, setManualValue] = useState("")
+  const [keepCaptures, setKeepCaptures] = useState(false)
+  const [captureCount, setCaptureCount] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const activeRef = useRef(false)
@@ -76,14 +78,19 @@ export function ProductIdentifier({ resolve, onContinue, onRegister, className =
     if (!value || capturesRef.current.some((item) => item.rawValue === value)) return
     const next = [...capturesRef.current, { ...capture, rawValue: value }]
     capturesRef.current = next
+    setCaptureCount(next.length)
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
     settleTimerRef.current = setTimeout(() => void acceptCaptures(capturesRef.current), 800)
   }, [acceptCaptures])
 
-  const startCamera = async () => {
+  const startCamera = async (reset = true) => {
     setCameraError(null)
-    capturesRef.current = []
-    setResult(null)
+    if (reset) {
+      capturesRef.current = []
+      setResult(null)
+      setCaptureCount(0)
+    }
+    setKeepCaptures(false)
     const NativeDetector = (window as Window & { BarcodeDetector?: DetectorConstructor }).BarcodeDetector
     if (!NativeDetector) {
       setCameraError("La cámara directa no está disponible. Usá un lector o ingresá el código.")
@@ -127,15 +134,26 @@ export function ProductIdentifier({ resolve, onContinue, onRegister, className =
   const reset = () => {
     stopCamera()
     capturesRef.current = []
+    setCaptureCount(0)
     setResult(null)
     setCameraError(null)
     setManualValue("")
+    setKeepCaptures(false)
   }
 
   const handleManual = () => {
     if (!manualValue.trim() || loading) return
-    capturesRef.current = [{ rawValue: manualValue.trim(), symbology: "manual" }]
-    void acceptCaptures(capturesRef.current)
+    const next = [...capturesRef.current.filter((capture) => capture.rawValue !== manualValue.trim()), { rawValue: manualValue.trim(), symbology: "manual" }]
+    capturesRef.current = next
+    setCaptureCount(next.length)
+    setManualValue("")
+    void acceptCaptures(next)
+  }
+
+  const addAnotherCapture = () => {
+    setResult(null)
+    setCameraError(null)
+    setKeepCaptures(true)
   }
 
   const chooseCandidate = (candidate: IdentificationCandidate) => {
@@ -148,9 +166,10 @@ export function ProductIdentifier({ resolve, onContinue, onRegister, className =
       <CardContent className="space-y-4 p-4 sm:p-6">
         <div><h1 className="text-xl font-semibold tracking-tight text-gray-950">Identificar producto</h1><p className="mt-1 text-sm text-gray-500">Escaneá el envase para reconocer el artículo.</p></div>
         <div className="relative flex min-h-[min(56svh,28rem)] items-center justify-center overflow-hidden rounded-xl bg-slate-950 text-center">
-          {cameraOpen ? <><video ref={videoRef} muted playsInline className="absolute inset-0 h-full w-full object-cover" /><div className="pointer-events-none absolute inset-x-8 top-1/2 h-40 -translate-y-1/2 rounded-xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" /><p className="absolute bottom-5 left-4 right-4 text-sm font-medium text-white">Buscando el producto…</p><Button variant="secondary" className="absolute bottom-3 right-3 h-10" onClick={stopCamera}><X className="mr-2 size-4" />Cerrar</Button></> : <div className="space-y-3 px-6 text-white"><Camera className="mx-auto size-8 text-slate-300" /><p className="text-sm text-slate-300">Apuntá al producto</p><Button className="h-11 bg-white text-slate-950 hover:bg-slate-100" onClick={() => void startCamera()} disabled={loading}><Camera className="mr-2 size-4" />Escanear</Button></div>}
+          {cameraOpen ? <><video ref={videoRef} muted playsInline className="absolute inset-0 h-full w-full object-cover" /><div className="pointer-events-none absolute inset-x-8 top-1/2 h-40 -translate-y-1/2 rounded-xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" /><p className="absolute bottom-5 left-4 right-4 text-sm font-medium text-white">Buscando el producto…</p><Button variant="secondary" className="absolute bottom-3 right-3 h-10" onClick={stopCamera}><X className="mr-2 size-4" />Cerrar</Button></> : <div className="space-y-3 px-6 text-white"><Camera className="mx-auto size-8 text-slate-300" /><p className="text-sm text-slate-300">Apuntá al producto</p><Button className="h-11 bg-white text-slate-950 hover:bg-slate-100" onClick={() => void startCamera(!keepCaptures)} disabled={loading}><Camera className="mr-2 size-4" />Escanear</Button></div>}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500"><span className="inline-flex items-center gap-2"><span className="size-2 rounded-full bg-emerald-500" />Lector conectado</span><div className="flex items-center gap-2"><Keyboard className="size-4" /><Input aria-label="Ingresar código" className="h-9 w-48" value={manualValue} onChange={(event) => setManualValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && handleManual()} placeholder="Ingresar código" /><Button variant="outline" className="h-9" onClick={handleManual} disabled={!manualValue.trim() || loading}><Search className="size-4" /></Button></div></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500"><span className="inline-flex items-center gap-2"><span className="size-2 rounded-full bg-emerald-500" />Lector conectado</span><div className="flex items-center gap-2"><Keyboard className="size-4" /><Input aria-label="Ingresar código" className="h-9 w-48" value={manualValue} onChange={(event) => setManualValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && handleManual()} placeholder="Ingresar código" /><Button aria-label="Resolver código ingresado" variant="outline" className="h-9" onClick={handleManual} disabled={!manualValue.trim() || loading}><Search className="size-4" /></Button></div></div>
+        {captureCount > 0 && <p className="text-xs text-gray-500">{captureCount} lectura{captureCount === 1 ? "" : "s"} usada{captureCount === 1 ? "" : "s"} para identificar el artículo.</p>}
         {cameraError && <p role="alert" className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">{cameraError}</p>}
       </CardContent>
     </Card>}
@@ -160,7 +179,7 @@ export function ProductIdentifier({ resolve, onContinue, onRegister, className =
     {result && !loading && <Card className="border-gray-200 shadow-sm"><CardContent className="space-y-5 p-5 sm:p-7">
       {result.status === "identified" && result.item && <><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-600" /><div><p className="font-semibold text-gray-950">Producto encontrado</p><h2 className="mt-1 text-lg font-semibold tracking-tight text-gray-950">{result.item.description}</h2>{result.item.manufacturer && <p className="text-sm text-gray-500">{result.item.manufacturer}</p>}</div></div><dl className="grid grid-cols-1 divide-y rounded-lg border bg-gray-50 text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0"><TraceField label="Lote" value={result.lot} /><TraceField label="Serie" value={result.serial} /><TraceField label="Vencimiento" value={result.expirationDate} /></dl><div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="outline" className="h-11" onClick={reset}>Escanear nuevamente</Button><Button className="h-11" onClick={() => { onContinue(result); reset() }}>Continuar</Button></div></>}
       {result.status === "ambiguous" && <><div><p className="font-semibold text-gray-950">Encontramos más de un producto posible.</p><p className="mt-1 text-sm text-gray-500">Elegí el artículo correcto para continuar.</p></div><div className="space-y-2">{result.candidates?.map((candidate) => <button type="button" key={candidate.id} onClick={() => chooseCandidate(candidate)} className="w-full rounded-lg border bg-white p-3 text-left transition-colors hover:border-[var(--ossum-action)] focus:outline-none focus:ring-2 focus:ring-[var(--ossum-action)]"><p className="font-medium text-gray-950">{candidate.description}</p>{candidate.manufacturer && <p className="mt-1 text-xs text-gray-500">{candidate.manufacturer}</p>}</button>)}</div><Button variant="outline" className="h-11" onClick={reset}>Escanear nuevamente</Button></>}
-      {result.status === "not_found" && <><div><p className="font-semibold text-gray-950">Producto todavía no cargado.</p><p className="mt-1 text-sm text-gray-500">La lectura se hizo correctamente, pero no existe una ficha que coincida en esta empresa.</p></div>{result.details?.length ? <ScanDetails details={result.details} /> : null}<p className="text-xs text-gray-500">El GTIN identifica el artículo. Lote, serie y vencimiento corresponden a esta unidad.</p><div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="outline" className="h-11" onClick={reset}>Escanear nuevamente</Button>{onRegister && <Button className="h-11" onClick={() => onRegister(result)}>Crear artículo</Button>}</div></>}
+      {result.status === "not_found" && <><div><p className="font-semibold text-gray-950">Producto todavía no cargado.</p><p className="mt-1 text-sm text-gray-500">Podés agregar otro código del mismo envase antes de crear la ficha.</p></div>{result.details?.length ? <ScanDetails details={result.details} /> : null}<p className="text-xs text-gray-500">El GTIN identifica el artículo. Lote, serie y vencimiento corresponden a esta unidad.</p><div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="outline" className="h-11" onClick={reset}>Escanear nuevamente</Button><Button variant="outline" className="h-11" onClick={addAnotherCapture}>Agregar otro código</Button>{onRegister && <Button className="h-11" onClick={() => onRegister(result)}>Crear artículo</Button>}</div></>}
     </CardContent></Card>}
   </section>
 }

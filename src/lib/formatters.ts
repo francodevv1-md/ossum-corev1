@@ -14,17 +14,20 @@ export function formatNumberAR(value: number, decimals = 0): string {
   }).format(value)
 }
 
+function parseDate(date: string): Date | null {
+  if (!date) return null
+  const parsed = new Date(/^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00` : date)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 export function formatDate(date: string): string {
-  if (!date) return "—"
-  try {
-    return new Date(date + "T00:00:00").toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
-  } catch {
-    return date
-  }
+  const parsed = parseDate(date)
+  if (!parsed) return "—"
+  return parsed.toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
 }
 
 export function formatDateTime(date: string, time?: string): string {
@@ -42,8 +45,8 @@ export function formatContextualDate(date: string): ContextualDateResult {
   if (!date) return { text: "—", variant: "neutral" }
 
   try {
-    const parsed = new Date(date + "T00:00:00")
-    if (Number.isNaN(parsed.getTime())) return { text: "—", variant: "neutral" }
+    const parsed = parseDate(date)
+    if (!parsed) return { text: "—", variant: "neutral" }
 
     const today = new Date()
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())

@@ -14,6 +14,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { useOrtoTrackStore } from "@/lib/store"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
 import type { Contacto, ContactRole } from "@/types"
 import type { SearchChip, SearchChipField } from "@/lib/cirugias.types"
 import { cn } from "@/lib/utils"
@@ -94,8 +95,9 @@ function generateChipId(): string {
  */
 function buildSurgerySuggestions(
   query: string,
-  surgeries: Array<{ id: string; patient: string; surgeon: string; institution: string; client: string; prNumber?: string; expedienteNumber?: string }>,
+  surgeries: Array<{ id: string; backendId?: string; patient: string; surgeon: string; institution: string; client: string; expedienteNumber?: string }>,
   existingContactoMatches: Set<string>, // contacto names already matched, to avoid duplicates
+  presupuestoIdentities: Map<string, string>,
 ): SurgerySuggestion[] {
   const q = normalizeAccents(query.trim().toLowerCase())
   if (!q) return []
@@ -149,13 +151,14 @@ function buildSurgerySuggestions(
     }
 
     // Check PR number
-    if (s.prNumber && normalizeAccents(s.prNumber).toLowerCase().includes(q)) {
-      const key = `pr-${s.prNumber}`
+    const presupuestoIdentity = presupuestoIdentities.get(s.backendId ?? s.id)
+    if (presupuestoIdentity && normalizeAccents(presupuestoIdentity).toLowerCase().includes(q)) {
+      const key = `pr-${presupuestoIdentity}`
       if (!seen.has(key) && suggestions.length < MAX_SURGERY_SUGGESTIONS) {
         seen.add(key)
         suggestions.push({
           surgeryId: s.id,
-          display: s.prNumber,
+          display: presupuestoIdentity,
           context: `Presupuesto — ${s.id}`,
           field: "general",
         })
@@ -216,6 +219,7 @@ function buildSurgerySuggestions(
 
 export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurgerySearchProps) {
   const store = useOrtoTrackStore()
+  const presupuestoAuthority = usePresupuestos({ take: 100 })
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -247,11 +251,23 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
     return names
   }, [contactoSuggestions])
 
+  const presupuestoIdentities = useMemo(() => {
+    const identities = new Map<string, string>()
+    for (const item of presupuestoAuthority.presupuestos) {
+      if (!item.surgeryId || item.slot === "HISTORY") continue
+      const label = item.visibleNumber == null
+        ? "Presupuesto en borrador"
+        : `P-${String(item.visibleNumber).padStart(4, "0")}`
+      if (item.slot === "CURRENT" || !identities.has(item.surgeryId)) identities.set(item.surgeryId, label)
+    }
+    return identities
+  }, [presupuestoAuthority.presupuestos])
+
   // ── Surgery-level suggestions (complement contactos) ──
   const surgerySuggestions = useMemo(() => {
     if (!query.trim()) return []
-    return buildSurgerySuggestions(query, store.surgeries, contactoMatchedNames)
-  }, [query, store.surgeries, contactoMatchedNames])
+    return buildSurgerySuggestions(query, store.surgeries, contactoMatchedNames, presupuestoIdentities)
+  }, [query, store.surgeries, contactoMatchedNames, presupuestoIdentities])
 
   // ── Has any suggestions at all ──
   const hasSuggestions = contactoSuggestions.length > 0 || surgerySuggestions.length > 0
@@ -490,6 +506,14 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
                       </CommandItem>
                     )
                   })}
+                </CommandGroup>
+              )}
+
+              {query.trim() && (presupuestoAuthority.loading || presupuestoAuthority.error) && (
+                <CommandGroup heading="Presupuestos">
+                  <CommandItem disabled value="__presupuestos_unavailable__" className="text-xs text-muted-foreground">
+                    {presupuestoAuthority.loading ? "Cargando identidades…" : "Identidades no cargadas"}
+                  </CommandItem>
                 </CommandGroup>
               )}
 

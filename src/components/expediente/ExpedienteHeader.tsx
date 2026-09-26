@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Receipt, Truck, Activity, BookOpen, MoreHorizontal, Edit, StickyNote, ShieldCheck, Calendar, AlertOctagon, RotateCcw, Printer, Stethoscope, Building2, UserCircle, ChevronDown } from "lucide-react"
@@ -11,6 +12,7 @@ import { ExpedienteReferencesStrip } from "./ExpedienteReferencesStrip"
 import type { CxOperationsDerivedDisplay } from "@/lib/cx-operations-derived"
 import type { Surgery, SurgeryState, ConsumoState } from "@/types"
 import type { ExpedienteHeaderModel } from "./expediente-header.model"
+import { canMutatePresupuesto } from "@/lib/permissions/financial-document-email"
 
 const CLASSIFICATION_PILL_COLORS: Record<string, string> = {
   "Reemplazo total de rodilla": "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200",
@@ -50,6 +52,8 @@ interface ExpedienteHeaderProps {
 }
 
 export function ExpedienteHeader({ surgery: s, presupuestoId, consumoState, docStatus, model, onSetDialogSurgery, onSetFacturarDialogOpen, onSetNoteDialogOpen, onSetSuspendDialogOpen, onSetCancelDialogOpen, onSetChangeStateDialogOpen, onSetChangeDateDialogOpen, onSetNewState, onRecover, onEditFicha, onViewPR, onGeneratePR, onViewDocumentacion, onViewRemitos, onViewConsumo }: ExpedienteHeaderProps) {
+  const { currentAccess } = useAuth()
+  const canMutatePR = canMutatePresupuesto(currentAccess?.role)
   const canAuthFV = canAutorizarFV(s, docStatus, consumoState)
   const canRemitNR = canRemitirNR(s)
   const canLoadConsumo = canCargarConsumo(s)
@@ -120,7 +124,7 @@ export function ExpedienteHeader({ surgery: s, presupuestoId, consumoState, docS
       {/* ── Action row ── */}
       <div className="flex items-center gap-1.5 overflow-x-auto px-3 pb-2 sm:flex-wrap sm:overflow-visible sm:px-4">
         <Button variant="outline" size="sm" className="h-7 rounded-md gap-1 border-slate-300 bg-white text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800" onClick={onEditFicha}><Edit className="size-3" /> Editar ficha</Button>
-        <Button size="sm" className="h-7 rounded-md gap-1 bg-primary px-2.5 text-[11px] text-primary-foreground hover:bg-primary/90" onClick={primaryAction}><Receipt className="size-3" /> {primaryActionLabel}</Button>
+        {(hasPR || canMutatePR) && <Button size="sm" className="h-7 rounded-md gap-1 bg-primary px-2.5 text-[11px] text-primary-foreground hover:bg-primary/90" onClick={primaryAction}><Receipt className="size-3" /> {primaryActionLabel}</Button>}
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-7 rounded-md gap-1 border-slate-300 bg-white text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"><MoreHorizontal className="size-3" /> Más</Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52 border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">

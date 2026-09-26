@@ -3,14 +3,18 @@
 import Link from "next/link"
 import React, { useEffect, useMemo, Suspense, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { NovedadesTabContent } from "@/components/expediente/NovedadesTabContent"
 import { useBackendActiveSurgeries } from "@/hooks/useBackendActiveSurgeries"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
+import { toLegacyPresupuestoProjection } from "@/lib/api/presupuestos"
 import { useOrtoTrackStore } from "@/lib/store"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/formatters"
 import { getBadgeVariant, comprobanteTypeLabels, CLIENT_OPTIONS, INSTITUTION_OPTIONS, CLASSIFICATION_OPTIONS, SURGERY_STATE_OPTIONS } from "@/lib/statusHelpers"
 import { canAutorizarFV, canRemitirNR, canCargarConsumo, canValidateConsumption } from "@/lib/businessRules"
 import { getSaldoPendienteFactura } from "@/lib/cobros.utils"
 import { getExpedienteEntryParam, resolveExpedienteLandingTab } from "@/lib/expediente-navigation"
+import { canMutatePresupuesto } from "@/lib/permissions/financial-document-email"
 import { StateBadge, StatsCard, SearchInput, FilterSelect } from "@/components/shared"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -49,7 +53,7 @@ import {
   FileText, Receipt, ShoppingCart, Truck, Activity, Link2, BookOpen,
   MapPin, ArrowRightLeft, Stethoscope, CreditCard, AlertTriangle,
   StickyNote, History, Search, ShieldCheck, CheckCircle2, XCircle,
-  Clock, Plus, Send, ThumbsUp, ThumbsDown, Lock, RotateCcw, Edit,
+  Clock, Plus, Send, ThumbsUp, ThumbsDown, RotateCcw, Edit,
   Package, Box, DollarSign, CalendarDays, User, Building2,
   ChevronRight, Info,
 } from "lucide-react"
@@ -90,6 +94,8 @@ export default function ExpedientePage() {
 
 function ExpedienteContent() {
   const searchParams = useSearchParams()
+  const { currentAccess } = useAuth()
+  const canMutate = canMutatePresupuesto(currentAccess?.role)
   const store = useOrtoTrackStore()
   const backendSurgeries = useBackendActiveSurgeries()
 
@@ -115,12 +121,21 @@ function ExpedienteContent() {
 
   useEffect(() => {
     if (!urlId) return
+    // URL navigation is the external source this legacy route mirrors.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedId((current) => (current === urlId ? current : urlId))
     setActiveTab(urlTab ?? "resumen")
   }, [urlId, urlTab])
 
   const surgery = store.getSurgeryById(effectiveId)
-  const presupuestos = store.getPresupuestosBySurgeryId(effectiveId)
+  const presupuestoAuthority = usePresupuestos(
+    { surgeryId: surgery?.backendId ?? surgery?.id, take: 100 },
+    Boolean(surgery),
+  )
+  const presupuestos = useMemo(
+    () => presupuestoAuthority.presupuestos.map(toLegacyPresupuestoProjection),
+    [presupuestoAuthority.presupuestos],
+  )
   const comprobantes = store.getComprobantesBySurgeryId(effectiveId)
   const remitos = store.getRemitosBySurgeryId(effectiveId)
   const consumo = store.getConsumoBySurgeryId(effectiveId)
@@ -184,12 +199,15 @@ function ExpedienteContent() {
     setActiveTab("novedades")
   }
 
-  const handlePresupuestoAction = (prId: string, action: "enviar" | "aprobar" | "rechazar" | "bloquear") => {
-    switch (action) {
-      case "enviar": store.enviarPresupuesto(prId); toast.success("Presupuesto enviado"); break
-      case "aprobar": store.authorizeBudget(prId); toast.success("Presupuesto aprobado"); break
-      case "rechazar": store.rechazarPresupuesto(prId); toast.success("Presupuesto rechazado"); break
-      case "bloquear": store.bloquearPresupuesto(prId); toast.success("Presupuesto bloqueado"); break
+  const handlePresupuestoAction = async (prId: string, action: "enviar" | "aprobar" | "rechazar") => {
+    const presupuesto = presupuestoAuthority.presupuestos.find((item) => item.id === prId)
+    if (!presupuesto) return
+    try {
+      if (action === "enviar") await presupuestoAuthority.emit(prId, presupuesto.revision)
+      else await presupuestoAuthority.transition(prId, action === "aprobar" ? "approve" : "reject", presupuesto.revision)
+      toast.success(action === "enviar" ? "Presupuesto emitido" : action === "aprobar" ? "Presupuesto aprobado" : "Presupuesto rechazado")
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "No se pudo actualizar el presupuesto")
     }
   }
 
@@ -283,6 +301,7 @@ function ExpedienteContent() {
 
   return (
     <div className="space-y-4">
+      {presupuestoAuthority.error && <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">No se pudieron cargar los presupuestos: {presupuestoAuthority.error}</div>}
       <LegacyStandaloneNotice
         description="La superficie real del expediente vive en Ficha CX dentro de Cirugías. Esta ruta standalone queda legacy/deprecada para evitar operar fuera del flujo vigente."
         tabHint="Usá Cirugías para seleccionar una cirugía y abrir su Ficha CX contextual."
@@ -368,7 +387,7 @@ function ExpedienteContent() {
                   { label: "Cliente", value: surgery.client },
                   { label: "Obra Social", value: surgery.obraSocial || "—" },
                   { label: "Clasificación", value: surgery.classification },
-                  { label: "PR Nº", value: surgery.prNumber || "—" },
+                   { label: "PR Nº", value: presupuestoAuthority.current?.visibleNumber == null ? "—" : `P-${String(presupuestoAuthority.current.visibleNumber).padStart(4, "0")}` },
                   { label: "Expediente", value: surgery.expedienteNumber || "—" },
                   { label: "Instrumentador", value: surgery.instrumentador || "—" },
                   { label: "Vendedor", value: surgery.vendedor || "—" },
@@ -437,30 +456,26 @@ function ExpedienteContent() {
                 <div className="flex items-center gap-3">
                   <h3 className="text-sm font-semibold">{presupuesto.id}</h3>
                   <StateBadge status={presupuesto.state} />
-                  {presupuesto.bloqueado && <Badge variant="destructive" className="text-[10px]">Bloqueado</Badge>}
                 </div>
-                <div className="flex gap-2">
-                  {presupuesto.state === "Borrador" && (
-                    <Button size="sm" variant="outline" className="gap-1 h-7" onClick={() => handlePresupuestoAction(presupuesto.id, "enviar")}>
-                      <Send className="size-3" /> Enviar
-                    </Button>
-                  )}
-                  {presupuesto.state === "Enviado" && (
-                    <>
-                      <Button size="sm" variant="outline" className="gap-1 h-7" onClick={() => handlePresupuestoAction(presupuesto.id, "aprobar")}>
-                        <ThumbsUp className="size-3" /> Aprobar
+                {canMutate && (
+                  <div className="flex gap-2">
+                    {presupuesto.state === "Borrador" && (
+                      <Button size="sm" variant="outline" className="gap-1 h-7" onClick={() => void handlePresupuestoAction(presupuesto.id, "enviar")}>
+                        <Send className="size-3" /> Enviar
                       </Button>
-                      <Button size="sm" variant="outline" className="gap-1 h-7" onClick={() => handlePresupuestoAction(presupuesto.id, "rechazar")}>
-                        <ThumbsDown className="size-3" /> Rechazar
-                      </Button>
-                    </>
-                  )}
-                  {!presupuesto.bloqueado && (
-                    <Button size="sm" variant="ghost" className="gap-1 h-7" onClick={() => handlePresupuestoAction(presupuesto.id, "bloquear")}>
-                      <Lock className="size-3" /> Bloquear
-                    </Button>
-                  )}
-                </div>
+                    )}
+                    {presupuesto.state === "Emitido" && (
+                      <>
+                        <Button size="sm" variant="outline" className="gap-1 h-7" onClick={() => void handlePresupuestoAction(presupuesto.id, "aprobar")}>
+                          <ThumbsUp className="size-3" /> Aprobar
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1 h-7" onClick={() => void handlePresupuestoAction(presupuesto.id, "rechazar")}>
+                          <ThumbsDown className="size-3" /> Rechazar
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <Card>
                 <CardContent className="pt-4">
@@ -506,9 +521,11 @@ function ExpedienteContent() {
                 <Receipt className="size-10 text-muted-foreground mb-3" />
                 <p className="text-sm font-medium text-muted-foreground">Sin presupuesto</p>
                 <p className="text-xs text-muted-foreground">No hay presupuesto asociado a esta cirugía</p>
-                <Button size="sm" className="mt-4 gap-1.5" onClick={() => toast.info("Crear presupuesto desde cirugías")}>
-                  <Plus className="size-3" /> Crear presupuesto
-                </Button>
+                {canMutate && (
+                  <Button size="sm" className="mt-4 gap-1.5" onClick={() => toast.info("Crear presupuesto desde cirugías")}>
+                    <Plus className="size-3" /> Crear presupuesto
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}
@@ -541,18 +558,6 @@ function ExpedienteContent() {
               <CardContent className="flex flex-col items-center py-12">
                 <ShoppingCart className="size-10 text-muted-foreground mb-3" />
                 <p className="text-sm font-medium text-muted-foreground">Sin pedido</p>
-                {presupuesto && presupuesto.state === "Aprobado" && (
-                  <Button
-                    size="sm"
-                    className="mt-4 gap-1.5"
-                    onClick={() => {
-                      store.generateOrderFromBudget(presupuesto.id)
-                      toast.success("Pedido generado desde presupuesto")
-                    }}
-                  >
-                    <Plus className="size-3" /> Generar pedido desde presupuesto
-                  </Button>
-                )}
               </CardContent>
             </Card>
           )}

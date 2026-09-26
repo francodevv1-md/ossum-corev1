@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,8 @@ import {
 } from "lucide-react"
 import { formatDate, formatCurrency } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
+import { FiscalEvidenceDialog } from "@/components/facturacion/FiscalEvidenceDialog"
+import { useInvoices } from "@/hooks/useInvoices"
 import type { Surgery, Comprobante, Presupuesto } from "@/types"
 import type { ResumenCobranzaSurgery, FacturaCobranzaDetalle } from "@/lib/cobros.utils"
 
@@ -53,12 +55,25 @@ const ESTADO_COBRANZA_LABELS: Record<string, string> = {
 }
 
 export function ComprobantesAsociados({
-  surgery: _surgery, comprobantes, resumenCobranza, presupuestos,
+  surgery, comprobantes, resumenCobranza, presupuestos,
 }: ComprobantesAsociadosProps) {
   const [filterType, setFilterType] = useState<CompFilterType>("all")
   const [filterState, setFilterState] = useState<string>("all")
   const [searchText, setSearchText] = useState("")
   const [expandedFVs, setExpandedFVs] = useState<Set<string>>(new Set())
+  const [fiscalEvidenceSelection, setFiscalEvidenceSelection] = useState<{ companyId: string; invoiceId: string; label: string } | null>(null)
+  const surgeryId = surgery.backendId ?? surgery.id
+  const invoicesApi = useInvoices({ surgeryId })
+
+  useEffect(() => {
+    setFiscalEvidenceSelection(null)
+  }, [invoicesApi.companyId])
+
+  const authoritativeInvoices = useMemo(() => {
+    if (invoicesApi.loading || !invoicesApi.companyId) return []
+    return invoicesApi.invoices.filter((invoice) => invoice.companyId === invoicesApi.companyId && invoice.surgeryId === surgeryId)
+  }, [invoicesApi.companyId, invoicesApi.invoices, invoicesApi.loading, surgeryId])
+  const activeFiscalEvidenceSelection = fiscalEvidenceSelection?.companyId === invoicesApi.companyId ? fiscalEvidenceSelection : null
 
   // Build factura detail map from resumenCobranza
   const facturaDetailMap = useMemo(() => {
@@ -165,6 +180,20 @@ export function ComprobantesAsociados({
           </Badge>
         </div>
       </div>
+
+      {authoritativeInvoices.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-950/60" aria-label="Evidencia fiscal">
+          {authoritativeInvoices.map((invoice) => {
+            const label = `Factura ${invoice.visibleNumber ?? invoice.id}`
+            return <Button key={invoice.id} variant="outline" size="sm" className="h-7 gap-1.5 rounded-md px-2 text-[10px]" onClick={() => {
+              const companyId = invoicesApi.companyId
+              if (companyId) setFiscalEvidenceSelection({ companyId, invoiceId: invoice.id, label })
+            }}>
+              <FileText className="size-3.5" /> Evidencia fiscal · {label}
+            </Button>
+          })}
+        </div>
+      ) : null}
 
       {/* ── Filters bar ── */}
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-950/60">
@@ -371,6 +400,13 @@ export function ComprobantesAsociados({
             <p className="text-[11px] text-muted-foreground">Se mostrarán acá cuando el expediente genere movimiento comercial.</p>
           </div>
       )}
+      {activeFiscalEvidenceSelection ? <FiscalEvidenceDialog
+        companyId={activeFiscalEvidenceSelection.companyId}
+        invoiceId={activeFiscalEvidenceSelection.invoiceId}
+        invoiceLabel={activeFiscalEvidenceSelection.label}
+        open
+        onOpenChange={(open) => { if (!open) setFiscalEvidenceSelection(null) }}
+      /> : null}
     </div>
   )
 }

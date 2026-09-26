@@ -1,4 +1,5 @@
 import { AlertCircle, Building2, FileSearch, Inbox } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -6,11 +7,18 @@ type RemitoStateSurfaceProps =
   | { kind: "loading" }
   | { kind: "blocked" }
   | { kind: "error"; message: string; onRetry: () => void }
-  | { kind: "empty" }
+  | { kind: "empty"; action?: { label: string; onClick: () => void }; disabled?: boolean }
   | { kind: "no-match"; onClear: () => void }
   | { kind: "unselected" }
 
-const content = {
+type EmptyishKind = "blocked" | "empty" | "no-match" | "unselected"
+type EmptyishContent = {
+  icon: LucideIcon
+  title: string
+  description: string
+}
+
+const content: Record<EmptyishKind, EmptyishContent> = {
   blocked: {
     icon: Building2,
     title: "No hay empresa activa",
@@ -19,7 +27,7 @@ const content = {
   empty: {
     icon: Inbox,
     title: "Todavía no hay remitos",
-    description: "Los remitos de esta empresa aparecerán en esta grilla.",
+    description: "Los remitos de esta empresa aparecerán en esta grilla. Cargá el primero para empezar.",
   },
   "no-match": {
     icon: FileSearch,
@@ -31,7 +39,7 @@ const content = {
     title: "Seleccioná un remito",
     description: "El detalle, los ítems y las acciones permitidas se muestran acá.",
   },
-} as const
+}
 
 export function RemitoStateSurface(props: RemitoStateSurfaceProps) {
   if (props.kind === "loading") {
@@ -68,6 +76,9 @@ export function RemitoStateSurface(props: RemitoStateSurfaceProps) {
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">{item.description}</p>
       </div>
       {props.kind === "no-match" && <Button type="button" size="sm" variant="outline" onClick={props.onClear}>Limpiar filtros</Button>}
+      {props.kind === "empty" && props.action && (
+        <Button type="button" size="sm" onClick={props.action.onClick} disabled={props.disabled}>{props.action.label}</Button>
+      )}
     </div>
   )
 }

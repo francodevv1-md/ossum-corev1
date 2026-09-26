@@ -1,20 +1,22 @@
 "use client"
 
-import React, { useEffect, useCallback } from "react"
+import React, { useEffect, useCallback, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useOrtoTrackStore } from "@/lib/store"
 import { usePresupuestoForm } from "@/hooks/usePresupuestoForm"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
 import { DatosComercialesSection } from "./DatosComercialesSection"
 import { CondicionesSection } from "./CondicionesSection"
 import { PresupuestoItemsTable } from "./PresupuestoItemsTable"
 import { TotalesSection } from "./TotalesSection"
-import type { Presupuesto, Surgery, PresupuestoItem } from "@/types"
+import type { Surgery } from "@/types"
+import { buildEstimativePresupuestoPayload, type PresupuestoApiRow } from "@/lib/api/presupuestos"
 import { Receipt } from "lucide-react"
+import { toast } from "sonner"
 
 // ─── Types ───
 
@@ -26,38 +28,11 @@ export interface PresupuestoFormDialogProps {
   context: PresupuestoFormContext
   surgeryId?: string           // Required if context="surgery"
   presupuestoId?: string       // For editing (future, not V1)
+  presupuesto?: PresupuestoApiRow
   open?: boolean               // Dialog mode
   onOpenChange?: (open: boolean) => void
-  onSubmit?: (presupuesto: Presupuesto) => void
+  onSubmit?: (presupuesto: PresupuestoApiRow) => void
   onCancel?: () => void
-}
-
-// ─── Helper: convert form items to PresupuestoItem[] ───
-
-function formItemsToPresupuestoItems(items: ReturnType<typeof usePresupuestoForm>["items"]): PresupuestoItem[] {
-  return items.map((item) => {
-    const subtotalBruto = item.quantity * item.unitPrice
-    const clampedDiscount = Math.min(Math.max(item.discountPercent, 0), 100)
-    const descuentoLinea = subtotalBruto * (clampedDiscount / 100)
-    const subtotalNeto = subtotalBruto - descuentoLinea
-    // CHATZAI-017L: stockItemId comes from catalogItemId if linked, or generated for libre items
-    const isLibre = item.isArticuloLibre
-    return {
-      stockItemId: item.catalogItemId || `Z-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name: isLibre && item.descripcionLibre ? item.descripcionLibre : item.name,
-      code: item.code || (isLibre ? "Z-LIBRE" : "SIN-COD"),
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      discountPercent: clampedDiscount > 0 ? clampedDiscount : undefined,
-      subtotal: subtotalNeto,
-      catalogItemId: item.catalogItemId || undefined,
-      // Backward compat: isArticuloZ derived from isArticuloLibre
-      isArticuloZ: isLibre || undefined,
-      descripcionLibre: isLibre ? item.descripcionLibre : undefined,
-      // CHATZAI-025: IVA per item
-      ivaKey: item.ivaKey,
-    }
-  })
 }
 
 // ─── Form Content (shared between dialog and inline) ───
@@ -65,16 +40,48 @@ function formItemsToPresupuestoItems(items: ReturnType<typeof usePresupuestoForm
 interface FormContentProps {
   context: PresupuestoFormContext
   surgeryId?: string
-  onSubmit: (presupuesto: Presupuesto) => void
+  presupuesto?: PresupuestoApiRow
+  onSubmit: (presupuesto: PresupuestoApiRow) => void
   onCancel?: () => void
 }
 
-function PresupuestoFormContent({ context, surgeryId, onSubmit, onCancel }: FormContentProps) {
+function PresupuestoFormContent({ context, surgeryId, presupuesto, onSubmit, onCancel }: FormContentProps) {
   const store = useOrtoTrackStore()
+  const presupuestoApi = usePresupuestos({ take: 100 })
+  const [saving, setSaving] = useState(false)
   const surgery = surgeryId ? store.getSurgeryById(surgeryId) : undefined
-  const availableSurgeries = store.surgeries.filter(
-    (s) => !s.presupuestoId && s.state !== "Cancelada" && s.state !== "Suspendida"
+  const linkedSurgeryIds = new Set(presupuestoApi.presupuestos.map((item) => item.surgeryId).filter(Boolean))
+  const availableSurgeries = presupuestoApi.error ? [] : store.surgeries.filter(
+    (s) => !linkedSurgeryIds.has(s.backendId ?? s.id) && s.state !== "Cancelada" && s.state !== "Suspendida"
   )
+
+  const initialData = useMemo(() => presupuesto ? {
+    branchId: presupuesto.branchId ?? "",
+    clientContactId: presupuesto.clientContactId ?? "",
+    payerContactId: presupuesto.payerContactId ?? "",
+    concepto: presupuesto.title ?? "",
+    fechaEmision: presupuesto.documentDate?.slice(0, 10) ?? "",
+    vigencia: presupuesto.documentDate && presupuesto.validUntil
+      ? `${Math.max(1, Math.round((new Date(presupuesto.validUntil).getTime() - new Date(presupuesto.documentDate).getTime()) / 86_400_000))} días`
+      : "30 días",
+    listaPrecios: presupuesto.priceListCode ?? "",
+    condicionPago: presupuesto.paymentTerms ?? "",
+    descuento: Number(presupuesto.generalDiscountRate),
+    items: presupuesto.items.map((item) => ({
+      code: item.sku ?? "",
+      name: item.description,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+      discountPercent: Number(item.discountRate),
+      catalogItemId: "",
+      isArticuloLibre: true,
+      descripcionLibre: item.description,
+      ivaKey: item.taxRate,
+      codeResolved: false,
+    })),
+    observaciones: presupuesto.notes ?? "",
+    surgeryId: presupuesto.surgeryId ?? undefined,
+  } : undefined, [presupuesto])
 
   const {
     formData,
@@ -96,7 +103,7 @@ function PresupuestoFormContent({ context, surgeryId, onSubmit, onCancel }: Form
     articuloZCount,
     resetForm,
     populateFromSurgery,
-  } = usePresupuestoForm()
+  } = usePresupuestoForm(initialData)
 
   // Auto-populate from surgery when context is surgery
   useEffect(() => {
@@ -109,52 +116,28 @@ function PresupuestoFormContent({ context, surgeryId, onSubmit, onCancel }: Form
     populateFromSurgery(selectedSurgery)
   }, [populateFromSurgery])
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!validate()) return
-
-    const presupuestoItems = formItemsToPresupuestoItems(items)
-
-    const presupuestoData = {
-      surgeryId: context === "surgery" ? surgeryId : formData.surgeryId,
-      client: formData.client,
-      obraSocial: formData.obraSocial || undefined,
-      financiador: formData.financiador || undefined,
-      vendedor: formData.vendedor,
-      patient: formData.patient || undefined,
-      institution: formData.institution || undefined,
-      concepto: formData.concepto || undefined,
-      fechaEmision: formData.fechaEmision,
-      vigencia: formData.vigencia,
-      listaPrecios: formData.listaPrecios,
-      condicionPago: formData.condicionPago || undefined,
-      descuento: formData.descuento > 0 ? formData.descuento : undefined,
-      items: presupuestoItems,
-      subtotal,
-      total,
-      state: "Borrador" as const,
-      observaciones: formData.observaciones || undefined,
-      bloqueado: false,
-      version: 1,
-      versionStatus: "vigente" as const,
+    const selectedSurgeryId = context === "surgery" ? surgeryId : formData.surgeryId
+    const selectedSurgery = selectedSurgeryId ? store.getSurgeryById(selectedSurgeryId) : undefined
+    setSaving(true)
+    try {
+      const payload = buildEstimativePresupuestoPayload(formData, items)
+      const saved = presupuesto
+        ? await presupuestoApi.replaceDraft(presupuesto.id, { ...payload, expectedRevision: presupuesto.revision })
+        : await presupuestoApi.create({ ...payload, surgeryId: selectedSurgery?.backendId ?? selectedSurgeryId })
+      resetForm()
+      onSubmit(saved)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "No se pudo crear el presupuesto")
+    } finally {
+      setSaving(false)
     }
-
-    let presupuesto: Presupuesto
-
-    if (context === "surgery" && surgeryId) {
-      presupuesto = store.createBudgetForSurgery(surgeryId, presupuestoData)
-    } else if (formData.surgeryId) {
-      // Independent context but linked to a surgery
-      presupuesto = store.createBudgetForSurgery(formData.surgeryId, presupuestoData)
-    } else {
-      presupuesto = store.createBudgetIndependent(presupuestoData)
-    }
-
-    resetForm()
-    onSubmit(presupuesto)
-  }, [validate, items, context, surgeryId, formData, subtotal, total, store, resetForm, onSubmit])
+  }, [validate, context, surgeryId, formData, store, presupuestoApi, items, presupuesto, resetForm, onSubmit])
 
   return (
     <div className="space-y-6">
+      {presupuestoApi.error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{presupuestoApi.error}</p>}
       {/* Section 1: Datos Comerciales */}
       <DatosComercialesSection
         formData={formData}
@@ -224,9 +207,9 @@ function PresupuestoFormContent({ context, surgeryId, onSubmit, onCancel }: Form
             Cancelar
           </Button>
         )}
-        <Button size="sm" onClick={handleSubmit}>
+        <Button size="sm" onClick={() => void handleSubmit()} disabled={saving}>
           <Receipt className="size-3.5 mr-1.5" />
-          Guardar presupuesto
+          {saving ? "Guardando…" : "Guardar presupuesto"}
         </Button>
       </div>
     </div>
@@ -240,12 +223,13 @@ export function PresupuestoFormDialog({
   context,
   surgeryId,
   presupuestoId,
+  presupuesto,
   open,
   onOpenChange,
   onSubmit,
   onCancel,
 }: PresupuestoFormDialogProps) {
-  const handleSubmit = useCallback((presupuesto: Presupuesto) => {
+  const handleSubmit = useCallback((presupuesto: PresupuestoApiRow) => {
     onSubmit?.(presupuesto)
     if (mode === "dialog") {
       onOpenChange?.(false)
@@ -266,7 +250,7 @@ export function PresupuestoFormDialog({
         <DialogContent className="sm:max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {presupuestoId ? "Editar Presupuesto" : "Nuevo Presupuesto"}
+              {presupuestoId || presupuesto ? "Editar Presupuesto" : "Nuevo Presupuesto"}
             </DialogTitle>
             <DialogDescription>
               {context === "surgery"
@@ -278,6 +262,7 @@ export function PresupuestoFormDialog({
           <PresupuestoFormContent
             context={context}
             surgeryId={surgeryId}
+            presupuesto={presupuesto}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
           />
@@ -291,6 +276,7 @@ export function PresupuestoFormDialog({
     <PresupuestoFormContent
       context={context}
       surgeryId={surgeryId}
+      presupuesto={presupuesto}
       onSubmit={handleSubmit}
       onCancel={handleCancel}
     />

@@ -53,22 +53,22 @@ describe("NovedadesTabContent", () => {
     expect(screen.queryByRole("button", { name: /Marcar autorizado/i })).not.toBeInTheDocument()
   })
 
-  it("does not offer mutation actions to coordinators", async () => {
+  it("offers mutation actions to coordinators", async () => {
     authState.role = "coordinator"
     render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} openAddSheetKey={1} />)
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Agregar nota/i })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole("button", { name: /Agregar nota/i })).toBeInTheDocument())
     expect(screen.queryByRole("button", { name: /Marcar autorizado/i })).not.toBeInTheDocument()
   })
 
-  it("does not expose the composer to coordinators", async () => {
+  it("exposes the composer to coordinators", async () => {
     authState.role = "coordinator"
     render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} initialAddAction="note" initialAddActionKey={1} />)
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Tipo y prioridad" })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole("button", { name: "Tipo y prioridad" })).toBeInTheDocument())
   })
 
-  it("rejects a direct authorization composer request from coordinators", async () => {
+  it("keeps authorization composer restricted for coordinators", async () => {
     authState.role = "coordinator"
     render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} initialAddAction="auth" initialAddActionKey={1} />)
 
@@ -108,10 +108,10 @@ describe("NovedadesTabContent", () => {
     expect(container.textContent).toContain("Autorización")
   })
 
-  it("hides Modify for non-admin users while retaining the feed", () => {
+  it("allows coordinator note edits while retaining the feed", () => {
     authState.role = "coordinator"
     const { container } = render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} />)
-    expect(container.querySelectorAll('[title="Editar novedad"]')).toHaveLength(0)
+    expect(container.querySelectorAll('[title="Editar novedad"]')).toHaveLength(1)
     expect(container.textContent).toContain("Nota editable")
   })
 

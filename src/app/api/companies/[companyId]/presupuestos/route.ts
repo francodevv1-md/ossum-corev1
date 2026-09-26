@@ -4,15 +4,14 @@ import {
   requireCompanyReadAccess,
 } from "../../../../../lib/api/guards";
 import { badRequest } from "../../../../../lib/api/errors";
-import { getDateParam, getNonNegativeIntegerParam, getStringParam } from "../../../../../lib/api/query";
 import { created, errorResponse, ok } from "../../../../../lib/api/responses";
 import prisma from "../../../../../lib/prisma";
 import {
   PRESUPUESTO_MUTATION_ROLES,
-  createPresupuesto,
+  createFamilyDraft,
   listPresupuestos,
 } from "../../../../../lib/services/presupuesto.service";
-import { presupuestoCreateSchema } from "../../../../../lib/validators/presupuesto";
+import { presupuestoCreateSchema, presupuestoListQuerySchema } from "../../../../../lib/validators/presupuesto";
 
 type RouteContext = {
   params: Promise<{ companyId: string }>;
@@ -33,15 +32,17 @@ export async function GET(request: Request, { params }: RouteContext) {
     requireCompanyReadAccess(ctx);
 
     const searchParams = new URL(request.url).searchParams;
+    const query = presupuestoListQuerySchema.safeParse({
+      surgeryId: searchParams.get("surgeryId") ?? undefined,
+      state: searchParams.get("state") ?? undefined,
+      take: searchParams.get("take") ?? undefined,
+      skip: searchParams.get("skip") ?? undefined,
+    });
+    if (!query.success) throw badRequest(query.error.issues[0]?.message, "invalid_presupuesto_query");
     const presupuestos = await listPresupuestos({
       companyId: ctx.companyId,
       prisma,
-      surgeryId: getStringParam(searchParams, "surgeryId"),
-      state: getStringParam(searchParams, "state"),
-      fromDate: getDateParam(searchParams, "from"),
-      toDate: getDateParam(searchParams, "to"),
-      take: getNonNegativeIntegerParam(searchParams, "take"),
-      skip: getNonNegativeIntegerParam(searchParams, "skip"),
+      ...query.data,
     });
 
     return ok(presupuestos);
@@ -65,16 +66,25 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     const body = parsed.data;
 
-    const presupuesto = await createPresupuesto({
+    const presupuesto = await createFamilyDraft({
       companyId: ctx.companyId,
       prisma,
       surgeryId: body.surgeryId,
+      branchId: body.branchId,
+      clientContactId: body.clientContactId,
+      payerContactId: body.payerContactId,
       title: body.title,
       currency: body.currency,
+      documentDate: body.documentDate,
+      paymentTerms: body.paymentTerms,
+      priceListCode: body.priceListCode,
+      legend: body.legend,
+      notes: body.notes,
       validUntil: body.validUntil,
+      generalDiscountRate: body.generalDiscountRate,
+      commercial: body.commercial,
       items: body.items,
-      createdById: ctx.actorUserId,
-      metadata: body.metadata ?? null,
+      actorUserId: ctx.actorUserId,
     });
 
     return created(presupuesto);

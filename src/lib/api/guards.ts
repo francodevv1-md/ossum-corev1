@@ -3,10 +3,46 @@
 // No direct header parsing here — auth resolution is centralized in auth-context.ts.
 
 import type { ApiAuthContext } from "./auth-context";
-import { forbidden } from "./errors";
+import type { ApiIdentity } from "./identity-context";
+import prisma from "../prisma";
+import { conflict, forbidden } from "./errors";
 import { SEGUIMIENTO_EVENT_MUTATION_ALLOWED_ROLES } from "../permissions/seguimiento";
 
 export { type ApiAuthContext } from "./auth-context";
+
+export type ActiveCompanyMembership = {
+  companyId: string;
+  role: string;
+  company: { id: string; name: string };
+};
+
+export async function getActiveCompanyMemberships(
+  identity: ApiIdentity
+): Promise<ActiveCompanyMembership[]> {
+  return prisma.userCompanyAccess.findMany({
+    where: { userId: identity.actorUserId, isActive: true },
+    orderBy: [{ company: { name: "asc" } }, { companyId: "asc" }],
+    select: { companyId: true, role: true, company: { select: { id: true, name: true } } },
+  });
+}
+
+/** Treats company input as untrusted until exact active membership is proven. */
+export function requireSelectedCompanyMembership(
+  memberships: readonly ActiveCompanyMembership[],
+  selectedCompanyId?: string
+): ActiveCompanyMembership {
+  const selected = selectedCompanyId?.trim();
+  if (!selected) {
+    if (memberships.length === 1) return memberships[0];
+    if (memberships.length === 0) {
+      throw forbidden("Company access denied", "company_access_denied");
+    }
+    throw conflict("Select a company before scanning", "company_selection_required");
+  }
+  const membership = memberships.find(({ companyId }) => companyId === selected);
+  if (!membership) throw forbidden("Company access denied", "company_access_denied");
+  return membership;
+}
 
 /**
  * Validate that the actor has read access to the target company.

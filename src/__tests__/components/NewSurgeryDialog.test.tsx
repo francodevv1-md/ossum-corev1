@@ -13,7 +13,7 @@
  * here (only the surrounding heavy children/hooks are mocked).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent, act } from "@testing-library/react"
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { useState } from "react"
 
 import { NewSurgeryDialog } from "@/components/cirugias/dialogs/NewSurgeryDialog"
@@ -40,6 +40,12 @@ const mockStore = {
   getContactoById: (id: string) => mockStore.contactos.find((contacto) => contacto.id === id),
 }
 
+const presupuestoApiMocks = vi.hoisted(() => ({
+  fetch: vi.fn(),
+  create: vi.fn(),
+  build: vi.fn(() => ({ branchId: "branch-1" })),
+}))
+
 vi.mock("@/lib/store", () => ({
   useOrtoTrackStore: () => mockStore,
 }))
@@ -50,6 +56,12 @@ vi.mock("@/components/auth/AuthProvider", () => ({
 
 vi.mock("@/hooks/useAiExtraction", () => ({
   useAiExtraction: () => mockAiHookState,
+}))
+
+vi.mock("@/lib/api/presupuestos", () => ({
+  fetchPresupuestos: presupuestoApiMocks.fetch,
+  createPresupuesto: presupuestoApiMocks.create,
+  buildEstimativePresupuestoPayload: presupuestoApiMocks.build,
 }))
 
 // ContactLookupField stub: renders an <input> inside the data-step0-field wrapper
@@ -101,9 +113,17 @@ vi.mock("@/components/presupuestos/TotalesSection", () => ({ TotalesSection: () 
 vi.mock("@/components/presupuestos/TemplateSelector", () => ({ TemplateSelector: () => null }))
 vi.mock("@/components/presupuestos/ImportSubmodal", () => ({ ImportSubmodal: () => null }))
 vi.mock("@/components/presupuestos/LeyendaPresupuestoSection", () => ({ LeyendaPresupuestoSection: () => null }))
-vi.mock("@/components/cirugias/PostCreationPanel", () => ({ PostCreationPanel: () => null }))
+vi.mock("@/components/cirugias/PostCreationPanel", () => ({
+  PostCreationPanel: ({ onCreatePresupuestoLater, hasPresupuesto }: { onCreatePresupuestoLater: () => void; hasPresupuesto: boolean }) => (
+    <button type="button" onClick={onCreatePresupuestoLater} disabled={hasPresupuesto}>Reintentar presupuesto</button>
+  ),
+}))
 vi.mock("@/components/contactos/ContactoFormDialog", () => ({ ContactoFormDialog: () => null }))
-vi.mock("@/components/cirugias/AiResultsPanel", () => ({ AiResultsPanel: () => null }))
+vi.mock("@/components/cirugias/AiResultsPanel", () => ({
+  AiResultsPanel: ({ onApply }: { onApply: () => void }) => (
+    <button type="button" onClick={onApply}>Test completar campos vacíos</button>
+  ),
+}))
 vi.mock("@/components/cirugias/AiUploadZone", () => ({ AiUploadZone: () => null }))
 
 // ─── Helpers ───
@@ -234,6 +254,9 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     latestLookupCallbacks.clear()
     mockStore.contactos = []
     mockStore.classifications = []
+    presupuestoApiMocks.fetch.mockReset()
+    presupuestoApiMocks.create.mockReset()
+    presupuestoApiMocks.build.mockClear()
     mockAiHookState = {
       extract: vi.fn(),
       result: null,
@@ -247,6 +270,18 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     if (typeof Element.prototype.scrollIntoView !== "function") {
       Element.prototype.scrollIntoView = function () {}
     }
+  })
+
+  it("presents optional authorization upload before the manual case fields", () => {
+    renderDialog()
+
+    const authorizationHeading = screen.getByRole("heading", { name: "Cargar autorización" })
+    const dataHeading = screen.getByRole("heading", { name: "Datos principales" })
+
+    expect(screen.getByText("Opcional")).toBeInTheDocument()
+    expect(
+      authorizationHeading.compareDocumentPosition(dataHeading) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
   })
 
   it("does not show the MissingFieldsBar or footer count before Siguiente is clicked (step0Errors empty)", () => {
@@ -419,6 +454,48 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     expect(screen.getByRole("button", { name: "Crear paciente" })).toBeInTheDocument()
   })
 
+  it("bulk apply completes empty fields without replacing existing values", () => {
+    mockAiHookState.result = {
+      confidence: 0.9,
+      extracted: {
+        paciente: "Paciente IA",
+        dni: "30123456",
+        medico: "Médico IA",
+        institucion: "Institución IA",
+        obra_social: "Pagador IA",
+        fecha_cirugia: "2026-09-12",
+        fecha_probable: "",
+        patologia_sugerida: "",
+        provincia_sugerida: "",
+        localidad_sugerida: "",
+        material_autorizado: [],
+        observaciones: "",
+      },
+    }
+
+    renderDialog({
+      ...EMPTY_NEW_FORM,
+      patient: "Paciente confirmado",
+      surgeon: "Médico confirmado",
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Test completar campos vacíos" }))
+
+    const formState = screen.getByTestId("form-state").textContent
+    expect(formState).toContain('"patient":"Paciente confirmado"')
+    expect(formState).toContain('"surgeon":"Médico confirmado"')
+    expect(formState).toContain('"institution":"Institución IA"')
+    expect(formState).toContain('"date":"2026-09-12"')
+    expect(screen.getByRole("status")).toHaveTextContent("Campos vacíos completados")
+    expect(screen.queryByRole("button", { name: "Test completar campos vacíos" })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "Revisar datos" }))
+    expect(screen.getByTestId("clf-Cliente / Pagador *")).toHaveFocus()
+
+    fireEvent.click(screen.getByRole("button", { name: "Ver autorización" }))
+    expect(screen.getByRole("button", { name: "Test completar campos vacíos" })).toBeInTheDocument()
+  })
+
   it("shows an explicit text-only indicator after clicking 'Mantener texto'", () => {
     mockAiHookState.result = {
       confidence: 0.82,
@@ -584,5 +661,68 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     ).toBe(false)
 
     consoleErrorSpy.mockRestore()
+  })
+
+  it("retries a failed linked Presupuesto without creating another Surgery or family request", async () => {
+    const onConfirm = vi.fn().mockResolvedValue(true)
+    presupuestoApiMocks.fetch.mockResolvedValue([])
+    presupuestoApiMocks.create.mockResolvedValue({ id: "budget-1" })
+
+    render(
+      <NewSurgeryDialog
+        open
+        onOpenChange={vi.fn()}
+        wizardStep={2}
+        setWizardStep={vi.fn()}
+        newForm={{ ...EMPTY_NEW_FORM, patient: "Paciente Test", classification: "Otro" }}
+        setNewForm={vi.fn()}
+        createPRNow
+        setCreatePRNow={vi.fn()}
+        prForm={buildPrFormStub()}
+        onConfirm={onConfirm}
+        createdSurgeryId="surgery-db-1"
+        instrumentadores={[]}
+      />
+    )
+
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await waitFor(() => expect(presupuestoApiMocks.fetch).toHaveBeenCalledWith("test-co", { surgeryId: "surgery-db-1", take: 1 }))
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar presupuesto" }))
+    await waitFor(() => expect(presupuestoApiMocks.create).toHaveBeenCalledWith("test-co", expect.objectContaining({ surgeryId: "surgery-db-1" })))
+
+    expect(onConfirm).toHaveBeenCalledOnce()
+    expect(presupuestoApiMocks.create).toHaveBeenCalledOnce()
+  })
+
+  it("reconciles an ambiguous retry response when the linked Presupuesto already committed", async () => {
+    presupuestoApiMocks.fetch
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "budget-committed" }])
+    presupuestoApiMocks.create.mockRejectedValueOnce(new Error("La respuesta se perdió"))
+
+    render(
+      <NewSurgeryDialog
+        open
+        onOpenChange={vi.fn()}
+        wizardStep={2}
+        setWizardStep={vi.fn()}
+        newForm={{ ...EMPTY_NEW_FORM, patient: "Paciente Test", classification: "Otro" }}
+        setNewForm={vi.fn()}
+        createPRNow
+        setCreatePRNow={vi.fn()}
+        prForm={buildPrFormStub()}
+        onConfirm={vi.fn().mockResolvedValue(true)}
+        createdSurgeryId="surgery-db-1"
+        instrumentadores={[]}
+      />
+    )
+
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await waitFor(() => expect(presupuestoApiMocks.fetch).toHaveBeenCalledOnce())
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar presupuesto" }))
+
+    await waitFor(() => expect(presupuestoApiMocks.fetch).toHaveBeenCalledTimes(2))
+    expect(presupuestoApiMocks.create).toHaveBeenCalledOnce()
+    expect(screen.getByRole("button", { name: "Reintentar presupuesto" })).toBeDisabled()
   })
 })

@@ -243,7 +243,7 @@ export function RemitoDraftDialog({ open, request, onOpenChange, onSubmit, onSuc
   const [errors, setErrors] = useState<FormErrors>({})
   const [status, setStatus] = useState<"draft" | "submitting" | "success" | "error">("draft")
   const [submitError, setSubmitError] = useState("")
-  const fieldRefs = useRef<Record<string, HTMLElement | null>>({})
+  const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLSelectElement | null>>({})
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const branchPresetAppliedRef = useRef(false)
   const [isDirty, setIsDirty] = useState(false)
@@ -280,7 +280,7 @@ export function RemitoDraftDialog({ open, request, onOpenChange, onSubmit, onSuc
     })
   }, [devPreset, isDirty, isEditing, open])
 
-  const setFieldRef = (name: string) => (element: HTMLElement | null) => {
+  const setFieldRef = (name: string) => (element: HTMLInputElement | HTMLSelectElement | null) => {
     fieldRefs.current[name] = element
   }
 

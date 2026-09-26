@@ -31,7 +31,7 @@ import { CreateProveedorModal } from "@/components/compras/CreateProveedorModal"
 import { ArticleSearchInput } from "@/components/compras/ArticleSearchInput"
 import { useComprasOcrForm, type ComprasOcrTipo } from "@/hooks/useComprasOcrForm"
 import { cn } from "@/lib/utils"
-import type { Proveedor } from "@/types"
+import type { Proveedor, RemitoProveedor } from "@/types"
 
 // ─── OSSUM brand surface (scoped) ────────────────────────────────────────────
 const NAVY = "bg-[var(--ossum-navy)] text-white"
@@ -51,25 +51,36 @@ const OSSUM_SCOPE_STYLE = {
 } as React.CSSProperties
 
 const fieldClass =
-  "h-8 bg-white text-sm border border-[var(--ossum-line)] rounded-[3px] px-2 focus-visible:outline-none focus-visible:border-[var(--ossum-action)] focus-visible:ring-1 focus-visible:ring-[var(--ossum-action)]"
+  "h-11 sm:h-8 bg-white text-sm border border-[var(--ossum-line)] rounded-[3px] px-2 focus-visible:outline-none focus-visible:border-[var(--ossum-action)] focus-visible:ring-1 focus-visible:ring-[var(--ossum-action)]"
 const cellInputClass =
   "h-7 w-full bg-transparent text-xs px-1.5 focus-visible:outline-none focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-[var(--ossum-action)] rounded-[2px] border border-transparent focus-visible:border-[var(--ossum-action)]"
 const selectClass =
-  "h-8 w-full rounded-[3px] border border-[var(--ossum-line)] bg-white px-2 text-sm focus-visible:outline-none focus-visible:border-[var(--ossum-action)] focus-visible:ring-1 focus-visible:ring-[var(--ossum-action)]"
+  "h-11 sm:h-8 w-full rounded-[3px] border border-[var(--ossum-line)] bg-white px-2 text-sm focus-visible:outline-none focus-visible:border-[var(--ossum-action)] focus-visible:ring-1 focus-visible:ring-[var(--ossum-action)]"
 
 type Mode = "ia" | "manual"
 
 export function ComprasOcrWorkspace({
   tipo,
   backHref,
+  persistToStore = true,
+  onRemitoConfirmed,
 }: {
   tipo: ComprasOcrTipo
   backHref: string
+  persistToStore?: boolean
+  onRemitoConfirmed?: (payload: Omit<RemitoProveedor, "id">) => void | Promise<void>
 }) {
   const router = useRouter()
   const form = useComprasOcrForm({
     tipo,
-    onSuccess: () => router.push(backHref),
+    persistToStore,
+    onSuccess: async (payload) => {
+      if (onRemitoConfirmed && tipo === "remito-proveedor" && payload) {
+        await onRemitoConfirmed(payload)
+        return
+      }
+      router.push(backHref)
+    },
   })
 
   const [mode, setMode] = React.useState<Mode>("ia")
@@ -95,21 +106,21 @@ export function ComprasOcrWorkspace({
     <div className="flex min-h-full flex-col" style={OSSUM_SCOPE_STYLE}>
       {/* ── HEADER ── */}
       <header className={cn("sticky top-0 z-30 border-b border-[var(--ossum-navy)]", NAVY)}>
-        <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-3 px-4 py-2 sm:px-6">
+          <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 px-3 py-2 sm:gap-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-1">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-9 text-white/80 hover:bg-white/10 hover:text-white"
+              className="h-11 px-2 text-white/80 hover:bg-white/10 hover:text-white sm:h-9 sm:px-3"
               onClick={() => router.push(backHref)}
             >
               <ArrowLeft className="size-4" /> Volver
             </Button>
           </div>
           <div className="flex min-w-0 items-center gap-3">
-            <h1 className="truncate text-base font-semibold text-white">{titleText}</h1>
-            <span className="rounded-[3px] bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70">
+             <h1 className="truncate text-sm font-semibold text-white sm:text-base">{titleText}</h1>
+             <span className="hidden rounded-[3px] bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70 sm:inline">
               {form.phase === "upload" && mode === "ia"
                 ? "Sin documento cargado"
                 : form.isProcessing
@@ -121,7 +132,7 @@ export function ComprasOcrWorkspace({
       </header>
 
       {/* ── MAIN ── */}
-      <main className="mx-auto w-full max-w-[1800px] flex-1 px-4 py-4 sm:px-6">
+       <main className="mx-auto w-full max-w-[1800px] flex-1 px-3 py-3 sm:px-6 sm:py-4">
         {!form.activeCompany?.id ? (
           <div className="rounded-md border border-[var(--ossum-line)] bg-white p-6">
             <h2 className="text-base font-semibold text-[var(--ossum-navy)]">
@@ -134,7 +145,7 @@ export function ComprasOcrWorkspace({
         ) : (
           <div className="space-y-3">
             {/* ── MODE SELECTOR ── */}
-            <div className="flex items-center gap-2 rounded-md border border-[var(--ossum-line)] bg-white p-1.5">
+             <div className="flex flex-col items-stretch gap-1 rounded-md border border-[var(--ossum-line)] bg-white p-1.5 sm:flex-row sm:items-center sm:gap-2">
               <ModeButton
                 active={mode === "ia"}
                 onClick={() => handleModeChange("ia")}
@@ -210,7 +221,7 @@ export function ComprasOcrWorkspace({
 
                 {/* ── SECTION: Datos del documento ── */}
                 <Section label="Datos del documento">
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-3 sm:gap-y-2 lg:grid-cols-4">
                     {/* Proveedor */}
                     <div className="col-span-2 sm:col-span-2 lg:col-span-2">
                       <Label className="mb-0.5 block text-[11px] font-medium text-gray-500">
@@ -311,7 +322,7 @@ export function ComprasOcrWorkspace({
                       </>
                     )}
 
-                    <CompactField label="Orden de compra (ref)" className="col-span-2">
+                     <CompactField label="Orden de compra (ref)" className="sm:col-span-2">
                       <Input
                         value={form.ordenCompraRef}
                         onChange={(e) => form.setOrdenCompraRef(e.target.value)}
@@ -320,7 +331,7 @@ export function ComprasOcrWorkspace({
                       />
                     </CompactField>
 
-                    <CompactField label="Observaciones" className="col-span-2">
+                     <CompactField label="Observaciones" className="sm:col-span-2">
                       <Input
                         value={form.observaciones}
                         onChange={(e) => form.setObservaciones(e.target.value)}
@@ -357,8 +368,8 @@ export function ComprasOcrWorkspace({
                       No hay items. Agregá una línea para empezar.
                     </p>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                     <div className="-mx-3 overflow-x-auto px-3">
+                       <table className="min-w-[760px] w-full text-xs">
                         <thead>
                           <tr className="border-b border-[var(--ossum-line)] text-left text-[11px] text-gray-400">
                             <th className="w-8 px-1 py-1 text-right font-medium">#</th>
@@ -498,10 +509,10 @@ export function ComprasOcrWorkspace({
                 )}
 
                 {/* ── ACTIONS ── */}
-                <div className="flex items-center justify-between gap-2 pb-4">
+                 <div className="flex flex-col-reverse items-stretch justify-between gap-2 pb-4 sm:flex-row sm:items-center">
                   <div className="flex items-center gap-2">
                     {mode === "ia" && (
-                      <Button
+                   <Button
                         type="button"
                         variant="ghost"
                         size="sm"
@@ -517,7 +528,7 @@ export function ComprasOcrWorkspace({
                     size="sm"
                     onClick={form.handleConfirm}
                     disabled={form.isProcessing}
-                    className={cn("h-9 gap-1.5", ACTION)}
+                     className={cn("h-11 w-full gap-1.5 sm:h-9 sm:w-auto", ACTION)}
                   >
                     {form.isProcessing ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -614,7 +625,7 @@ function ModeButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-1 items-center gap-3 rounded-[5px] px-3 py-2 text-left transition-all",
+         "flex min-h-11 flex-1 items-center gap-3 rounded-[5px] px-3 py-2 text-left transition-all sm:min-h-0",
         active
           ? "bg-[var(--ossum-action)]/8 ring-1 ring-[var(--ossum-action)]/30"
           : "hover:bg-[var(--ossum-surface-2)]"

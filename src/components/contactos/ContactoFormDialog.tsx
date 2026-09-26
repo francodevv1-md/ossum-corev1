@@ -7,12 +7,14 @@ import { toast } from "sonner"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { InstitutionGeographySection } from "@/components/contactos/InstitutionGeographySection"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { createContactApi, updateContactApi } from "@/lib/api/contacts"
 import { mapApiContactToContacto, mapContactoToApiPayload } from "@/lib/api/contact-adapter"
+import type { ContactAddressGeoInput } from "@/lib/validators/contact"
 import { CONTACT_GROUPS, CONTACT_ROLE_LABELS, getGroupsForRole } from "@/lib/contacts.constants"
 import type { CondicionIvaCliente, Contacto, ContactRole, TipoPersona } from "@/types"
 
@@ -55,7 +57,7 @@ function Field({ name, label, error, required, className, children }: { name: st
 }
 
 function ContactoFormInner({ contacto, onSaved, onOpenChange, defaultRoles, defaultGroups, initialValues }: Omit<ContactoFormDialogProps, "open">) {
-  const { activeCompany } = useAuth()
+  const { activeCompany, currentAccess } = useAuth()
   const isEditing = Boolean(contacto)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
@@ -89,6 +91,7 @@ function ContactoFormInner({ contacto, onSaved, onOpenChange, defaultRoles, defa
   const [matricula, setMatricula] = useState(contacto?.datosMedico?.matricula ?? "")
   const [especialidad, setEspecialidad] = useState(contacto?.datosMedico?.especialidad ?? "")
   const [observacionEntrega, setObservacionEntrega] = useState(contacto?.datosInstitucion?.observacionEntrega ?? "")
+  const [mainAddressGeo, setMainAddressGeo] = useState<ContactAddressGeoInput | undefined>(contacto?.mainAddressGeo)
 
   useEffect(() => {
     companyIdRef.current = activeCompany?.id
@@ -144,7 +147,7 @@ function ContactoFormInner({ contacto, onSaved, onOpenChange, defaultRoles, defa
       datosMedico: groups.includes("medicos") ? { matricula: matricula.trim() || undefined, especialidad: especialidad.trim() || undefined } : undefined,
       datosInstitucion: groups.includes("instituciones") ? { observacionEntrega: observacionEntrega.trim() || undefined } : undefined,
     }
-    const payload = mapContactoToApiPayload(formData)
+    const payload = mapContactoToApiPayload(formData, groups.includes("instituciones") ? mainAddressGeo : undefined)
     if (isEditing) {
       payload.isActive = estado === "activo"
       if (tipoPersona === "juridica") {
@@ -209,9 +212,10 @@ function ContactoFormInner({ contacto, onSaved, onOpenChange, defaultRoles, defa
           <Field name="telefono" label="Teléfono"><Input type="tel" value={telefono} onChange={(event) => setTelefono(event.target.value)} className={controlClass} /></Field>
           <Field name="email" label="Email" error={errors.email}><Input ref={emailRef} type="email" value={email} onChange={(event) => { setEmail(event.target.value); clearError("email") }} className={controlClass} /></Field>
         </div>
-      </section>
+       </section>
+       {groups.includes("instituciones") && activeCompany?.id && <InstitutionGeographySection companyId={activeCompany.id} actorRole={currentAccess?.role} address={{ street: domicilio, city: localidad, state: provincia }} value={mainAddressGeo} onChange={setMainAddressGeo} />}
 
-      <section className="border border-[var(--ossum-line)] bg-white" aria-labelledby="contact-classification">
+       <section className="border border-[var(--ossum-line)] bg-white" aria-labelledby="contact-classification">
         <h2 id="contact-classification" className="border-b border-[var(--ossum-line)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--ossum-navy)]">Roles y grupos</h2>
         <div className="space-y-4 p-3">
           <div className="flex flex-wrap gap-2">{ROLE_OPTIONS.map((role) => <label key={role} className="flex h-11 cursor-pointer items-center gap-2 border border-[var(--ossum-line)] px-3 text-sm sm:h-8 sm:text-xs"><Checkbox checked={roles.includes(role)} onCheckedChange={() => toggleRole(role)} /><span>{CONTACT_ROLE_LABELS[role]}</span></label>)}</div>

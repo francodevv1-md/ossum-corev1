@@ -6,13 +6,13 @@
  * - low confidence → amber pill "Confianza baja · NN%" + AlertTriangle (Alert absorbed)
  * - the standalone amber Alert block and the Progress bar are no longer rendered
  * - Material autorizado renders inside a collapsed <details> with the count summary
- * - "Aplicar al formulario" stays driven only by canApply (confidence does NOT gate apply)
+ * - "Completar campos vacíos" stays driven only by canApply (confidence does NOT gate apply)
  */
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 
 import { AiResultsPanel } from "@/components/cirugias/AiResultsPanel"
-import type { AutorizacionAIResponse, MaterialAutorizadoItem } from "@/lib/validators/autorizacion-ai"
+import { AutorizacionExtractedSchema, type AutorizacionAIResponse, type MaterialAutorizadoItem } from "@/lib/validators/autorizacion-ai"
 
 function buildMaterialItem(overrides: Partial<MaterialAutorizadoItem> = {}): MaterialAutorizadoItem {
   return {
@@ -54,10 +54,18 @@ function buildResult(overrides: Partial<AutorizacionAIResponse> = {}): Autorizac
 }
 
 describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
+  it("shows one compact result summary without provider noise", () => {
+    render(<AiResultsPanel result={buildResult()} onApply={vi.fn()} onReset={vi.fn()} />)
+
+    expect(screen.getByText("Autorización leída")).toBeInTheDocument()
+    expect(screen.getByText("Ver datos detectados")).toBeInTheDocument()
+    expect(screen.queryByText(/Provider:/)).toBeNull()
+  })
+
   describe("confidence pill (AC-02 / AC-09)", () => {
-    it("renders the ok emerald pill with 'Confianza NN%' when confidence >= threshold", () => {
-      render(<AiResultsPanel result={buildResult({ confidence: 0.72 })} onApply={vi.fn()} onReset={vi.fn()} />)
-      const pill = screen.getByText(/Confianza 72%/)
+    it("renders the ok emerald pill for high confidence", () => {
+      render(<AiResultsPanel result={buildResult({ confidence: 0.82 })} onApply={vi.fn()} onReset={vi.fn()} />)
+      const pill = screen.getByText(/Confianza 82%/)
       expect(pill).toBeInTheDocument()
       // Emerald token classes for the ok state (DESIGN §7.2).
       expect(pill.className).toContain("border-emerald-300")
@@ -65,7 +73,7 @@ describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
     })
 
     it("renders the low amber pill with 'Confianza baja · NN%' + AlertTriangle when confidence < threshold", () => {
-      const { container } = render(
+      render(
         <AiResultsPanel result={buildResult({ confidence: 0.18 })} onApply={vi.fn()} onReset={vi.fn()} />
       )
       const pill = screen.getByText(/Confianza baja · 18%/)
@@ -78,14 +86,12 @@ describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
       const svg = pill.querySelector("svg")
       expect(svg).not.toBeNull()
       // The native title tooltip preserves the removed AlertDescription text.
-      expect(pill).toHaveAttribute("title", "Confianza baja — revisá los datos antes de aplicar.")
-      // Sanity: container rendered.
-      expect(container.firstChild).not.toBeNull()
+      expect(pill).toHaveAttribute("title", "Revisá los datos detectados antes de aplicarlos.")
     })
 
     it("does NOT render an icon inside the ok pill (icon is unique to the low state)", () => {
-      render(<AiResultsPanel result={buildResult({ confidence: 0.72 })} onApply={vi.fn()} onReset={vi.fn()} />)
-      const pill = screen.getByText(/Confianza 72%/)
+      render(<AiResultsPanel result={buildResult({ confidence: 0.82 })} onApply={vi.fn()} onReset={vi.fn()} />)
+      const pill = screen.getByText(/Confianza 82%/)
       expect(pill.querySelector("svg")).toBeNull()
     })
 
@@ -97,11 +103,11 @@ describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
     })
 
     it("does NOT render the Progress bar anymore", () => {
-      const { container } = render(
-        <AiResultsPanel result={buildResult({ confidence: 0.72 })} onApply={vi.fn()} onReset={vi.fn()} />
+      render(
+        <AiResultsPanel result={buildResult({ confidence: 0.82 })} onApply={vi.fn()} onReset={vi.fn()} />
       )
       // shadcn Progress renders a <div> with role="progressbar" — must be absent.
-      expect(container.querySelector('[role="progressbar"]')).toBeNull()
+      expect(screen.queryByRole("progressbar")).toBeNull()
     })
   })
 
@@ -111,10 +117,10 @@ describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
         buildMaterialItem({ codigo: "IMP-RTR-001", descripcion: "Implante A" }),
         buildMaterialItem({ codigo: "NOPE-999", descripcion: "Implante B" }),
       ]
-      const { container } = render(
+      render(
         <AiResultsPanel result={buildResult({ extracted: { ...buildResult().extracted, material_autorizado: items } })} onApply={vi.fn()} onReset={vi.fn()} />
       )
-      const details = container.querySelector("details")
+      const details = screen.getByText("Material autorizado (2 ítems detectados)").closest("details")
       expect(details).not.toBeNull()
       expect(details?.hasAttribute("open")).toBe(false)
       expect(screen.getByText("Material autorizado (2 ítems detectados)")).toBeInTheDocument()
@@ -125,10 +131,10 @@ describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
         buildMaterialItem({ codigo: "IMP-RTR-001", descripcion: "Implante A" }),
         buildMaterialItem({ codigo: "NOPE-999", descripcion: "Implante B" }),
       ]
-      const { container } = render(
+      render(
         <AiResultsPanel result={buildResult({ extracted: { ...buildResult().extracted, material_autorizado: items } })} onApply={vi.fn()} onReset={vi.fn()} />
       )
-      fireEvent.click(container.querySelector("details summary") as HTMLElement)
+      fireEvent.click(screen.getByText("Material autorizado (2 ítems detectados)"))
       expect(screen.getByText("IMP-RTR-001")).toBeInTheDocument()
       expect(screen.getByText("NOPE-999")).toBeInTheDocument()
       expect(screen.getByText("En catálogo")).toBeInTheDocument()
@@ -137,7 +143,7 @@ describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
   })
 
   describe("apply button gating (AC-09 / AC-10)", () => {
-    it("keeps 'Aplicar al formulario' enabled when looks_like_authorization=true regardless of low confidence", () => {
+    it("keeps 'Completar campos vacíos' enabled when looks_like_authorization=true regardless of low confidence", () => {
       render(
         <AiResultsPanel
           result={buildResult({ confidence: 0.18, looks_like_authorization: true })}
@@ -145,13 +151,13 @@ describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
           onReset={vi.fn()}
         />
       )
-      const applyBtn = screen.getByRole("button", { name: "Aplicar al formulario" })
+      const applyBtn = screen.getByRole("button", { name: "Completar campos vacíos" })
       // Confidence is low but looks_like_authorization is true → canApply=true → enabled.
       // Confidence must NOT gate apply (AC-09).
       expect(applyBtn).not.toBeDisabled()
     })
 
-    it("disables 'Aplicar al formulario' only when looks_like_authorization=false (canApply=false)", () => {
+    it("keeps completion available when useful data was detected even if the document type is uncertain", () => {
       render(
         <AiResultsPanel
           result={buildResult({ confidence: 0.95, looks_like_authorization: false })}
@@ -159,14 +165,36 @@ describe("AiResultsPanel — NUEVA-CIRUGIA-IA-UX-P1", () => {
           onReset={vi.fn()}
         />
       )
-      const applyBtn = screen.getByRole("button", { name: "Aplicar al formulario" })
-      expect(applyBtn).toBeDisabled()
+      const applyBtn = screen.getByRole("button", { name: "Completar campos vacíos" })
+      expect(applyBtn).not.toBeDisabled()
+      expect(screen.getByText("Tipo de documento sin confirmar")).toBeInTheDocument()
+    })
+
+    it("disables completion only when no useful data was detected", () => {
+      const empty = AutorizacionExtractedSchema.parse({})
+
+      render(
+        <AiResultsPanel
+          result={buildResult({ looks_like_authorization: false, extracted: empty })}
+          onApply={vi.fn()}
+          onReset={vi.fn()}
+        />
+      )
+
+      expect(screen.getByRole("button", { name: "Completar campos vacíos" })).toBeDisabled()
+    })
+
+    it("shows 50% as medium confidence instead of a positive green signal", () => {
+      render(<AiResultsPanel result={buildResult({ confidence: 0.5 })} onApply={vi.fn()} onReset={vi.fn()} />)
+
+      const pill = screen.getByText("Confianza media · 50%")
+      expect(pill.className).toContain("border-amber-300")
     })
 
     it("calls onApply when the apply button is clicked (bulk-apply semantics unchanged, AC-10)", () => {
       const onApply = vi.fn()
       render(<AiResultsPanel result={buildResult()} onApply={onApply} onReset={vi.fn()} />)
-      fireEvent.click(screen.getByRole("button", { name: "Aplicar al formulario" }))
+      fireEvent.click(screen.getByRole("button", { name: "Completar campos vacíos" }))
       expect(onApply).toHaveBeenCalledTimes(1)
     })
   })

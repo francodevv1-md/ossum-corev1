@@ -5,9 +5,10 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CLIENT_OPTIONS, INSTITUTION_OPTIONS } from "@/lib/statusHelpers"
+import { INSTITUTION_OPTIONS } from "@/lib/statusHelpers"
 import { VENDEDORES_OPTIONS } from "@/lib/presupuestos.constants"
 import { SurgerySelector } from "./SurgerySelector"
+import { PresupuestoCommercialIdentityFields } from "./PresupuestoCommercialIdentityFields"
 import type { PresupuestoFormData, PresupuestoFormErrors } from "@/hooks/usePresupuestoForm"
 import type { Surgery } from "@/types"
 import { User, Building2, Briefcase } from "lucide-react"
@@ -65,26 +66,10 @@ export function DatosComercialesSection({
         />
       )}
 
+      <PresupuestoCommercialIdentityFields formData={formData} errors={errors} updateField={updateField} />
+
       {/* Form fields grid */}
       <div className="grid gap-4 sm:grid-cols-2">
-        {/* Client (required) */}
-        <div className="space-y-2">
-          <Label className="text-xs font-medium">
-            Cliente / Obra Social <span className="text-destructive">*</span>
-          </Label>
-          <Select value={formData.client} onValueChange={(v) => updateField("client", v)}>
-            <SelectTrigger className={errors.client ? "border-destructive" : ""}>
-              <SelectValue placeholder="Seleccionar cliente" />
-            </SelectTrigger>
-            <SelectContent>
-              {CLIENT_OPTIONS.filter((o) => o.value).map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.client && <p className="text-[10px] text-destructive">{errors.client}</p>}
-        </div>
-
         {/* Vendedor (required) */}
         <div className="space-y-2">
           <Label className="text-xs font-medium">

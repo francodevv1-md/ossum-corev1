@@ -4,6 +4,9 @@ import { ExpedienteHeader } from "@/components/expediente/ExpedienteHeader"
 import { buildExpedienteHeaderModel } from "@/components/expediente/expediente-header.model"
 import type { Surgery } from "@/types"
 
+const authState = vi.hoisted(() => ({ role: "admin" }))
+vi.mock("@/components/auth/AuthProvider", () => ({ useAuth: () => ({ currentAccess: { role: authState.role } }) }))
+
 function makeSurgery(overrides: Partial<Surgery> = {}): Surgery {
   return {
     id: "technical-surgery-1",
@@ -29,11 +32,11 @@ function makeSurgery(overrides: Partial<Surgery> = {}): Surgery {
   }
 }
 
-function renderHeader(surgery = makeSurgery()) {
+function renderHeader(surgery = makeSurgery(), presupuestoId: string | undefined = "PR-1") {
   const model = buildExpedienteHeaderModel({
     surgery,
     docStatus: "Incompleta",
-    presupuestoId: "PR-1",
+    presupuestoId,
     remitoId: "NR-1",
     fvNumber: "FV-1",
     facturacionStatus: "pending",
@@ -47,7 +50,7 @@ function renderHeader(surgery = makeSurgery()) {
     <ExpedienteHeader
       surgery={surgery}
       docStatus="Incompleta"
-      presupuestoId="PR-1"
+      presupuestoId={presupuestoId}
       model={model}
       operationsDisplay={{
         attentionReasons: ["SLA vencido", "Sin disponibilidad", "Urgente"],
@@ -104,5 +107,11 @@ describe("ExpedienteHeader", () => {
 
     expect(onEditFicha).toHaveBeenCalledOnce()
     expect(onViewPR).toHaveBeenCalledOnce()
+  })
+
+  it("hides Generate PR from read-only roles while preserving read access", () => {
+    authState.role = "logistica"
+    renderHeader(makeSurgery(), "")
+    expect(screen.queryByRole("button", { name: /Generar PR/i })).not.toBeInTheDocument()
   })
 })

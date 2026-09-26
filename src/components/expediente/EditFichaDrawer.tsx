@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { ReferenciasAdministrativasEditor } from "@/components/cirugias/ReferenciasAdministrativasEditor"
-import { emitOperationalNotification } from "@/lib/api/operational-notifications"
+import { apiFetch } from "@/lib/api/client"
 import { useOrtoTrackStore } from "@/lib/store"
 import { CLASSIFICATIONS, COORDINADOR_CX_OPTIONS } from "@/lib/cirugias.constants"
 import { VENDEDORES_OPTIONS } from "@/lib/shared-constants"
@@ -61,6 +61,16 @@ export function EditFichaDrawer({ surgery, open, onOpenChange }: EditFichaDrawer
   const store = useOrtoTrackStore()
   const { activeCompany } = useAuth()
   const instrumentadorOptions = useMemo(() => ["Sin asignar", ...store.instrumentadores.map((item) => item.name)], [store.instrumentadores])
+  const coordinatorOptions = useMemo(() => {
+    const contacts = store.getContactosByGroup("coordinadores")
+    return [
+      { value: "Sin asignar", contactId: undefined },
+      ...COORDINADOR_CX_OPTIONS.filter((option) => option !== "Sin asignar").map((option) => ({
+        value: option,
+        contactId: contacts.find((contact) => contact.nombre.toLowerCase().includes(option.toLowerCase()))?.id,
+      })),
+    ]
+  }, [store])
   const [form, setForm] = useState<Partial<Surgery>>({})
 
   const hydrateForm = useCallback(() => {
@@ -83,6 +93,7 @@ export function EditFichaDrawer({ surgery, open, onOpenChange }: EditFichaDrawer
       localidad: latestSurgery.localidad,
       instrumentador: latestSurgery.instrumentador,
       coordinadorCx: latestSurgery.coordinadorCx,
+      coordinadorContactId: latestSurgery.coordinadorContactId,
       vendedor: latestSurgery.vendedor,
       titular: latestSurgery.titular,
       tipoGestion: latestSurgery.tipoGestion,
@@ -97,6 +108,8 @@ export function EditFichaDrawer({ surgery, open, onOpenChange }: EditFichaDrawer
   }, [store, surgery])
 
   useEffect(() => {
+    // The drawer hydrates its draft only when opened; this is intentionally a UI boundary sync.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) hydrateForm()
   }, [open, hydrateForm])
 
@@ -116,11 +129,14 @@ export function EditFichaDrawer({ surgery, open, onOpenChange }: EditFichaDrawer
         form.coordinadorCx !== undefined &&
         nextCoordinator !== surgery.coordinadorCx
 
-      if (coordinatorChanged && activeCompany?.id && nextCoordinator) {
-        await emitOperationalNotification(activeCompany.id, surgery.id, {
-          sourceEntityId: typeof crypto !== "undefined" ? crypto.randomUUID() : `${surgery.id}-${Date.now()}`,
-          eventType: "coordinator_assigned",
-          coordinatorName: nextCoordinator,
+      if (coordinatorChanged && activeCompany?.id) {
+        await apiFetch(`/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(surgery.backendId ?? surgery.id)}/coordinator`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contactId: form.coordinadorContactId ?? coordinatorOptions.find((option) => option.value === nextCoordinator)?.contactId ?? null,
+            coordinatorName: nextCoordinator === "Sin asignar" ? null : nextCoordinator,
+          }),
         })
       }
 
@@ -138,7 +154,7 @@ export function EditFichaDrawer({ surgery, open, onOpenChange }: EditFichaDrawer
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full max-w-none border-l border-slate-200 bg-slate-50 p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:max-w-[640px] xl:max-w-[720px]">
+      <SheetContent side="right" className="w-full max-w-none gap-0 border-l border-slate-200 bg-slate-50 p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:max-w-[640px] xl:max-w-[720px]">
         <SheetHeader className="gap-3 border-b border-slate-200 bg-white px-5 py-4 text-left dark:border-slate-800 dark:bg-slate-900 sm:px-6">
           <div className="flex flex-wrap items-center gap-2 pr-8">
             <Badge className="rounded-md bg-sky-700 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white hover:bg-sky-700">{surgery.id}</Badge>
@@ -155,7 +171,7 @@ export function EditFichaDrawer({ surgery, open, onOpenChange }: EditFichaDrawer
           </div>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-198px)]">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-5">
             <Section title="Identificación y paciente" description="Datos principales visibles en el encabezado" icon={UserRound}>
               <div className="grid gap-4 md:grid-cols-2">
@@ -185,7 +201,7 @@ export function EditFichaDrawer({ surgery, open, onOpenChange }: EditFichaDrawer
 
             <Section title="Gestión operativa" description="Asignaciones y destino administrativo" icon={ClipboardList}>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <Field label="Coordinador CX"><Select value={String(form.coordinadorCx ?? "Sin asignar")} onValueChange={(value) => updateField("coordinadorCx", value)}><SelectTrigger className={"h-9 w-full " + SELECT_TRIGGER_CLS}><SelectValue /></SelectTrigger><SelectContent className={SELECT_CONTENT_CLS}>{COORDINADOR_CX_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></Field>
+                <Field label="Coordinador CX"><Select value={String(form.coordinadorCx ?? "Sin asignar")} onValueChange={(value) => { const option = coordinatorOptions.find((candidate) => candidate.value === value); updateField("coordinadorCx", value); updateField("coordinadorContactId", option?.contactId) }}><SelectTrigger className={"h-9 w-full " + SELECT_TRIGGER_CLS}><SelectValue /></SelectTrigger><SelectContent className={SELECT_CONTENT_CLS}>{coordinatorOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.value}</SelectItem>)}</SelectContent></Select></Field>
                 <Field label="Vendedor"><Select value={String(form.vendedor ?? "Sin asignar")} onValueChange={(value) => updateField("vendedor", value)}><SelectTrigger className={"h-9 w-full " + SELECT_TRIGGER_CLS}><SelectValue /></SelectTrigger><SelectContent className={SELECT_CONTENT_CLS}>{VENDEDORES_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></Field>
                 <Field label="Instrumentador"><Select value={String(form.instrumentador ?? "Sin asignar")} onValueChange={(value) => updateField("instrumentador", value)}><SelectTrigger className={"h-9 w-full " + SELECT_TRIGGER_CLS}><SelectValue /></SelectTrigger><SelectContent className={SELECT_CONTENT_CLS}>{instrumentadorOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></Field>
                 <Field label="Tipo de gestión"><Input value={String(form.tipoGestion ?? "")} onChange={(e) => updateField("tipoGestion", e.target.value)} className={"h-9 " + INPUT_CLS} /></Field>

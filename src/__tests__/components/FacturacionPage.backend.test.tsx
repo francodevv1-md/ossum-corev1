@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   useInvoices: vi.fn(),
@@ -8,9 +8,10 @@ const mocks = vi.hoisted(() => ({
   openExpediente: vi.fn(),
   emit: vi.fn(),
   createInvoice: vi.fn(),
-  createPayment: vi.fn(),
-  refreshInvoices: vi.fn(),
-  fetchSurgeries: vi.fn(),
+    createPayment: vi.fn(),
+    refreshInvoices: vi.fn(),
+    fetchSurgeries: vi.fn(),
+    fiscalEvidenceDialog: vi.fn(),
 }))
 
 vi.mock("@/hooks/useInvoices", () => ({ useInvoices: mocks.useInvoices }))
@@ -31,6 +32,12 @@ vi.mock("@/components/cobros/CobroFormDialog", () => ({
   CobroFormDialog: ({ open, invoice, onSubmit }: { open: boolean; invoice: { id: string } | null; onSubmit: (payload: { invoiceId: string; amount: string }) => Promise<unknown> }) => open && invoice
     ? <button onClick={() => void onSubmit({ invoiceId: invoice.id, amount: "25" })}>Confirmar cobro backend</button>
     : null,
+}))
+vi.mock("@/components/facturacion/FiscalEvidenceDialog", () => ({
+  FiscalEvidenceDialog: ({ invoiceId }: { invoiceId: string }) => {
+    mocks.fiscalEvidenceDialog(invoiceId)
+    return <div role="dialog">Fiscal evidence {invoiceId}</div>
+  },
 }))
 
 import FacturacionPage from "@/app/ventas/facturacion/page"
@@ -66,11 +73,16 @@ const backendInvoices = [
 ] as InvoiceApiRow[]
 
 describe("FacturacionPage backend authority", () => {
+  let companyId = "company-real"
+
+  afterEach(cleanup)
+
   beforeEach(() => {
     vi.clearAllMocks()
+    companyId = "company-real"
     mocks.fetchSurgeries.mockResolvedValue([{ id: "CX-1", backendId: "surgery-real", patient: "Paciente backend" }])
-    mocks.useInvoices.mockReturnValue({
-      companyId: "company-real",
+    mocks.useInvoices.mockImplementation(() => ({
+      companyId,
       invoices: backendInvoices,
       loading: false,
       error: null,
@@ -78,7 +90,7 @@ describe("FacturacionPage backend authority", () => {
       emit: mocks.emit.mockResolvedValue(undefined),
       create: mocks.createInvoice.mockResolvedValue(undefined),
       refresh: mocks.refreshInvoices.mockResolvedValue(undefined),
-    })
+    }))
     mocks.usePayments.mockReturnValue({ error: null, mutatingId: null, create: mocks.createPayment.mockResolvedValue(undefined) })
   })
 
@@ -102,5 +114,21 @@ describe("FacturacionPage backend authority", () => {
 
     await waitFor(() => expect(mocks.createPayment).toHaveBeenCalledWith({ invoiceId: "invoice-real", amount: "25" }))
     expect(mocks.refreshInvoices).toHaveBeenCalledTimes(1)
+  })
+
+  it("clears fiscal evidence selection when the authoritative company changes", async () => {
+    const page = render(<FacturacionPage />)
+    await waitFor(() => expect(mocks.fetchSurgeries).toHaveBeenCalledWith("company-real"))
+
+    fireEvent.click(page.getAllByRole("button", { name: "Evidencia fiscal" })[1])
+    expect(page.getByRole("dialog")).toHaveTextContent("invoice-real")
+
+    companyId = "company-other"
+    page.rerender(<FacturacionPage />)
+    await waitFor(() => expect(page.queryByRole("dialog")).not.toBeInTheDocument())
+
+    companyId = "company-real"
+    page.rerender(<FacturacionPage />)
+    expect(page.queryByRole("dialog")).not.toBeInTheDocument()
   })
 })

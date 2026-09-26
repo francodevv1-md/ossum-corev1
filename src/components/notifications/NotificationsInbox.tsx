@@ -15,12 +15,13 @@ import { useNotifications } from "@/hooks/useNotifications"
 import {
   getAvailabilityRequestCandidate,
   getNotificationEntryId,
+  isCoordinatorAssignmentNotification,
   readAvailabilityRequestCandidate,
 } from "@/components/notifications/notificationAppearance"
 import { AvailabilityRequestActionDialog } from "@/components/notifications/AvailabilityRequestActionDialog"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { NotificationListItem } from "@/components/notifications/NotificationListItem"
-import { buildNotificationExpedienteLink } from "@/lib/expediente-navigation"
+import { buildNotificationCirugiaLink, buildNotificationExpedienteLink } from "@/lib/expediente-navigation"
 import {
   getNotificationEmptyCopy,
   NotificationStateSurface,
@@ -85,10 +86,9 @@ export function NotificationsInbox() {
         setSelectedRequestId(requestCandidate)
         return
       }
-      router.push(buildNotificationExpedienteLink({
-        surgeryId: notification.surgeryId,
-        entryId: getNotificationEntryId(notification),
-      }))
+       router.push(isCoordinatorAssignmentNotification(notification)
+         ? buildNotificationCirugiaLink(notification.surgeryId)
+         : buildNotificationExpedienteLink({ surgeryId: notification.surgeryId, entryId: getNotificationEntryId(notification) }))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo abrir la notificación")
     }
@@ -119,7 +119,7 @@ export function NotificationsInbox() {
         <div className="space-y-3.5 sm:space-y-4">
           <SectionHeader
             title="Notificaciones"
-            description="Inbox interno de menciones y novedades recientes."
+            description="Menciones y novedades de tus cirugías."
             actions={(
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <Badge variant="outline" className="rounded-full border-border/70 bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground sm:px-2.5 sm:text-[11px]">
@@ -202,8 +202,10 @@ export function NotificationsInbox() {
             </div>
             <p className="mt-2.5 text-[11px] text-muted-foreground sm:mt-3 sm:text-xs">
               {unreadCount > 0
-                ? `${unreadCount} notificaciones siguen pendientes.`
-                : "No hay pendientes por revisar."}
+                ? unreadCount === 1
+                  ? "1 notificación pendiente de revisar."
+                  : `${unreadCount} notificaciones pendientes de revisar.`
+                : "No hay nada pendiente, estás al día."}
             </p>
           </div>
         </div>

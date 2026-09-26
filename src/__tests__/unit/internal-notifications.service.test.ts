@@ -164,6 +164,7 @@ describe("internal-notifications.service", () => {
         createdAt: new Date("2026-07-03T13:00:00.000Z"),
         updatedAt: new Date("2026-07-03T13:00:00.000Z"),
         actor: { firstName: "Nora", lastName: "Test", email: "nora@test.com" },
+        surgery: { patient: { firstName: "Ana", lastName: "Paciente", legalName: null } },
       },
     ])
 
@@ -263,6 +264,7 @@ describe("internal-notifications.service", () => {
         createdAt: new Date("2026-07-03T13:00:00.000Z"),
         updatedAt: new Date("2026-07-03T13:05:00.000Z"),
         actor: { firstName: "Nora", lastName: "Test", email: "nora@test.com" },
+        surgery: { patient: { firstName: "Ana", lastName: "Paciente", legalName: null } },
       })
 
     const update = vi.fn().mockResolvedValue({
@@ -280,6 +282,7 @@ describe("internal-notifications.service", () => {
       createdAt: new Date("2026-07-03T13:00:00.000Z"),
       updatedAt: new Date("2026-07-03T13:05:00.000Z"),
       actor: { firstName: "Nora", lastName: "Test", email: "nora@test.com" },
+      surgery: { patient: { firstName: "Ana", lastName: "Paciente", legalName: null } },
     })
 
     const prisma = {
@@ -295,10 +298,24 @@ describe("internal-notifications.service", () => {
       recipientUserId: "user-2",
       notificationId: "notif-1",
     })
+    const second = await markInternalNotificationRead(prisma, {
+      companyId: "co-1",
+      recipientUserId: "user-2",
+      notificationId: "notif-1",
+    })
     const count = await getUnreadInternalNotificationsCount(prisma, "co-1", "user-2")
 
     expect(first.readAt).not.toBeNull()
+    expect(first.patientName).toBe("Ana Paciente")
+    expect(second.readAt).not.toBeNull()
+    expect(second.patientName).toBe("Ana Paciente")
     expect(update).toHaveBeenCalledTimes(1)
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({ surgery: expect.any(Object) }),
+    }))
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({ surgery: expect.any(Object) }),
+    }))
     expect(count).toEqual({ all: 2, mention: 1, operational: 1 })
   })
 
@@ -416,6 +433,37 @@ describe("internal-notifications.service", () => {
         ],
       })
     )
+  })
+
+  it("emits date request notification to the uniquely matched coordinator", async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 })
+    const prisma = {
+      user: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ firstName: "Nora", lastName: "Admin", email: "nora@test.com" }),
+      },
+      userCompanyAccess: {
+        findMany: vi.fn().mockResolvedValue([{ userId: "user-coord-1", user: { firstName: "Nelson", lastName: "Ricardo", email: "nelson@test.com" } }]),
+      },
+      internalNotification: { createMany },
+    } as unknown as Prisma.TransactionClient
+
+    const result = await emitOperationalInternalNotifications(prisma, {
+      companyId: "co-1",
+      surgeryId: "sx-1",
+      sourceEntityId: "seg-date-request-1",
+      actorUserId: "user-1",
+      eventType: "surgery_date_requested",
+      coordinatorName: "Nelson",
+    })
+
+    expect(result).toEqual({ createdCount: 1, attemptedCount: 1 })
+    expect(createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({
+        recipientUserId: "user-coord-1",
+        eventKey: "operational:surgery_date_requested:seg-date-request-1:user-coord-1",
+        title: "Nora Admin solicitó definir fecha de cirugía",
+      })],
+    }))
   })
 
   it("emits surgery rescheduled notifications to admin recipients", async () => {

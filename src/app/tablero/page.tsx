@@ -18,6 +18,7 @@ import { runAutomations } from "@/lib/automations"
 import { toast } from "sonner"
 import { Scissors, ShieldCheck, Package, Truck, Receipt, Plus, Zap, Download, Search, CheckCircle2, XCircle, FileText, Activity, ArrowRight, RotateCcw, Kanban, Eye } from "lucide-react"
 import type { SurgeryState, SurgeryClassification, Surgery } from "@/types"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
 
 // ── Kanban column definitions ──
 interface KanbanColumn {
@@ -97,7 +98,13 @@ const COLUMN_HEADER_BG: Record<string, string> = {
 
 export default function TableroPage() {
   const store = useOrtoTrackStore()
+  const presupuestoAuthority = usePresupuestos({ take: 100 })
   const { openExpediente } = useExpedienteDrawer()
+
+  const presupuestoSurgeryIds = useMemo(
+    () => new Set(presupuestoAuthority.presupuestos.map((item) => item.surgeryId).filter((id): id is string => Boolean(id))),
+    [presupuestoAuthority.presupuestos],
+  )
 
   // ── Filters ──
   const [search, setSearch] = useState("")
@@ -188,7 +195,9 @@ export default function TableroPage() {
 
   // ── Indicator icons for a surgery ──
   const SurgeryIndicators = ({ surgery }: { surgery: Surgery }) => {
-    const hasPresupuesto = !!surgery.presupuestoId
+    const hasPresupuesto = presupuestoAuthority.loading || presupuestoAuthority.error
+      ? null
+      : presupuestoSurgeryIds.has(surgery.backendId ?? surgery.id)
     const hasRemito = !!surgery.remitoId
     const hasConsumo = store.getConsumoBySurgeryId(surgery.id) !== undefined
     const facturado = surgery.facturado
@@ -199,11 +208,11 @@ export default function TableroPage() {
           <Tooltip>
             <TooltipTrigger asChild>
               <span>
-                <Receipt className={cn("size-3", hasPresupuesto ? "text-blue-500" : "text-muted-foreground/40")} />
+                <Receipt className={cn("size-3", hasPresupuesto === true ? "text-blue-500" : "text-muted-foreground/40")} />
               </span>
             </TooltipTrigger>
             <TooltipContent className="text-xs">
-              {hasPresupuesto ? "Presupuesto OK" : "Sin presupuesto"}
+              {hasPresupuesto == null ? "Presupuesto no cargado" : hasPresupuesto ? "Presupuesto OK" : "Sin presupuesto"}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

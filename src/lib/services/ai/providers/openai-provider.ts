@@ -85,6 +85,15 @@ function buildFilePart(request: AIProviderRequest): {
 } {
   const { buffer, mimeType, fileName } = request.file;
 
+  if (mimeType === "text/plain") {
+    return {
+      part: {
+        type: "text",
+        text: buffer.toString("utf8"),
+      },
+    };
+  }
+
   if (mimeType === "application/pdf") {
     return {
       part: {

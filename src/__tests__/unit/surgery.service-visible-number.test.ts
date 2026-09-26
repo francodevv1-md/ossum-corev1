@@ -169,6 +169,32 @@ describe("createSurgery visible number allocation", () => {
     expect(surgery.visibleNumber).toBe("CX-0006")
   })
 
+  it("retries the adapter-pg P2002 shape used by Prisma 7", async () => {
+    tx.$queryRaw
+      .mockResolvedValueOnce([{ maxNumber: BigInt(4) }])
+      .mockResolvedValueOnce([{ maxNumber: BigInt(5) }])
+    tx.surgery.create
+      .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError("Duplicate visible number", {
+        code: "P2002",
+        clientVersion: "test",
+        meta: {
+          driverAdapterError: {
+            cause: { constraint: { fields: ['"companyId"', '"visibleNumber"'] } },
+          },
+        },
+      }))
+      .mockImplementationOnce(async ({ data }: { data: { visibleNumber: string | null } }) => buildCreatedSurgery(data.visibleNumber))
+
+    const surgery = await createSurgery(
+      prismaMock as never,
+      { actorUserId: "user-1", companyId: "company-1", module: "surgery" },
+      { patientId: "patient-1", source: "PRESUPUESTO_AUTHORITY_S7_2" }
+    )
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2)
+    expect(surgery.visibleNumber).toBe("CX-0006")
+  })
+
   it("still retries serialization failures for explicit legacy numbers", async () => {
     tx.surgery.create
       .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError("Serialization failure", {

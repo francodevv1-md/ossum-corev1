@@ -4,9 +4,17 @@ import { useCallback, useMemo } from "react"
 import { useOrtoTrackStore } from "@/lib/store"
 import { canValidateConsumo } from "@/lib/consumoValidation"
 import type { Consumo, ConsumoItem, ValidationIssue } from "@/types"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
+import { toLegacyPresupuestoProjection } from "@/lib/api/presupuestos"
 
 export function useConsumo(surgeryId: string) {
   const store = useOrtoTrackStore()
+  const surgery = store.getSurgeryById(surgeryId)
+  const presupuestoAuthority = usePresupuestos(
+    { surgeryId: surgery?.backendId ?? surgery?.id, take: 100 },
+    Boolean(surgery),
+  )
+  const { current: currentPresupuesto, draft: draftPresupuesto } = presupuestoAuthority
 
   const consumo = useMemo(
     () => store.getConsumoBySurgeryId(surgeryId),
@@ -19,8 +27,11 @@ export function useConsumo(surgeryId: string) {
   )
 
   const presupuestoVigente = useMemo(
-    () => store.getPresupuestoVigenteBySurgeryId(surgeryId),
-    [store, surgeryId]
+    () => {
+      const authoritative = currentPresupuesto ?? draftPresupuesto
+      return authoritative ? toLegacyPresupuestoProjection(authoritative) : undefined
+    },
+    [currentPresupuesto, draftPresupuesto]
   )
 
   const validationIssues: ValidationIssue[] = useMemo(
@@ -113,6 +124,7 @@ export function useConsumo(surgeryId: string) {
     consumo,
     consumoState: consumo?.state,
     presupuestoVigente,
+    presupuestoError: presupuestoAuthority.error,
     validationIssues,
     remitos,
     // Actions

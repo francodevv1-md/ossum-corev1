@@ -53,7 +53,7 @@ export interface StockItem {
   code: string
   name: string
   descriptionExtra: string
-  family: Family
+  family: string
   category: string
   rubro: string
   seccion: string
@@ -131,6 +131,14 @@ export const FAMILY_STYLE: Record<Family, { icon: LucideIcon; thumb: string; lab
   Instrumental: { icon: Scissors, thumb: "bg-slate-100 text-slate-600 ring-slate-200", label: "Instrumental" },
   Descartable: { icon: Package, thumb: "bg-amber-50 text-amber-600 ring-amber-200", label: "Descartable" },
   Insumos: { icon: Droplets, thumb: "bg-rose-50 text-rose-600 ring-rose-200", label: "Insumos" },
+}
+
+export function getFamilyStyle(value?: string | null): { icon: LucideIcon; thumb: string; label: string } {
+  const label = value?.trim() || "Sin familia"
+  const exact = FAMILY_STYLE[label as Family]
+  if (exact) return exact
+  const base = FAMILY_STYLE[label.split("·", 1)[0].trim() as Family]
+  return base ? { ...base, label } : { icon: Package, thumb: "bg-gray-50 text-gray-600 ring-gray-200", label }
 }
 
 // ─── Article type metadata ────────────────────────────────

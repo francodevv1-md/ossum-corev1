@@ -35,9 +35,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
 
     const input = parsed.data;
-    const result = await updateContact(prisma, ctx.companyId, contactId, input);
+    const result = await updateContact(prisma, ctx.companyId, contactId, input, { userId: ctx.actorUserId, role: ctx.role });
     const changedFields = Object.keys(input);
-    const updatedFields = changedFields.filter((field) => field !== "isActive");
+    const updatedFields = changedFields.filter((field) => field !== "isActive" && !(field === "mainAddress" && input.mainAddress?.geo));
     if (updatedFields.length > 0) {
       await createAuditEvent({
         prisma,

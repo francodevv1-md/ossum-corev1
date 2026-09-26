@@ -6,7 +6,7 @@ import type { Session, User } from "@supabase/supabase-js"
 import { apiFetch } from "@/lib/api/client"
 import { supabaseBrowserClient } from "@/lib/auth/client"
 
-const DEFAULT_COMPANY_ID = process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID
+const ACTIVE_COMPANY_STORAGE_KEY = "ossum.activeCompanyId"
 
 export type InternalCurrentUser = {
   id: string
@@ -34,6 +34,11 @@ type CurrentUserResponse = {
   }
 }
 
+type CompaniesResponse = {
+  companies: ActiveCompany[]
+  singleCompanyId: string | null
+}
+
 export type AuthFeatures = {
   availabilityRequests: boolean
 }
@@ -49,6 +54,8 @@ type AuthContextValue = {
   currentUser: InternalCurrentUser | null
   currentAccess: CurrentUserAccess | null
   activeCompany: ActiveCompany | null
+  availableCompanies: ActiveCompany[]
+  selectActiveCompany: (id: string) => void
   features: AuthFeatures
   currentUserLoading: boolean
   isLoading: boolean
@@ -72,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<InternalCurrentUser | null>(null)
   const [currentAccess, setCurrentAccess] = useState<CurrentUserAccess | null>(null)
   const [activeCompany, setActiveCompany] = useState<ActiveCompany | null>(null)
+  const [availableCompanies, setAvailableCompanies] = useState<ActiveCompany[]>([])
   const [availabilityFeatureState, setAvailabilityFeatureState] = useState<AvailabilityFeatureState | null>(null)
   const [currentUserLoading, setCurrentUserLoading] = useState(false)
   const loadedCurrentUserRequestKeyRef = useRef<string | null>(null)
@@ -86,9 +94,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setCurrentUser(null)
     setCurrentAccess(null)
     setActiveCompany(null)
+    setAvailableCompanies([])
     setAvailabilityFeatureState(null)
     setCurrentUserLoading(false)
   }, [])
+
+  const selectActiveCompany = useCallback((id: string) => {
+    const company = availableCompanies.find((candidate) => candidate.id === id)
+    if (!company) return
+    window.sessionStorage.setItem(ACTIVE_COMPANY_STORAGE_KEY, company.id)
+    loadedCurrentUserRequestKeyRef.current = null
+    setCurrentUser(null)
+    setCurrentAccess(null)
+    setActiveCompany(company)
+    setAvailabilityFeatureState(null)
+  }, [availableCompanies])
 
   const signOut = useCallback(async () => {
     await supabaseBrowserClient.auth.signOut()
@@ -125,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: subscription } = supabaseBrowserClient.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return
       setSession(nextSession)
+      if (!nextSession) clearCurrentUserContext()
       completeBootstrap()
     })
 
@@ -133,16 +154,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (bootstrapTimeout !== null) window.clearTimeout(bootstrapTimeout)
       subscription.subscription.unsubscribe()
     }
-  }, [])
+  }, [clearCurrentUserContext])
 
   useEffect(() => {
-    if (!session || !DEFAULT_COMPANY_ID) {
-      clearCurrentUserContext()
+    if (!session) {
       return
     }
 
     let active = true
-    const currentUserRequestKey = `${DEFAULT_COMPANY_ID}:${session.access_token}`
+    apiFetch<CompaniesResponse>("/api/me/companies")
+      .then((data) => {
+        if (!active) return
+        setAvailableCompanies(data.companies)
+        const restored = window.sessionStorage.getItem(ACTIVE_COMPANY_STORAGE_KEY)
+        const selectedId = data.singleCompanyId ?? restored
+        const selected = data.companies.find(({ id }) => id === selectedId) ?? null
+        setActiveCompany(selected)
+        if (!selected) window.sessionStorage.removeItem(ACTIVE_COMPANY_STORAGE_KEY)
+      })
+      .catch(() => {
+        if (active) clearCurrentUserContext()
+      })
+      .finally(() => {
+        if (active) setCurrentUserLoading(false)
+      })
+    return () => { active = false }
+  }, [clearCurrentUserContext, session])
+
+  useEffect(() => {
+    if (!session || !activeCompany) return
+
+    let active = true
+    const currentUserRequestKey = `${activeCompany.id}:${session.access_token}`
 
     if (loadedCurrentUserRequestKeyRef.current === currentUserRequestKey) {
       setCurrentUserLoading(false)
@@ -154,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!currentUserRequest || currentUserRequest.key !== currentUserRequestKey) {
       currentUserRequest = {
         key: currentUserRequestKey,
-        promise: apiFetch<CurrentUserResponse>(`/api/companies/${encodeURIComponent(DEFAULT_COMPANY_ID)}/me`),
+        promise: apiFetch<CurrentUserResponse>(`/api/companies/${encodeURIComponent(activeCompany.id)}/me`),
       }
       inFlightCurrentUserRequestRef.current = currentUserRequest
     }
@@ -166,7 +209,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!active) return
         setCurrentUser(data.user)
         setCurrentAccess(data.access)
-        setActiveCompany(data.activeCompany)
         setAvailabilityFeatureState({
           requestKey: currentUserRequestKey,
           enabled: data.features?.availabilityRequests === true,
@@ -177,7 +219,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!active) return
         setCurrentUser(null)
         setCurrentAccess(null)
-        setActiveCompany(null)
         setAvailabilityFeatureState(null)
         loadedCurrentUserRequestKeyRef.current = null
       })
@@ -192,7 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false
     }
-  }, [clearCurrentUserContext, session])
+  }, [activeCompany, session])
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -217,9 +258,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       currentUser,
       currentAccess,
       activeCompany,
+      availableCompanies,
+      selectActiveCompany,
       features: {
         availabilityRequests:
-          availabilityFeatureState?.requestKey === `${DEFAULT_COMPANY_ID}:${session?.access_token}` &&
+          availabilityFeatureState?.requestKey === `${activeCompany?.id}:${session?.access_token}` &&
           availabilityFeatureState.enabled,
       },
       currentUserLoading,
@@ -227,7 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: Boolean(session),
       signOut,
     }),
-    [activeCompany, availabilityFeatureState, currentAccess, currentUser, currentUserLoading, isLoading, session, signOut]
+    [activeCompany, availabilityFeatureState, availableCompanies, currentAccess, currentUser, currentUserLoading, isLoading, selectActiveCompany, session, signOut]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useMemo, useState, useCallback, useRef, useEffect } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -31,21 +32,22 @@ import { MissingCountText } from "@/components/cirugias/MissingCountText"
 import { ReferenciasAdministrativasEditor } from "@/components/cirugias/ReferenciasAdministrativasEditor"
 import { CondicionesSection } from "@/components/presupuestos/CondicionesSection"
 import { PresupuestoItemsTable } from "@/components/presupuestos/PresupuestoItemsTable"
+import { PresupuestoCommercialIdentityFields } from "@/components/presupuestos/PresupuestoCommercialIdentityFields"
+import { buildEstimativePresupuestoPayload, createPresupuesto, fetchPresupuestos } from "@/lib/api/presupuestos"
 import { TotalesSection } from "@/components/presupuestos/TotalesSection"
 import { TemplateSelector } from "@/components/presupuestos/TemplateSelector"
 import { ImportSubmodal } from "@/components/presupuestos/ImportSubmodal"
 import { PostCreationPanel } from "@/components/cirugias/PostCreationPanel"
 import { LeyendaPresupuestoSection } from "@/components/presupuestos/LeyendaPresupuestoSection"
 import { ClasificacionSelectorModal } from "@/components/presupuestos/ClasificacionSelectorModal"
-import { Plus, Settings2, FileText, Info, Sparkles } from "lucide-react"
+import { CheckCircle2, Plus, Settings2, FileText, Info, Sparkles } from "lucide-react"
 import { useAiExtraction } from "@/hooks/useAiExtraction"
 import type { NewSurgeryForm } from "@/lib/cirugias.types"
 import { EMPTY_NEW_FORM } from "@/lib/cirugias.types"
-import type { Contacto, SurgeryClassification, ReferenciaAdministrativa, PlantillaPresupuesto } from "@/types"
+import type { Contacto, ReferenciaAdministrativa, PlantillaPresupuesto } from "@/types"
 import type { ContactRole, TipoPersona } from "@/types"
 import type { PresupuestoFormData, PresupuestoFormErrors, FormItem } from "@/hooks/usePresupuestoForm"
 import { mapAiToWizardForm } from "@/lib/validators/autorizacion-ai"
-import { aiConfig } from "@/lib/services/ai/config"
 
 // ─── Step labels (3 steps) ───
 const STEP_LABELS = ["Datos del caso", "Presupuesto", "Confirmación"] as const
@@ -417,7 +419,7 @@ export function NewSurgeryDialog({
   newForm, setNewForm,
   createPRNow, setCreatePRNow,
   prForm,
-  onConfirm, createdSurgeryId, instrumentadores, onOpenCreatedSurgery,
+  onConfirm, createdSurgeryId, onOpenCreatedSurgery,
 }: NewSurgeryDialogProps) {
   // ─── CHATZAI-020: Store access for Contacto lookups ───
   const store = useOrtoTrackStore()
@@ -427,13 +429,15 @@ export function NewSurgeryDialog({
   const [step0Errors, setStep0Errors] = useState<Step0Errors>({})
   const [step1Errors, setStep1Errors] = useState<Step1Errors>({})
   const [creationDone, setCreationDone] = useState(false)
-  const [showAiSection, setShowAiSection] = useState(false)
+  const [presupuestoCreated, setPresupuestoCreated] = useState(false)
+  const [presupuestoRetrying, setPresupuestoRetrying] = useState(false)
   const [contactCreateOpen, setContactCreateOpen] = useState(false)
   const [contactFormKey, setContactFormKey] = useState(0)
   const [pendingContactCreation, setPendingContactCreation] = useState<PendingContactCreation | null>(null)
   const [contactLookupRenderVersion, setContactLookupRenderVersion] = useState(0)
   const [contactSelectionOverrides, setContactSelectionOverrides] = useState<ContactSelectionOverrides>({})
   const [textOnlyContactFields, setTextOnlyContactFields] = useState<TextOnlyContactFields>({})
+  const [aiSuggestionsApplied, setAiSuggestionsApplied] = useState(false)
 
   // ─── CHATZAI-025: Cancel confirmation state ───
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
@@ -446,7 +450,7 @@ export function NewSurgeryDialog({
 
   const aiExtraction = useAiExtraction({
     companyId,
-    mode: "openai",
+    mode: "azure",
   })
 
   // ─── Scroll container refs for scroll-to-error ───
@@ -603,15 +607,53 @@ export function NewSurgeryDialog({
     }
   }, [onConfirm])
 
+  useEffect(() => {
+    if (!creationDone || !createPRNow || !createdSurgeryId || !activeCompany?.id) return
+    let active = true
+    fetchPresupuestos(activeCompany.id, { surgeryId: createdSurgeryId, take: 1 })
+      .then((rows) => { if (active) setPresupuestoCreated(rows.length > 0) })
+      .catch(() => { if (active) setPresupuestoCreated(false) })
+    return () => { active = false }
+  }, [activeCompany?.id, createPRNow, createdSurgeryId, creationDone])
+
+  const retryPresupuesto = useCallback(async () => {
+    if (!activeCompany?.id || !createdSurgeryId || presupuestoRetrying) return
+    setPresupuestoRetrying(true)
+    try {
+      await createPresupuesto(activeCompany.id, {
+        surgeryId: createdSurgeryId,
+        ...buildEstimativePresupuestoPayload(prForm.formData, prForm.items),
+      })
+      setPresupuestoCreated(true)
+      toast.success("Presupuesto creado exitosamente")
+    } catch (cause) {
+      try {
+        const rows = await fetchPresupuestos(activeCompany.id, { surgeryId: createdSurgeryId, take: 1 })
+        if (rows.length > 0) {
+          setPresupuestoCreated(true)
+          toast.success("Presupuesto creado exitosamente")
+          return
+        }
+      } catch {
+        // Keep the original create failure when reconciliation is unavailable.
+      }
+      toast.error(cause instanceof Error ? cause.message : "No se pudo crear el presupuesto")
+    } finally {
+      setPresupuestoRetrying(false)
+    }
+  }, [activeCompany, createdSurgeryId, prForm.formData, prForm.items, presupuestoRetrying])
+
   // ─── Reset on close ───
   const handleClose = useCallback(() => {
     onOpenChange(false)
     setWizardStep(0)
     setCreationDone(false)
-    setShowAiSection(false)
+    setPresupuestoCreated(false)
+    setPresupuestoRetrying(false)
     setContactCreateOpen(false)
     setPendingContactCreation(null)
     setTextOnlyContactFields({})
+    setAiSuggestionsApplied(false)
     setStep0Errors({})
     setStep1Errors({})
     setCancelConfirmOpen(false)
@@ -636,8 +678,21 @@ export function NewSurgeryDialog({
       throw new Error("No hay empresa activa disponible para procesar la autorización")
     }
 
+    setAiSuggestionsApplied(false)
     await aiExtraction.extract(file)
   }, [aiExtraction, companyId])
+
+  const handleResetAiResult = useCallback(() => {
+    setAiSuggestionsApplied(false)
+    aiExtraction.reset()
+  }, [aiExtraction])
+
+  const handleReviewAiFields = useCallback(() => {
+    const firstField = step0Ref.current?.querySelector('[data-step0-field="client"]')
+    firstField?.scrollIntoView({ behavior: "smooth", block: "center" })
+    const control = firstField?.querySelector("input, button, select, textarea") as HTMLElement | null
+    control?.focus()
+  }, [])
 
   const handleApplyAiResult = useCallback(() => {
     if (!aiExtraction.result) return
@@ -696,6 +751,7 @@ export function NewSurgeryDialog({
 
     if (hasSuggestedProvincia) setAutoFilledProvincia(true)
     if (hasSuggestedLocalidad) setAutoFilledLocalidad(true)
+    setAiSuggestionsApplied(true)
   }, [aiExtraction.result, setNewForm])
 
   const contactSuggestionGroups = useMemo<ContactSuggestionGroup[]>(() => {
@@ -1114,114 +1170,73 @@ export function NewSurgeryDialog({
 
         {/* ═══════════ Paso 0 — Datos del caso ═══════════ */}
         {wizardStep === 0 && !creationDone && (
-          <div ref={step0Ref} className="space-y-3 overflow-y-auto flex-1 px-4 py-3 xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-4 xl:items-start">
+          <div ref={step0Ref} className="space-y-4 overflow-y-auto flex-1 px-4 py-3">
 
             {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A, AC-01): Critical Missing Bar.
                 Pure presentational — only READS step0Errors; no new validation pass.
                 Hidden when step0Errors is empty. Renders above the IA panel. */}
             {Object.keys(step0Errors).length > 0 && (
-              <div className="xl:col-span-2">
+              <div>
                 <MissingFieldsBar errors={step0Errors} fields={STEP0_FIELD_MAP} />
               </div>
             )}
 
-            <aside className="border-l border-border/70 bg-muted/10 pl-3 pr-1 py-1 space-y-3 xl:col-start-2 xl:row-start-2 xl:sticky xl:top-0 xl:max-h-[calc(85vh-8rem)] xl:overflow-y-auto">
+            <section aria-labelledby="authorization-upload-title" className="space-y-3 rounded-lg border border-border/70 bg-muted/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="size-3.5" />
-                    IA de autorización
+                  <div className="flex items-center gap-2">
+                    <Sparkles aria-hidden="true" className="size-3.5" />
+                    <h3 id="authorization-upload-title" className="text-sm font-semibold">Cargar autorización</h3>
+                    <Badge variant="outline" className="text-[10px]">Opcional</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Si tenés el archivo, cargalo para recibir propuestas antes de completar el caso.
                   </p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Extraé datos y aplicá sugerencias sin salir del formulario.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {companyId ? (
-                    <Badge variant="outline" className="text-[10px]">Empresa activa</Badge>
-                  ) : (
-                    <Badge variant="destructive" className="text-[10px]">Sin companyId</Badge>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowAiSection((prev) => !prev)}
-                  >
-                    {showAiSection ? "Ocultar" : "Mostrar"}
-                  </Button>
                 </div>
               </div>
 
-              {showAiSection && (
-                <div className="space-y-3">
-                  {!companyId && (
-                    <p className="text-[11px] text-destructive">
-                      No se detectó empresa activa. Iniciá sesión o verificá el contexto actual antes de usar IA.
-                    </p>
-                  )}
-
-                  {!aiExtraction.result ? (
-                    <AiUploadZone
-                      isProcessing={aiExtraction.isProcessing}
-                      error={aiExtraction.error}
-                      onFileSelected={handleAiFileSelected}
-                    />
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="rounded-md border border-border/60 bg-background/70 p-3 space-y-3">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Resumen IA
-                              </p>
-                              <p className="text-[11px] text-muted-foreground mt-1">
-                                Resolvé contactos y fechas desde las sugerencias del formulario.
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant={aiExtraction.result.confidence < aiConfig.confidenceThreshold ? "warning" : "outline"} className="text-[10px]">
-                                Confianza {Math.round(aiExtraction.result.confidence * 100)}%
-                              </Badge>
-                              <Button type="button" variant="outline" size="sm" onClick={handleApplyAiResult}>
-                                Aplicar vacíos
-                              </Button>
-                            </div>
-                          </div>
-
-                            <div className="border-t border-border/60 pt-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                Contactos detectados
-                              </p>
-                              <Badge variant="outline" className="text-[10px]">{contactSuggestionGroups.length} campos</Badge>
-                            </div>
-                              <p className="text-[11px] text-muted-foreground mt-1">
-                                Las sugerencias aparecen junto al campo correspondiente.
-                              </p>
-                            </div>
-
-                          <details className="border-t border-border/60 pt-2">
-                            <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Ver detalle IA
-                            </summary>
-                            <div className="mt-3 space-y-3">
-                              <AiResultsPanel
-                                result={aiExtraction.result}
-                                onApply={handleApplyAiResult}
-                                onReset={aiExtraction.reset}
-                              />
-                            </div>
-                          </details>
-                        </div>
-                        </div>
-                      )}
+              {!companyId ? (
+                <p className="text-xs text-destructive">
+                  No se detectó una empresa activa. Verificá la sesión para usar esta opción.
+                </p>
+              ) : !aiExtraction.result ? (
+                <AiUploadZone
+                  isProcessing={aiExtraction.isProcessing}
+                  error={aiExtraction.error}
+                  onFileSelected={handleAiFileSelected}
+                />
+              ) : aiSuggestionsApplied ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900 dark:bg-emerald-950/20">
+                  <div className="flex min-w-0 items-start gap-2.5">
+                    <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
+                    <div role="status">
+                      <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                        Campos vacíos completados
+                      </p>
+                      <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                        Revisá las propuestas antes de continuar. Los datos existentes no se modificaron.
+                      </p>
                     </div>
-                  )}
-            </aside>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setAiSuggestionsApplied(false)}>
+                      Ver autorización
+                    </Button>
+                    <Button type="button" size="sm" onClick={handleReviewAiFields} className="bg-emerald-600 hover:bg-emerald-700">
+                      Revisar datos
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <AiResultsPanel
+                  result={aiExtraction.result}
+                  onApply={handleApplyAiResult}
+                  onReset={handleResetAiResult}
+                />
+              )}
+            </section>
 
-            <div className="min-w-0 space-y-1 xl:col-start-1 xl:row-start-2">
+            <div className="min-w-0 space-y-1">
 
             {/* ── Section 1: Datos principales ── */}
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-2 mb-2">
@@ -1685,6 +1700,9 @@ export function NewSurgeryDialog({
 
             {createPRNow ? (
               <>
+                <div className="shrink-0 border-b px-3 py-2">
+                  <PresupuestoCommercialIdentityFields formData={prForm.formData} errors={step1Errors} updateField={prForm.updateField} />
+                </div>
                 {/* ── Toolbar (CHATZAI-017F: operational bar, part of workspace) ── */}
                 <div className="shrink-0 px-3 py-1 border-b border-gray-300 dark:border-gray-600 border-t flex items-center gap-0.5 bg-gray-50 dark:bg-gray-800/40">
                     <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 px-2 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => prForm.addItem()} data-testid="add-item-btn">
@@ -1930,20 +1948,21 @@ export function NewSurgeryDialog({
         {creationDone && (
           <div className="flex-1 overflow-y-auto px-4 py-3">
             <PostCreationPanel
-              hasPresupuesto={createPRNow && prForm.items.length > 0}
+              hasPresupuesto={Boolean(presupuestoCreated)}
               surgeryId={createdSurgeryId || "—"}
               patientName={newForm.patient}
               classification={newForm.classification}
               onGoToExpediente={() => {
                 if (createdSurgeryId && onOpenCreatedSurgery) {
-                  onOpenCreatedSurgery(createdSurgeryId)
+                  onOpenCreatedSurgery(store.surgeries.find((item) => item.backendId === createdSurgeryId)?.id ?? createdSurgeryId)
                   handleClose()
                 } else if (createdSurgeryId) {
                   handleClose()
                 }
               }}
               onCreatePresupuestoLater={() => {
-                handleClose()
+                if (createPRNow && !presupuestoCreated && !presupuestoRetrying) void retryPresupuesto()
+                else handleClose()
               }}
             />
           </div>

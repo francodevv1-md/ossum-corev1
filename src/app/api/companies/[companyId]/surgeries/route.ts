@@ -200,6 +200,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         doctorId,
         institutionId,
         payerContactId,
+        coordinatorContactId: parseOptionalString(body.coordinatorContactId),
         classification: parseOptionalString(body.classification),
         description: parseOptionalString(body.description),
         priority: parseOptionalString(body.priority),

@@ -4,14 +4,13 @@ import React from "react"
 import Link from "next/link"
 import { useOrtoTrackStore } from "@/lib/store"
 import { formatCurrency, formatDate } from "@/lib/formatters"
-import { getBadgeVariant } from "@/lib/statusHelpers"
 import { CX_STATE_BAR_COLORS } from "@/lib/shared-constants"
 import { getEstadoCobro, getImporteNoImputadoCobro } from "@/lib/cobros.utils"
-import { StatsCard, StateBadge, SectionHeader } from "@/components/shared"
+import { StatsCard, StateBadge } from "@/components/shared"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
 import {
   Scissors,
@@ -22,13 +21,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Calendar,
-  FileText,
   Receipt,
-  TrendingUp,
-  MapPin,
-  BarChart3,
-  Smartphone,
-  Truck,
   CheckCircle2,
   XCircle,
   Package,
@@ -39,6 +32,8 @@ import {
 const STATE_COLORS = CX_STATE_BAR_COLORS
 
 export default function DashboardPage() {
+  const { currentAccess } = useAuth()
+  const isCoordinator = currentAccess?.role === "coordinator"
   const {
     surgeries,
     comprobantes,
@@ -106,34 +101,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Download Banner ── */}
-      <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 dark:border-emerald-800">
-        <CardContent className="py-4 px-5 flex items-center gap-4">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
-            <svg xmlns="http://www.w3.org/2000/svg" className="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold text-emerald-900 dark:text-emerald-100">Descargar Proyecto Completo (Actualizado + Compilable)</h2>
-            <p className="text-xs text-emerald-700/70 dark:text-emerald-300/70 mt-0.5">
-              384 archivos &bull; npm ci + tsc + build verificados &bull; 598/608 tests passing &bull; Contactos, Comparativa, Remitos, Consumos incluidos
-            </p>
-          </div>
-          <a
-            href="/OSSUM_COR_PROJECT_ACTUALIZADO_COMPILABLE_2026-05-26.zip"
-            download="OSSUM_COR_PROJECT_ACTUALIZADO_COMPILABLE_2026-05-26.zip"
-            className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-all shadow-md shadow-emerald-600/30 hover:shadow-emerald-500/40 hover:scale-105 active:scale-95"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            DESCARGAR ZIP (1.5 MB)
-          </a>
-        </CardContent>
-      </Card>
       {/* ── Row 1: Stats ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className={isCoordinator ? "grid gap-4 sm:grid-cols-3" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"}>
         <StatsCard
           title="Cirugías del mes"
           value={surgeriesThisMonth.length}
@@ -148,34 +117,50 @@ export default function DashboardPage() {
           subtitle="Sin autorización"
           trend={{ value: -8, label: "vs semana pasada" }}
         />
-        <StatsCard
-          title="Facturación mes"
-          value={formatCurrency(facturacionMes)}
-          icon={DollarSign}
-          subtitle={`${invoicesThisMonth.length} facturas`}
-          trend={{ value: 12, label: "vs mes anterior" }}
-        />
-        <StatsCard
-          title="Cobros pendientes"
-          value={formatCurrency(cobrosPendientes)}
-          icon={CreditCard}
-          subtitle={`${pendingCobros.length} cobros`}
-          trend={{ value: -5, label: "vs semana pasada" }}
-        />
-        <StatsCard
-          title="Necesidades urgentes"
-          value={urgentNecesidades.length}
-          icon={ShoppingCart}
-          subtitle="Prioridad urgente"
-          className={urgentNecesidades.length > 0 ? "border-red-200" : ""}
-        />
-        <StatsCard
-          title="Stock bajo mínimo"
-          value={lowStockItems.length}
-          icon={AlertTriangle}
-          subtitle="Requieren reposición"
-          className={lowStockItems.length > 0 ? "border-amber-200" : ""}
-        />
+        {!isCoordinator && (
+          <StatsCard
+            title="Facturación mes"
+            value={formatCurrency(facturacionMes)}
+            icon={DollarSign}
+            subtitle={`${invoicesThisMonth.length} facturas`}
+            trend={{ value: 12, label: "vs mes anterior" }}
+          />
+        )}
+        {!isCoordinator && (
+          <StatsCard
+            title="Cobros pendientes"
+            value={formatCurrency(cobrosPendientes)}
+            icon={CreditCard}
+            subtitle={`${pendingCobros.length} cobros`}
+            trend={{ value: -5, label: "vs semana pasada" }}
+          />
+        )}
+        {isCoordinator && (
+          <StatsCard
+            title="Pendientes facturar"
+            value={pendientesFacturar.length}
+            icon={Receipt}
+            subtitle="Realizadas sin factura"
+          />
+        )}
+        {!isCoordinator && (
+          <StatsCard
+            title="Necesidades urgentes"
+            value={urgentNecesidades.length}
+            icon={ShoppingCart}
+            subtitle="Prioridad urgente"
+            className={urgentNecesidades.length > 0 ? "border-red-200" : ""}
+          />
+        )}
+        {!isCoordinator && (
+          <StatsCard
+            title="Stock bajo mínimo"
+            value={lowStockItems.length}
+            icon={AlertTriangle}
+            subtitle="Requieren reposición"
+            className={lowStockItems.length > 0 ? "border-amber-200" : ""}
+          />
+        )}
       </div>
 
       {/* ── Row 2: Bar chart + Upcoming ── */}
@@ -251,7 +236,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Row 3: Pending invoice / Recent invoices / Urgent needs ── */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className={isCoordinator ? "grid gap-4" : "grid gap-4 lg:grid-cols-3"}>
         {/* Pendientes facturar */}
         <Card>
           <CardHeader className="pb-3">
@@ -283,6 +268,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Últimas facturas */}
+        {!isCoordinator && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">Últimas Facturas</CardTitle>
@@ -313,8 +299,10 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Necesidades urgentes */}
+        {!isCoordinator && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -344,11 +332,13 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* ── Row 4: Cobros by client + Alerts ── */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={isCoordinator ? "grid gap-4" : "grid gap-4 lg:grid-cols-2"}>
         {/* Cobros por cliente */}
+        {!isCoordinator && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">Cobros Pendientes por Cliente</CardTitle>
@@ -370,6 +360,7 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Alertas */}
         <Card>
@@ -465,61 +456,6 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-
-      {/* ── Row 5: Roadmap v2.3 ── */}
-      <SectionHeader
-        title="Roadmap v2.3"
-        description="Próximas funcionalidades en desarrollo"
-      />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            title: "Tableros Operativos",
-            description: "Kanban boards para seguimiento visual del flujo de cirugías",
-            icon: BarChart3,
-          },
-          {
-            title: "Calendario Quirúrgico",
-            description: "Vista calendario con programación de cirugías y recursos",
-            icon: Calendar,
-          },
-          {
-            title: "Estadísticas Móvil",
-            description: "Dashboard responsive optimizado para dispositivos móviles",
-            icon: Smartphone,
-          },
-          {
-            title: "Logística con Mapa",
-            description: "Seguimiento de envíos y logística con integración de mapas",
-            icon: MapPin,
-          },
-        ].map((item) => {
-          const Icon = item.icon
-          return (
-            <Card key={item.title} className="relative overflow-hidden border-dashed">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <Icon className="size-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">{item.title}</p>
-                    <Badge variant="outline" className="text-[10px] mt-0.5">
-                      Próximamente
-                    </Badge>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {item.description}
-                </p>
-              </CardContent>
-              <div className="absolute top-0 right-0 -mt-1 -mr-1 size-8 bg-muted rounded-bl-lg flex items-center justify-center">
-                <span className="text-[8px] font-bold text-muted-foreground">v2.3</span>
-              </div>
-            </Card>
-          )
-        })}
       </div>
     </div>
   )

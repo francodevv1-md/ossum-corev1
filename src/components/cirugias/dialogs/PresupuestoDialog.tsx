@@ -16,7 +16,7 @@ export function PresupuestoDialog({ open, onOpenChange, surgery, onCreated }: Pr
     <PresupuestoFormDialog
       mode="dialog"
       context="surgery"
-      surgeryId={surgery.id}
+      surgeryId={surgery.backendId ?? surgery.id}
       open={open}
       onOpenChange={onOpenChange}
       onSubmit={(pr) => {

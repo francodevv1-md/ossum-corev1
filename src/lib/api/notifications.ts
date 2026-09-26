@@ -15,6 +15,7 @@ export type InternalNotificationListItem = {
   createdAt: string
   updatedAt: string
   actorName: string
+  patientName: string | null
 }
 
 export type InternalNotificationCategoryCounts = {

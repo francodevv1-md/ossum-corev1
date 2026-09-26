@@ -4,6 +4,7 @@ import React from "react"
 import { ComprobantesAsociados } from "@/components/expediente/ComprobantesAsociados"
 import { formatCurrency } from "@/lib/formatters"
 import { Receipt } from "lucide-react"
+import { PresupuestoPanel } from "./PresupuestoPanel"
 import type { Surgery, Presupuesto, Remito, Box, Comprobante } from "@/types"
 import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
 
@@ -47,7 +48,6 @@ function SectionCard({
 export function ComercialTabContent({
   surgery,
   presupuestos,
-  remitos: _remitos,
   comprobantes,
   resumenCobranza,
 }: ComercialTabContentProps) {
@@ -55,6 +55,7 @@ export function ComercialTabContent({
 
   return (
     <div className="space-y-3">
+      <PresupuestoPanel surgery={surgery} />
       <SectionCard
         title="Comprobantes asociados"
         icon={Receipt}

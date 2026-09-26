@@ -25,15 +25,15 @@ export function getNotificationEmptyCopy({
     return {
       title:
         categoryFilter === "mention"
-          ? "No hay menciones sin leer."
+          ? "No hay menciones sin leer"
           : categoryFilter === "operational"
-            ? "No hay operativas sin leer."
-            : "No hay notificaciones sin leer.",
+            ? "No hay novedades operativas sin leer"
+            : "Estás al día",
       description:
         categoryFilter === "mention"
-          ? "Cuando llegue una mención nueva, la vas a ver primero acá."
+          ? "Cuando alguien te mencione en un seguimiento, aparece acá al instante."
           : categoryFilter === "operational"
-            ? "Cuando llegue una novedad operativa nueva, la vas a ver primero acá."
+            ? "Las novedades operativas nuevas aparecen acá apenas llegan."
             : "Cuando llegue algo nuevo, lo vas a ver primero acá.",
     }
   }
@@ -41,13 +41,13 @@ export function getNotificationEmptyCopy({
   return {
     title:
       categoryFilter === "mention"
-        ? "No hay menciones por ahora."
+        ? "No hay menciones todavía"
         : categoryFilter === "operational"
-          ? "No hay operativas por ahora."
-          : "No hay notificaciones por ahora.",
+          ? "No hay novedades operativas"
+          : "No hay notificaciones",
     description:
       categoryFilter === "mention"
-        ? "Las menciones van a aparecer acá."
+        ? "Las menciones de seguimiento van a aparecer acá."
         : categoryFilter === "operational"
           ? "Las novedades operativas van a aparecer acá."
           : "Las menciones y novedades operativas van a aparecer acá.",

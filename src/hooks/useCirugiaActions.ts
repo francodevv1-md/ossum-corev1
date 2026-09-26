@@ -9,7 +9,6 @@
 
 import { useState, useCallback, useEffect, useRef } from "react"
 import { useOrtoTrackStore } from "@/lib/store"
-import type { SurgeryClassification } from "@/types"
 import { canAutorizarFV, canRemitirNR, canCargarConsumo } from "@/lib/businessRules"
 import { toast } from "sonner"
 import type { Contacto } from "@/types"
@@ -21,6 +20,7 @@ import type { FacturarDialogData } from "@/components/facturacion/FacturarDialog
 import { useAuth } from "@/components/auth/AuthProvider"
 import { fetchBackendActiveSurgeries } from "@/lib/api/backend-surgeries"
 import { apiFetch } from "@/lib/api/client"
+import { buildEstimativePresupuestoPayload, createPresupuesto } from "@/lib/api/presupuestos"
 
 type CreateSurgeryApiResponse = {
   id: string
@@ -111,6 +111,14 @@ export function useCirugiaActions() {
   // ── PR form for wizard ──
   const prForm = usePresupuestoForm()
 
+  const createLinkedPresupuesto = useCallback(async (surgeryId: string) => {
+    if (!activeCompany?.id) throw new Error("No hay empresa activa")
+    return createPresupuesto(activeCompany.id, {
+      surgeryId,
+      ...buildEstimativePresupuestoPayload(prForm.formData, prForm.items),
+    })
+  }, [activeCompany, prForm])
+
   // Sync wizard data into PR form when createPRNow changes or wizard step changes
   useEffect(() => {
     if (createPRNow && wizardStep === 1) {
@@ -183,6 +191,7 @@ export function useCirugiaActions() {
             institutionContact,
             payerContactId: newForm.clientContactId ?? null,
             payerContact,
+            coordinatorContactId: newForm.coordinadorContactId ?? null,
             classification: newForm.classification || null,
             priority: newForm.urgente ? "urgent" : null,
             probableDate: newForm.probableDate || null,
@@ -194,6 +203,23 @@ export function useCirugiaActions() {
       )
 
       const localSurgeryId = persistedSurgery.visibleNumber?.trim() || persistedSurgery.id
+      setCreatedSurgeryId(persistedSurgery.id)
+
+      if (newForm.coordinadorContactId && newForm.coordinadorCx) {
+        try {
+          await apiFetch(`/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(persistedSurgery.id)}/notifications/operational`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sourceEntityId: persistedSurgery.id,
+              eventType: "coordinator_assigned",
+              coordinatorName: newForm.coordinadorCx,
+            }),
+          })
+        } catch {
+          toast.warning("La cirugía se creó y asignó, pero no se pudo notificar al coordinador")
+        }
+      }
 
       // CHATZAI-017C: Extract DNI from referenciasAdministrativas if present
       const dniRef = newForm.referenciasAdministrativas.find(r => r.tipo === "DNI" && r.valor.trim())
@@ -212,61 +238,17 @@ export function useCirugiaActions() {
         }
 
         // CHATZAI-017D: Store the created surgery ID for post-creation panel
-        setCreatedSurgeryId(refreshedSurgery.id)
-
         if (createPRNow) {
-        const items = prForm.items.map((it) => {
-          const isLibre = it.isArticuloLibre
-          const subtotalBruto = it.quantity * it.unitPrice
-          const clampedDiscount = Math.min(Math.max(it.discountPercent, 0), 100)
-          const descuentoLinea = subtotalBruto * (clampedDiscount / 100)
-          const subtotalNeto = subtotalBruto - descuentoLinea
-          return {
-          stockItemId: it.catalogItemId || `Z-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          name: isLibre && it.descripcionLibre ? it.descripcionLibre : it.name,
-          code: it.code || (isLibre ? "Z-LIBRE" : "SIN-COD"),
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          discountPercent: clampedDiscount > 0 ? clampedDiscount : undefined,
-          subtotal: subtotalNeto,
-          catalogItemId: it.catalogItemId || undefined,
-          isArticuloZ: isLibre || undefined,
-          descripcionLibre: isLibre ? it.descripcionLibre : undefined,
-          ivaKey: it.ivaKey,
-        }})
-
-        const subtotal = prForm.subtotal
-        const descuentoMonto = prForm.descuentoMonto
-        const total = prForm.total
-
-        store.createBudgetForSurgery(refreshedSurgery.id, {
-          patient: prForm.formData.patient || undefined,
-          institution: prForm.formData.institution || undefined,
-          client: prForm.formData.client,
-          obraSocial: prForm.formData.obraSocial || undefined,
-          financiador: prForm.formData.financiador || undefined,
-          vendedor: prForm.formData.vendedor || "Sin asignar",
-          concepto: prForm.formData.concepto || undefined,
-          fechaEmision: prForm.formData.fechaEmision,
-          vigencia: prForm.formData.vigencia,
-          listaPrecios: prForm.formData.listaPrecios,
-          condicionPago: prForm.formData.condicionPago || undefined,
-          descuento: prForm.formData.descuento > 0 ? prForm.formData.descuento : undefined,
-          items,
-          subtotal,
-          total,
-          state: "Borrador",
-          bloqueado: false,
-          observaciones: prForm.formData.observaciones || undefined,
-          version: 1,
-          versionStatus: "vigente",
-        })
-          toast.success("Cirugía y presupuesto creados exitosamente")
+          try {
+            await createLinkedPresupuesto(persistedSurgery.id)
+            toast.success("Cirugía y presupuesto creados exitosamente")
+          } catch {
+            toast.warning("La cirugía se creó sin presupuesto. Podés reintentar sin duplicar la cirugía.")
+          }
         } else {
           toast.success("Cirugía creada exitosamente")
         }
       } catch (refreshError) {
-        setCreatedSurgeryId(undefined)
         const message = refreshError instanceof Error && refreshError.message
           ? refreshError.message
           : CREATE_REFRESH_FAILED_MESSAGE
@@ -281,7 +263,7 @@ export function useCirugiaActions() {
     } finally {
       createInFlightRef.current = false
     }
-  }, [activeCompany?.id, store, newForm, createPRNow, prForm])
+  }, [activeCompany, store, newForm, createPRNow, prForm, createLinkedPresupuesto])
 
   // CHATZAI-017D: Reset all wizard state when dialog closes
   const resetWizardState = useCallback(() => {

@@ -37,10 +37,16 @@ Reglas funcionales que no se pueden romper.
 - tests, si corresponde.
 - browser QA, si toca UI.
 
+### Checklist E2E autenticado
+- [ ] E2E requiere Auth.
+- [ ] Si Auth no es objeto del test, usar sesión manual persistida.
+- [ ] `storageState` generado fresco al inicio.
+- [ ] Preflight autenticado exitoso antes de ejecutar Playwright.
+- [ ] No automatizar ni diagnosticar Auth durante retries del core-flow.
+
 ## Entregable
 Qué archivos/documentos deben quedar actualizados.
 
 ## Handoff esperado
 Resumen corto con cambios, archivos, validaciones, riesgos y próximos pasos.
 ```
-

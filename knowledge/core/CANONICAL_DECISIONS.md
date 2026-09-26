@@ -2,7 +2,7 @@
 
 Estado: vigente  
 Tipo: decisiones cortas para agentes  
-Actualizado: 2026-07-07
+Actualizado: 2026-09-10
 
 ---
 
@@ -60,6 +60,16 @@ La secuencia 0A/0B como gate bloqueante ya **no aplica**. Las prohibiciones sobr
 
 ---
 
+## Geografía
+
+- `knowledge/core/GEORREFERENCIACION_ARGENTINA_MASTER.md` gobierna toda lógica geográfica del sistema.
+- Georef Argentina es la fuente territorial primaria; IGN/POSGAR 07 aplica cuando la precisión geodésica lo exige.
+- Conservar `georef_id`, jerarquía territorial, latitud, longitud, `coordinate_type`, CRS, fuente y fecha de validación; la geografía debe ser interoperable entre sistemas.
+- Distinguir centroide, dirección geocodificada, GPS/GNSS y geometría. No presentar ni reutilizar uno como si fuera otro.
+- Nunca inferir ni corregir provincia/localidad por texto. Ante conflictos, auditar e informar sin modificar automáticamente.
+
+---
+
 ## Prohibiciones vigentes (reglas protectivas, independientes del cierre de fases)
 
 - No backend foundation nuevo (circuito troncal post-Cirugía) sin Task Brief específico y aprobación de Franco.
@@ -80,4 +90,3 @@ La secuencia 0A/0B como gate bloqueante ya **no aplica**. Las prohibiciones sobr
 ## Prioridad inmediata
 
 Crear y consolidar Knowledge V2 + AGENTS.md + specs GPT-027F.0.
-

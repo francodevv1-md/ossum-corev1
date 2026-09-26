@@ -12,6 +12,12 @@ function toIsoDate(offsetDays: number) {
 }
 
 describe("formatContextualDate", () => {
+  it("formats date-only and API ISO timestamps without producing Invalid Date", () => {
+    expect(formatDate("2026-08-25")).toBe("25/08/2026")
+    expect(formatDate("2026-08-25T14:30:00.000Z")).toBe("25/08/2026")
+    expect(formatDate("not-a-date")).toBe("—")
+  })
+
   it("formats today, tomorrow, and yesterday", () => {
     expect(formatContextualDate(toIsoDate(0))).toEqual({ text: "Hoy", variant: "today" })
     expect(formatContextualDate(toIsoDate(1))).toEqual({ text: "Mañana", variant: "tomorrow" })

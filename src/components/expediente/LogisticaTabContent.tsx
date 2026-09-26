@@ -16,6 +16,8 @@ import { useRemitos } from "@/hooks/useRemitos"
 import { getRemitoDestinatarioName, getRemitoVisibleNumber, type RemitoApiItem, type RemitoApiRow } from "@/lib/api/remitos"
 import { useTrazabilidad } from "@/hooks/useTrazabilidad"
 import type { TraceItemRow } from "@/lib/api/trazabilidad"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { LogisticsInformationSurface } from "@/components/expediente/LogisticsInformationSurface"
 
 type TransitPanelSource = "remitos" | "fallback"
 
@@ -64,6 +66,9 @@ export function mapRemitoApiItemToPanelItem(
     sentQuantity: canonical?.sentQuantity ?? toNumber(item.quantity),
     returnedQuantity: canonical?.returnedQuantity ?? 0,
     consumedQuantity: canonical?.consumedQuantity ?? 0,
+    lotNumber: item.lotNumber,
+    serialNumber: item.serialNumber,
+    expirationDate: item.expirationDate,
   }
 }
 
@@ -73,13 +78,33 @@ export function mapRemitoApiToPanelRemito(
 ): RemitosPanelRemito {
   return {
     apiId: remito.id,
+    companyId: remito.companyId,
+    remitoShortCode: remito.remitoShortCode ?? null,
     id: getRemitoVisibleNumber(remito),
     surgeryId: remito.surgeryId ?? "",
     boxId: remito.boxId,
     destination: getRemitoDestinatarioName(remito),
     date: remito.issuedAt ?? remito.deliveredAt ?? remito.createdAt,
     state: remito.state,
+    surgeryLabel: remito.surgeryLabel,
+    surgeryPatientName: remito.surgeryPatientName,
+    surgeryDoctorName: remito.surgeryDoctorName,
+    surgeryInstitutionName: remito.surgeryInstitutionName,
+    surgeryClientName: remito.surgeryClientName,
+    surgeryDate: remito.surgeryDate,
+    createdByName: remito.createdByName,
     items: remito.items.map((item) => mapRemitoApiItemToPanelItem(item, canonicalQuantities)),
+    detailItems: (remito.detailItems ?? remito.items).map((item) => ({
+      code: item.sku ?? "Sin SKU",
+      name: item.description,
+      quantity: toNumber(item.quantity),
+      unit: item.unit,
+      lotNumber: item.lotNumber,
+      serialNumber: item.serialNumber,
+      expirationDate: item.expirationDate,
+      identifiedCode: "identifiedCode" in item ? item.identifiedCode : null,
+      groupLabel: "groupLabel" in item ? item.groupLabel : null,
+    })),
   }
 }
 
@@ -94,7 +119,7 @@ interface LogisticaTabContentProps {
 
 type LogisticaTabContentBackendProps = LogisticaTabContentProps & { surgeryBackendId: string }
 
-function LogisticaTabContentBackend({
+export function LegacyLogisticaTabContentBackend({
   surgery,
   surgeryBackendId,
   logistics,
@@ -191,7 +216,7 @@ function LogisticaTabContentBackend({
       })) as TransitSummaryItem[],
       source: "fallback" as const,
     }
-  }, [box?.name, materialTransito, panelRemitos, surgery.id, surgery.institution, surgery.institutionCity, surgery.patient, surgery.surgeon])
+  }, [box, materialTransito, panelRemitos, surgery.id, surgery.institution, surgery.institutionCity, surgery.patient, surgery.surgeon])
 
   const remainingUnits = transitSummary.items.reduce((sum, item) => sum + (item.remainingQuantity ?? 1), 0)
   const sourceText = transitSummary.source === "remitos"
@@ -304,14 +329,22 @@ function LogisticaTabContentBackend({
   )
 }
 
+function LogisticaTabContentBackend({ surgeryBackendId, freshnessKey = 0 }: LogisticaTabContentBackendProps) {
+  const { activeCompany } = useAuth()
+  if (!activeCompany?.id) {
+    return <div className="rounded-lg border border-[var(--ossum-line)] bg-white px-3 py-4"><p className="text-sm font-medium text-[var(--ossum-navy)]">Logística no disponible</p><p className="mt-1 text-xs text-gray-500">Seleccioná una empresa para consultar la logística de esta cirugía.</p></div>
+  }
+  return <LogisticsInformationSurface companyId={activeCompany.id} surgeryId={surgeryBackendId} freshnessKey={freshnessKey} />
+}
+
 export function LogisticaTabContent(props: LogisticaTabContentProps) {
   const surgeryBackendId = props.surgery.backendId?.trim()
 
   if (!surgeryBackendId) {
     return (
       <div className="rounded-lg border border-slate-300 bg-white px-3 py-4 dark:border-slate-800 dark:bg-slate-900/90">
-        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Logística no disponible</p>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">La cirugía no tiene ID server-side disponible.</p>
+        <p className="text-sm font-medium text-[var(--ossum-navy)]">Logística no disponible</p>
+        <p className="mt-1 text-xs text-gray-500">La información logística todavía no está disponible para esta cirugía.</p>
       </div>
     )
   }

@@ -10,6 +10,8 @@ import { useState, useCallback, useMemo, useEffect } from "react"
 import { useOrtoTrackStore } from "@/lib/store"
 import type { PanelState } from "@/lib/cirugias.constants"
 import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
+import { toLegacyPresupuestoProjection } from "@/lib/api/presupuestos"
 
 export function useCirugiaSelection() {
   const store = useOrtoTrackStore()
@@ -20,7 +22,14 @@ export function useCirugiaSelection() {
 
   // ── Derived data ──
   const selectedSurgery = selectedSurgeryId ? store.getSurgeryById(selectedSurgeryId) : null
-  const selPresupuestos = selectedSurgeryId ? store.getPresupuestosBySurgeryId(selectedSurgeryId) : []
+  const presupuestoAuthority = usePresupuestos(
+    { surgeryId: selectedSurgery?.backendId ?? selectedSurgery?.id, take: 100 },
+    Boolean(selectedSurgery),
+  )
+  const selPresupuestos = useMemo(
+    () => presupuestoAuthority.presupuestos.map(toLegacyPresupuestoProjection),
+    [presupuestoAuthority.presupuestos],
+  )
   const selComprobantes = selectedSurgeryId ? store.getComprobantesBySurgeryId(selectedSurgeryId) : []
   const selRemitos = selectedSurgeryId ? store.getRemitosBySurgeryId(selectedSurgeryId) : []
   const selConsumo = selectedSurgeryId ? store.getConsumoBySurgeryId(selectedSurgeryId) : undefined
@@ -43,6 +52,8 @@ export function useCirugiaSelection() {
     if (!selectedSurgeryId) return
     if (store.getSurgeryById(selectedSurgeryId)) return
 
+    // The external store removed the selected entity; clear the now-invalid UI selection.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedSurgeryId(null)
     setPanelState("list")
   }, [selectedSurgeryId, store, store.surgeries])

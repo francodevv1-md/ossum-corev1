@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   CONTROL_LABEL,
-  FAMILY_STYLE,
+  getFamilyStyle,
   fmtDate,
   fmtMoney,
   fmtQty,
@@ -37,7 +37,7 @@ export interface StockColumn {
 }
 
 export function FamilyThumb({ item }: { item: StockItem }) {
-  const family = FAMILY_STYLE[item.family]
+  const family = getFamilyStyle(item.family)
   const Icon = family.icon
   return (
     <span className={`flex size-7 shrink-0 items-center justify-center rounded-md ring-1 ${family.thumb}`} title={family.label}>
@@ -76,7 +76,7 @@ export const STOCK_COLUMNS: StockColumn[] = [
   { key: "gtin", label: "GTIN / EAN", render: (i) => <span className="font-mono text-[11px] text-gray-500">{i.gtin || "—"}</span> },
   { key: "pm", label: "PM / Registro", render: (i) => <span className="font-mono text-[11px] text-gray-500">{i.pm || "—"}</span> },
   { key: "type", label: "Tipo", render: (i) => <span className="text-gray-500">{i.type}</span> },
-  { key: "family", label: "Familia / Patología", render: (i) => <span className="text-gray-500">{FAMILY_STYLE[i.family].label}</span> },
+  { key: "family", label: "Familia / Patología", render: (i) => <span className="text-gray-500">{getFamilyStyle(i.family).label}</span> },
   { key: "unit", label: "Unidad de venta", render: (i) => <span className="text-gray-500">{i.unit}</span> },
   { key: "unitBuy", label: "Unidad de compra", render: (i) => <span className="text-gray-500">{i.unitBuy}</span> },
   { key: "supplier", label: "Proveedor preferido", render: (i) => <span className="block max-w-[180px] truncate text-gray-600" title={i.preferredSupplier}>{i.preferredSupplier || "—"}</span> },

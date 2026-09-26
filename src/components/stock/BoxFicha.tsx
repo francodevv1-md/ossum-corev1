@@ -79,7 +79,7 @@ function BoxFicha({ boxId }: { boxId: string }) {
       at: new Date().toISOString(),
     }, ...prev])
     setResolveRow(null)
-    toast.success(kind === "incidencia" ? "Incidencia registrada (demo)" : "Diferencia resuelta (demo)")
+    toast.info(kind === "incidencia" ? "Incidencia agregada solo a esta vista" : "Diferencia ajustada solo en esta vista")
   }
 
   return (

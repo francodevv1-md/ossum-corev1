@@ -172,7 +172,7 @@ describe("useCirugiaActions create flow backend-only", () => {
     expect(storeMock.createSurgery).not.toHaveBeenCalled()
     expect(storeMock.replaceSurgeries).not.toHaveBeenCalled()
     expect(storeState.surgeries).toEqual([])
-    expect(actions.createdSurgeryId).toBeUndefined()
+    expect(actions.createdSurgeryId).toBe("db-1")
     expect(storeMock.createBudgetForSurgery).not.toHaveBeenCalled()
     expect(toastErrorMock).toHaveBeenCalledWith("backend caído")
   })
@@ -196,7 +196,7 @@ describe("useCirugiaActions create flow backend-only", () => {
     })
 
     await waitFor(() => {
-      expect(actions.createdSurgeryId).toBe("CX-9001")
+      expect(actions.createdSurgeryId).toBe("db-1")
     })
 
     expect(result).toBe(true)
@@ -244,7 +244,7 @@ describe("useCirugiaActions create flow backend-only", () => {
     })
 
     await waitFor(() => {
-      expect(actions.createdSurgeryId).toBe("CX-9001")
+      expect(actions.createdSurgeryId).toBe("db-1")
     })
 
     expect(firstResult).toBe(true)

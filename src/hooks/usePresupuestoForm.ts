@@ -59,6 +59,9 @@ export const EMPTY_FORM_ITEM: FormItem = {
 // ─── Form data type ───
 
 export interface PresupuestoFormData {
+  branchId: string
+  clientContactId: string
+  payerContactId: string
   client: string
   obraSocial: string
   financiador: string
@@ -87,6 +90,9 @@ function todayStr(): string {
 }
 
 const DEFAULT_FORM_DATA: PresupuestoFormData = {
+  branchId: "",
+  clientContactId: "",
+  payerContactId: "",
   client: "",
   obraSocial: "",
   financiador: "",
@@ -247,11 +253,13 @@ export function usePresupuestoForm(initialData?: Partial<PresupuestoFormData>) {
   const validate = useCallback((): boolean => {
     const newErrors: PresupuestoFormErrors = {}
 
-    if (!formData.client.trim()) newErrors.client = "El cliente es obligatorio"
-    if (!formData.vendedor.trim()) newErrors.vendedor = "El vendedor es obligatorio"
+    if (!formData.branchId) newErrors.branchId = "La sucursal es obligatoria"
+    if (!formData.clientContactId) newErrors.clientContactId = "El cliente es obligatorio"
+    if (!formData.payerContactId) newErrors.payerContactId = "El pagador es obligatorio"
     if (!formData.fechaEmision) newErrors.fechaEmision = "La fecha de emisión es obligatoria"
     if (!formData.vigencia) newErrors.vigencia = "La vigencia es obligatoria"
     if (!formData.listaPrecios) newErrors.listaPrecios = "La lista de precios es obligatoria"
+    if (!formData.condicionPago.trim()) newErrors.condicionPago = "La condición de pago es obligatoria"
 
     // Items validation
     if (formData.items.length === 0) {

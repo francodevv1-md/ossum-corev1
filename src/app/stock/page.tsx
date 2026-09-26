@@ -31,23 +31,12 @@ import { Switch } from "@/components/ui/switch"
 import {
   ARTICLE_TYPES,
   ARTICLE_TYPE_LABEL,
-  BRANDS,
-  CATEGORIES,
   DEPOSITS,
-  FABRICANTES,
-  FAMILIES,
-  FAMILY_STYLE,
-  LINEAS,
-  PROVEEDORES,
-  RUBROS,
-  SECCIONES,
+  getFamilyStyle,
   STOCK_CONTROL_OPTIONS,
-  STOCK_ITEMS,
   STOCK_STATE_OPTIONS,
   STOCK_STATE_ORDER,
   TRACE_METHODS,
-  TYPES,
-  type Family,
   type StockItem,
   type TraceMethod,
 } from "@/data/stock-mock"
@@ -64,6 +53,8 @@ import { StockArticleSheet, type FichaTab } from "@/components/stock/StockArticl
 import { ArticleCodesDialog } from "@/components/stock/ArticleCodesDialog"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { apiFetch } from "@/lib/api/client"
+import { mapCanonicalArticleToStockItem, type CanonicalArticle } from "@/lib/stock/article-adapter"
+import { CatalogSelect, type CatalogItem, type CatalogKind } from "@/components/stock/CatalogSelect"
 
 // ─── Sort ─────────────────────────────────────────────────
 
@@ -180,24 +171,30 @@ function FormField({ label, children, className = "" }: { label: string; childre
   )
 }
 
-function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }: { open: boolean; onOpenChange: (v: boolean) => void; companyId?: string; onCreated?: () => void; prefill?: ArticlePrefill }) {
+type Catalogs = Record<CatalogKind, CatalogItem[]>
+const emptyCatalogs: Catalogs = { category: [], "clinical-family": [], brand: [], manufacturer: [], "product-line": [] }
+
+function NewArticleDialog({ open, onOpenChange, companyId, catalogs, catalogsLoading, catalogsError, canQuickCreate, onRetryCatalogs, onCatalogItemsChange, onCreated, prefill }: { open: boolean; onOpenChange: (v: boolean) => void; companyId?: string; catalogs: Catalogs; catalogsLoading: boolean; catalogsError: string | null; canQuickCreate: boolean; onRetryCatalogs: () => void; onCatalogItemsChange: (kind: CatalogKind, items: CatalogItem[]) => void; onCreated?: () => void; prefill?: ArticlePrefill }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [image, setImage] = useState<string | null>(null)
   const [useFamilyImage, setUseFamilyImage] = useState(false)
-  const [family, setFamily] = useState("")
+  const [categoryId, setCategoryId] = useState("")
+  const [clinicalFamilyId, setClinicalFamilyId] = useState("")
   const [method, setMethod] = useState<TraceMethod>(() => prefill?.trace === "serial" || prefill?.trace === "serial-expiry" ? "serie" : prefill?.trace === "lot" || prefill?.trace === "lot-expiry" ? "lote" : "cantidad")
   const [expiry, setExpiry] = useState(() => prefill?.trace === "serial-expiry" || prefill?.trace === "lot-expiry")
   const [sterile, setSterile] = useState(true)
   const [sku, setSku] = useState(() => `ITM-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`)
   const [description, setDescription] = useState("")
   const [articleType, setArticleType] = useState("")
-  const [brand, setBrand] = useState("")
-  const [manufacturer, setManufacturer] = useState("")
+  const [brandId, setBrandId] = useState("")
+  const [manufacturerId, setManufacturerId] = useState("")
+  const [productLineId, setProductLineId] = useState("")
   const [gtin, setGtin] = useState(() => prefill?.gtin ?? "")
   const [identifiers, setIdentifiers] = useState<Array<{ type: "MANUFACTURER_REF" | "GTIN_EAN" | "GS1_AI_22" | "SUPPLIER_CODE" | "ALTERNATIVE_CODE"; value: string; sourcePayload?: string; manufacturerContext?: string; supplierId?: string }>>(() => prefill?.ai22 ? [{ type: "GS1_AI_22", value: prefill.ai22, sourcePayload: prefill.rawValue }] : [])
   const [saving, setSaving] = useState(false)
 
-  const familyStyle = family ? FAMILY_STYLE[family as Family] : null
+  const clinicalFamilyName = catalogs["clinical-family"].find((item) => item.id === clinicalFamilyId)?.name
+  const familyStyle = clinicalFamilyName ? getFamilyStyle(clinicalFamilyName) : null
   const FamilyIcon = familyStyle?.icon
 
   const pickImage = () => fileRef.current?.click()
@@ -218,7 +215,7 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
     if (!description.trim()) return toast.error("La descripción es obligatoria")
     setSaving(true)
     try {
-      await apiFetch(`/api/companies/${encodeURIComponent(companyId)}/articles`, { method: "POST", body: JSON.stringify({ description, sku: sku.trim() || undefined, articleType: articleType || undefined, brand: brand || undefined, manufacturer: manufacturer || undefined, family: family || undefined, unit: "u", traceabilityPolicy: method === "cantidad" ? "NONE" : method === "lote" ? (expiry ? "LOT_EXPIRY" : "LOT") : method === "serie" ? (expiry ? "SERIAL_EXPIRY" : "SERIAL") : "LOT_SERIAL_EXPIRY", identifiers: [...(gtin.trim() ? [{ type: "GTIN_EAN" as const, value: gtin }] : []), ...identifiers].filter((item) => item.value.trim()), supplierMappings: identifiers.filter((item) => item.type === "SUPPLIER_CODE" && item.supplierId && item.value.trim()).map((item) => ({ supplierId: item.supplierId, supplierCode: item.value })) }) })
+      await apiFetch(`/api/companies/${encodeURIComponent(companyId)}/articles`, { method: "POST", body: JSON.stringify({ description, sku: sku.trim() || undefined, articleType: articleType || undefined, categoryId: categoryId || null, clinicalFamilyId: clinicalFamilyId || null, brandId: brandId || null, manufacturerId: manufacturerId || null, productLineId: productLineId || null, unit: "u", traceabilityRequirement: method === "cantidad" ? "NONE" : method === "lote" ? "LOT" : method === "serie" ? "SERIAL" : "LOT_AND_SERIAL", expirationRequired: expiry, identifiers: [...(gtin.trim() ? [{ type: "GTIN_EAN" as const, value: gtin }] : []), ...identifiers].filter((item) => item.value.trim()), supplierMappings: identifiers.filter((item) => item.type === "SUPPLIER_CODE" && item.supplierId && item.value.trim()).map((item) => ({ supplierId: item.supplierId, supplierCode: item.value })) }) })
       onOpenChange(false)
       onCreated?.()
       toast.success("Artículo creado")
@@ -266,18 +263,8 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
               <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                 <FormField label="Código / SKU"><Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="TORN-3.5-COR" className="h-8 font-mono text-xs" /></FormField>
                 <FormField label="Descripción" className="sm:col-span-2"><Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tornillo cortical 3.5 mm x 24 mm" className="h-8 text-xs" /></FormField>
-                <FormField label="Categoría">
-                  <select className={selectClass} defaultValue="">
-                    <option value="" disabled>Seleccionar</option>
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Marca">
-                  <select className={selectClass} value={brand} onChange={(e) => setBrand(e.target.value)}>
-                    <option value="" disabled>Seleccionar</option>
-                    {BRANDS.map((b) => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                </FormField>
+                <FormField label="Categoría"><CatalogSelect companyId={companyId} kind="category" label="Categoría" value={categoryId} onChange={setCategoryId} items={catalogs.category} loading={catalogsLoading} error={catalogsError} onRetry={onRetryCatalogs} onItemsChange={(items) => onCatalogItemsChange("category", items)} allowQuickCreate canQuickCreate={canQuickCreate} /></FormField>
+                <FormField label="Marca"><CatalogSelect companyId={companyId} kind="brand" label="Marca" value={brandId} onChange={setBrandId} items={catalogs.brand} loading={catalogsLoading} error={catalogsError} onRetry={onRetryCatalogs} onItemsChange={(items) => onCatalogItemsChange("brand", items)} allowQuickCreate canQuickCreate={canQuickCreate} /></FormField>
                 <FormField label="Tipo de artículo">
                   <select className={selectClass} value={articleType} onChange={(e) => setArticleType(e.target.value)}>
                     <option value="" disabled>Seleccionar</option>
@@ -302,13 +289,9 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
           <section>
             <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--ossum-navy)]">Clasificación y registro</h3>
             <div className="grid gap-3 sm:grid-cols-3">
-              <FormField label="Familia / Patología">
-                <select className={selectClass} value={family} onChange={(e) => setFamily(e.target.value)}>
-                  <option value="">Sin familia</option>
-                  {FAMILIES.map((f) => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </FormField>
-                <FormField label="Fabricante"><Input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} placeholder="DePuy Synthes" className="h-8 text-xs" /></FormField>
+              <FormField label="Familia clínica"><CatalogSelect companyId={companyId} kind="clinical-family" label="Familia clínica" value={clinicalFamilyId} onChange={setClinicalFamilyId} items={catalogs["clinical-family"]} loading={catalogsLoading} error={catalogsError} onRetry={onRetryCatalogs} onItemsChange={(items) => onCatalogItemsChange("clinical-family", items)} allowQuickCreate canQuickCreate={canQuickCreate} /></FormField>
+              <FormField label="Fabricante"><CatalogSelect companyId={companyId} kind="manufacturer" label="Fabricante" value={manufacturerId} onChange={setManufacturerId} items={catalogs.manufacturer} loading={catalogsLoading} error={catalogsError} onRetry={onRetryCatalogs} onItemsChange={(items) => onCatalogItemsChange("manufacturer", items)} allowQuickCreate canQuickCreate={canQuickCreate} /></FormField>
+              <FormField label="Línea de producto"><CatalogSelect companyId={companyId} kind="product-line" label="Línea de producto" value={productLineId} onChange={setProductLineId} items={catalogs["product-line"]} loading={catalogsLoading} error={catalogsError} onRetry={onRetryCatalogs} onItemsChange={(items) => onCatalogItemsChange("product-line", items)} allowQuickCreate canQuickCreate={canQuickCreate} /></FormField>
                 <FormField label="GTIN / EAN"><Input value={gtin} onChange={(e) => setGtin(e.target.value)} placeholder="00888867011234" className="h-8 font-mono text-xs" /></FormField>
               <FormField label="PM / Registro"><Input placeholder="PM-1182-1" className="h-8 font-mono text-xs" /></FormField>
               <div className="flex items-end justify-between gap-3 pb-1">
@@ -357,7 +340,7 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    onClick={() => { setMethod(option.id); if (option.id === "cantidad") setExpiry(false) }}
+                     onClick={() => setMethod(option.id)}
                     className={`rounded-md border px-3 py-2 text-left transition-colors ${selected ? "border-[var(--ossum-action)] bg-[#eef0ff] ring-1 ring-[var(--ossum-action)]" : "border-[var(--ossum-line)] bg-white hover:border-gray-300"}`}
                   >
                     <span className={`block text-xs font-medium ${selected ? "text-[var(--ossum-action)]" : "text-gray-800"}`}>{option.label}</span>
@@ -370,9 +353,9 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
             <div className="mt-3 flex items-center justify-between rounded-md border border-[var(--ossum-line)] bg-white px-3 py-2">
               <div>
                 <p className="text-xs font-medium text-gray-800">Controlar vencimiento</p>
-                <p className="text-[10px] text-gray-400">Permite combinar {method === "serie" ? "Serie" : method === "lote" ? "Lote" : "Cantidad"} + vencimiento.</p>
+                 <p className="text-[10px] text-gray-400">Se exige de forma independiente, incluso si el artículo no requiere lote ni serie.</p>
               </div>
-               <Switch checked={expiry} disabled={method === "cantidad"} onCheckedChange={setExpiry} />
+                <Switch checked={expiry} onCheckedChange={setExpiry} />
             </div>
           </section>
         </div>
@@ -389,21 +372,23 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
 // ─── Main page ────────────────────────────────────────────
 
 export default function StockPage() {
-  const { activeCompany } = useAuth()
+  const { activeCompany, currentAccess } = useAuth()
   const activeCompanyId = activeCompany?.id
-  const [canonicalArticles, setCanonicalArticles] = useState<Array<{ id: string; sku: string; description: string; articleType?: string | null; brand?: string | null; manufacturer?: string | null; family?: string | null; unit: string; identifiers: Array<{ type: string; value: string }> }>>([])
+  const [canonicalArticles, setCanonicalArticles] = useState<CanonicalArticle[]>([])
+  const [catalogState, setCatalogState] = useState<{ companyId?: string; items: Catalogs; loading: boolean; error: string | null }>({ companyId: activeCompany?.id, items: emptyCatalogs, loading: Boolean(activeCompany?.id), error: null })
+  const catalogsRequestRef = useRef(0)
+  const articlesRequestRef = useRef(0)
+  const [articlesLoading, setArticlesLoading] = useState(Boolean(activeCompany?.id))
+  const [articlesError, setArticlesError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [depositFilter, setDepositFilter] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("")
   const [brandFilter, setBrandFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
   const [typeFilter, setTypeFilter] = useState("")
-  const [rubroFilter, setRubroFilter] = useState("")
-  const [seccionFilter, setSeccionFilter] = useState("")
   const [lineaFilter, setLineaFilter] = useState("")
   const [familyFilter, setFamilyFilter] = useState("")
   const [fabricanteFilter, setFabricanteFilter] = useState("")
-  const [proveedorFilter, setProveedorFilter] = useState("")
   const [controlFilter, setControlFilter] = useState("")
   const [sterileFilter, setSterileFilter] = useState("")
   const [gtinFilter, setGtinFilter] = useState("")
@@ -424,30 +409,95 @@ export default function StockPage() {
   const [newOpen, setNewOpen] = useState(() => Boolean(scannedArticlePrefill()))
 
   const loadCanonicalArticles = useCallback(async () => {
-    if (!activeCompanyId) return
+    const requestId = ++articlesRequestRef.current
+    if (!activeCompanyId) {
+      if (requestId === articlesRequestRef.current) {
+        setCanonicalArticles([])
+        setArticlesLoading(false)
+      }
+      return
+    }
+    setArticlesLoading(true)
+    setArticlesError(null)
     try {
       const result = await apiFetch<typeof canonicalArticles>(`/api/companies/${encodeURIComponent(activeCompanyId)}/articles?take=100`)
-      setCanonicalArticles(result)
-    } catch { /* Existing mock list remains usable when API is unavailable. */ }
+      if (requestId === articlesRequestRef.current) setCanonicalArticles(result)
+    } catch (error) {
+      if (requestId === articlesRequestRef.current) {
+        setCanonicalArticles([])
+        setArticlesError(error instanceof Error ? error.message : "No se pudieron cargar los artículos")
+      }
+    } finally {
+      if (requestId === articlesRequestRef.current) setArticlesLoading(false)
+    }
   }, [activeCompanyId])
 
   useEffect(() => {
     let cancelled = false
+    const requestId = ++articlesRequestRef.current
     const load = async () => {
-      if (!activeCompanyId) return
+      if (!activeCompanyId) {
+        setCanonicalArticles([])
+        setArticlesLoading(false)
+        return
+      }
+      setCanonicalArticles([])
+      setArticlesLoading(true)
+      setArticlesError(null)
       try {
         const result = await apiFetch<typeof canonicalArticles>(`/api/companies/${encodeURIComponent(activeCompanyId)}/articles?take=100`)
-        if (!cancelled) setCanonicalArticles(result)
-      } catch { /* Existing mock list remains usable when API is unavailable. */ }
+        if (!cancelled && requestId === articlesRequestRef.current) setCanonicalArticles(result)
+      } catch (error) {
+        if (!cancelled && requestId === articlesRequestRef.current) setArticlesError(error instanceof Error ? error.message : "No se pudieron cargar los artículos")
+      } finally {
+        if (!cancelled && requestId === articlesRequestRef.current) setArticlesLoading(false)
+      }
     }
     void load()
-    return () => { cancelled = true }
+    return () => { cancelled = true; articlesRequestRef.current += 1 }
   }, [activeCompanyId])
 
-  const canonicalStockItems = useMemo<StockItem[]>(() => canonicalArticles.map((article) => ({
-    id: article.id, code: article.sku, name: article.description, descriptionExtra: "", family: (article.family || "Insumos") as Family, category: "", rubro: "", seccion: "", linea: "", brand: article.brand || "", type: article.articleType || "Otro", unit: article.unit, unitBuy: article.unit, manufacturer: article.manufacturer || "", gtin: article.identifiers.find((item) => item.type === "GTIN_EAN")?.value || "", pm: "", sterile: false, preferredSupplier: "", cost: 0, price: 0, available: 0, reserved: 0, inTransit: 0, min: 0, state: "Pendiente", masterStatus: "Activo", control: "cantidad", lots: [], movements: [], articleType: (article.articleType || "Otro") as StockItem["articleType"], suppliers: [],
-  })), [canonicalArticles])
-  const allStockItems = useMemo(() => [...STOCK_ITEMS.filter((item) => !canonicalArticles.some((article) => article.id === item.id)), ...canonicalStockItems], [canonicalArticles, canonicalStockItems])
+  const loadCatalogs = useCallback(async () => {
+    const requestId = ++catalogsRequestRef.current
+    if (!activeCompanyId) {
+      setCatalogState({ companyId: undefined, items: emptyCatalogs, loading: false, error: null })
+      return
+    }
+    setCatalogState({ companyId: activeCompanyId, items: emptyCatalogs, loading: true, error: null })
+    try {
+      const entries = await Promise.all((Object.keys(emptyCatalogs) as CatalogKind[]).map(async (kind) => [kind, await apiFetch<CatalogItem[]>(`/api/companies/${encodeURIComponent(activeCompanyId)}/article-catalogs/${kind}`)] as const))
+      if (requestId === catalogsRequestRef.current) setCatalogState({ companyId: activeCompanyId, items: Object.fromEntries(entries) as Catalogs, loading: false, error: null })
+    } catch (error) {
+      if (requestId === catalogsRequestRef.current) setCatalogState({ companyId: activeCompanyId, items: emptyCatalogs, loading: false, error: error instanceof Error ? error.message : "No se pudieron cargar los catálogos" })
+    }
+  }, [activeCompanyId])
+
+  useEffect(() => {
+    void Promise.resolve().then(loadCatalogs)
+  }, [loadCatalogs])
+
+  const catalogs = catalogState.companyId === activeCompanyId ? catalogState.items : emptyCatalogs
+  const catalogsLoading = catalogState.companyId !== activeCompanyId || catalogState.loading
+  const catalogsError = catalogState.companyId === activeCompanyId ? catalogState.error : null
+  const updateCatalog = useCallback((kind: CatalogKind, items: CatalogItem[]) => {
+    setCatalogState((current) => current.companyId === activeCompanyId ? { ...current, items: { ...current.items, [kind]: items } } : current)
+  }, [activeCompanyId])
+  const catalogSelectProps = useCallback((kind: CatalogKind) => ({ items: catalogs[kind], loading: catalogsLoading, error: catalogsError, onRetry: () => void loadCatalogs(), onItemsChange: (items: CatalogItem[]) => updateCatalog(kind, items), canQuickCreate: currentAccess?.role === "admin" }), [catalogs, catalogsError, catalogsLoading, currentAccess?.role, loadCatalogs, updateCatalog])
+
+  useEffect(() => {
+    if (!activeCompanyId) { queueMicrotask(() => { setCategoryFilter(""); setBrandFilter(""); setLineaFilter(""); setFamilyFilter(""); setFabricanteFilter("") }); return }
+    queueMicrotask(() => { setCategoryFilter(""); setBrandFilter(""); setLineaFilter(""); setFamilyFilter(""); setFabricanteFilter("") })
+  }, [activeCompanyId])
+
+
+  const canonicalStockItems = useMemo(() => canonicalArticles.map((article) => ({ ...mapCanonicalArticleToStockItem(article), catalogCategoryId: article.categoryId, catalogClinicalFamilyId: article.clinicalFamilyId, catalogBrandId: article.brandId, catalogManufacturerId: article.manufacturerId, catalogProductLineId: article.productLineId })), [canonicalArticles])
+  const allStockItems = canonicalStockItems
+  const categoryDescendants = useMemo(() => {
+    const ids = new Set<string>()
+    const visit = (parentId: string) => catalogs.category.filter((item) => item.parentId === parentId).forEach((item) => { ids.add(item.id); visit(item.id) })
+    if (categoryFilter) { ids.add(categoryFilter); visit(categoryFilter) }
+    return ids
+  }, [catalogs.category, categoryFilter])
 
   const visibleColumns = useMemo<StockColumn[]>(() => {
     const view = STOCK_VIEWS.find((v) => v.key === viewKey) ?? STOCK_VIEWS[0]
@@ -466,16 +516,13 @@ export default function StockPage() {
         if (!haystack.includes(q)) return false
       }
       if (depositFilter && !i.lots.some((l) => l.deposit === depositFilter)) return false
-      if (categoryFilter && i.category !== categoryFilter) return false
-      if (brandFilter && i.brand !== brandFilter) return false
+      if (categoryFilter && !categoryDescendants.has(i.catalogCategoryId ?? "")) return false
+      if (brandFilter && i.catalogBrandId !== brandFilter) return false
       if (statusFilter && i.state !== statusFilter) return false
       if (typeFilter && i.type !== typeFilter) return false
-      if (rubroFilter && i.rubro !== rubroFilter) return false
-      if (seccionFilter && i.seccion !== seccionFilter) return false
-      if (lineaFilter && i.linea !== lineaFilter) return false
-      if (familyFilter && i.family !== familyFilter) return false
-      if (fabricanteFilter && i.manufacturer !== fabricanteFilter) return false
-      if (proveedorFilter && i.preferredSupplier !== proveedorFilter) return false
+      if (lineaFilter && i.catalogProductLineId !== lineaFilter) return false
+      if (familyFilter && i.catalogClinicalFamilyId !== familyFilter) return false
+      if (fabricanteFilter && i.catalogManufacturerId !== fabricanteFilter) return false
       if (controlFilter && i.control !== controlFilter) return false
       if (sterileFilter === "si" && !i.sterile) return false
       if (sterileFilter === "no" && i.sterile) return false
@@ -504,7 +551,7 @@ export default function StockPage() {
       }
       return cmp * dir
     })
-  }, [allStockItems, search, depositFilter, categoryFilter, brandFilter, statusFilter, typeFilter, rubroFilter, seccionFilter, lineaFilter, familyFilter, fabricanteFilter, proveedorFilter, controlFilter, sterileFilter, gtinFilter, pmFilter, quickFilter, sortKey, sortDir])
+  }, [allStockItems, search, depositFilter, categoryFilter, categoryDescendants, brandFilter, statusFilter, typeFilter, lineaFilter, familyFilter, fabricanteFilter, controlFilter, sterileFilter, gtinFilter, pmFilter, quickFilter, sortKey, sortDir])
 
   const summary = useMemo(() => ({
     total: allStockItems.length,
@@ -524,12 +571,12 @@ export default function StockPage() {
 
   const clearFilters = () => {
     setSearch(""); setDepositFilter(""); setCategoryFilter(""); setBrandFilter("")
-    setStatusFilter(""); setTypeFilter(""); setRubroFilter(""); setSeccionFilter(""); setLineaFilter("")
-    setFamilyFilter(""); setFabricanteFilter(""); setProveedorFilter(""); setControlFilter(""); setSterileFilter("")
+    setStatusFilter(""); setTypeFilter(""); setLineaFilter("")
+    setFamilyFilter(""); setFabricanteFilter(""); setControlFilter(""); setSterileFilter("")
     setGtinFilter(""); setPmFilter(""); setQuickFilter("")
   }
 
-  const hasFilters = Boolean(search || depositFilter || categoryFilter || brandFilter || statusFilter || typeFilter || rubroFilter || seccionFilter || lineaFilter || familyFilter || fabricanteFilter || proveedorFilter || controlFilter || sterileFilter || gtinFilter || pmFilter || quickFilter)
+  const hasFilters = Boolean(search || depositFilter || categoryFilter || brandFilter || statusFilter || typeFilter || lineaFilter || familyFilter || fabricanteFilter || controlFilter || sterileFilter || gtinFilter || pmFilter || quickFilter)
 
   const selectItem = (item: StockItem) => setSelectedId(item.id)
   const openSheet = (item: StockItem, tab: FichaTab = "general") => setSheet({ item, tab })
@@ -578,8 +625,8 @@ export default function StockPage() {
             )}
           </div>
           <FilterSelect ariaLabel="Filtrar por depósito" value={depositFilter} onChange={setDepositFilter} options={[{ value: "", label: "Todos los depósitos" }, ...DEPOSITS.map((d) => ({ value: d, label: d }))]} />
-          <FilterSelect ariaLabel="Filtrar por categoría" value={categoryFilter} onChange={setCategoryFilter} options={[{ value: "", label: "Todas las categorías" }, ...CATEGORIES.map((c) => ({ value: c, label: c }))]} />
-          <FilterSelect ariaLabel="Filtrar por marca" value={brandFilter} onChange={setBrandFilter} options={[{ value: "", label: "Todas las marcas" }, ...BRANDS.map((b) => ({ value: b, label: b }))]} />
+           <div className="w-44"><CatalogSelect companyId={activeCompanyId} kind="category" label="Filtrar por categoría" value={categoryFilter} onChange={setCategoryFilter} placeholder="Todas las categorías" {...catalogSelectProps("category")} /></div>
+           <div className="w-40"><CatalogSelect companyId={activeCompanyId} kind="brand" label="Filtrar por marca" value={brandFilter} onChange={setBrandFilter} placeholder="Todas las marcas" {...catalogSelectProps("brand")} /></div>
           <FilterSelect ariaLabel="Filtrar por estado" value={statusFilter} onChange={setStatusFilter} options={STOCK_STATE_OPTIONS} />
           <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setMoreFiltersOpen((v) => !v)}>Más filtros <ChevronDown className={`size-3 transition-transform ${moreFiltersOpen ? "rotate-180" : ""}`} /></Button>
           {hasFilters && <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-600">Limpiar filtros</button>}
@@ -596,13 +643,10 @@ export default function StockPage() {
         </div>
         {moreFiltersOpen && (
           <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-[var(--ossum-line)] pt-1.5">
-            <FilterSelect ariaLabel="Filtrar por tipo" value={typeFilter} onChange={setTypeFilter} options={[{ value: "", label: "Tipo" }, ...TYPES.map((t) => ({ value: t, label: t }))]} />
-            <FilterSelect ariaLabel="Filtrar por rubro" value={rubroFilter} onChange={setRubroFilter} options={[{ value: "", label: "Rubro" }, ...RUBROS.map((r) => ({ value: r, label: r }))]} />
-            <FilterSelect ariaLabel="Filtrar por sección" value={seccionFilter} onChange={setSeccionFilter} options={[{ value: "", label: "Sección" }, ...SECCIONES.map((s) => ({ value: s, label: s }))]} />
-            <FilterSelect ariaLabel="Filtrar por línea" value={lineaFilter} onChange={setLineaFilter} options={[{ value: "", label: "Línea" }, ...LINEAS.map((l) => ({ value: l, label: l }))]} />
-            <FilterSelect ariaLabel="Filtrar por familia" value={familyFilter} onChange={setFamilyFilter} options={[{ value: "", label: "Familia" }, ...FAMILIES.map((f) => ({ value: f, label: f }))]} />
-            <FilterSelect ariaLabel="Filtrar por fabricante" value={fabricanteFilter} onChange={setFabricanteFilter} options={[{ value: "", label: "Fabricante" }, ...FABRICANTES.map((f) => ({ value: f, label: f }))]} />
-            <FilterSelect ariaLabel="Filtrar por proveedor" value={proveedorFilter} onChange={setProveedorFilter} options={[{ value: "", label: "Proveedor" }, ...PROVEEDORES.map((p) => ({ value: p, label: p }))]} />
+             <FilterSelect ariaLabel="Filtrar por tipo" value={typeFilter} onChange={setTypeFilter} options={[{ value: "", label: "Tipo" }, ...ARTICLE_TYPES.map((t) => ({ value: t, label: t }))]} />
+             <div className="w-40"><CatalogSelect companyId={activeCompanyId} kind="product-line" label="Filtrar por línea" value={lineaFilter} onChange={setLineaFilter} placeholder="Línea" {...catalogSelectProps("product-line")} /></div>
+             <div className="w-40"><CatalogSelect companyId={activeCompanyId} kind="clinical-family" label="Filtrar por familia clínica" value={familyFilter} onChange={setFamilyFilter} placeholder="Familia clínica" {...catalogSelectProps("clinical-family")} /></div>
+             <div className="w-40"><CatalogSelect companyId={activeCompanyId} kind="manufacturer" label="Filtrar por fabricante" value={fabricanteFilter} onChange={setFabricanteFilter} placeholder="Fabricante" {...catalogSelectProps("manufacturer")} /></div>
             <FilterSelect ariaLabel="Filtrar por control" value={controlFilter} onChange={setControlFilter} options={[{ value: "", label: "Control" }, ...STOCK_CONTROL_OPTIONS.map((c) => ({ value: c.value, label: c.label }))]} />
             <FilterSelect ariaLabel="Filtrar por esterilización" value={sterileFilter} onChange={setSterileFilter} options={[{ value: "", label: "Estéril" }, { value: "si", label: "Solo estériles" }, { value: "no", label: "Solo no estériles" }]} />
              <TextFilter ariaLabel="Filtrar por GTIN/EAN" value={gtinFilter} onChange={setGtinFilter} placeholder="GTIN / EAN" />
@@ -624,7 +668,15 @@ export default function StockPage() {
       {/* ── CONTENT ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {filtered.length === 0 ? (
+          {articlesLoading ? (
+            <div className="flex flex-1 items-center justify-center px-5 py-10 text-sm text-muted-foreground" role="status">Cargando artículos…</div>
+          ) : articlesError ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 py-10 text-center" role="alert">
+              <Package className="size-5 text-muted-foreground" />
+              <div><p className="font-medium">No se pudieron cargar los artículos</p><p className="mt-1 max-w-sm text-sm text-muted-foreground">{articlesError}</p></div>
+              <Button type="button" size="sm" variant="outline" onClick={() => void loadCanonicalArticles()}>Reintentar</Button>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 py-10 text-center">
               <Package className="size-5 text-muted-foreground" />
               <div>
@@ -692,7 +744,6 @@ export default function StockPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-52">
                                 <DropdownMenuItem onSelect={() => openSheet(item, "general")}>Ver ficha</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => openSheet(item, "general")}>Editar</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => openSheet(item, "stock")}>Existencias</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => openSheet(item, "trazabilidad")}>Movimientos</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => openSheet(item, "trazabilidad")}>Trazabilidad</DropdownMenuItem>
@@ -712,7 +763,7 @@ export default function StockPage() {
         </div>
       </div>
 
-      {newOpen && <NewArticleDialog key={articlePrefill?.rawValue ?? "new"} open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open && articlePrefill) { setArticlePrefill(undefined); window.history.replaceState(null, "", "/stock") } }} companyId={activeCompany?.id} prefill={articlePrefill} onCreated={() => { setArticlePrefill(undefined); void loadCanonicalArticles() }} />}
+       {newOpen && <NewArticleDialog key={`${activeCompanyId ?? "none"}:${articlePrefill?.rawValue ?? "new"}`} open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open && articlePrefill) { setArticlePrefill(undefined); window.history.replaceState(null, "", "/stock") } }} companyId={activeCompany?.id} catalogs={catalogs} catalogsLoading={catalogsLoading} catalogsError={catalogsError} canQuickCreate={currentAccess?.role === "admin"} onRetryCatalogs={() => void loadCatalogs()} onCatalogItemsChange={updateCatalog} prefill={articlePrefill} onCreated={() => { setArticlePrefill(undefined); void loadCanonicalArticles() }} />}
       <StockArticleSheet item={sheet?.item ?? null} initialTab={sheet?.tab} open={Boolean(sheet)} onOpenChange={(v) => { if (!v) setSheet(null) }} />
       <ArticleCodesDialog item={codesItem} open={Boolean(codesItem)} onOpenChange={(v) => { if (!v) setCodesItem(null) }} />
     </div>

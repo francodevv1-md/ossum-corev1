@@ -32,6 +32,7 @@ const notificationItems: InternalNotificationListItem[] = [
     createdAt: "2026-07-03T13:00:00.000Z",
     updatedAt: "2026-07-03T13:00:00.000Z",
     actorName: "Ana Pérez",
+    patientName: null,
   },
   {
     id: "notif-2",
@@ -56,6 +57,7 @@ const notificationItems: InternalNotificationListItem[] = [
     createdAt: "2026-07-03T15:00:00.000Z",
     updatedAt: "2026-07-03T15:00:00.000Z",
     actorName: "Luis Gómez",
+    patientName: null,
   },
 ]
 const availabilityItem: InternalNotificationListItem = {
@@ -241,8 +243,6 @@ describe("NotificationMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: /notificaciones/i }))
 
     expect(await screen.findByText("Ana te mencionó en Seguimiento")).toBeInTheDocument()
-    expect(screen.getByText("Necesitamos revisar la autorización.")).toBeInTheDocument()
-    expect(screen.getByText("Ana Pérez")).toBeInTheDocument()
     expect(screen.getByText(/Caso CX-101/)).toBeInTheDocument()
     await waitFor(() => expect(refreshListMock).toHaveBeenCalled())
   })
@@ -299,7 +299,7 @@ describe("NotificationMenu", () => {
     render(<NotificationMenu />)
 
     fireEvent.click(screen.getByRole("button", { name: /notificaciones/i }))
-    expect(await screen.findByRole("button", { name: /abrir expediente/i })).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: /abrir caso/i })).toBeInTheDocument()
     fireEvent.click(screen.getByText("Luis reprogramó la cirugía"))
 
     await waitFor(() => {
@@ -329,7 +329,7 @@ describe("NotificationMenu", () => {
     render(<NotificationMenu />)
 
     fireEvent.click(screen.getByRole("button", { name: /notificaciones/i }))
-    fireEvent.click(await screen.findByText("Ver inbox completo"))
+    fireEvent.click(await screen.findByText("Ver todas las notificaciones"))
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notificaciones")
@@ -443,7 +443,7 @@ describe("NotificationMenu", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /notificaciones/i }))
 
-    expect(await screen.findByText("No hay notificaciones por ahora.")).toBeInTheDocument()
+    expect(await screen.findByText("No hay notificaciones")).toBeInTheDocument()
   })
 
   it("muestra toast si marcar una notificación falla", async () => {

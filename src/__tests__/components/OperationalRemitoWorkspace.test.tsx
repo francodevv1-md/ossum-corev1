@@ -25,13 +25,28 @@ describe("OperationalRemitoWorkspace", () => {
 
   it("creates only after manual context and a valid row, then replaces the route", async () => {
     render(<OperationalRemitoWorkspace />)
-    expect(screen.getByRole("button", { name: /buscar producto/i })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /producto/i })).toBeDisabled()
     expect(screen.getByRole("button", { name: /importar desde/i })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText(/sucursal de salida/i), { target: { value: "suc-1" } })
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "suc-1" } })
     fireEvent.change(screen.getByRole("textbox", { name: "Descripción del renglón 1" }), { target: { value: "Implante" } })
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }))
     await waitFor(() => expect(api.create).toHaveBeenCalled())
     expect(router.replace).toHaveBeenCalledWith("/remitos/rem-1/editar")
+  })
+
+  it("creates and generates a new remito in one confirmed flow", async () => {
+    api.emit.mockResolvedValue(undefined)
+    render(<OperationalRemitoWorkspace />)
+
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "suc-1" } })
+    fireEvent.change(screen.getByRole("textbox", { name: "Descripción del renglón 1" }), { target: { value: "Implante" } })
+    fireEvent.click(screen.getByRole("button", { name: /generar remito/i }))
+    fireEvent.click(screen.getByRole("button", { name: /confirmar y generar/i }))
+
+    await waitFor(() => expect(api.create).toHaveBeenCalled())
+    await waitFor(() => expect(api.emit).toHaveBeenCalledWith("company-1", "rem-1"))
+    expect(router.replace).toHaveBeenCalledWith("/remitos")
+    expect(router.replace).not.toHaveBeenCalledWith("/remitos/rem-1/editar")
   })
 
   it("applies only DEV preset branch defaults to a clean create workspace", async () => {
@@ -39,9 +54,9 @@ describe("OperationalRemitoWorkspace", () => {
 
     render(<OperationalRemitoWorkspace />)
 
-    await waitFor(() => expect(screen.getByLabelText(/sucursal de salida/i)).toHaveValue("dev-branch"))
-    expect(screen.getByLabelText(/sucursal emisora/i)).toHaveValue("dev-branch")
-    expect(screen.getByText("Sucursal", { exact: true }).parentElement).toHaveTextContent("dev-branch")
+    await waitFor(() => expect(screen.getByLabelText(/depósito de salida/i)).toHaveValue("Sucursal DEV"))
+    expect(screen.getByLabelText(/sucursal central emisora/i)).toHaveValue("Sucursal DEV")
+    expect(screen.getByRole("heading", { name: "Nuevo remito" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Cargar ejemplo DEV" })).toBeInTheDocument()
     expect(screen.getByLabelText(/cirugía \/ expediente/i)).toHaveValue("")
     expect(screen.getByLabelText(/destinatario/i)).toHaveValue("")
@@ -53,10 +68,10 @@ describe("OperationalRemitoWorkspace", () => {
     api.preset.mockImplementationOnce(() => pendingPreset.promise)
     render(<OperationalRemitoWorkspace />)
 
-    fireEvent.change(screen.getByLabelText(/sucursal de salida/i), { target: { value: "caller-branch" } })
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "caller-branch" } })
     await act(async () => { pendingPreset.resolve({ available: true, branch: { id: "dev-branch", label: "Sucursal DEV" }, example: { surgeryId: "", origin: "manual", salidaReason: "cirugia", recipientSnapshot: { nombre: "" }, shippingAddressSnapshot: null, transportSnapshot: null, packageCount: null, declaredValue: null, metadata: null, items: [] } }); await pendingPreset.promise })
 
-    expect(screen.getByLabelText(/sucursal de salida/i)).toHaveValue("caller-branch")
+    expect(screen.getByLabelText(/depósito de salida/i)).toHaveValue("caller-branch")
   })
 
   it("loads a draft, preserves origin and sends the loaded concurrency baseline", async () => {
@@ -73,7 +88,7 @@ describe("OperationalRemitoWorkspace", () => {
   it("offers the secure new-tab edit link only after the remito is persisted", async () => {
     const { unmount } = render(<OperationalRemitoWorkspace remitoId="rem-1" />)
 
-    const savedLink = await screen.findByRole("link", { name: /abrir en nueva pestaña/i })
+    const savedLink = await screen.findByRole("link", { name: /nueva pestaña/i })
     expect(savedLink).toHaveAttribute("href", "/remitos/rem-1/editar")
     expect(savedLink).toHaveAttribute("target", "_blank")
     expect(savedLink).toHaveAttribute("rel", "noopener noreferrer")
@@ -84,11 +99,26 @@ describe("OperationalRemitoWorkspace", () => {
     expect(screen.queryByRole("link", { name: /abrir en nueva pestaña/i })).not.toBeInTheDocument()
   })
 
-  it("shows the lock state for an emitted document", async () => {
+  it("keeps emitted documents locked", async () => {
     api.fetch.mockResolvedValue({ ...row, state: "Emitido" })
     render(<OperationalRemitoWorkspace remitoId="rem-1" />)
     expect(await screen.findByText(/edición no disponible/i)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /volver a remitos/i })).toBeInTheDocument()
+  })
+
+  it("allows editing and saving an Entregado remito without offering generation", async () => {
+    const delivered = { ...row, state: "Entregado", issuedAt: "2026-07-03T00:00:00Z", deliveredAt: "2026-07-04T00:00:00Z" }
+    api.fetch.mockResolvedValue(delivered)
+    api.patch.mockResolvedValue(delivered)
+
+    render(<OperationalRemitoWorkspace remitoId="rem-1" />)
+
+    const description = await screen.findByRole("textbox", { name: "Descripción del renglón 1" })
+    fireEvent.change(description, { target: { value: "Implante corregido" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }))
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith("company-1", "rem-1", expect.objectContaining({ expectedUpdatedAt: delivered.updatedAt })))
+    expect(screen.queryByRole("button", { name: /generar remito/i })).not.toBeInTheDocument()
   })
 
   it("pushes /remitos from the clean header action without using history back", () => {
@@ -102,7 +132,7 @@ describe("OperationalRemitoWorkspace", () => {
 
   it("keeps editing when dirty header navigation is cancelled, then pushes after discard", () => {
     render(<OperationalRemitoWorkspace />)
-    fireEvent.change(screen.getByLabelText(/sucursal de salida/i), { target: { value: "suc-1" } })
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "suc-1" } })
     fireEvent.click(screen.getByRole("button", { name: "Remitos" }))
 
     expect(screen.getByRole("dialog", { name: /cambios sin guardar/i })).toBeInTheDocument()
@@ -117,7 +147,7 @@ describe("OperationalRemitoWorkspace", () => {
 
   it("saves a dirty draft before applying the requested header navigation", async () => {
     render(<OperationalRemitoWorkspace />)
-    fireEvent.change(screen.getByLabelText(/sucursal de salida/i), { target: { value: "suc-1" } })
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "suc-1" } })
     fireEvent.change(screen.getByRole("textbox", { name: "Descripción del renglón 1" }), { target: { value: "Implante" } })
     fireEvent.click(screen.getByRole("button", { name: "Remitos" }))
     fireEvent.click(within(screen.getByRole("dialog", { name: /cambios sin guardar/i })).getByRole("button", { name: /guardar borrador/i }))
@@ -129,9 +159,10 @@ describe("OperationalRemitoWorkspace", () => {
   it("replaces /remitos after a successful emit", async () => {
     api.emit.mockResolvedValue(undefined)
     render(<OperationalRemitoWorkspace remitoId="rem-1" />)
-    await screen.findByRole("button", { name: /emitir/i })
+    await screen.findByRole("button", { name: /generar remito/i })
 
-    fireEvent.click(screen.getByRole("button", { name: /emitir/i }))
+    fireEvent.click(screen.getByRole("button", { name: /generar remito/i }))
+    fireEvent.click(screen.getByRole("button", { name: /confirmar y generar/i }))
 
     await waitFor(() => expect(api.emit).toHaveBeenCalledWith("company-1", "rem-1"))
     expect(router.replace).toHaveBeenCalledWith("/remitos")
@@ -143,9 +174,9 @@ describe("OperationalRemitoWorkspace", () => {
     render(<OperationalRemitoWorkspace />)
 
     const dialog = await screen.findByRole("dialog", { name: /recuperar cambios sin guardar/i })
-    expect(screen.getByLabelText(/sucursal de salida/i)).not.toHaveValue("recovered-branch")
+    expect(screen.getByLabelText(/depósito de salida/i)).not.toHaveValue("recovered-branch")
     fireEvent.click(within(dialog).getByRole("button", { name: "Recuperar" }))
-    expect(screen.getByLabelText(/sucursal de salida/i)).toHaveValue("recovered-branch")
+    expect(screen.getByLabelText(/depósito de salida/i)).toHaveValue("recovered-branch")
     expect(screen.getAllByDisplayValue("Implante recuperado")).toHaveLength(2)
   })
 
@@ -161,7 +192,8 @@ describe("OperationalRemitoWorkspace", () => {
     writeRemitoWorkspaceDraft(editContext, { origin: "manual", salidaReason: "cirugia", branchId: "suc-1", issuedBranchId: "suc-1", surgeryId: "", boxId: "", presupuestoId: "", destinatarioContactId: "", destinatarioNombre: "", domicilio: "", localidad: "", provincia: "", transporte: "", packageCount: "", declaredValue: "", observaciones: "", items: [{ sku: "", description: "Implante", quantity: "2", unit: "unidad", lotNumber: "", serialNumber: "", expirationDate: "" }] }, row.updatedAt)
     render(<OperationalRemitoWorkspace remitoId="rem-1" />)
     fireEvent.click(within(await screen.findByRole("dialog", { name: /recuperar cambios/i })).getByRole("button", { name: "Descartar" }))
-    fireEvent.click(await screen.findByRole("button", { name: /emitir/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /generar remito/i }))
+    fireEvent.click(screen.getByRole("button", { name: /confirmar y generar/i }))
     await waitFor(() => expect(window.sessionStorage.getItem(remitoWorkspaceDraftKey(editContext))).toBeNull())
   })
 
@@ -171,14 +203,14 @@ describe("OperationalRemitoWorkspace", () => {
     const contextB = { userId: "user-2", companyId: "company-2", mode: "create" as const }
     const view = render(<OperationalRemitoWorkspace />)
 
-    fireEvent.change(screen.getByLabelText(/sucursal de salida/i), { target: { value: "a-persisted" } })
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "a-persisted" } })
     await act(async () => { await vi.advanceTimersByTimeAsync(750) })
     expect(window.sessionStorage.getItem(remitoWorkspaceDraftKey(contextA))).toContain("a-persisted")
 
-    fireEvent.change(screen.getByLabelText(/sucursal de salida/i), { target: { value: "a-pending" } })
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "a-pending" } })
     auth.current = { activeCompany: { id: "company-2" }, currentUser: { id: "user-2" }, currentUserLoading: false, isLoading: false }
     view.rerender(<OperationalRemitoWorkspace />)
-    expect(screen.getByLabelText(/sucursal de salida/i)).toHaveValue("")
+    expect(screen.getByLabelText(/depósito de salida/i)).toHaveValue("")
 
     await act(async () => { await vi.advanceTimersByTimeAsync(750) })
     expect(window.sessionStorage.getItem(remitoWorkspaceDraftKey(contextB))).toBeNull()
@@ -190,7 +222,7 @@ describe("OperationalRemitoWorkspace", () => {
     const recoveryContext = { userId: "user-1", companyId: "company-1", mode: "create" as const }
     writeRemitoWorkspaceDraft(recoveryContext, { origin: "manual", salidaReason: "cirugia", branchId: "recovery", issuedBranchId: "", surgeryId: "", boxId: "", presupuestoId: "", destinatarioContactId: "", destinatarioNombre: "", domicilio: "", localidad: "", provincia: "", transporte: "", packageCount: "", declaredValue: "", observaciones: "", items: [{ sku: "", description: "x", quantity: "1", unit: "unidad", lotNumber: "", serialNumber: "", expirationDate: "" }] }, null)
     const recoveryOpener = document.createElement("button")
-    document.body.append(recoveryOpener)
+    document.body.appendChild(recoveryOpener)
     recoveryOpener.focus()
     const { unmount } = render(<OperationalRemitoWorkspace />)
 
@@ -206,20 +238,20 @@ describe("OperationalRemitoWorkspace", () => {
 
     render(<OperationalRemitoWorkspace />)
     const leaveOpener = screen.getByRole("button", { name: "Remitos" })
-    fireEvent.change(screen.getByLabelText(/sucursal de salida/i), { target: { value: "suc-1" } })
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "suc-1" } })
     fireEvent.click(leaveOpener)
     const leaveDialog = screen.getByRole("dialog", { name: /cambios sin guardar/i })
     expect(within(leaveDialog).getByRole("button", { name: /seguir editando/i })).toHaveFocus()
     await act(async () => { fireEvent.keyDown(document, { key: "Escape" }) })
     await waitFor(() => expect(screen.queryByRole("dialog", { name: /cambios sin guardar/i })).not.toBeInTheDocument())
     expect(leaveOpener).toHaveFocus()
-    expect(screen.getByLabelText(/sucursal de salida/i)).toHaveValue("suc-1")
+    expect(screen.getByLabelText(/depósito de salida/i)).toHaveValue("suc-1")
   })
 
   it("no aplica create tardío de A después de cambiar a B", async () => {
     const pending = deferred<RemitoApiRow>(); api.create.mockImplementationOnce(() => pending.promise)
     const view = render(<OperationalRemitoWorkspace />)
-    fireEvent.change(screen.getByLabelText(/sucursal de salida/i), { target: { value: "suc-1" } })
+    fireEvent.change(screen.getByLabelText(/depósito de salida/i), { target: { value: "suc-1" } })
     fireEvent.change(screen.getByRole("textbox", { name: "Descripción del renglón 1" }), { target: { value: "Implante A" } })
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }))
     await waitFor(() => expect(api.create).toHaveBeenCalled())
@@ -247,7 +279,8 @@ describe("OperationalRemitoWorkspace", () => {
   it("no aplica emisión tardía de A después de cambiar a B", async () => {
     const pending = deferred<void>(); api.emit.mockImplementationOnce(() => pending.promise)
     const view = render(<OperationalRemitoWorkspace remitoId="rem-1" />)
-    fireEvent.click(await screen.findByRole("button", { name: "Emitir" }))
+    fireEvent.click(await screen.findByRole("button", { name: /generar remito/i }))
+    fireEvent.click(screen.getByRole("button", { name: /confirmar y generar/i }))
     await waitFor(() => expect(api.emit).toHaveBeenCalled())
     switchToB(); view.rerender(<OperationalRemitoWorkspace />)
     await act(async () => { pending.resolve(); await pending.promise })
@@ -291,7 +324,7 @@ describe("OperationalRemitoWorkspace", () => {
   it("restaura el foco en el encabezado cuando el opener de recuperación ya no existe", async () => {
     const recoveryContext = { userId: "user-1", companyId: "company-1", mode: "create" as const }
     writeRemitoWorkspaceDraft(recoveryContext, { origin: "manual", salidaReason: "cirugia", branchId: "recovery", issuedBranchId: "", surgeryId: "", boxId: "", presupuestoId: "", destinatarioContactId: "", destinatarioNombre: "", domicilio: "", localidad: "", provincia: "", transporte: "", packageCount: "", declaredValue: "", observaciones: "", items: [{ sku: "", description: "x", quantity: "1", unit: "unidad", lotNumber: "", serialNumber: "", expirationDate: "" }] }, null)
-    const opener = document.createElement("button"); document.body.append(opener); opener.focus()
+    const opener = document.createElement("button"); document.body.appendChild(opener); opener.focus()
     render(<OperationalRemitoWorkspace />)
     await screen.findByRole("dialog", { name: /recuperar cambios sin guardar/i })
     opener.remove()

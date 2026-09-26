@@ -9,15 +9,22 @@ vi.hoisted(() => {
   dotenv.config({ path: ".env" })
 })
 
-const { getApiAuthContext } = vi.hoisted(() => ({
+const { getApiAuthContext, getRemitoIssuanceDependencies } = vi.hoisted(() => ({
   getApiAuthContext: vi.fn(),
+  getRemitoIssuanceDependencies: vi.fn(),
 }))
 
 vi.mock("@/lib/api/auth-context", () => ({
   getApiAuthContext,
 }))
 
+vi.mock("@/lib/remito-verification/issuance-runtime", () => ({
+  getRemitoIssuanceDependencies,
+}))
+
 import prisma from "@/lib/prisma"
+import { createRemitoTokenKeyring } from "@/lib/remito-verification/token"
+import { installRemitoActivationRuntime } from "@/lib/remito-verification/activation"
 import { GET as listRemitos, POST as createRemito } from "@/app/api/companies/[companyId]/remitos/route"
 import { GET as getRemito, PATCH as updateRemitoDraft } from "@/app/api/companies/[companyId]/remitos/[remitoId]/route"
 import { PATCH as updateRemitoState } from "@/app/api/companies/[companyId]/remitos/[remitoId]/state/route"
@@ -31,6 +38,17 @@ const BRANCH_ID = `${PREFIX}-branch`
 const USER_ID = `${PREFIX}-user`
 const PATIENT_ID = `${PREFIX}-patient`
 const SURGERY_ID = `${PREFIX}-surgery`
+const TEST_ISSUANCE_DEPENDENCIES = {
+  keyring: createRemitoTokenKeyring({
+    activeTokenKeyVersion: 1,
+    keys: { "1": Buffer.alloc(32, 7).toString("base64url") },
+  }),
+}
+
+installRemitoActivationRuntime({ flags: {
+  remitoLocatorIssuanceWrites: true, remitoInternalScanRead: true,
+  remitoPublicPublicationWrites: true, remitoPublicCompatibilityRead: true, remitoPrintCodes: false,
+}, cohort: { companyIds: [COMPANY_ID], cohortStart: new Date(0) } })
 
 const ADMIN_AUTH = {
   actorUserId: USER_ID,
@@ -55,7 +73,12 @@ function routeParams(params: Record<string, string>) {
 
 async function seedBase() {
   await prisma.organization.create({ data: { id: ORG_ID, name: "Integration Test Org", slug: `${PREFIX}-org` } })
-  await prisma.company.create({ data: { id: COMPANY_ID, organizationId: ORG_ID, name: "Integration Test Company" } })
+  await prisma.company.create({ data: {
+    id: COMPANY_ID,
+    organizationId: ORG_ID,
+    name: "Integration Test Company",
+    taxId: "30123456789",
+  } })
   await prisma.branch.create({ data: { id: BRANCH_ID, companyId: COMPANY_ID, name: "Casa central" } })
   await prisma.user.create({
     data: {
@@ -106,13 +129,16 @@ describe("Remito API integration (Supabase DEV DB)", () => {
   })
 
   afterAll(async () => {
-    await cleanupBase()
+    // Issuance verification history is intentionally immutable/non-deletable.
+    // This disposable DEV integration database retains the uniquely-prefixed fixture.
     await prisma.$disconnect()
   })
 
   beforeEach(() => {
     getApiAuthContext.mockReset()
     getApiAuthContext.mockResolvedValue(ADMIN_AUTH)
+    getRemitoIssuanceDependencies.mockReset()
+    getRemitoIssuanceDependencies.mockReturnValue(TEST_ISSUANCE_DEPENDENCIES)
   })
 
   it("creates, lists, transitions and registers a devolución for a remito", async () => {
@@ -122,9 +148,8 @@ describe("Remito API integration (Supabase DEV DB)", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           branchId: BRANCH_ID,
-          surgeryId: SURGERY_ID,
           origin: "manual",
-          salidaReason: "cirugia",
+          salidaReason: "venta",
           destinatarioSnapshot: { nombre: "Clínica Test", direccion: "Calle 123" },
           items: [{ sku: "SKU-IT-1", description: "Implante integración", quantity: 2, unit: "unidad" }],
         }),
@@ -154,7 +179,7 @@ describe("Remito API integration (Supabase DEV DB)", () => {
     expect(patched.data?.metadata?.integration).toBe(true)
 
     const listResponse = await listRemitos(
-      new Request(`http://localhost/api/companies/${COMPANY_ID}/remitos?surgeryId=${SURGERY_ID}`),
+      new Request(`http://localhost/api/companies/${COMPANY_ID}/remitos`),
       routeParams({ companyId: COMPANY_ID })
     )
     const listed = await bodyAsJson<Array<{ id: string }>>(listResponse)

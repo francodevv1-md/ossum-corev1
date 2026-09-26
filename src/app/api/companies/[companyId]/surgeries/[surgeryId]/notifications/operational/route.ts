@@ -17,6 +17,7 @@ type RouteContext = {
 const SURGERY_NOTIFICATION_MUTATION_ROLES = ["admin", "coordinator", "operator"] as const
 const OPERATIONAL_EVENT_TYPES = new Set<OperationalInternalNotificationEventType>([
   "coordinator_assigned",
+  "surgery_date_requested",
   "surgery_date_assigned",
   "surgery_rescheduled",
   "surgery_marked_urgent",

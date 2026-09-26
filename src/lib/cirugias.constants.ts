@@ -12,7 +12,7 @@
 import type { PreparationState, SurgeryState, SurgeryClassification } from "@/types"
 import {
   FileText, Receipt, Activity, BookOpen, MapPin,
-  Stethoscope, History, Mail,
+  Stethoscope, History, Mail, Package,
   StickyNote,
 } from "lucide-react"
 
@@ -129,7 +129,7 @@ export const PREP_STATE_CELL_COLORS: Record<PreparationState, string> = {
 
 export type ExpTab =
   | "ficha" | "novedades" | "comercial" | "consumo" | "documentacion"
-  | "logistica" | "correo" | "instrumentador" | "historial"
+  | "logistica" | "correo" | "cajas" | "instrumentador" | "historial"
 
 export const EXPEDIENTE_TABS: readonly { value: ExpTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { value: "ficha", label: "Ficha", icon: FileText },
@@ -142,6 +142,7 @@ export const EXPEDIENTE_TABS: readonly { value: ExpTab; label: string; icon: Rea
 ]
 
 export const EXPEDIENTE_MORE_TABS: readonly { value: ExpTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { value: "cajas", label: "Cajas", icon: Package },
   { value: "instrumentador", label: "Instrumentador", icon: Stethoscope },
   { value: "historial", label: "Historial", icon: History },
 ]

@@ -257,7 +257,7 @@ describe("CoordinatorInboxView compact case card", () => {
     expect(source).not.toContain("Ver otros coordinadores")
     expect(source).not.toContain("Seleccionar coordinador")
     expect(source).not.toContain("DEFAULT_COORDINATOR")
-    expect(source).toContain("CoordinationMetricFilters")
+    expect(source).toContain("CoordinationWorkspace")
   })
 
   it("integrates the released state surface and the isolated preview root", () => {
@@ -280,8 +280,8 @@ describe("CoordinatorInboxView compact case card", () => {
   })
 
   it("replaces legacy productive metrics and filter strip only in the personal graph", () => {
-    expect(source).toContain("<CoordinationMetricFilters")
-    expect(source).toContain("<CoordinationAdvancedFilters")
+    expect(source).toContain("<CoordinationWorkspace")
+    expect(source).toContain("CoordinationWorkspace")
     expect(source).not.toContain("ProductiveQuickFilters")
     expect(source).not.toContain("ProductiveCoordinationMetrics")
     expect(source).not.toContain("CoordinationSecondaryFilters")

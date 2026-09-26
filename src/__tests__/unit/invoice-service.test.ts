@@ -313,6 +313,7 @@ describe("updateInvoiceState", () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       consumo: { updateMany: vi.fn() },
+      fiscalDocument: { findFirst: vi.fn().mockResolvedValue(null) },
       invoice: { findFirst: vi.fn().mockResolvedValue(current), update: vi.fn(async ({ data }) => buildInvoice({ ...current, ...data })) },
     };
     const prismaMock = { $transaction: vi.fn((cb: any) => cb(tx)) } as any;
@@ -327,6 +328,7 @@ describe("updateInvoiceState", () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       consumo: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      fiscalDocument: { findFirst: vi.fn().mockResolvedValue(null) },
       invoice: { findFirst: vi.fn().mockResolvedValue(current), update: vi.fn(async ({ data }) => buildInvoice({ ...current, ...data })) },
     };
     const prismaMock = { $transaction: vi.fn((cb: any) => cb(tx)) } as any;
@@ -341,10 +343,26 @@ describe("updateInvoiceState", () => {
     expect(tx.invoice.findFirst.mock.invocationCallOrder[0]).toBeLessThan(tx.consumo.updateMany.mock.invocationCallOrder[0]);
   });
 
+  it("blocks operational cancellation and linked Consumo restoration while fiscal evidence is active", async () => {
+    const current = buildInvoice({ state: "Emitida", consumoId: "consumo-1", base: "mixto" });
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      consumo: { updateMany: vi.fn() },
+      fiscalDocument: { findFirst: vi.fn().mockResolvedValue({ id: "fiscal-1", state: "AUTHORIZED" }) },
+      invoice: { findFirst: vi.fn().mockResolvedValue(current), update: vi.fn() },
+    };
+    const prismaMock = { $transaction: vi.fn((cb: any) => cb(tx)) } as any;
+
+    await expect(updateInvoiceState({ companyId: "company-1", invoiceId: "invoice-1", newState: "Anulada", prisma: prismaMock })).rejects.toMatchObject({ code: "fiscal_cancellation_blocked" });
+    expect(tx.invoice.update).not.toHaveBeenCalled();
+    expect(tx.consumo.updateMany).not.toHaveBeenCalled();
+  });
+
   it("locks the company-scoped invoice row before reading and changing state", async () => {
     const current = buildInvoice({ state: "Borrador" });
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
+      fiscalDocument: { findFirst: vi.fn().mockResolvedValue(null) },
       invoice: { findFirst: vi.fn().mockResolvedValue(current), update: vi.fn(async ({ data }) => buildInvoice({ ...current, ...data })) },
     };
     const prismaMock = { $transaction: vi.fn((cb: any) => cb(tx)) } as any;

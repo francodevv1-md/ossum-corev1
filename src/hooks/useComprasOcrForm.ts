@@ -21,7 +21,7 @@ import {
   type RemitoProveedorExtracted,
   type FacturaCompraExtracted,
 } from "@/lib/validators/compras-document-ai"
-import type { Proveedor, StockItem } from "@/types"
+import type { Proveedor, RemitoProveedor, StockItem } from "@/types"
 
 export type ComprasOcrTipo = "remito-proveedor" | "factura-compra"
 
@@ -51,10 +51,11 @@ function confidenceLevel(c: number): "low" | "medium" | "high" {
 
 export interface UseComprasOcrFormOptions {
   tipo: ComprasOcrTipo
-  onSuccess?: () => void
+  persistToStore?: boolean
+  onSuccess?: (payload?: Omit<RemitoProveedor, "id">) => void | Promise<void>
 }
 
-export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions) {
+export function useComprasOcrForm({ tipo, persistToStore = true, onSuccess }: UseComprasOcrFormOptions) {
   const { activeCompany } = useAuth()
   const store = useOrtoTrackStore()
   const proveedores = store.proveedores.filter((p) => p.active)
@@ -321,7 +322,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
     setProveedorName(prov.name)
   }, [])
 
-  const handleConfirm = React.useCallback(() => {
+  const handleConfirm = React.useCallback(async () => {
     // Allow saving in both IA mode (result exists) and manual mode (no result)
     const proveedor = proveedores.find((p) => p.id === proveedorId)
     const resolvedProveedorName = proveedor?.name || proveedorName.trim()
@@ -380,7 +381,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
         stockItemId: linkedStockIds[idx] || undefined,
       }))
 
-      store.createRemitoProveedor(payload)
+      if (persistToStore) store.createRemitoProveedor(payload)
       toast.success(
         `Remito de proveedor guardado.${warnings.length > 0 ? " Revisá las advertencias." : ""}`
       )
@@ -388,7 +389,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
         warnings.forEach((w) => toast.warning(w))
       }
       resetState()
-      onSuccess?.()
+      await onSuccess?.(payload)
     } else {
       const extracted: FacturaCompraExtracted = {
         proveedor_name: resolvedProveedorName,
@@ -445,6 +446,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
     linkedStockIds,
     resetState,
     onSuccess,
+    persistToStore,
   ])
 
   const looksLike = result

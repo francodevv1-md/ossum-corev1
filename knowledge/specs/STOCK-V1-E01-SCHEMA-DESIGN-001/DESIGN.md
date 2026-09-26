@@ -61,11 +61,23 @@ These equations are behavioral review criteria only and select no E02 storage, f
 
 Future validation requires static schema review, isolated constraint tests, cross-company negatives, decimal boundaries, compatibility/opening fixtures, and separate DB/domain and SDD/governance verdicts. No command is authorized.
 
-## 5. Risks and unresolved decisions
+## 5. Article taxonomy boundary
+
+The Article taxonomy contract is deliberately separate from this E01 Stock identity design:
+
+- `articleType` is `STANDARD` or `COMPOSITE`, never Implant, Instrumental, Disposable, or Equipment.
+- Product classification is Category → Subcategory → optional third level; Clinical Family is independent.
+- Brand, Manufacturer, and optional Product Line are independent commercial catalogs.
+- `CajasBoxFormula.currentVersionId` is the only evidence for `COMPOSITE`; it identifies a box model. `StockIdentifiedUnit` identifies a physical box and is not implied by operational type.
+- Legacy Fabricado/Reventa remains lossless evidence only. Rubro is a curated Category candidate; Sección is not a permanent separate axis from the available export; Sector is unresolved.
+
+`ARTICLE-XADMIN-MIGRATION-MATRIX-001/MIGRATION_MATRIX.md` is the read-only migration contract. This section selects no physical model, catalog relation, migration, backfill, API, UI, Auth, permission, or data action.
+
+## 6. Risks and unresolved decisions
 
 Risks: subtype leakage, cross-company links, trace ambiguity, retroactive policy change, expiration collapse, dual truth, and opening mistaken for history. Franco must accept or revise §2–§3, numeric precision/constraint strategy, lot grouping, and opening linkage before `G-SCHEMA`. Any later forward-fix or migration plan must preserve evidence and receive separate approval.
 
-## 6. Review, stop, non-authorization
+## 7. Review, stop, non-authorization
 
 Independent DB/domain and SDD/governance reviewers are read-only/no-fix and report `PASS`, `PASS WITH CONCERNS`, or `FAIL`. Stop on drift, overlap, contradiction, extra path/command, or any unapproved decision.
 

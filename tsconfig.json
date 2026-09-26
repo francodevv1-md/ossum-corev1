@@ -47,6 +47,7 @@
     "knowledge",
     "FEATURE_SPECS",
     "src-old-backup",
-    "examples"
+    "examples",
+    "workers/document-service"
   ]
 }

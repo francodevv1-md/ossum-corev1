@@ -57,14 +57,37 @@ export type RemitoApiItem = {
   updatedAt: string
 }
 
+export type RemitoApiDetailItem = {
+  groupLabel: string | null
+  sku: string | null
+  description: string
+  quantity: string | number
+  unit: string | null
+  lotNumber: string | null
+  serialNumber: string | null
+  expirationDate: string | null
+  identifiedCode: string | null
+}
+
 export type RemitoApiRow = {
   id: string
+  remitoShortCode?: string | null
   visibleNumber: number | null
   companyId: string
   branchId: string | null
+  branchLabel?: string | null
   issuedBranchId: string | null
+  issuedBranchLabel?: string | null
   documentType: string
   surgeryId: string | null
+  surgeryLabel?: string | null
+  surgeryDescription?: string | null
+  surgeryDate?: string | null
+  surgeryPatientName?: string | null
+  surgeryDoctorName?: string | null
+  surgeryInstitutionName?: string | null
+  surgeryClientName?: string | null
+  createdByName?: string | null
   origin: RemitoOrigin | string
   salidaReason: RemitoSalidaReason | string
   boxId: string | null
@@ -85,6 +108,7 @@ export type RemitoApiRow = {
   createdAt: string
   updatedAt: string
   items: RemitoApiItem[]
+  detailItems?: RemitoApiDetailItem[]
 }
 
 export type RemitoDraftItemPayload = {
@@ -230,7 +254,7 @@ export function registrarRemitoDevolucion(
 }
 
 export function getRemitoVisibleNumber(remito: Pick<RemitoApiRow, "visibleNumber" | "id">) {
-  return remito.visibleNumber ? `R-${String(remito.visibleNumber).padStart(4, "0")}` : remito.id
+  return remito.visibleNumber ? `R-${String(remito.visibleNumber).padStart(4, "0")}` : "R-SIN-NÚMERO"
 }
 
 export function getRemitoDestinatarioName(remito: Pick<RemitoApiRow, "destinatarioSnapshot">) {
