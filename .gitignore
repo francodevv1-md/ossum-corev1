@@ -50,3 +50,26 @@ _local_backups/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Worktree noise (excluded from git by 2026-09-26 per Franco)
+# Logs and error logs
+*.log
+*.err.log
+# Screenshots and captures
+capturas-*/
+capturas-logistica/
+capturas-stock/
+*-current.png
+phase-e-cx-*.png
+gps-route-*.png
+# UI snapshot baselines
+logistics-*.yaml
+# Local AI configs
+.claude/
+.opencode/
+opencode.json
+# Loose reports
+DESIGN.md
+deep-research-report.md
+# Fiscal DEV migration: already applied to DEV DB, do not re-track
+prisma/migrations/20260923134500_fiscal_tusfacturas_dev/
