@@ -84,4 +84,49 @@ describe("contact service company query", () => {
       update: { role: "doctor", roles: ["cliente"], isActive: true },
     }));
   });
+
+  it("allocates sequential C-XXXX code when creating contact without explicit code", async () => {
+    const { createContact } = await import("@/lib/services/contact.service");
+    const tx = {
+      contactCompanyLink: {
+        findMany: vi.fn().mockResolvedValue([{ code: "C-0010" }, { code: "C-0005" }]),
+        create: vi.fn().mockResolvedValue({ id: "link-1" }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: "link-1",
+          code: "C-0011",
+          roles: ["cliente"],
+          role: "pacientes",
+          isActive: true,
+          contact: { id: "contact-new", firstName: "Juan", lastName: "Perez", addresses: [], groupMemberships: [] },
+        }),
+      },
+      contact: {
+        create: vi.fn().mockResolvedValue({ id: "contact-new", firstName: "Juan", lastName: "Perez" }),
+      },
+      contactGroup: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      contactGroupMembership: {
+        deleteMany: vi.fn(),
+      },
+      contactAddress: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (cb) => cb(tx)),
+    } as never;
+
+    const result = await createContact(prisma, "company-1", {
+      firstName: "Juan",
+      lastName: "Perez",
+    });
+
+    expect(tx.contactCompanyLink.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        code: "C-0011",
+      }),
+    }));
+    expect(result.code).toBe("C-0011");
+  });
 });

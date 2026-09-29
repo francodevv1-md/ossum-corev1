@@ -1,9 +1,11 @@
 "use client"
 
-import React from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -19,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Activity, ArrowRight, Check } from "lucide-react"
+import { Activity, ArrowRight, Check, FileCheck, FileText, Loader2, UploadCloud, X } from "lucide-react"
 import type { SurgeryState } from "@/types"
 import { ALL_STATES, CX_STATE_VISUALS, DEFAULT_CX_STATE_VISUAL } from "@/lib/cirugias.constants"
 import { cn } from "@/lib/utils"
@@ -30,7 +32,7 @@ interface ChangeStateDialogProps {
   dialogSurgery: { id: string; state: string } | null
   newState: SurgeryState
   setNewState: (s: SurgeryState) => void
-  onConfirm: () => void
+  onConfirm: (payload?: { authFile?: File | null; reasonWithoutAuthFile?: string }) => void | Promise<void>
 }
 
 export function ChangeStateDialog({
@@ -44,6 +46,55 @@ export function ChangeStateDialog({
   const currentState = dialogSurgery?.state || ""
   const currentVisual = CX_STATE_VISUALS[currentState] || DEFAULT_CX_STATE_VISUAL
   const newVisual = CX_STATE_VISUALS[newState] || DEFAULT_CX_STATE_VISUAL
+
+  const [authFile, setAuthFile] = useState<File | null>(null)
+  const [noComprobanteCheck, setNoComprobanteCheck] = useState(false)
+  const [motivoSinComprobante, setMotivoSinComprobante] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open) {
+      setAuthFile(null)
+      setNoComprobanteCheck(false)
+      setMotivoSinComprobante("")
+      setSubmitting(false)
+    }
+  }, [open])
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setAuthFile(file)
+      setNoComprobanteCheck(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files?.[0]
+    if (file) {
+      setAuthFile(file)
+      setNoComprobanteCheck(false)
+    }
+  }
+
+  const isAutorizadaState = newState === "Autorizada"
+  const isReasonValid = motivoSinComprobante.trim().length >= 3
+  const isAuthRequirementFulfilled = !isAutorizadaState || (authFile !== null) || (noComprobanteCheck && isReasonValid)
+
+  const handleExecuteConfirm = useCallback(async () => {
+    if (!isAuthRequirementFulfilled || submitting) return
+    setSubmitting(true)
+    try {
+      await onConfirm({
+        authFile: noComprobanteCheck ? null : authFile,
+        reasonWithoutAuthFile: noComprobanteCheck ? motivoSinComprobante.trim() : undefined,
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }, [authFile, isAuthRequirementFulfilled, motivoSinComprobante, noComprobanteCheck, onConfirm, submitting])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,6 +184,101 @@ export function ChangeStateDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Requerimiento de comprobante de autorización */}
+          {isAutorizadaState && (
+            <div className="space-y-3 rounded-lg border border-blue-200/80 bg-blue-50/40 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+              <div className="flex items-center gap-2 text-blue-900 dark:text-blue-200">
+                <FileCheck className="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                <p className="text-xs font-semibold">Comprobante de Autorización</p>
+              </div>
+
+              {!noComprobanteCheck && (
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,application/pdf"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+
+                  {authFile ? (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-blue-300 bg-white p-2.5 text-xs dark:border-blue-800 dark:bg-slate-900">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <FileText className="size-4 shrink-0 text-blue-600" />
+                        <span className="truncate font-medium">{authFile.name}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          ({(authFile.size / 1024).toFixed(0)} KB)
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-slate-500 hover:text-destructive"
+                        onClick={() => setAuthFile(null)}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-blue-300 bg-white/80 p-4 text-center transition hover:bg-blue-50/60 dark:border-blue-800 dark:bg-slate-900/60"
+                    >
+                      <UploadCloud className="size-6 text-blue-500" />
+                      <p className="mt-1 text-xs font-medium text-slate-700 dark:text-slate-200">
+                        Cargar imagen o PDF de autorización
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        Arrastrá o hacé clic para seleccionar (PNG, JPG, PDF)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Checkbox de excepción */}
+              <div className="flex items-center space-x-2 pt-1">
+                <Checkbox
+                  id="no-comprobante-check"
+                  checked={noComprobanteCheck}
+                  onCheckedChange={(checked) => {
+                    setNoComprobanteCheck(!!checked)
+                    if (checked) setAuthFile(null)
+                  }}
+                />
+                <Label
+                  htmlFor="no-comprobante-check"
+                  className="cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-300"
+                >
+                  No dispongo de comprobante ahora
+                </Label>
+              </div>
+
+              {/* Comentario obligatorio si se activa la excepción */}
+              {noComprobanteCheck && (
+                <div className="space-y-1.5 pt-1">
+                  <Label htmlFor="motivo-sin-comprobante" className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Motivo obligatorio de autorización *
+                  </Label>
+                  <Textarea
+                    id="motivo-sin-comprobante"
+                    value={motivoSinComprobante}
+                    onChange={(e) => setMotivoSinComprobante(e.target.value)}
+                    placeholder="Detallá el motivo o justificación de la autorización sin comprobante adjunto..."
+                    className="h-16 text-xs"
+                  />
+                  {!isReasonValid && motivoSinComprobante.length > 0 && (
+                    <p className="text-[10px] text-destructive">El motivo debe tener al menos 3 caracteres.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer con microinteracciones en botones */}
@@ -144,6 +290,7 @@ export function ChangeStateDialog({
                 size="sm"
                 className="h-8 border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 onClick={() => onOpenChange(false)}
+                disabled={submitting}
               >
                 Cancelar
               </Button>
@@ -153,8 +300,10 @@ export function ChangeStateDialog({
               <Button
                 size="sm"
                 className="h-8 bg-primary text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary/90"
-                onClick={onConfirm}
+                onClick={() => void handleExecuteConfirm()}
+                disabled={!isAuthRequirementFulfilled || submitting}
               >
+                {submitting && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
                 Confirmar cambio
               </Button>
             </motion.div>

@@ -15,7 +15,7 @@ import type {
 } from "./types";
 
 function resolveProviderName(mode?: string): AIProviderName {
-  if (!mode || mode.trim().length === 0) {
+  if (!mode || mode.trim().length === 0 || mode.trim().toLowerCase() === "default") {
     return aiConfig.provider;
   }
 
@@ -25,15 +25,8 @@ function resolveProviderName(mode?: string): AIProviderName {
     return "mock";
   }
 
-  if (normalized === "vlm") {
-    if (aiConfig.provider === "mock") {
-      throw new ApiError(
-        501,
-        "ai_provider_not_implemented",
-        'AI provider mode "vlm" is not implemented yet. Use mode="mock" in this phase.'
-      );
-    }
-
+  if (normalized === "vlm" || normalized === "azure") {
+    // If azure or vlm is requested, fallback to configured AI provider
     return aiConfig.provider;
   }
 
@@ -47,7 +40,7 @@ function resolveProviderName(mode?: string): AIProviderName {
     return normalized;
   }
 
-  throw badRequest(`Unsupported AI extraction mode: ${mode}`, "unsupported_ai_mode");
+  return aiConfig.provider;
 }
 
 function normalizeWarnings(

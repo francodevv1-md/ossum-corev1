@@ -19,6 +19,8 @@ import {
   Clock,
   Copy,
   ExternalLink,
+  Eye,
+  FileCheck,
   Info,
   Layers,
   MessageSquareText,
@@ -44,6 +46,9 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { useSeguimientoFeed } from "@/hooks/useSeguimientoFeed"
+import { ImageViewerDialog } from "@/components/shared/image/ImageViewerDialog"
 
 interface SurgeryContextTrayProps {
   surgery: Surgery | null | undefined
@@ -67,8 +72,68 @@ export function SurgeryContextTray({
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
 
+  const { activeCompany } = useAuth()
+  const { entries: feedEntries } = useSeguimientoFeed(surgery?.backendId || surgery?.id || "")
   const store = useOrtoTrackStore()
+
+  const authEvidence = useMemo(() => {
+    if (!surgery) return null
+
+    for (const entry of feedEntries) {
+      if (entry.imageEvidenceMeta?.files?.length) {
+        const file = entry.imageEvidenceMeta.files[0]
+        return {
+          type: "image" as const,
+          src: file.previewDataUrl,
+          fileName: file.name || "comprobante_autorizacion.jpg",
+          entryId: entry.id,
+        }
+      }
+      if (entry.photoMeta?.files?.length) {
+        const file = entry.photoMeta.files[0]
+        return {
+          type: "image" as const,
+          src: file.previewDataUrl,
+          fileName: file.name || "evidencia_autorizacion.jpg",
+          entryId: entry.id,
+        }
+      }
+      if (entry.documentMeta) {
+        const doc = entry.documentMeta
+        const isImg = Boolean(doc.mimeType?.startsWith("image") || /\.(png|jpe?g|webp|gif|svg)$/i.test(doc.fileName))
+        const companyId = activeCompany?.id || surgery.companyId || process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID || "codevdistricorr1000000000"
+        const surgeryBackendId = surgery.backendId || surgery.id
+        const docUrl = `/api/companies/${encodeURIComponent(companyId)}/surgeries/${encodeURIComponent(surgeryBackendId)}/seguimiento/documents/${encodeURIComponent(entry.id)}`
+        return {
+          type: isImg ? ("image" as const) : ("pdf" as const),
+          src: docUrl,
+          fileName: doc.fileName,
+          entryId: entry.id,
+        }
+      }
+    }
+    return null
+  }, [activeCompany?.id, feedEntries, surgery])
+
+  const handleViewAutorizado = () => {
+    if (!surgery) return
+    if (authEvidence) {
+      if (authEvidence.type === "pdf") {
+        window.open(authEvidence.src, "_blank", "noopener,noreferrer")
+      } else {
+        setViewerOpen(true)
+      }
+    } else {
+      toast.info("No se encontró un comprobante de autorización adjunto en Seguimiento.", {
+        action: {
+          label: "Ver Expediente",
+          onClick: () => onOpenExpediente(surgery.id),
+        },
+      })
+    }
+  }
 
   const copyToClipboard = (text: string, label = "Copiado al portapapeles", id?: string) => {
     void navigator.clipboard.writeText(text)
@@ -89,9 +154,9 @@ export function SurgeryContextTray({
     )
     if (presupuesto && presupuesto.items && presupuesto.items.length > 0) {
       return presupuesto.items.map((item) => ({
-        description: item.description,
+        description: item.description?.trim() || item.code?.trim() || "Material presupuestado",
         quantity: item.quantity || 1,
-        code: item.code,
+        code: item.code && item.code !== item.description && item.code.length > 1 ? item.code : undefined,
       }))
     }
 
@@ -101,19 +166,30 @@ export function SurgeryContextTray({
     )
     if (remito && remito.items && remito.items.length > 0) {
       return remito.items.map((item) => ({
-        description: item.description,
+        description: item.description?.trim() || item.code?.trim() || "Material remitado",
         quantity: item.quantity || 1,
-        code: item.code,
+        code: item.code && item.code !== item.description && item.code.length > 1 ? item.code : undefined,
       }))
     }
 
-    // 3. Fallback: Parse from procedure / classification
-    const mainDesc = surgery.procedure || surgery.classification || "Kit operativo de osteosíntesis"
+    // 3. Fallback: Parse from procedure / description / classification
+    const mainDesc =
+      (surgery.procedure && surgery.procedure.trim().length > 1 ? surgery.procedure.trim() : "") ||
+      (surgery.leyenda && surgery.leyenda.trim().length > 1 ? surgery.leyenda.trim() : "") ||
+      (surgery.classification && surgery.classification.trim().length > 2 ? surgery.classification.trim() : "") ||
+      (surgery.notes && surgery.notes.trim().length > 1 ? surgery.notes.trim() : "") ||
+      "Material e implantes quirúrgicos autorizados"
+
+    const code =
+      surgery.classification && surgery.classification !== mainDesc && surgery.classification.trim().length > 1
+        ? surgery.classification.trim()
+        : undefined
+
     return [
       {
         description: mainDesc,
         quantity: 1,
-        code: surgery.classification,
+        code,
       },
     ]
   }, [surgery, store.presupuestos, store.remitos])
@@ -291,6 +367,25 @@ export function SurgeryContextTray({
               type="button"
               variant="ghost"
               size="sm"
+              onClick={handleViewAutorizado}
+              className={cn(
+                "h-6 px-2 text-[11px] font-semibold flex items-center gap-1 transition-colors",
+                authEvidence
+                  ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200"
+              )}
+              title={authEvidence ? `Ver comprobante (${authEvidence.fileName})` : "Ver comprobante de autorización"}
+            >
+              <FileCheck className={cn("size-3", authEvidence ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400")} />
+              Ver Autorizado
+              {authEvidence && (
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse ml-0.5" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
               onClick={onAddNote}
               className="h-6 px-2 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
             >
@@ -360,13 +455,24 @@ export function SurgeryContextTray({
                   </span>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => onOpenExpediente(surgery.id)}
-                className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 flex items-center gap-0.5"
-              >
-                Ver en Expediente →
-              </button>
+              <div className="flex items-center gap-2">
+                {authEvidence && (
+                  <button
+                    type="button"
+                    onClick={handleViewAutorizado}
+                    className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline dark:text-emerald-400 flex items-center gap-0.5"
+                  >
+                    <Eye className="size-3" /> Ver Comprobante
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onOpenExpediente(surgery.id)}
+                  className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 flex items-center gap-0.5"
+                >
+                  Ver en Expediente →
+                </button>
+              </div>
             </div>
 
             {/* Listado de Materiales con HoverCard */}
@@ -376,8 +482,8 @@ export function SurgeryContextTray({
                   <HoverCardTrigger asChild>
                     <div className="group flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-slate-200/90 shadow-2xs dark:bg-slate-900/80 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="shrink-0 font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300">
-                          {mat.quantity}x
+                        <span className="shrink-0 font-mono text-[10.5px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300">
+                          {mat.quantity} {mat.quantity === 1 ? "ud." : "uds."}
                         </span>
                         <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
                           {mat.description}
@@ -385,7 +491,7 @@ export function SurgeryContextTray({
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {mat.code && (
-                          <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+                          <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded">
                             {mat.code}
                           </span>
                         )}
@@ -393,7 +499,7 @@ export function SurgeryContextTray({
                       </div>
                     </div>
                   </HoverCardTrigger>
-                  <HoverCardContent side="top" align="start" className="w-80 p-3.5 shadow-xl border-emerald-200 dark:border-emerald-800">
+                  <HoverCardContent side="top" align="start" className="w-84 p-3.5 shadow-xl border-emerald-200 dark:border-emerald-800">
                     <div className="flex items-start justify-between gap-2 border-b pb-2 mb-2">
                       <div className="flex items-center gap-2">
                         <div className="flex size-7 items-center justify-center rounded bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50">
@@ -427,7 +533,7 @@ export function SurgeryContextTray({
 
                       {mat.code && (
                         <div>
-                          <p className="text-[10px] font-semibold uppercase text-slate-400">Clasificación / Código</p>
+                          <p className="text-[10px] font-semibold uppercase text-slate-400">Código / Clasificación</p>
                           <p className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
                             {mat.code}
                           </p>
@@ -551,6 +657,21 @@ export function SurgeryContextTray({
           </div>
         </div>
       </motion.div>
+
+      {/* Modal de visualización de imagen de autorización */}
+      {authEvidence?.type === "image" && (
+        <ImageViewerDialog
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          src={authEvidence.src}
+          alt={authEvidence.fileName}
+          title={`Comprobante de Autorización - ${displayCode}`}
+          subtitle={`${surgery.patient} · ${authEvidence.fileName}`}
+          onOpenInNewTab={() => {
+            if (authEvidence.src) window.open(authEvidence.src, "_blank", "noopener,noreferrer")
+          }}
+        />
+      )}
     </TooltipProvider>
   )
 }

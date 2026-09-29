@@ -68,7 +68,10 @@ describe("getSurgeryDeletionPreview", () => {
 
     expect(prismaMock.surgery.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "surgery-1", companyId: "company-1" },
+        where: {
+          OR: [{ id: "surgery-1" }, { visibleNumber: "surgery-1" }],
+          companyId: "company-1",
+        },
       })
     )
     expect(preview?.surgery).toEqual({

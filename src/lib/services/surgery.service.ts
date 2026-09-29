@@ -370,7 +370,7 @@ async function getNextSurgeryVisibleNumber(
 ): Promise<string> {
   const rows = await tx.$queryRaw<Array<{ maxNumber: string | bigint | number | null }>>`
     SELECT COALESCE(
-      MAX(CAST(SUBSTRING("visibleNumber" FROM ${SURGERY_VISIBLE_NUMBER_PREFIX.length + 1}) AS NUMERIC)),
+      MAX(CAST(SUBSTRING("visibleNumber", 4) AS NUMERIC)),
       0
     )::TEXT AS "maxNumber"
     FROM "Surgery"
@@ -489,7 +489,10 @@ export async function getSurgeryById(
   const surgery = await prisma.surgery.findFirst({
     select: surgeryReadSelect(scopedCompanyId),
     where: {
-      id: surgeryId,
+      OR: [
+        { id: surgeryId },
+        { visibleNumber: surgeryId },
+      ],
       companyId: scopedCompanyId,
       archivedAt: null,
     },
@@ -508,7 +511,10 @@ export async function getSurgeryDeletionPreview(
 
   const surgery = await prisma.surgery.findFirst({
     where: {
-      id: surgeryId,
+      OR: [
+        { id: surgeryId },
+        { visibleNumber: surgeryId },
+      ],
       companyId: scopedCompanyId,
     },
     select: {
@@ -547,15 +553,15 @@ export async function getSurgeryDeletionPreview(
     seguimientoEntries,
     internalNotifications,
   ] = await Promise.all([
-    prisma.presupuesto.count({ where: { companyId: scopedCompanyId, surgeryId } }),
-    prisma.remito.count({ where: { companyId: scopedCompanyId, surgeryId } }),
-    prisma.consumo.count({ where: { companyId: scopedCompanyId, surgeryId } }),
-    prisma.devolucion.count({ where: { companyId: scopedCompanyId, surgeryId } }),
-    prisma.invoice.count({ where: { companyId: scopedCompanyId, surgeryId } }),
-    prisma.payment.count({ where: { companyId: scopedCompanyId, surgeryId } }),
-    prisma.digitalReceipt.count({ where: { companyId: scopedCompanyId, surgeryId } }),
-    prisma.seguimientoEntry.count({ where: { companyId: scopedCompanyId, surgeryId } }),
-    prisma.internalNotification.count({ where: { companyId: scopedCompanyId, surgeryId } }),
+    prisma.presupuesto.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
+    prisma.remito.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
+    prisma.consumo.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
+    prisma.devolucion.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
+    prisma.invoice.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
+    prisma.payment.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
+    prisma.digitalReceipt.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
+    prisma.seguimientoEntry.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
+    prisma.internalNotification.count({ where: { companyId: scopedCompanyId, surgeryId: surgery.id } }),
   ]);
 
   const dependencies: SurgeryDeletionPreview["dependencies"] = {
@@ -642,7 +648,13 @@ export async function archiveSurgery(
   }
 
   const currentSurgery = await prisma.surgery.findFirst({
-    where: { id: surgeryId, companyId: scopedCompanyId },
+    where: {
+      OR: [
+        { id: surgeryId },
+        { visibleNumber: surgeryId },
+      ],
+      companyId: scopedCompanyId,
+    },
   });
 
   if (!currentSurgery) {
@@ -656,7 +668,7 @@ export async function archiveSurgery(
   const preview = await getSurgeryDeletionPreview(
     prisma,
     { companyId: scopedCompanyId },
-    surgeryId
+    currentSurgery.id
   );
 
   if (!preview) {
@@ -677,7 +689,7 @@ export async function archiveSurgery(
   return prisma.$transaction(async (tx) => {
     const archivedAt = new Date();
     const result = await tx.surgery.updateMany({
-      where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null },
+      where: { id: currentSurgery.id, companyId: scopedCompanyId, archivedAt: null },
       data: {
         archivedAt,
         archivedById: scopedContext.actorUserId,
@@ -691,7 +703,7 @@ export async function archiveSurgery(
     }
 
     const archivedSurgery = await tx.surgery.findFirst({
-      where: { id: surgeryId, companyId: scopedCompanyId },
+      where: { id: currentSurgery.id, companyId: scopedCompanyId },
     });
 
     await createAuditEvent({
@@ -699,7 +711,7 @@ export async function archiveSurgery(
       companyId: scopedCompanyId,
       userId: scopedContext.actorUserId,
       entityType: "Surgery",
-      entityId: surgeryId,
+      entityId: currentSurgery.id,
       action: "surgery.archived",
       module: scopedContext.module ?? "surgery",
       detail: reason,

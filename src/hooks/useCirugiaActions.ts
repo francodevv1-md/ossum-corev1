@@ -129,7 +129,7 @@ export function useCirugiaActions() {
   const [editingConsumo, setEditingConsumo] = useState<Record<string, { consumed: number; returned: number }>>({})
 
   // ── Action handlers ──
-  const handleNewSurgery = useCallback(async (): Promise<boolean> => {
+  const handleNewSurgery = useCallback(async (options?: { authorizationFile?: File | null }): Promise<boolean> => {
     if (createInFlightRef.current) {
       return false
     }
@@ -195,6 +195,25 @@ export function useCirugiaActions() {
 
       const localSurgeryId = persistedSurgery.visibleNumber?.trim() || persistedSurgery.id
 
+      // If an authorization file was provided from the OCR step, upload it to Seguimiento
+      if (options?.authorizationFile) {
+        try {
+          const formData = new FormData()
+          formData.set("file", options.authorizationFile)
+          formData.set("description", "Comprobante de autorización médica cargado en el alta")
+          await apiFetch(
+            `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(persistedSurgery.id)}/seguimiento/documents`,
+            {
+              method: "POST",
+              body: formData,
+            }
+          )
+        } catch (uploadErr) {
+          console.error("Error uploading authorization document to seguimiento:", uploadErr)
+          toast.warning("Cirugía creada, pero ocurrió un problema al adjuntar el comprobante en Seguimiento.")
+        }
+      }
+
       // CHATZAI-017C: Extract DNI from referenciasAdministrativas if present
       const dniRef = newForm.referenciasAdministrativas.find(r => r.tipo === "DNI" && r.valor.trim())
       const patientDni = dniRef ? dniRef.valor.trim() : ""
@@ -218,7 +237,7 @@ export function useCirugiaActions() {
         const items = prForm.items.map((it) => {
           const isLibre = it.isArticuloLibre
           const subtotalBruto = it.quantity * it.unitPrice
-          const clampedDiscount = Math.min(Math.max(it.discountPercent, 0), 100)
+          const clampedDiscount = Math.min(Math.max(itemDiscount(it), 0), 100)
           const descuentoLinea = subtotalBruto * (clampedDiscount / 100)
           const subtotalNeto = subtotalBruto - descuentoLinea
           return {
@@ -234,6 +253,10 @@ export function useCirugiaActions() {
           descripcionLibre: isLibre ? it.descripcionLibre : undefined,
           ivaKey: it.ivaKey,
         }})
+
+        function itemDiscount(it: import("@/hooks/usePresupuestoForm").FormItem) {
+          return it.discountPercent || 0
+        }
 
         const subtotal = prForm.subtotal
         const descuentoMonto = prForm.descuentoMonto
@@ -261,9 +284,9 @@ export function useCirugiaActions() {
           version: 1,
           versionStatus: "vigente",
         })
-          toast.success("Cirugía y presupuesto creados exitosamente")
+          toast.success(options?.authorizationFile ? "Cirugía y presupuesto creados con comprobante fijado" : "Cirugía y presupuesto creados exitosamente")
         } else {
-          toast.success("Cirugía creada exitosamente")
+          toast.success(options?.authorizationFile ? "Cirugía creada con comprobante fijado en Seguimiento" : "Cirugía creada exitosamente")
         }
       } catch (refreshError) {
         setCreatedSurgeryId(undefined)
@@ -301,9 +324,10 @@ export function useCirugiaActions() {
   }, [resetWizardState])
 
   const handleAutorizar = useCallback((s: Surgery) => {
-    store.authorizeSurgery(s.id)
-    toast.success(`Cirugía ${s.id} autorizada`)
-  }, [store])
+    setDialogSurgery(s)
+    setNewState("Autorizada")
+    setChangeStateDialogOpen(true)
+  }, [])
 
   const handleFacturar = useCallback(() => {
     const s = dialogSurgery
@@ -335,13 +359,77 @@ export function useCirugiaActions() {
     setDialogSurgery(null)
   }, [store, dialogSurgery])
 
-  const handleChangeState = useCallback(() => {
+  const handleChangeState = useCallback(async (payload?: { authFile?: File | null; reasonWithoutAuthFile?: string }) => {
     if (!dialogSurgery) return
-    store.changeSurgeryStatus(dialogSurgery.id, newState)
-    toast.success(`Estado cambiado a ${newState}`)
-    setChangeStateDialogOpen(false)
-    setDialogSurgery(null)
-  }, [store, dialogSurgery, newState])
+
+    const targetSurgeryId = dialogSurgery.id
+    const surgeryRecord = store.surgeries.find((s) => s.id === targetSurgeryId || s.backendId === targetSurgeryId)
+    const backendId = surgeryRecord?.backendId || targetSurgeryId
+
+    try {
+      if (activeCompany?.id && newState === "Autorizada") {
+        if (payload?.authFile) {
+          const formData = new FormData()
+          formData.set("file", payload.authFile)
+          formData.set("description", "Comprobante de autorización médica")
+          await apiFetch(
+            `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(backendId)}/seguimiento/documents`,
+            {
+              method: "POST",
+              body: formData,
+            }
+          ).catch((err) => {
+            console.error("Failed to upload authorization document:", err)
+            toast.warning("Se cambió el estado pero ocurrió un problema al adjuntar el comprobante.")
+          })
+        } else if (payload?.reasonWithoutAuthFile) {
+          await apiFetch(
+            `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(backendId)}/seguimiento`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                entryType: "note",
+                content: `Autorizada sin comprobante adjunto. Motivo: ${payload.reasonWithoutAuthFile}`,
+              }),
+            }
+          ).catch((err) => {
+            console.error("Failed to post authorization note:", err)
+          })
+        }
+      }
+
+      // Sync status with backend if available
+      if (activeCompany?.id) {
+        try {
+          await apiFetch(
+            `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(backendId)}/status`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: newState,
+                source: "cirugias-ui:change-state",
+              }),
+            }
+          )
+        } catch {
+          // Graceful fallback for DEV mock
+        }
+      }
+
+      store.changeSurgeryStatus(dialogSurgery.id, newState)
+      if (newState === "Autorizada") {
+        store.authorizeSurgery(dialogSurgery.id)
+      }
+
+      toast.success(`Estado cambiado a ${newState}${payload?.authFile ? " (comprobante fijado)" : ""}`)
+      setChangeStateDialogOpen(false)
+      setDialogSurgery(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al cambiar el estado")
+    }
+  }, [activeCompany?.id, dialogSurgery, newState, store])
 
   const handleChangeDate = useCallback(() => {
     if (!dialogSurgery || !newDate) return

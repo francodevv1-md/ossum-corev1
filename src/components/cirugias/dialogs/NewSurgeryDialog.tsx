@@ -380,7 +380,7 @@ interface NewSurgeryDialogProps {
     loadTemplate: (template: PlantillaPresupuesto) => void
     addItems: (items: FormItem[]) => void
   }
-  onConfirm: () => boolean | Promise<boolean>
+  onConfirm: (options?: { authorizationFile?: File | null }) => boolean | Promise<boolean>
   /** CHATZAI-017E: ID of the just-created surgery (for post-creation actions) */
   createdSurgeryId?: string
   instrumentadores: string[]
@@ -438,6 +438,8 @@ export function NewSurgeryDialog({
   const [contactSelectionOverrides, setContactSelectionOverrides] = useState<ContactSelectionOverrides>({})
   const [textOnlyContactFields, setTextOnlyContactFields] = useState<TextOnlyContactFields>({})
   const [aiSuggestionsApplied, setAiSuggestionsApplied] = useState(false)
+  const [uploadedAiFile, setUploadedAiFile] = useState<File | null>(null)
+  const [saveAuthorizationImage, setSaveAuthorizationImage] = useState(true)
 
   // ─── CHATZAI-025: Cancel confirmation state ───
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
@@ -450,7 +452,6 @@ export function NewSurgeryDialog({
 
   const aiExtraction = useAiExtraction({
     companyId,
-    mode: "azure",
   })
 
   // ─── Scroll container refs for scroll-to-error ───
@@ -601,11 +602,13 @@ export function NewSurgeryDialog({
 
   // ─── Handle confirm ───
   const handleConfirm = useCallback(async () => {
-    const success = await onConfirm()
+    const success = await onConfirm({
+      authorizationFile: saveAuthorizationImage ? uploadedAiFile : null,
+    })
     if (success) {
       setCreationDone(true)
     }
-  }, [onConfirm])
+  }, [onConfirm, saveAuthorizationImage, uploadedAiFile])
 
   useEffect(() => {
     if (!creationDone || !createPRNow || !createdSurgeryId || !activeCompany?.id) return
@@ -654,13 +657,15 @@ export function NewSurgeryDialog({
     setPendingContactCreation(null)
     setTextOnlyContactFields({})
     setAiSuggestionsApplied(false)
+    setUploadedAiFile(null)
+    setSaveAuthorizationImage(true)
     setStep0Errors({})
     setStep1Errors({})
     setCancelConfirmOpen(false)
     setAutoFilledProvincia(false)
     setAutoFilledLocalidad(false)
     aiExtraction.reset()
-  }, [onOpenChange, setWizardStep])
+  }, [onOpenChange, setWizardStep, aiExtraction])
 
   // ─── CHATZAI-025: Handle close with dirty check ───
   const handleRequestClose = useCallback(() => {
@@ -678,11 +683,15 @@ export function NewSurgeryDialog({
       throw new Error("No hay empresa activa disponible para procesar la autorización")
     }
 
+    setUploadedAiFile(file)
+    setSaveAuthorizationImage(true)
     setAiSuggestionsApplied(false)
     await aiExtraction.extract(file)
   }, [aiExtraction, companyId])
 
   const handleResetAiResult = useCallback(() => {
+    setUploadedAiFile(null)
+    setSaveAuthorizationImage(true)
     setAiSuggestionsApplied(false)
     aiExtraction.reset()
   }, [aiExtraction])
@@ -1237,6 +1246,22 @@ export function NewSurgeryDialog({
                   onApply={handleApplyAiResult}
                   onReset={handleResetAiResult}
                 />
+              )}
+
+              {uploadedAiFile && (
+                <div className="flex items-center space-x-2 rounded-md border border-emerald-200 bg-emerald-50/50 p-2.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                  <Checkbox
+                    id="save-authorization-image-check"
+                    checked={saveAuthorizationImage}
+                    onCheckedChange={(checked) => setSaveAuthorizationImage(!!checked)}
+                  />
+                  <Label
+                    htmlFor="save-authorization-image-check"
+                    className="cursor-pointer text-xs font-medium text-emerald-900 dark:text-emerald-200"
+                  >
+                    Fijar imagen como comprobante de autorización en Seguimiento ({uploadedAiFile.name})
+                  </Label>
+                </div>
               )}
             </section>
 
@@ -1882,6 +1907,18 @@ export function NewSurgeryDialog({
               <div className="rounded-md bg-muted/50 p-2 text-xs">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Notas internas</p>
                 <p className="mt-0.5">{newForm.notes}</p>
+              </div>
+            )}
+
+            {/* Comprobante de autorización adjunto */}
+            {uploadedAiFile && saveAuthorizationImage && (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50/50 p-2 text-xs dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                  Comprobante de autorización adjunto
+                </p>
+                <p className="mt-0.5 font-medium text-emerald-950 dark:text-emerald-100">
+                  {uploadedAiFile.name} (se fijará en Seguimiento al crear)
+                </p>
               </div>
             )}
 

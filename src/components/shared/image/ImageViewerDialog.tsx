@@ -209,7 +209,6 @@ export function ImageViewerDialog({
 
   // Mouse wheel zoom
   const handleWheel = (event: React.WheelEvent) => {
-    event.preventDefault()
     if (event.deltaY < 0) {
       handleZoomIn()
     } else {

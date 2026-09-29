@@ -218,7 +218,7 @@ type ContactLinkWithDetails = Prisma.ContactCompanyLinkGetPayload<{
 }>;
 
 function flattenContact(link: ContactLinkWithDetails) {
-  const { addresses, groupMemberships, ...contact } = link.contact;
+  const { addresses = [], groupMemberships = [], ...contact } = link.contact;
   return {
     ...contact,
     code: link.code,
@@ -226,8 +226,8 @@ function flattenContact(link: ContactLinkWithDetails) {
     roles: link.roles,
     linkRole: link.role,
     linkIsActive: link.isActive,
-    groupSlugs: groupMemberships.map(({ group }) => group.slug),
-    mainAddress: addresses[0] ?? null,
+    groupSlugs: (groupMemberships ?? []).map(({ group }) => group?.slug).filter(Boolean),
+    mainAddress: addresses?.[0] ?? null,
     isPayer: link.isPayer,
     vatCondition: link.vatCondition,
     paymentTerms: link.paymentTerms,
@@ -408,10 +408,28 @@ export async function createContact(
   data: ContactCreateInput,
   role?: string
 ) {
-  const explicitCode = data.code ?? data.codigo;
+  const explicitCode = clean(data.code ?? data.codigo);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
+        let codeToUse = explicitCode;
+        if (!codeToUse) {
+          const existingLinks = await tx.contactCompanyLink.findMany({
+            where: { companyId, code: { startsWith: "C-" } },
+            select: { code: true },
+          });
+          let maxNum = 0;
+          for (const link of existingLinks) {
+            const m = link.code.match(/^C-(\d+)$/);
+            if (m) {
+              const n = parseInt(m[1], 10);
+              if (n > maxNum) maxNum = n;
+            }
+          }
+          const nextNum = maxNum + 1 + attempt;
+          codeToUse = `C-${String(nextNum).padStart(4, "0")}`;
+        }
+
         const legacyRole = clean(role ?? data.role ?? data.contactType);
         const fallbackRole = generalRole(legacyRole);
         const roles = data.roles?.length ? [...new Set(data.roles)] : fallbackRole ? [fallbackRole] : [];
@@ -422,7 +440,7 @@ export async function createContact(
           documentNumber: clean(data.documentNumber), contactType: clean(data.contactType),
         } });
         await tx.contactCompanyLink.create({ data: {
-          contactId: contact.id, companyId, code: explicitCode, role: legacyRole, roles, isActive: true,
+          contactId: contact.id, companyId, code: codeToUse, role: legacyRole, roles, isActive: true,
           isPayer: data.isPayer, vatCondition: clean(data.vatCondition), paymentTerms: clean(data.paymentTerms),
           defaultPriceList: clean(data.defaultPriceList), usualDiscount: data.usualDiscount,
           doctorLicense: clean(data.doctorLicense), specialty: clean(data.specialty), deliveryNotes: clean(data.deliveryNotes),

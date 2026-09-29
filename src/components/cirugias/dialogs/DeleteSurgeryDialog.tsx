@@ -117,7 +117,8 @@ export function DeleteSurgeryDialog({ open, onOpenChange, surgery, onArchived }:
       return
     }
 
-    if (!activeCompany?.id || !surgery?.id) {
+    const targetSurgeryId = surgery?.backendId?.trim() || surgery?.id
+    if (!activeCompany?.id || !targetSurgeryId) {
       setPreview(null)
       setError("No hay empresa activa o cirugía seleccionada para consultar la previsualización.")
       return
@@ -129,7 +130,7 @@ export function DeleteSurgeryDialog({ open, onOpenChange, surgery, onArchived }:
     setPreview(null)
 
     apiFetch<SurgeryDeletionPreview>(
-      `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(surgery.id)}/delete-preview`
+      `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(targetSurgeryId)}/delete-preview`
     )
       .then((data) => {
         if (!cancelled) setPreview(data)
@@ -146,7 +147,7 @@ export function DeleteSurgeryDialog({ open, onOpenChange, surgery, onArchived }:
     return () => {
       cancelled = true
     }
-  }, [activeCompany?.id, open, surgery?.id])
+  }, [activeCompany?.id, open, surgery?.backendId, surgery?.id])
 
   const policyMessage = resolvePolicyMessage(preview)
   const policyAllowsNextStep = !!preview && (preview.policy.canDelete || preview.policy.canArchive)
@@ -167,14 +168,15 @@ export function DeleteSurgeryDialog({ open, onOpenChange, surgery, onArchived }:
   const executeLabel = preview?.policy.recommendedAction === "archive" ? "Archivar cirugía" : "Eliminar cirugía"
 
   async function handleArchive() {
-    if (!activeCompany?.id || !surgery?.id || !canExecuteArchive) return
+    const targetSurgeryId = surgery?.backendId?.trim() || surgery?.id
+    if (!activeCompany?.id || !targetSurgeryId || !canExecuteArchive) return
 
     setExecuting(true)
     setError(null)
 
     try {
       await apiFetch(
-        `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(surgery.id)}/archive`,
+        `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(targetSurgeryId)}/archive`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

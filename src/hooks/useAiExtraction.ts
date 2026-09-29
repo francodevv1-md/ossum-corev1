@@ -20,7 +20,7 @@ type UseAiExtractionResult = {
 
 export function useAiExtraction({
   companyId,
-  mode = "mock",
+  mode,
 }: UseAiExtractionOptions): UseAiExtractionResult {
   const [result, setResult] = useState<AutorizacionAIResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
