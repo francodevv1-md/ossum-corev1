@@ -2511,3 +2511,132 @@ model CajasProjectionReconciliation {
   @@index([repairCommandAcceptanceId], map: "ix_cpr_repair_command")
   @@map("cajas_projection_reconciliation")
 }
+
+// ─── Catálogo Canónico de Artículos y Stock ─────────────────────────────────
+
+enum ArticleIdentifierType {
+  MANUFACTURER_REF
+  GTIN_EAN
+  GS1_AI_22
+  SUPPLIER_CODE
+  ALTERNATIVE_CODE
+  OSSUM_CODE
+}
+
+enum ArticleTraceabilityPolicyKind {
+  NONE
+  LOT
+  LOT_EXPIRY
+  SERIAL
+  SERIAL_EXPIRY
+  LOT_SERIAL_EXPIRY
+}
+
+model Article {
+  id             String   @id @default(cuid())
+  organizationId String
+  sku            String
+  description    String   @db.Text
+  articleType    String?
+  brand          String?
+  manufacturer   String?
+  family         String?
+  modelVariant   String?
+  measure        String?
+  unit           String   @default("u")
+  vatTreatment   String   @default("GRAVADO")
+  vatRate        Decimal  @default(21.0000) @db.Decimal(18, 4)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization       Organization                @relation("OrganizationArticles", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_organization")
+  stockEligibilities StockArticleEligibility[]   @relation("StockEligibilityArticle")
+  identifiers        ArticleIdentifier[]         @relation("ArticleIdentifiers")
+  supplierMappings   ArticleSupplierMapping[]    @relation("ArticleSupplierMappings")
+  tracePolicies      ArticleTraceabilityPolicy[] @relation("ArticleTracePolicies")
+
+  @@unique([organizationId, sku], map: "uq_article_org_sku")
+  @@unique([organizationId, id], map: "uq_article_org_id")
+  @@map("article")
+}
+
+model ArticleIdentifier {
+  id                  String                @id @default(cuid())
+  organizationId      String
+  articleId           String
+  type                ArticleIdentifierType
+  value               String
+  normalizedValue     String
+  sourcePayload       String?
+  scopeKey            String                @default("")
+  manufacturerContext String?
+  supplierId          String?
+  companyId           String?
+  isActive            Boolean               @default(true)
+  deactivatedAt       DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  article      Article             @relation("ArticleIdentifiers", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_identifier_article")
+  supplierLink ContactCompanyLink? @relation("ArticleIdentifierSupplierLink", fields: [supplierId, companyId], references: [contactId, companyId], onDelete: Restrict, onUpdate: Restrict, map: "fk_article_identifier_supplier_link")
+
+  @@unique([organizationId, type, normalizedValue, scopeKey], map: "uq_article_identifier_global_active", where: raw("\"isActive\" = true AND \"companyId\" IS NULL"))
+  @@unique([organizationId, companyId, type, normalizedValue, scopeKey], map: "uq_article_identifier_company_active", where: raw("\"isActive\" = true AND \"companyId\" IS NOT NULL"))
+  @@index([organizationId, companyId, normalizedValue, isActive], map: "ix_article_identifier_search")
+  @@index([organizationId, companyId, type, normalizedValue, isActive], map: "ix_article_identifier_resolution")
+  @@map("article_identifier")
+}
+
+model ArticleSupplierMapping {
+  id             String    @id @default(cuid())
+  organizationId String
+  articleId      String
+  supplierId     String
+  companyId      String
+  supplierCode   String
+  normalizedCode String
+  isActive       Boolean   @default(true)
+  deactivatedAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  article      Article             @relation("ArticleSupplierMappings", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_supplier_mapping_article")
+  supplierLink ContactCompanyLink? @relation("ArticleSupplierMappingSupplierLink", fields: [supplierId, companyId], references: [contactId, companyId], onDelete: Restrict, onUpdate: Restrict, map: "fk_article_supplier_mapping_supplier_link")
+
+  @@unique([organizationId, companyId, supplierId, normalizedCode], map: "uq_article_supplier_mapping_active", where: raw("\"isActive\" = true"))
+  @@index([organizationId, companyId, normalizedCode, isActive], map: "ix_article_supplier_mapping_search")
+  @@map("article_supplier_mapping")
+}
+
+model ArticleTraceabilityPolicy {
+  id             String                        @id @default(cuid())
+  organizationId String
+  articleId      String
+  policy         ArticleTraceabilityPolicyKind
+  effectiveAt    DateTime                      @default(now())
+  createdAt      DateTime                      @default(now())
+
+  article Article @relation("ArticleTracePolicies", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_trace_policy_article")
+
+  @@unique([organizationId, articleId, effectiveAt], map: "uq_article_trace_policy_effective")
+  @@index([organizationId, articleId, effectiveAt], map: "ix_article_trace_policy_article")
+  @@map("article_traceability_policy")
+}
+
+model StockArticleEligibility {
+  id             String   @id @default(cuid())
+  companyId      String
+  organizationId String
+  articleId      String
+  version        Int
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  company Company @relation("CompanyStockArticleEligibilities", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sae_company")
+  article Article @relation("StockEligibilityArticle", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sae_article")
+
+  @@unique([companyId, articleId], map: "uq_stock_article_eligibility")
+  @@index([companyId, version], map: "ix_stock_article_eligibility_company_version")
+  @@map("stock_article_eligibility")
+}

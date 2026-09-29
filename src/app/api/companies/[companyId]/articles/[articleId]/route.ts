@@ -1,12 +1,22 @@
 import { getApiAuthContext } from "@/lib/api/auth-context";
 import { requireArticleMutationAccess } from "@/lib/permissions/article";
+import { requireCompanyReadAccess } from "@/lib/api/guards";
 import { badRequest } from "@/lib/api/errors";
 import { errorResponse, ok } from "@/lib/api/responses";
 import prisma from "@/lib/prisma";
-import { updateArticle } from "@/lib/services/article.service";
+import { getArticle, updateArticle } from "@/lib/services/article.service";
 import { articleUpdateSchema } from "@/lib/validators/article";
 
 type Context = { params: Promise<{ companyId: string; articleId: string }> };
+
+export async function GET(request: Request, { params }: Context) {
+  try {
+    const { companyId, articleId } = await params;
+    const ctx = await getApiAuthContext(request, companyId);
+    requireCompanyReadAccess(ctx);
+    return ok(await getArticle(prisma, ctx.companyId, articleId));
+  } catch (error) { return errorResponse(error); }
+}
 
 export async function PATCH(request: Request, { params }: Context) {
   try {

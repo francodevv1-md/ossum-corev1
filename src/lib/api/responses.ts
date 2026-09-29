@@ -1,6 +1,5 @@
-// OSSUM COR — Minimal Web API response helpers.
-
-import { ApiError, internalError } from "./errors";
+import { ZodError } from "zod";
+import { ApiError, badRequest, internalError } from "./errors";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
@@ -25,7 +24,17 @@ export function noContent() {
 }
 
 export function errorResponse(error: unknown) {
-  const apiError = error instanceof ApiError ? error : internalError();
+  let apiError: ApiError;
+
+  if (error instanceof ApiError) {
+    apiError = error;
+  } else if (error instanceof ZodError) {
+    const firstIssue = error.issues[0];
+    const message = firstIssue ? `${firstIssue.path.join(".")}: ${firstIssue.message}` : "Validation error";
+    apiError = badRequest(message, "validation_failed");
+  } else {
+    apiError = internalError();
+  }
 
   return jsonResponse(
     {

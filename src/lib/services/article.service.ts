@@ -1,7 +1,19 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { badRequest, conflict, notFound } from "../api/errors";
 import { createAuditEvent } from "../audit";
-import { identifierScopeKey, normalizeArticleIdentifier, resolutionStatus, type ArticleCreateInput, type ArticleLookupQuery, type ArticleUpdateInput } from "../validators/article";
+import {
+  getVatKeyFromTreatmentAndRate,
+  validateVatTreatmentAndRate,
+  type VatTreatment,
+} from "../commercial/vat";
+import {
+  identifierScopeKey,
+  normalizeArticleIdentifier,
+  resolutionStatus,
+  type ArticleCreateInput,
+  type ArticleLookupQuery,
+  type ArticleUpdateInput,
+} from "../validators/article";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 const ai22ArticleReferenceManufacturers = ["BIOPROTECE"];
@@ -14,8 +26,17 @@ function clean(value?: string | null): string | undefined {
 function toIdentifierData(identifier: ArticleCreateInput["identifiers"][number]) {
   const manufacturerContext = clean(identifier.manufacturerContext);
   const supplierId = clean(identifier.supplierId);
-  if (identifier.type === "GS1_AI_22" && (!manufacturerContext || !ai22ArticleReferenceManufacturers.some((manufacturer) => normalizeArticleIdentifier(manufacturerContext).startsWith(manufacturer)))) {
-    throw badRequest("GS1 AI (22) is currently supported only for BIOPROTECE article references", "gs1_ai22_manufacturer_not_supported");
+  if (
+    identifier.type === "GS1_AI_22" &&
+    (!manufacturerContext ||
+      !ai22ArticleReferenceManufacturers.some((manufacturer) =>
+        normalizeArticleIdentifier(manufacturerContext).startsWith(manufacturer),
+      ))
+  ) {
+    throw badRequest(
+      "GS1 AI (22) is currently supported only for BIOPROTECE article references",
+      "gs1_ai22_manufacturer_not_supported",
+    );
   }
   return {
     type: identifier.type,
@@ -52,14 +73,25 @@ export async function createArticle(db: Db, companyId: string, input: ArticleCre
   const existing = await db.article.findFirst({ where: { organizationId, sku }, select: { id: true } });
   if (existing) throw conflict("SKU already exists in this organization", "duplicate_sku");
 
+  const { treatment: vatTreatment, rate: vatRate } = validateVatTreatmentAndRate(
+    input.vatTreatment,
+    input.vatRate,
+  );
+
   return db.$transaction(async (tx) => {
     for (const mapping of input.supplierMappings) {
-      const supplier = await tx.contactCompanyLink.findFirst({ where: { companyId, contactId: mapping.supplierId, isActive: true }, select: { contactId: true } });
+      const supplier = await tx.contactCompanyLink.findFirst({
+        where: { companyId, contactId: mapping.supplierId, isActive: true },
+        select: { contactId: true },
+      });
       if (!supplier) throw badRequest("Supplier is not linked to the company", "supplier_company_scope_invalid");
     }
     for (const identifier of identifiers) {
       if (!identifier.supplierId) continue;
-      const supplier = await tx.contactCompanyLink.findFirst({ where: { companyId, contactId: identifier.supplierId, isActive: true }, select: { contactId: true } });
+      const supplier = await tx.contactCompanyLink.findFirst({
+        where: { companyId, contactId: identifier.supplierId, isActive: true },
+        select: { contactId: true },
+      });
       if (!supplier) throw badRequest("Supplier is not linked to the company", "supplier_company_scope_invalid");
     }
     const article = await tx.article.create({
@@ -67,50 +99,213 @@ export async function createArticle(db: Db, companyId: string, input: ArticleCre
         organizationId,
         sku,
         description: input.description.trim(),
-        articleType: clean(input.articleType), brand: clean(input.brand), manufacturer: clean(input.manufacturer),
-        family: clean(input.family), modelVariant: clean(input.modelVariant), measure: clean(input.measure), unit: input.unit.trim(),
+        articleType: clean(input.articleType),
+        brand: clean(input.brand),
+        manufacturer: clean(input.manufacturer),
+        family: clean(input.family),
+        modelVariant: clean(input.modelVariant),
+        measure: clean(input.measure),
+        unit: input.unit.trim(),
+        vatTreatment,
+        vatRate,
         identifiers: { create: identifiers },
-        supplierMappings: { create: input.supplierMappings.map((mapping) => ({ supplierId: mapping.supplierId, supplierCode: mapping.supplierCode.trim(), normalizedCode: normalizeArticleIdentifier(mapping.supplierCode) })) },
+        supplierMappings: {
+          create: input.supplierMappings.map((mapping) => ({
+            supplierId: mapping.supplierId,
+            supplierCode: mapping.supplierCode.trim(),
+            normalizedCode: normalizeArticleIdentifier(mapping.supplierCode),
+          })),
+        },
         tracePolicies: { create: { policy: input.traceabilityPolicy } },
         stockEligibilities: { create: { companyId, version: 1 } },
       },
-      include: { identifiers: true, tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 }, stockEligibilities: true },
+      include: {
+        identifiers: true,
+        tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 },
+        stockEligibilities: true,
+      },
     });
-    await createAuditEvent({ prisma: tx, companyId, userId: actorUserId, entityType: "Article", entityId: article.id, action: "created", module: "stock", newValue: { sku: article.sku, description: article.description } });
-    return { ...article, stock: 0 };
+    await createAuditEvent({
+      prisma: tx,
+      companyId,
+      userId: actorUserId,
+      entityType: "Article",
+      entityId: article.id,
+      action: "created",
+      module: "stock",
+      newValue: { sku: article.sku, description: article.description, vatTreatment, vatRate: Number(vatRate) },
+    });
+    return {
+      ...article,
+      ivaKey: getVatKeyFromTreatmentAndRate(article.vatTreatment as VatTreatment, article.vatRate),
+      stock: 0,
+    };
   });
 }
 
-export async function updateArticle(db: Db, companyId: string, articleId: string, input: ArticleUpdateInput, actorUserId: string) {
+export async function updateArticle(
+  db: Db,
+  companyId: string,
+  articleId: string,
+  input: ArticleUpdateInput,
+  actorUserId: string,
+) {
   const organizationId = await getCompanyOrganization(db, companyId);
-  const existing = await db.article.findFirst({ where: { id: articleId, organizationId, stockEligibilities: { some: { companyId } } }, include: { tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 } } });
+  const existing = await db.article.findFirst({
+    where: { id: articleId, organizationId, stockEligibilities: { some: { companyId } } },
+    include: { tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 } },
+  });
   if (!existing) throw notFound("Article not found", "article_not_found");
+
+  let vatData: { vatTreatment?: string; vatRate?: Prisma.Decimal } = {};
+  if (input.vatTreatment !== undefined || input.vatRate !== undefined) {
+    const treatmentToValidate = input.vatTreatment ?? existing.vatTreatment;
+    const rateToValidate = input.vatRate !== undefined ? input.vatRate : existing.vatRate;
+    const validated = validateVatTreatmentAndRate(treatmentToValidate, rateToValidate);
+    vatData = { vatTreatment: validated.treatment, vatRate: validated.rate };
+  }
+
   const article = await db.$transaction(async (tx) => {
-    const updated = await tx.article.update({ where: { id: articleId }, data: {
-      description: input.description?.trim(), articleType: clean(input.articleType), brand: clean(input.brand), manufacturer: clean(input.manufacturer), family: clean(input.family), modelVariant: clean(input.modelVariant), measure: clean(input.measure), unit: input.unit?.trim(), isActive: input.isActive,
-    }, include: { identifiers: { where: { isActive: true } }, tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 }, stockEligibilities: true } });
+    const updated = await tx.article.update({
+      where: { id: articleId },
+      data: {
+        description: input.description?.trim(),
+        sku: clean(input.sku),
+        articleType: clean(input.articleType),
+        brand: clean(input.brand),
+        manufacturer: clean(input.manufacturer),
+        family: clean(input.family),
+        modelVariant: clean(input.modelVariant),
+        measure: clean(input.measure),
+        unit: input.unit?.trim(),
+        isActive: input.isActive,
+        ...vatData,
+      },
+      include: {
+        identifiers: { where: { isActive: true } },
+        tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 },
+        stockEligibilities: true,
+      },
+    });
     for (const identifier of input.identifiers ?? []) {
       const data = toIdentifierData(identifier);
-      await tx.articleIdentifier.upsert({ where: { organizationId_type_normalizedValue_scopeKey: { organizationId, type: data.type, normalizedValue: data.normalizedValue, scopeKey: data.scopeKey } }, create: { organizationId, articleId, ...data }, update: { articleId, value: data.value, manufacturerContext: data.manufacturerContext, supplierId: data.supplierId, isActive: true, deactivatedAt: null } });
+      await tx.articleIdentifier.upsert({
+        where: {
+          organizationId_type_normalizedValue_scopeKey: {
+            organizationId,
+            type: data.type,
+            normalizedValue: data.normalizedValue,
+            scopeKey: data.scopeKey,
+          },
+        },
+        create: { organizationId, articleId, ...data },
+        update: {
+          articleId,
+          value: data.value,
+          manufacturerContext: data.manufacturerContext,
+          supplierId: data.supplierId,
+          isActive: true,
+          deactivatedAt: null,
+        },
+      });
     }
     for (const mapping of input.supplierMappings ?? []) {
-      const supplier = await tx.contactCompanyLink.findFirst({ where: { companyId, contactId: mapping.supplierId, isActive: true }, select: { contactId: true } });
+      const supplier = await tx.contactCompanyLink.findFirst({
+        where: { companyId, contactId: mapping.supplierId, isActive: true },
+        select: { contactId: true },
+      });
       if (!supplier) throw badRequest("Supplier is not linked to the company", "supplier_company_scope_invalid");
-      await tx.articleSupplierMapping.upsert({ where: { organizationId_supplierId_normalizedCode: { organizationId, supplierId: mapping.supplierId, normalizedCode: normalizeArticleIdentifier(mapping.supplierCode) } }, create: { organizationId, articleId, supplierId: mapping.supplierId, supplierCode: mapping.supplierCode.trim(), normalizedCode: normalizeArticleIdentifier(mapping.supplierCode) }, update: { articleId, supplierCode: mapping.supplierCode.trim(), isActive: true, deactivatedAt: null } });
+      await tx.articleSupplierMapping.upsert({
+        where: {
+          organizationId_companyId_supplierId_normalizedCode: {
+            organizationId,
+            companyId,
+            supplierId: mapping.supplierId,
+            normalizedCode: normalizeArticleIdentifier(mapping.supplierCode),
+          },
+        },
+        create: {
+          organizationId,
+          articleId,
+          companyId,
+          supplierId: mapping.supplierId,
+          supplierCode: mapping.supplierCode.trim(),
+          normalizedCode: normalizeArticleIdentifier(mapping.supplierCode),
+        },
+        update: {
+          articleId,
+          supplierCode: mapping.supplierCode.trim(),
+          isActive: true,
+          deactivatedAt: null,
+        },
+      });
     }
-    if (input.traceabilityPolicy && input.traceabilityPolicy !== existing.tracePolicies[0]?.policy) await tx.articleTraceabilityPolicy.create({ data: { organizationId, articleId, policy: input.traceabilityPolicy } });
-    await createAuditEvent({ prisma: tx, companyId, userId: actorUserId, entityType: "Article", entityId: articleId, action: "updated", module: "stock" });
+    if (input.traceabilityPolicy && input.traceabilityPolicy !== existing.tracePolicies[0]?.policy) {
+      await tx.articleTraceabilityPolicy.create({
+        data: { organizationId, articleId, policy: input.traceabilityPolicy },
+      });
+    }
+    await createAuditEvent({
+      prisma: tx,
+      companyId,
+      userId: actorUserId,
+      entityType: "Article",
+      entityId: articleId,
+      action: "updated",
+      module: "stock",
+    });
     return updated;
   });
-  return { ...article, stock: 0 };
+  return {
+    ...article,
+    ivaKey: getVatKeyFromTreatmentAndRate(article.vatTreatment as VatTreatment, article.vatRate),
+    stock: 0,
+  };
 }
 
-export async function deactivateArticleIdentifier(db: Db, companyId: string, articleId: string, identifierId: string, actorUserId: string) {
+export async function getArticle(db: Db, companyId: string, articleId: string) {
   const organizationId = await getCompanyOrganization(db, companyId);
-  const identifier = await db.articleIdentifier.findFirst({ where: { id: identifierId, articleId, organizationId, article: { stockEligibilities: { some: { companyId } } } } });
+  const article = await db.article.findFirst({
+    where: { id: articleId, organizationId, stockEligibilities: { some: { companyId } } },
+    include: {
+      identifiers: { where: { isActive: true } },
+      tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 },
+      stockEligibilities: true,
+    },
+  });
+  if (!article) throw notFound("Article not found", "article_not_found");
+  return {
+    ...article,
+    ivaKey: getVatKeyFromTreatmentAndRate(article.vatTreatment as VatTreatment, article.vatRate),
+    stock: 0,
+  };
+}
+
+export async function deactivateArticleIdentifier(
+  db: Db,
+  companyId: string,
+  articleId: string,
+  identifierId: string,
+  actorUserId: string,
+) {
+  const organizationId = await getCompanyOrganization(db, companyId);
+  const identifier = await db.articleIdentifier.findFirst({
+    where: { id: identifierId, articleId, organizationId, article: { stockEligibilities: { some: { companyId } } } },
+  });
   if (!identifier) throw notFound("Identifier not found", "article_identifier_not_found");
-  const updated = await db.articleIdentifier.update({ where: { id: identifierId }, data: { isActive: false, deactivatedAt: new Date() } });
-  await createAuditEvent({ prisma: db, companyId, userId: actorUserId, entityType: "ArticleIdentifier", entityId: identifierId, action: "deactivated", module: "stock" });
+  const updated = await db.articleIdentifier.update({
+    where: { id: identifierId },
+    data: { isActive: false, deactivatedAt: new Date() },
+  });
+  await createAuditEvent({
+    prisma: db,
+    companyId,
+    userId: actorUserId,
+    entityType: "ArticleIdentifier",
+    entityId: identifierId,
+    action: "deactivated",
+    module: "stock",
+  });
   return updated;
 }
 
@@ -118,28 +313,112 @@ export async function resolveArticleIdentifier(db: Db, companyId: string, query:
   const organizationId = await getCompanyOrganization(db, companyId);
   if (!query.identifier) throw badRequest("identifier is required", "identifier_required");
   const scopeKey = query.supplierId || query.manufacturerContext ? identifierScopeKey(query) : undefined;
-  const matches = await db.articleIdentifier.findMany({ where: { organizationId, isActive: true, normalizedValue: normalizeArticleIdentifier(query.identifier), type: query.identifierType, article: { stockEligibilities: { some: { companyId } } }, ...(scopeKey ? { scopeKey } : {}) }, include: { article: true }, take: 100 });
-  return { status: resolutionStatus(matches.length), candidates: matches.map(({ article, ...identifier }) => ({ ...article, identifier })) };
+  const matches = await db.articleIdentifier.findMany({
+    where: {
+      organizationId,
+      isActive: true,
+      normalizedValue: normalizeArticleIdentifier(query.identifier),
+      type: query.identifierType,
+      article: { stockEligibilities: { some: { companyId } } },
+      ...(scopeKey ? { scopeKey } : {}),
+    },
+    include: { article: true },
+    take: 100,
+  });
+  return {
+    status: resolutionStatus(matches.length),
+    candidates: matches.map(({ article, ...identifier }) => ({
+      ...article,
+      ivaKey: getVatKeyFromTreatmentAndRate(article.vatTreatment as VatTreatment, article.vatRate),
+      identifier,
+    })),
+  };
 }
 
 export async function searchArticles(db: Db, companyId: string, query: ArticleLookupQuery) {
   const organizationId = await getCompanyOrganization(db, companyId);
   const q = query.q ? normalizeArticleIdentifier(query.q) : undefined;
-  const articles = await db.article.findMany({ where: { organizationId, isActive: true, stockEligibilities: { some: { companyId } }, ...(q ? { OR: [{ sku: { contains: query.q, mode: "insensitive" } }, { description: { contains: query.q, mode: "insensitive" } }, { identifiers: { some: { normalizedValue: { contains: q }, isActive: true } } }] } : {}) }, include: { identifiers: { where: { isActive: true } }, tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 } }, orderBy: { description: "asc" }, take: query.take });
-  return articles.map((article) => ({ ...article, stock: 0 }));
+  const articles = await db.article.findMany({
+    where: {
+      organizationId,
+      isActive: true,
+      stockEligibilities: { some: { companyId } },
+      ...(q
+        ? {
+            OR: [
+              { sku: { contains: query.q, mode: "insensitive" } },
+              { description: { contains: query.q, mode: "insensitive" } },
+              { identifiers: { some: { normalizedValue: { contains: q }, isActive: true } } },
+            ],
+          }
+        : {}),
+    },
+    include: {
+      identifiers: { where: { isActive: true } },
+      tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 },
+    },
+    orderBy: { description: "asc" },
+    take: query.take,
+  });
+  return articles.map((article) => ({
+    ...article,
+    ivaKey: getVatKeyFromTreatmentAndRate(article.vatTreatment as VatTreatment, article.vatRate),
+    stock: 0,
+  }));
 }
 
-export async function resolveSupplierCode(db: Db, companyId: string, supplierId: string, supplierCode: string) {
+export async function resolveSupplierCode(
+  db: Db,
+  companyId: string,
+  supplierId: string,
+  supplierCode: string,
+) {
   const organizationId = await getCompanyOrganization(db, companyId);
-  const mappings = await db.articleSupplierMapping.findMany({ where: { organizationId, supplierId, normalizedCode: normalizeArticleIdentifier(supplierCode), isActive: true, article: { stockEligibilities: { some: { companyId } } } }, include: { article: true }, take: 100 });
-  return { status: resolutionStatus(mappings.length), candidates: mappings.map(({ article, ...mapping }) => ({ ...article, mapping })) };
+  const mappings = await db.articleSupplierMapping.findMany({
+    where: {
+      organizationId,
+      supplierId,
+      normalizedCode: normalizeArticleIdentifier(supplierCode),
+      isActive: true,
+      article: { stockEligibilities: { some: { companyId } } },
+    },
+    include: { article: true },
+    take: 100,
+  });
+  return {
+    status: resolutionStatus(mappings.length),
+    candidates: mappings.map(({ article, ...mapping }) => ({
+      ...article,
+      ivaKey: getVatKeyFromTreatmentAndRate(article.vatTreatment as VatTreatment, article.vatRate),
+      mapping,
+    })),
+  };
 }
 
-export async function deactivateSupplierMapping(db: Db, companyId: string, articleId: string, mappingId: string, actorUserId: string) {
+export async function deactivateSupplierMapping(
+  db: Db,
+  companyId: string,
+  articleId: string,
+  mappingId: string,
+  actorUserId: string,
+) {
   const organizationId = await getCompanyOrganization(db, companyId);
-  const mapping = await db.articleSupplierMapping.findFirst({ where: { id: mappingId, articleId, organizationId, article: { stockEligibilities: { some: { companyId } } } } });
+  const mapping = await db.articleSupplierMapping.findFirst({
+    where: { id: mappingId, articleId, organizationId, article: { stockEligibilities: { some: { companyId } } } },
+  });
   if (!mapping) throw notFound("Supplier mapping not found", "supplier_mapping_not_found");
-  const updated = await db.articleSupplierMapping.update({ where: { id: mappingId }, data: { isActive: false, deactivatedAt: new Date() } });
-  await createAuditEvent({ prisma: db, companyId, userId: actorUserId, entityType: "ArticleSupplierMapping", entityId: mappingId, action: "deactivated", module: "stock" });
+  const updated = await db.articleSupplierMapping.update({
+    where: { id: mappingId },
+    data: { isActive: false, deactivatedAt: new Date() },
+  });
+  await createAuditEvent({
+    prisma: db,
+    companyId,
+    userId: actorUserId,
+    entityType: "ArticleSupplierMapping",
+    entityId: mappingId,
+    action: "deactivated",
+    module: "stock",
+  });
   return updated;
 }
