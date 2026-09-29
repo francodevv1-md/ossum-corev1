@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { INVOICE_BASES, INVOICE_STATES, INVOICE_TRANSITIONS } from "../services/invoice.service";
+import { SUPPORTED_VAT_TREATMENTS } from "../commercial/vat";
 
 export { INVOICE_BASES, INVOICE_STATES, INVOICE_TRANSITIONS };
 
@@ -17,9 +18,33 @@ export const invoiceItemCreateSchema = z.object({
   unitPrice: nonNegativeDecimal.optional(),
   discount: nonNegativeDecimal.optional(),
   tax: nonNegativeDecimal.optional(),
+  vatTreatment: z.enum(SUPPORTED_VAT_TREATMENTS as unknown as [string, ...string[]]).default("GRAVADO").optional(),
+  vatRate: nonNegativeDecimal.optional(),
   sourceType: z.string().trim().optional(),
   sourceItemId: z.string().trim().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+}).superRefine((data, ctx) => {
+  const qty = Number(data.quantity);
+  const price = data.unitPrice !== undefined ? Number(data.unitPrice) : 0;
+  const disc = data.discount !== undefined ? Number(data.discount) : 0;
+  const net = qty * price;
+  if (disc > net) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Discount (${disc}) cannot exceed line net amount (${net})`,
+      path: ["discount"],
+    });
+  }
+  if (data.vatTreatment && (data.vatTreatment === "EXENTO" || data.vatTreatment === "NO_GRAVADO") && data.vatRate !== undefined) {
+    const rate = Number(data.vatRate);
+    if (rate !== 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${data.vatTreatment} requires vatRate to be 0`,
+        path: ["vatRate"],
+      });
+    }
+  }
 });
 
 export const invoiceCreateSchema = z.object({

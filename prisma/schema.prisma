@@ -640,6 +640,8 @@ model PresupuestoItem {
   discount      Decimal     @default(0) @db.Decimal(18, 4)
   tax           Decimal     @default(0) @db.Decimal(18, 4)
   total         Decimal     @default(0) @db.Decimal(18, 4)
+  vatTreatment  String      @default("GRAVADO")
+  vatRate       Decimal     @default(21.0000) @db.Decimal(18, 4)
   metadata      Json?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt

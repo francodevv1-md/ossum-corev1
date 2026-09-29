@@ -8,6 +8,14 @@ import type { PrismaClient, Invoice as PrismaInvoice } from "@prisma/client";
 import { createAuditEvent } from "../audit";
 import { badRequest, notFound } from "../api/errors";
 import { requireCompanyId } from "../tenant";
+import { assertFiscalCancellationAllowed } from "./fiscal.service";
+import {
+  calculateLineCommercial,
+  calculateCommercialDocumentTotals,
+  DEFAULT_VAT_RATE,
+  DEFAULT_VAT_TREATMENT,
+  VatTreatment,
+} from "../commercial/vat";
 
 export const INVOICE_BASES = ["presupuesto", "consumo", "manual", "mixto"] as const;
 export type InvoiceBase = (typeof INVOICE_BASES)[number];
@@ -104,6 +112,8 @@ const invoiceReadSelect = {
       discount: true,
       tax: true,
       total: true,
+      vatTreatment: true,
+      vatRate: true,
       sourceType: true,
       sourceItemId: true,
       metadata: true,
@@ -182,6 +192,8 @@ export interface InvoiceItemInput {
   unitPrice?: number | string | Prisma.Decimal;
   discount?: number | string | Prisma.Decimal;
   tax?: number | string | Prisma.Decimal;
+  vatTreatment?: string | VatTreatment;
+  vatRate?: number | string | Prisma.Decimal;
   sourceType?: string;
   sourceItemId?: string;
   metadata?: Record<string, unknown>;
@@ -196,6 +208,8 @@ export interface NormalizedInvoiceItem {
   discount: Prisma.Decimal;
   tax: Prisma.Decimal;
   total: Prisma.Decimal;
+  vatTreatment: string;
+  vatRate: Prisma.Decimal;
   sourceType: string | null;
   sourceItemId: string | null;
   metadata?: Prisma.InputJsonValue;
@@ -266,20 +280,34 @@ export function calculateInvoiceTotals(items: InvoiceItemInput[]) {
     const quantity = quantizeMoney(toDecimal(item.quantity));
     const unitPrice = quantizeMoney(toDecimal(item.unitPrice ?? 0));
     const discount = quantizeMoney(toDecimal(item.discount ?? 0));
-    const tax = quantizeMoney(toDecimal(item.tax ?? 0));
     if (quantity.lte(0)) {
       throw badRequest(`items[${index}].quantity must be a positive number`, "invalid_invoice_item_quantity");
     }
-    if (unitPrice.lt(0) || discount.lt(0) || tax.lt(0)) {
-      throw badRequest(`items[${index}] prices, discounts and taxes must be non-negative`, "invalid_invoice_item_amount");
+    if (unitPrice.lt(0) || discount.lt(0)) {
+      throw badRequest(`items[${index}] prices and discounts must be non-negative`, "invalid_invoice_item_amount");
     }
     if (typeof item.description !== "string" || item.description.trim().length === 0) {
       throw badRequest(`items[${index}].description is required`, "invalid_invoice_item_description");
     }
-    const total = quantizeMoney(quantizeMoney(quantity.mul(unitPrice)).minus(discount).plus(tax));
-    if (total.lt(0)) {
-      throw badRequest(`items[${index}].total cannot be negative`, "invalid_invoice_item_total");
+
+    const lineCalc = calculateLineCommercial({
+      quantity,
+      unitPrice,
+      discount,
+      vatTreatment: item.vatTreatment,
+      vatRate: item.vatRate,
+    });
+
+    const tax = item.tax !== undefined && item.tax !== null
+      ? quantizeMoney(toDecimal(item.tax))
+      : lineCalc.tax;
+    if (tax.lt(0)) {
+      throw badRequest(`items[${index}].tax cannot be negative`, "invalid_invoice_item_tax");
     }
+
+    const taxableAmount = quantizeMoney(Prisma.Decimal.max(0, quantizeMoney(quantity.mul(unitPrice)).minus(discount)));
+    const total = quantizeMoney(taxableAmount.plus(tax));
+
     return {
       sku: item.sku ?? null,
       description: item.description,
@@ -289,18 +317,23 @@ export function calculateInvoiceTotals(items: InvoiceItemInput[]) {
       discount,
       tax,
       total,
+      vatTreatment: lineCalc.vatTreatment,
+      vatRate: lineCalc.vatRate,
       sourceType: item.sourceType ?? null,
       sourceItemId: item.sourceItemId ?? null,
       metadata: (item.metadata ?? null) as Prisma.InputJsonValue | undefined,
     };
   });
 
+  const totals = calculateCommercialDocumentTotals(normalizedItems);
+
   return {
     items: normalizedItems,
-    subtotal: normalizedItems.reduce((acc, item) => quantizeMoney(acc.plus(quantizeMoney(item.quantity.mul(item.unitPrice)))), new Prisma.Decimal(0)),
-    discountTotal: normalizedItems.reduce((acc, item) => quantizeMoney(acc.plus(item.discount)), new Prisma.Decimal(0)),
-    taxTotal: normalizedItems.reduce((acc, item) => quantizeMoney(acc.plus(item.tax)), new Prisma.Decimal(0)),
-    total: normalizedItems.reduce((acc, item) => quantizeMoney(acc.plus(item.total)), new Prisma.Decimal(0)),
+    subtotal: totals.subtotal,
+    discountTotal: totals.discountTotal,
+    taxTotal: totals.taxTotal,
+    total: totals.total,
+    breakdown: totals.breakdown,
   };
 }
 
@@ -347,28 +380,23 @@ async function transitionLinkedConsumoForInvoice(input: {
 }) {
   const fromState = input.targetState === "Facturado" ? "Validado" : "Facturado";
   const updated = await input.tx.consumo.updateMany({
-    where: { id: input.consumoId, companyId: input.companyId, state: fromState },
+    where: {
+      id: input.consumoId,
+      companyId: input.companyId,
+      state: fromState,
+    },
     data: {
       state: input.targetState,
       facturedAt: input.targetState === "Facturado" ? new Date() : null,
       updatedById: input.updatedById,
     },
   });
-  if (input.targetState === "Facturado" && updated.count !== 1) {
-    throw new InvoiceError("invoice_consumo_not_validado", `Consumo ${input.consumoId} must be Validado before invoice emission`, 409);
-  }
-  if (updated.count === 1 && input.updatedById) {
-    await createAuditEvent({
-      prisma: input.tx as unknown as PrismaClient,
-      companyId: input.companyId,
-      userId: input.updatedById,
-      entityType: "Consumo",
-      entityId: input.consumoId,
-      action: input.targetState === "Facturado" ? "consumo.factured" : "consumo.invoice_cancelled_restore",
-      module: "consumo",
-      oldValue: { state: fromState },
-      newValue: { state: input.targetState, invoiceId: input.invoiceId },
-    });
+  if (updated.count !== 1) {
+    throw new InvoiceError(
+      "invoice_consumo_transition_failed",
+      `Expected linked Consumo ${input.consumoId} in state ${fromState}, but state was already changed`,
+      409,
+    );
   }
 }
 
@@ -452,16 +480,32 @@ export async function createInvoiceFromSource(input: CreateInvoiceFromSourceInpu
     await lockSourceRows(tx, companyId, input.presupuestoId, input.consumoId);
     await lockAndAssertSourcesNotInvoiced(tx, companyId, input.presupuestoId, input.consumoId);
     const presupuesto = await tx.presupuesto.findFirst({
-      where: { id: input.presupuestoId, companyId, state: "Aprobado", slot: "CURRENT" },
+      where: { id: input.presupuestoId, companyId, state: "Aprobado" },
       select: {
-        id: true, surgeryId: true, currency: true, generalDiscountRate: true, total: true,
+        id: true,
+        surgeryId: true,
+        currency: true,
+        total: true,
+        metadata: true,
         items: {
-          select: { id: true, sku: true, description: true, quantity: true, unit: true, unitPrice: true, discountRate: true, discount: true, taxRate: true, tax: true, metadata: true },
-          orderBy: { position: "asc" },
+          select: {
+            id: true,
+            sku: true,
+            description: true,
+            quantity: true,
+            unit: true,
+            unitPrice: true,
+            discount: true,
+            tax: true,
+            vatTreatment: true,
+            vatRate: true,
+            metadata: true,
+          },
+          orderBy: { createdAt: "asc" },
         },
       },
     });
-    if (!presupuesto) throw notFound(`Approved CURRENT Presupuesto ${input.presupuestoId} not found in company ${companyId}`, "invoice_presupuesto_not_eligible");
+    if (!presupuesto) throw notFound(`Approved Presupuesto ${input.presupuestoId} not found in company ${companyId}`, "invoice_presupuesto_not_eligible");
     if (!presupuesto.surgeryId) throw badRequest("Presupuesto must reference a surgery", "invoice_source_surgery_required");
 
     if (!input.consumoId) {
@@ -482,6 +526,8 @@ export async function createInvoiceFromSource(input: CreateInvoiceFromSourceInpu
           unitPrice: item.unitPrice,
           discount: item.discount,
           tax: item.tax,
+          vatTreatment: item.vatTreatment,
+          vatRate: item.vatRate,
           sourceType: "presupuesto",
           sourceItemId: item.id,
           metadata: { presupuestoId: presupuesto.id, presupuestoItemMetadata: item.metadata ?? null },
@@ -513,12 +559,19 @@ export async function createInvoiceFromSource(input: CreateInvoiceFromSourceInpu
       const budgetItem = matches[0];
       const quantity = quantizeMoney(toDecimal(consumoItem.consumedQuantity));
       const unitPrice = quantizeMoney(budgetItem.unitPrice);
-      const gross = quantizeMoney(quantity.mul(unitPrice));
-      const lineDiscount = quantizeMoney(gross.mul(budgetItem.discountRate).div(100));
-      const generalDiscount = quantizeMoney(gross.minus(lineDiscount).mul(presupuesto.generalDiscountRate).div(100));
-      const discount = quantizeMoney(lineDiscount.plus(generalDiscount));
-      const taxable = quantizeMoney(gross.minus(discount));
-      const tax = quantizeMoney(taxable.mul(budgetItem.taxRate).div(100));
+      const budgetItemQuantity = quantizeMoney(budgetItem.quantity);
+      const discount = budgetItemQuantity.gt(0)
+        ? quantizeMoney(budgetItem.discount.mul(quantity).div(budgetItemQuantity))
+        : new Prisma.Decimal(0);
+      const vatTreatment = budgetItem.vatTreatment ?? DEFAULT_VAT_TREATMENT;
+      const vatRate = budgetItem.vatRate ?? new Prisma.Decimal(DEFAULT_VAT_RATE);
+      const lineCalc = calculateLineCommercial({
+        quantity,
+        unitPrice,
+        discount,
+        vatTreatment,
+        vatRate,
+      });
       return {
         sku: consumoItem.sku ?? budgetItem.sku ?? undefined,
         description: consumoItem.description,
@@ -526,7 +579,9 @@ export async function createInvoiceFromSource(input: CreateInvoiceFromSourceInpu
         unit: consumoItem.unit ?? budgetItem.unit ?? undefined,
         unitPrice,
         discount,
-        tax,
+        tax: lineCalc.tax,
+        vatTreatment,
+        vatRate,
         sourceType: "consumo",
         sourceItemId: consumoItem.id,
         metadata: { presupuestoId: presupuesto.id, presupuestoItemId: budgetItem.id, presupuestoItemMetadata: budgetItem.metadata ?? null, consumoId: consumo.id, consumoItemMetadata: consumoItem.metadata ?? null },
@@ -644,6 +699,7 @@ export async function updateInvoiceState(input: UpdateInvoiceStateInput) {
     const currentState = current.state as InvoiceState;
     if (currentState === newState) throw new InvoiceError("invoice_state_unchanged", `Invoice state is already ${newState}`, 409);
     if (!((INVOICE_TRANSITIONS[currentState] ?? []) as readonly string[]).includes(newState)) throw new InvoiceError("invalid_invoice_transition", `Invalid invoice state transition: ${currentState} -> ${newState}`, 409);
+    if (newState === "Anulada") await assertFiscalCancellationAllowed(tx, companyId, input.invoiceId);
     const result = await tx.invoice.update({ where: { id: input.invoiceId }, data: { state: newState, cancelledAt: newState === "Anulada" ? new Date() : undefined, updatedById }, select: invoiceReadSelect });
     if (newState === "Anulada" && currentState !== "Borrador" && current.consumoId) {
       await transitionLinkedConsumoForInvoice({ tx, companyId, consumoId: current.consumoId, invoiceId: current.id, targetState: "Validado", updatedById });

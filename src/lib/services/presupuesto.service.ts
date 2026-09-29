@@ -9,6 +9,13 @@ import type { PrismaClient, Presupuesto as PrismaPresupuesto } from "@prisma/cli
 import { createAuditEvent } from "../audit";
 import { requireCompanyId } from "../tenant";
 import { badRequest, notFound } from "../api/errors";
+import {
+  calculateLineCommercial,
+  calculateCommercialDocumentTotals,
+  DEFAULT_VAT_RATE,
+  DEFAULT_VAT_TREATMENT,
+  VatTreatment,
+} from "../commercial/vat";
 
 export const PRESUPUESTO_STATES = [
   "Borrador",
@@ -63,6 +70,8 @@ function isPresupuestoState(value: string): value is PresupuestoState {
 function toDecimal(value: number | string | Prisma.Decimal): Prisma.Decimal {
   return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
 }
+
+const quantizeMoney = (value: Prisma.Decimal) => value.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
 
 function serializeDate(value: Date | null): string | null {
   return value ? value.toISOString() : null;
@@ -150,6 +159,8 @@ const presupuestoReadSelect = {
       discount: true,
       tax: true,
       total: true,
+      vatTreatment: true,
+      vatRate: true,
       metadata: true,
       createdAt: true,
       updatedAt: true,
@@ -206,6 +217,8 @@ export interface PresupuestoItemInput {
   unitPrice?: number | string | Prisma.Decimal;
   discount?: number | string | Prisma.Decimal;
   tax?: number | string | Prisma.Decimal;
+  vatTreatment?: string | VatTreatment;
+  vatRate?: number | string | Prisma.Decimal;
   metadata?: Record<string, unknown>;
 }
 
@@ -217,6 +230,8 @@ export interface NormalizedPresupuestoItem extends Required<Pick<PresupuestoItem
   discount: Prisma.Decimal;
   tax: Prisma.Decimal;
   total: Prisma.Decimal;
+  vatTreatment: string;
+  vatRate: Prisma.Decimal;
   metadata?: Prisma.InputJsonValue;
 }
 
@@ -274,10 +289,9 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
   }
 
   const normalizedItems = items.map((item, index): NormalizedPresupuestoItem => {
-    const quantity = toDecimal(item.quantity);
-    const unitPrice = toDecimal(item.unitPrice ?? 0);
-    const discount = toDecimal(item.discount ?? 0);
-    const tax = toDecimal(item.tax ?? 0);
+    const quantity = quantizeMoney(toDecimal(item.quantity));
+    const unitPrice = quantizeMoney(toDecimal(item.unitPrice ?? 0));
+    const discount = quantizeMoney(toDecimal(item.discount ?? 0));
 
     if (quantity.lte(0)) {
       throw badRequest(
@@ -285,9 +299,9 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
         "invalid_presupuesto_item_quantity"
       );
     }
-    if (unitPrice.lt(0) || discount.lt(0) || tax.lt(0)) {
+    if (unitPrice.lt(0) || discount.lt(0)) {
       throw badRequest(
-        `items[${index}] prices, discounts and taxes must be non-negative`,
+        `items[${index}] prices and discounts must be non-negative`,
         "invalid_presupuesto_item_amount"
       );
     }
@@ -298,11 +312,23 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
       );
     }
 
-    const gross = quantity.mul(unitPrice);
-    const total = gross.minus(discount).plus(tax);
-    if (total.lt(0)) {
-      throw badRequest(`items[${index}].total cannot be negative`, "invalid_presupuesto_item_total");
+    const lineCalc = calculateLineCommercial({
+      quantity,
+      unitPrice,
+      discount,
+      vatTreatment: item.vatTreatment,
+      vatRate: item.vatRate,
+    });
+
+    const tax = item.tax !== undefined && item.tax !== null
+      ? quantizeMoney(toDecimal(item.tax))
+      : lineCalc.tax;
+    if (tax.lt(0)) {
+      throw badRequest(`items[${index}].tax cannot be negative`, "invalid_presupuesto_item_tax");
     }
+
+    const taxableAmount = quantizeMoney(Prisma.Decimal.max(0, quantizeMoney(quantity.mul(unitPrice)).minus(discount)));
+    const total = quantizeMoney(taxableAmount.plus(tax));
 
     return {
       sku: item.sku ?? null,
@@ -313,22 +339,22 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
       discount,
       tax,
       total,
+      vatTreatment: lineCalc.vatTreatment,
+      vatRate: lineCalc.vatRate,
       metadata: (item.metadata ?? null) as Prisma.InputJsonValue | undefined,
     };
   });
 
-  const subtotal = normalizedItems.reduce(
-    (acc, item) => acc.plus(item.quantity.mul(item.unitPrice)),
-    new Prisma.Decimal(0)
-  );
-  const discountTotal = normalizedItems.reduce(
-    (acc, item) => acc.plus(item.discount),
-    new Prisma.Decimal(0)
-  );
-  const taxTotal = normalizedItems.reduce((acc, item) => acc.plus(item.tax), new Prisma.Decimal(0));
-  const total = normalizedItems.reduce((acc, item) => acc.plus(item.total), new Prisma.Decimal(0));
+  const totals = calculateCommercialDocumentTotals(normalizedItems);
 
-  return { items: normalizedItems, subtotal, discountTotal, taxTotal, total };
+  return {
+    items: normalizedItems,
+    subtotal: totals.subtotal,
+    discountTotal: totals.discountTotal,
+    taxTotal: totals.taxTotal,
+    total: totals.total,
+    breakdown: totals.breakdown,
+  };
 }
 
 async function assertSurgeryBelongsToCompany(prisma: PrismaClient, companyId: string, surgeryId?: string) {
@@ -368,7 +394,7 @@ export async function createPresupuesto(input: CreatePresupuestoInput) {
         metadata: (input.metadata ?? null) as Prisma.InputJsonValue | undefined,
         items: { create: totals.items },
       },
-      select: { ...presupuestoReadSelect, items: { select: { id: true, description: true, quantity: true, total: true } } },
+      select: presupuestoReadSelect,
     });
 
     if (createdById) {
@@ -608,6 +634,8 @@ export async function createPresupuestoVersion(input: CreatePresupuestoVersionIn
       unitPrice: item.unitPrice,
       discount: item.discount,
       tax: item.tax,
+      vatTreatment: item.vatTreatment,
+      vatRate: item.vatRate,
       metadata: (item.metadata as Record<string, unknown> | null) ?? undefined,
     }));
     const totals = recalculatePresupuestoTotals(input.items ?? sourceItems);
