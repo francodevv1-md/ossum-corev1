@@ -53,6 +53,7 @@ export function CreateArticleModal({
   const [unitPrice, setUnitPrice] = React.useState(
     prefill?.unitPrice ? String(prefill.unitPrice) : ""
   )
+  const [ivaKey, setIvaKey] = React.useState("21")
 
   const handleCreate = React.useCallback(() => {
     if (!name.trim()) {
@@ -78,7 +79,7 @@ export function CreateArticleModal({
       deposit: "",
       sterilized: false,
       unitPrice: Number(unitPrice) || 0,
-      ivaKey: "21",
+      ivaKey: ivaKey || "21",
     })
 
     toast.success(`Artículo "${item.name}" creado en el catálogo.`)
@@ -173,15 +174,66 @@ export function CreateArticleModal({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="art-price">Precio unitario</Label>
-            <Input
-              id="art-price"
-              value={unitPrice}
-              onChange={(e) => setUnitPrice(e.target.value)}
-              placeholder="$0,00"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="art-price">P. Final (IVA inc.) *</Label>
+              <Input
+                id="art-price"
+                type="number"
+                min="0"
+                step="0.01"
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(e.target.value)}
+                placeholder="$0,00"
+                className="font-semibold"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="art-iva">Alícuota IVA</Label>
+              <select
+                id="art-iva"
+                value={ivaKey}
+                onChange={(e) => setIvaKey(e.target.value)}
+                className="w-full h-9 px-3 text-xs bg-background border rounded-md font-medium text-foreground"
+              >
+                <option value="21">21.0%</option>
+                <option value="10.5">10.5%</option>
+                <option value="27">27.0%</option>
+                <option value="0">0.0%</option>
+                <option value="exento">Exento / No gravado</option>
+              </select>
+            </div>
           </div>
+
+          {Number(unitPrice) > 0 && (
+            <div className="p-2 rounded-md bg-muted/40 border text-[11px] text-muted-foreground flex justify-between">
+              <span>
+                Neto:{" "}
+                <strong className="text-foreground">
+                  $
+                  {ivaKey === "exento" || ivaKey === "0"
+                    ? Number(unitPrice).toFixed(2)
+                    : (
+                        Number(unitPrice) /
+                        (1 + (ivaKey === "10.5" ? 0.105 : ivaKey === "27" ? 0.27 : 0.21))
+                      ).toFixed(2)}
+                </strong>
+              </span>
+              <span>
+                IVA ({ivaKey === "exento" ? "0%" : `${ivaKey}%`}):{" "}
+                <strong className="text-foreground">
+                  $
+                  {ivaKey === "exento" || ivaKey === "0"
+                    ? "0.00"
+                    : (
+                        Number(unitPrice) -
+                        Number(unitPrice) /
+                          (1 + (ivaKey === "10.5" ? 0.105 : ivaKey === "27" ? 0.27 : 0.21))
+                      ).toFixed(2)}
+                </strong>
+              </span>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

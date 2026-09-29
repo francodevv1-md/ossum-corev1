@@ -14,6 +14,8 @@ import { Prisma } from "@prisma/client";
 import {
   calculateLineCommercial,
   calculateCommercialDocumentTotals,
+  calculateNetFromGross,
+  calculateLineFromGrossPrice,
   mapVatToTusFacturasAlicuota,
   parseVatOptionKey,
   getVatKeyFromTreatmentAndRate,
@@ -539,5 +541,174 @@ describe("Commercial Pipeline — End-to-End Snapshot Lifecycle & Immutability",
     expect(newPresupuestoItem.vatRate.toNumber()).toBe(27);
     expect(newPresupuestoItem.tax.toNumber()).toBe(13500);
     expect(newPresupuestoItem.total.toNumber()).toBe(63500);
+  });
+});
+
+describe("COMMERCIAL-GROSS-PRICE-UX-001 — Gross Price (IVA Included) Invariants", () => {
+  it("Final $121 with IVA 21% results in Net $100 and IVA $21", () => {
+    const netDeriv = calculateNetFromGross(121, 21, "GRAVADO");
+    expect(netDeriv.netUnitPrice.toNumber()).toBe(100);
+    expect(netDeriv.vatUnitPrice.toNumber()).toBe(21);
+    expect(netDeriv.grossUnitPrice.toNumber()).toBe(121);
+
+    const line = calculateLineFromGrossPrice({
+      quantity: 1,
+      grossUnitPrice: 121,
+      vatTreatment: "GRAVADO",
+      vatRate: 21,
+    });
+
+    expect(line.grossUnitPrice.toNumber()).toBe(121);
+    expect(line.netUnitPrice.toNumber()).toBe(100);
+    expect(line.vatUnitPrice.toNumber()).toBe(21);
+    expect(line.subtotalNeto.toNumber()).toBe(100);
+    expect(line.taxableAmount.toNumber()).toBe(100);
+    expect(line.tax.toNumber()).toBe(21);
+    expect(line.total.toNumber()).toBe(121);
+  });
+
+  it("handles IVA 0%, EXENTO, and NO_GRAVADO with gross = net and tax = 0", () => {
+    // IVA 0%
+    const line0 = calculateLineFromGrossPrice({
+      quantity: 2,
+      grossUnitPrice: 500,
+      vatTreatment: "GRAVADO",
+      vatRate: 0,
+    });
+    expect(line0.netUnitPrice.toNumber()).toBe(500);
+    expect(line0.vatUnitPrice.toNumber()).toBe(0);
+    expect(line0.taxableAmount.toNumber()).toBe(1000);
+    expect(line0.tax.toNumber()).toBe(0);
+    expect(line0.total.toNumber()).toBe(1000);
+
+    // EXENTO
+    const lineEx = calculateLineFromGrossPrice({
+      quantity: 3,
+      grossUnitPrice: 200,
+      vatTreatment: "EXENTO",
+      vatRate: 0,
+    });
+    expect(lineEx.netUnitPrice.toNumber()).toBe(200);
+    expect(lineEx.vatUnitPrice.toNumber()).toBe(0);
+    expect(lineEx.taxableAmount.toNumber()).toBe(600);
+    expect(lineEx.tax.toNumber()).toBe(0);
+    expect(lineEx.total.toNumber()).toBe(600);
+
+    // NO_GRAVADO
+    const lineNg = calculateLineFromGrossPrice({
+      quantity: 1,
+      grossUnitPrice: 1500,
+      vatTreatment: "NO_GRAVADO",
+      vatRate: 0,
+    });
+    expect(lineNg.netUnitPrice.toNumber()).toBe(1500);
+    expect(lineNg.vatUnitPrice.toNumber()).toBe(0);
+    expect(lineNg.taxableAmount.toNumber()).toBe(1500);
+    expect(lineNg.tax.toNumber()).toBe(0);
+    expect(lineNg.total.toNumber()).toBe(1500);
+  });
+
+  it("changing IVA maintains gross price and recalculates net and IVA without altering total", () => {
+    const grossPrice = 242; // e.g. 2 x $121 with 21% -> total = 242
+
+    const line21 = calculateLineFromGrossPrice({
+      quantity: 2,
+      grossUnitPrice: 121,
+      vatTreatment: "GRAVADO",
+      vatRate: 21,
+    });
+    expect(line21.total.toNumber()).toBe(242);
+    expect(line21.netUnitPrice.toNumber()).toBe(100);
+    expect(line21.taxableAmount.toNumber()).toBe(200);
+    expect(line21.tax.toNumber()).toBe(42);
+
+    // User changes IVA to 10.5% while keeping grossUnitPrice = 121
+    const line105 = calculateLineFromGrossPrice({
+      quantity: 2,
+      grossUnitPrice: 121,
+      vatTreatment: "GRAVADO",
+      vatRate: 10.5,
+    });
+    expect(line105.total.toNumber()).toBe(242); // Total stays 242
+    expect(line105.taxableAmount.toNumber()).toBeCloseTo(218.9955 + 0.009, 1);
+    expect(line105.taxableAmount.plus(line105.tax).toNumber()).toBe(242); // Exact total match
+  });
+
+  it("computes Quantity x Gross Price without rounding drift between lines and summary", () => {
+    const line1 = calculateLineFromGrossPrice({
+      quantity: 3,
+      grossUnitPrice: 121, // total 363
+      vatTreatment: "GRAVADO",
+      vatRate: 21,
+    });
+    const line2 = calculateLineFromGrossPrice({
+      quantity: 5,
+      grossUnitPrice: 55.25, // total 276.25
+      vatTreatment: "GRAVADO",
+      vatRate: 10.5,
+    });
+
+    const linesTotal = line1.total.plus(line2.total).toNumber();
+    expect(linesTotal).toBe(639.25);
+
+    const docTotals = calculateCommercialDocumentTotals([
+      {
+        description: "Item 1",
+        quantity: line1.quantity,
+        unitPrice: line1.netUnitPrice,
+        discount: line1.discountAmount,
+        netSubtotal: line1.subtotalNeto,
+        taxableAmount: line1.taxableAmount,
+        vatTreatment: line1.vatTreatment,
+        vatRate: line1.vatRate,
+        tax: line1.tax,
+        total: line1.total,
+      },
+      {
+        description: "Item 2",
+        quantity: line2.quantity,
+        unitPrice: line2.netUnitPrice,
+        discount: line2.discountAmount,
+        netSubtotal: line2.subtotalNeto,
+        taxableAmount: line2.taxableAmount,
+        vatTreatment: line2.vatTreatment,
+        vatRate: line2.vatRate,
+        tax: line2.tax,
+        total: line2.total,
+      },
+    ]);
+
+    expect(docTotals.total.toNumber()).toBe(639.25);
+    expect(docTotals.taxTotal.plus(docTotals.subtotal.minus(docTotals.discountTotal)).toNumber()).toBe(639.25);
+  });
+
+  it("Presupuestos, Facturas and Ajustes share identical commercial VAT calculation results", () => {
+    const grossPrice = 1210;
+    const qty = 2;
+    const vatRate = 21;
+
+    // Presupuesto / Form computation
+    const calc = calculateLineFromGrossPrice({
+      quantity: qty,
+      grossUnitPrice: grossPrice,
+      vatTreatment: "GRAVADO",
+      vatRate,
+    });
+
+    // Invoice calculation
+    const invTotals = calculateInvoiceTotals([
+      {
+        description: "Test Item",
+        quantity: qty,
+        unitPrice: calc.netUnitPrice.toNumber(),
+        vatTreatment: "GRAVADO",
+        vatRate,
+      },
+    ]);
+
+    expect(calc.total.toNumber()).toBe(2420);
+    expect(invTotals.total.toNumber()).toBe(2420);
+    expect(invTotals.taxTotal.toNumber()).toBe(420);
+    expect(invTotals.subtotal.toNumber()).toBe(2000);
   });
 });

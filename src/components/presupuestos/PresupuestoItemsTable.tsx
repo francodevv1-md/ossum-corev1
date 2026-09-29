@@ -9,6 +9,7 @@ import type { CatalogMatch } from "@/data/mock-catalog"
 import { getCatalogByCode, searchCatalogByName } from "@/data/mock-catalog"
 import { IVA_OPTIONS } from "@/lib/presupuestos.constants"
 import { cn } from "@/lib/utils"
+import { calculateNetFromGross, parseVatOptionKey } from "@/lib/commercial/vat"
 import { ArticleSelectorModal } from "@/components/presupuestos/ArticleSelectorModal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -54,7 +55,7 @@ const COL_WIDTHS = {
   code: "90px",
   name: undefined,      // auto (flex)
   quantity: "52px",
-  unitPrice: "96px",
+  unitPrice: "115px",
   discountPercent: "56px",
   iva: "80px",          // CHATZAI-025: IVA per item
   subtotal: "100px",
@@ -447,8 +448,8 @@ export function PresupuestoItemsTable({
                   <th style={{ width: COL_WIDTHS.quantity }} className="px-2 py-1 text-right font-semibold text-[10px] text-muted-foreground uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
                     Cant.
                   </th>
-                  <th style={{ width: COL_WIDTHS.unitPrice }} className="px-2 py-1 text-right font-semibold text-[10px] text-muted-foreground uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
-                    P.Unit. <span className="text-destructive">*</span>
+                  <th style={{ width: "115px" }} className="px-2 py-1 text-right font-semibold text-[10px] text-muted-foreground uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                    P. Final (IVA inc.) <span className="text-destructive">*</span>
                   </th>
                   <th style={{ width: COL_WIDTHS.discountPercent }} className="px-2 py-1 text-right font-semibold text-[10px] text-muted-foreground uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
                     Dto. %
@@ -458,7 +459,7 @@ export function PresupuestoItemsTable({
                     IVA
                   </th>
                   <th style={{ width: COL_WIDTHS.subtotal }} className="px-2 py-1 text-right font-semibold text-[10px] text-muted-foreground uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
-                    Subtotal
+                    Total línea
                   </th>
                   <th className="px-2 py-1 text-left font-semibold text-[10px] text-muted-foreground uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
                     Observación
@@ -477,6 +478,18 @@ export function PresupuestoItemsTable({
                   // CHATZAI-017O: Line subtotal for display
                   const clampedDiscount = Math.min(Math.max(item.discountPercent, 0), 100)
                   const lineSubtotal = item.quantity * item.unitPrice * (1 - clampedDiscount / 100)
+
+                  // Derive net and iva from gross unit price using central engine
+                  let netUnit = item.unitPrice
+                  let ivaUnit = 0
+                  try {
+                    const vatParsed = parseVatOptionKey(item.ivaKey || "21")
+                    const netCalc = calculateNetFromGross(item.unitPrice, vatParsed.rate, vatParsed.treatment)
+                    netUnit = netCalc.netUnitPrice.toNumber()
+                    ivaUnit = netCalc.vatUnitPrice.toNumber()
+                  } catch {
+                    netUnit = item.unitPrice
+                  }
 
                   return (
                     <tr
@@ -556,21 +569,32 @@ export function PresupuestoItemsTable({
                         />
                       </td>
 
-                      {/* Precio unitario */}
+                      {/* Precio unitario final (IVA inc.) */}
                       <td style={{ width: COL_WIDTHS.unitPrice }} className="border-r border-gray-200 dark:border-gray-700 p-0">
-                        <input
-                          ref={(el) => setCellRef(idx, "unitPrice", el)}
-                          type="number"
-                          min={0}
-                          value={item.unitPrice || ""}
-                          onChange={(e) => updateItem(idx, { unitPrice: parseFloat(e.target.value) || 0 })}
-                          onKeyDown={(e) => handleCellKeyDown(e, idx, "unitPrice")}
-                          placeholder="$0"
-                          className={cn(
-                            CELL_INPUT_NUM,
-                            item.unitPrice <= 0 && hasError && CELL_INPUT_ERROR
-                          )}
-                        />
+                        <div className="flex flex-col justify-center h-full px-1 py-0.5">
+                          <input
+                            ref={(el) => setCellRef(idx, "unitPrice", el)}
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={item.unitPrice || ""}
+                            onChange={(e) => updateItem(idx, { unitPrice: parseFloat(e.target.value) || 0 })}
+                            onKeyDown={(e) => handleCellKeyDown(e, idx, "unitPrice")}
+                            placeholder="$0"
+                            className={cn(
+                              CELL_INPUT_NUM,
+                              item.unitPrice <= 0 && hasError && CELL_INPUT_ERROR
+                            )}
+                          />
+                          {item.unitPrice > 0 ? (
+                            <span
+                              className="text-[9px] text-muted-foreground text-right leading-none pb-0.5 truncate"
+                              title={`Neto: ${formatCurrency(netUnit)} · IVA ${item.ivaKey}%: ${formatCurrency(ivaUnit)}`}
+                            >
+                              Neto: {formatCurrency(netUnit)}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
 
                       {/* Dto. % (editable) */}

@@ -238,6 +238,116 @@ export function calculateLineCommercial(params: CalculateLineCommercialParams): 
   };
 }
 
+/**
+ * Derives net unit price and unit VAT from a gross price (IVA included).
+ * Formula:
+ * - net = gross / (1 + vatRate / 100) (if rate > 0 and treatment is GRAVADO)
+ * - vat = gross - net
+ * For 0%, EXENTO, NO_GRAVADO: net = gross, vat = 0.
+ */
+export function calculateNetFromGross(
+  grossUnitPrice: number | string | Prisma.Decimal,
+  vatRate?: number | string | Prisma.Decimal | null,
+  vatTreatment?: string | VatTreatment | null,
+): { netUnitPrice: Prisma.Decimal; vatUnitPrice: Prisma.Decimal; grossUnitPrice: Prisma.Decimal } {
+  const gross = quantizeMoney(toDecimal(grossUnitPrice ?? 0));
+  const { treatment, rate } = validateVatTreatmentAndRate(vatTreatment, vatRate);
+
+  if (treatment === "EXENTO" || treatment === "NO_GRAVADO" || rate.isZero()) {
+    return {
+      netUnitPrice: gross,
+      vatUnitPrice: new Prisma.Decimal(0),
+      grossUnitPrice: gross,
+    };
+  }
+
+  const divisor = new Prisma.Decimal(1).plus(rate.div(100));
+  const net = quantizeMoney(gross.div(divisor));
+  const vat = quantizeMoney(gross.minus(net));
+
+  return {
+    netUnitPrice: net,
+    vatUnitPrice: vat,
+    grossUnitPrice: gross,
+  };
+}
+
+/**
+ * Pure helper for single-line commercial calculation when user inputs Gross Price (IVA inc.).
+ * Enforces:
+ * - total = quantity * grossUnitPrice * (1 - discountPercent / 100)
+ * - netUnitPrice = grossUnitPrice / (1 + vatRate / 100)
+ * - taxableAmount = total / (1 + vatRate / 100)
+ * - tax = total - taxableAmount
+ */
+export function calculateLineFromGrossPrice(params: {
+  quantity: number | string | Prisma.Decimal;
+  grossUnitPrice: number | string | Prisma.Decimal;
+  discountPercent?: number | string | Prisma.Decimal;
+  vatTreatment?: string | VatTreatment;
+  vatRate?: number | string | Prisma.Decimal;
+}): {
+  quantity: Prisma.Decimal;
+  grossUnitPrice: Prisma.Decimal;
+  netUnitPrice: Prisma.Decimal;
+  vatUnitPrice: Prisma.Decimal;
+  discountPercent: Prisma.Decimal;
+  subtotalNeto: Prisma.Decimal;
+  discountAmount: Prisma.Decimal;
+  taxableAmount: Prisma.Decimal;
+  vatTreatment: VatTreatment;
+  vatRate: Prisma.Decimal;
+  tax: Prisma.Decimal;
+  total: Prisma.Decimal;
+} {
+  const quantity = quantizeMoney(toDecimal(params.quantity));
+  const grossUnitPrice = quantizeMoney(toDecimal(params.grossUnitPrice ?? 0));
+  const discountPercent = quantizeMoney(toDecimal(params.discountPercent ?? 0));
+
+  if (quantity.lte(0)) {
+    throw new VatValidationError("Quantity must be greater than 0", "invalid_commercial_quantity");
+  }
+  if (grossUnitPrice.lt(0)) {
+    throw new VatValidationError("Gross unit price cannot be negative", "invalid_commercial_unit_price");
+  }
+  if (discountPercent.lt(0) || discountPercent.gt(100)) {
+    throw new VatValidationError("Discount percent must be between 0 and 100", "invalid_commercial_discount");
+  }
+
+  const { treatment: vatTreatment, rate: vatRate } = validateVatTreatmentAndRate(
+    params.vatTreatment,
+    params.vatRate,
+  );
+
+  const { netUnitPrice, vatUnitPrice } = calculateNetFromGross(grossUnitPrice, vatRate, vatTreatment);
+
+  const lineGrossBeforeDiscount = quantizeMoney(quantity.mul(grossUnitPrice));
+  const discountFactor = new Prisma.Decimal(1).minus(discountPercent.div(100));
+  const total = quantizeMoney(lineGrossBeforeDiscount.mul(discountFactor));
+
+  const lineNetBeforeDiscount = quantizeMoney(quantity.mul(netUnitPrice));
+  const taxableAmount = (vatTreatment === "EXENTO" || vatTreatment === "NO_GRAVADO" || vatRate.isZero())
+    ? total
+    : quantizeMoney(total.div(new Prisma.Decimal(1).plus(vatRate.div(100))));
+  const discountAmount = quantizeMoney(lineNetBeforeDiscount.minus(taxableAmount));
+  const tax = quantizeMoney(total.minus(taxableAmount));
+
+  return {
+    quantity,
+    grossUnitPrice,
+    netUnitPrice,
+    vatUnitPrice,
+    discountPercent,
+    subtotalNeto: lineNetBeforeDiscount,
+    discountAmount,
+    taxableAmount,
+    vatTreatment,
+    vatRate,
+    tax,
+    total,
+  };
+}
+
 export interface DocumentCommercialTotals {
   subtotal: Prisma.Decimal;
   discountTotal: Prisma.Decimal;
