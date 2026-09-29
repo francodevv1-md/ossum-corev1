@@ -4,13 +4,11 @@ import React, { useState, useMemo } from "react"
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   FileText,
   Package,
@@ -19,10 +17,8 @@ import {
   ClipboardCheck,
   Printer,
   Download,
-  Eye,
   ZoomIn,
   ZoomOut,
-  Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { Surgery } from "@/types"

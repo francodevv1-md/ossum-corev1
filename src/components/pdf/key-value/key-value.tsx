@@ -34,7 +34,10 @@ export interface KeyValueEntry {
  * @see {@link KeyValueProps}
  */
 export interface KeyValueProps extends Omit<PDFComponentProps, "children"> {
-  items: KeyValueEntry[];
+  items?: KeyValueEntry[];
+  /** Legacy single-row API used by existing OSSUM templates. */
+  label?: string;
+  value?: string;
   /**
    * @default 'horizontal'
    */
@@ -108,6 +111,8 @@ const createKeyValueStyles = (t: PdfcnTheme) => {
 
 export const KeyValue = ({
   items,
+  label,
+  value,
   direction = "horizontal",
   divided = false,
   size = "md",
@@ -137,11 +142,12 @@ export const KeyValue = ({
   if (style) {
     containerStyles.push(...[style].flat());
   }
+  const resolvedItems = items ?? (label ? [{ key: label, value: value ?? "" }] : []);
 
   return (
     <View wrap={!noWrap} style={containerStyles}>
-      {items.map((item, index) => {
-        const isLast = index === items.length - 1;
+      {resolvedItems.map((item, index) => {
+        const isLast = index === resolvedItems.length - 1;
         const keyStyles: Style[] = [keyStyleMap[size]];
         if (labelColor) {
           keyStyles.push({ color: resolveColor(labelColor, theme.colors) });

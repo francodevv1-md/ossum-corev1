@@ -10,9 +10,11 @@ import {
 } from "@/components/ui/table"
 import {
   Link2, MoreHorizontal, Eye, Printer, Download, Edit,
-  XCircle, FileText, CreditCard, Search,
+  XCircle, FileText, CreditCard, Search, FileSearch,
   ChevronDown, ChevronRight,
 } from "lucide-react"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { FiscalEvidenceDialog } from "@/components/facturacion/FiscalEvidenceDialog"
 import { formatDate, formatCurrency } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import type { Surgery, Comprobante, Presupuesto } from "@/types"
@@ -55,10 +57,12 @@ const ESTADO_COBRANZA_LABELS: Record<string, string> = {
 export function ComprobantesAsociados({
   surgery: _surgery, comprobantes, resumenCobranza, presupuestos,
 }: ComprobantesAsociadosProps) {
+  const { activeCompany } = useAuth()
   const [filterType, setFilterType] = useState<CompFilterType>("all")
   const [filterState, setFilterState] = useState<string>("all")
   const [searchText, setSearchText] = useState("")
   const [expandedFVs, setExpandedFVs] = useState<Set<string>>(new Set())
+  const [fiscalTarget, setFiscalTarget] = useState<{ invoiceId: string; invoiceLabel: string } | null>(null)
 
   // Build factura detail map from resumenCobranza
   const facturaDetailMap = useMemo(() => {
@@ -301,6 +305,11 @@ export function ComprobantesAsociados({
                             <DropdownMenuItem><Printer className="size-4 mr-2" /> Imprimir</DropdownMenuItem>
                             <DropdownMenuItem><Download className="size-4 mr-2" /> Descargar PDF</DropdownMenuItem>
                             <DropdownMenuItem><Edit className="size-4 mr-2" /> Modificar</DropdownMenuItem>
+                            {row.type === "FV" && (
+                              <DropdownMenuItem onClick={() => setFiscalTarget({ invoiceId: row.id, invoiceLabel: row.number })}>
+                                <FileSearch className="size-4 mr-2" /> Evidencia fiscal DEV
+                              </DropdownMenuItem>
+                            )}
                             {row.type === "FV" && row.toCollect > 0 && (
                               <DropdownMenuItem><CreditCard className="size-4 mr-2" /> Cobrar</DropdownMenuItem>
                             )}
@@ -371,6 +380,16 @@ export function ComprobantesAsociados({
             <p className="text-[11px] text-muted-foreground">Se mostrarán acá cuando el expediente genere movimiento comercial.</p>
           </div>
       )}
+
+      {fiscalTarget && activeCompany?.id ? (
+        <FiscalEvidenceDialog
+          companyId={activeCompany.id}
+          invoiceId={fiscalTarget.invoiceId}
+          invoiceLabel={fiscalTarget.invoiceLabel}
+          open={Boolean(fiscalTarget)}
+          onOpenChange={(open) => { if (!open) setFiscalTarget(null) }}
+        />
+      ) : null}
     </div>
   )
 }

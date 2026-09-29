@@ -6,7 +6,7 @@ import { Table, TableHeader, TableBody, TableRow, TableCell } from "@/components
 import { Section } from "@/components/pdf/section/section"
 import { KeyValue } from "@/components/pdf/key-value/key-value"
 import { PageFooter } from "@/components/pdf/page-footer/page-footer"
-import { QRCode } from "@/components/pdf/qrcode/qrcode"
+import { PdfQRCode } from "@/components/pdf/qrcode/qrcode"
 import { formatCurrency, formatDate } from "@/lib/formatters"
 import type { FacturaDocumentData } from "./types"
 
@@ -209,7 +209,7 @@ export function FacturaPDF({ data }: { data: FacturaDocumentData }) {
           <View style={styles.totalsContainer}>
             <View style={styles.caeBox}>
               <View style={{ display: "flex", flexDirection: "row", gap: 10, alignItems: "center" }}>
-                <QRCode data={qrFiscalData} size={50} />
+                <PdfQRCode value={qrFiscalData} size={50} />
                 <View>
                   <Text weight="bold" variant="xs" color="#0f172a">Comprobante Fiscal Autorizado</Text>
                   <Text variant="xs" color="#475569">CAE N°: <Text weight="semibold">{data.cae || "74218932104523"}</Text></Text>

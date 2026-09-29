@@ -17,6 +17,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/expediente": "Expediente",
   "/ventas/presupuestos": "Presupuestos",
   "/ventas/facturacion": "Facturación",
+  "/ventas/documentos-ajuste": "Documentos de ajuste",
   "/ventas/notas-credito": "Notas Crédito",
   "/ventas/notas-debito": "Notas Débito",
   "/ventas/cobros": "Cobros",

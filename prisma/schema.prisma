@@ -23,6 +23,7 @@ model Organization {
   updatedAt DateTime @updatedAt
 
   companies Company[]
+  articles  Article[] @relation("OrganizationArticles")
 }
 
 // ─── Empresa ─────────────────────────────────────────────────────────
@@ -47,6 +48,9 @@ model Company {
   devoluciones                     Devolucion[]
   presupuestos                     Presupuesto[]
   invoices                         Invoice[]
+  adjustmentDocuments              AdjustmentDocument[]
+  fiscalDocuments                  FiscalDocument[]
+  fiscalIssuanceAttempts           FiscalIssuanceAttempt[]
   payments                         Payment[]
   digitalReceipts                  DigitalReceipt[]
   auditEvents                      AuditEvent[]
@@ -58,6 +62,7 @@ model Company {
   availabilityCommands             AvailabilityCommand[]                    @relation("AvailabilityCompanyCommands")
   availabilityCapabilityGrants     AvailabilityCapabilityGrant[]            @relation("AvailabilityCapabilityCompany")
   viewPreferences                  UserModuleViewPreference[]
+  stockArticleEligibilities        StockArticleEligibility[]                @relation("CompanyStockArticleEligibilities")
   cajasArticleReferences           CajasArticleReference[]                  @relation("CajasCompanyArticleReferences")
   cajasStockScopeReferences        CajasStockScopeReference[]               @relation("CajasCompanyStockScopeReferences")
   cajasStockRecordReferences       CajasStockRecordReference[]              @relation("CajasCompanyStockRecordReferences")
@@ -184,6 +189,8 @@ model User {
   updatedPresupuestos                   Presupuesto[]                            @relation("PresupuestoUpdatedBy")
   createdInvoices                       Invoice[]                                @relation("InvoiceCreatedBy")
   updatedInvoices                       Invoice[]                                @relation("InvoiceUpdatedBy")
+  createdAdjustments                    AdjustmentDocument[]                     @relation("AdjustmentCreatedBy")
+  updatedAdjustments                    AdjustmentDocument[]                     @relation("AdjustmentUpdatedBy")
   createdPayments                       Payment[]                                @relation("PaymentCreatedBy")
   updatedPayments                       Payment[]                                @relation("PaymentUpdatedBy")
   verifiedCajasArticleReferences        CajasArticleReference[]                  @relation("CajasArticleReferenceVerifiedBy")
@@ -297,8 +304,10 @@ model ContactCompanyLink {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  contact Contact @relation(fields: [contactId], references: [id])
-  company Company @relation(fields: [companyId], references: [id])
+  contact                        Contact                  @relation(fields: [contactId], references: [id])
+  company                        Company                  @relation(fields: [companyId], references: [id])
+  articleIdentifierSupplierLinks ArticleIdentifier[]      @relation("ArticleIdentifierSupplierLink")
+  articleSupplierMappingLinks    ArticleSupplierMapping[] @relation("ArticleSupplierMappingSupplierLink")
 
   @@unique([contactId, companyId])
   @@unique([companyId, code], map: "uq_contact_company_code")
@@ -413,6 +422,7 @@ model Surgery {
   devoluciones          Devolucion[]
   presupuestos          Presupuesto[]
   invoices              Invoice[]
+  adjustmentDocuments   AdjustmentDocument[]
   payments              Payment[]
   cajasAssignments      CajasAssignment[]          @relation("CajasSurgeryAssignments")
   documentChecklist     SurgeryDocumentChecklist?  @relation("SurgeryDocumentChecklistSurgery")
@@ -521,37 +531,39 @@ model Presupuesto {
 // PaymentImputation.invoiceId es FK real obligatoria (no matching por número visible/string).
 
 model Invoice {
-  id            String              @id @default(cuid())
-  visibleNumber Int?
-  companyId     String
-  company       Company             @relation(fields: [companyId], references: [id])
-  surgeryId     String?
-  surgery       Surgery?            @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
-  presupuestoId String?
-  presupuesto   Presupuesto?        @relation(fields: [presupuestoId], references: [id], onDelete: SetNull)
-  consumoId     String?
-  consumo       Consumo?            @relation(fields: [consumoId], references: [id], onDelete: SetNull)
-  base          String              @default("manual")
-  state         String              @default("Borrador")
-  type          String              @default("FV")
-  currency      String              @default("ARS")
-  subtotal      Decimal             @default(0) @db.Decimal(18, 4)
-  discountTotal Decimal             @default(0) @db.Decimal(18, 4)
-  taxTotal      Decimal             @default(0) @db.Decimal(18, 4)
-  total         Decimal             @default(0) @db.Decimal(18, 4)
-  paidTotal     Decimal             @default(0) @db.Decimal(18, 4)
-  balance       Decimal             @default(0) @db.Decimal(18, 4)
-  issuedAt      DateTime?
-  cancelledAt   DateTime?
-  createdById   String?
-  createdBy     User?               @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedById   String?
-  updatedBy     User?               @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  metadata      Json?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  items         InvoiceItem[]
-  imputations   PaymentImputation[]
+  id             String               @id @default(cuid())
+  visibleNumber  Int?
+  companyId      String
+  company        Company              @relation(fields: [companyId], references: [id])
+  surgeryId      String?
+  surgery        Surgery?             @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
+  presupuestoId  String?
+  presupuesto    Presupuesto?         @relation(fields: [presupuestoId], references: [id], onDelete: SetNull)
+  consumoId      String?
+  consumo        Consumo?             @relation(fields: [consumoId], references: [id], onDelete: SetNull)
+  base           String               @default("manual")
+  state          String               @default("Borrador")
+  type           String               @default("FV")
+  currency       String               @default("ARS")
+  subtotal       Decimal              @default(0) @db.Decimal(18, 4)
+  discountTotal  Decimal              @default(0) @db.Decimal(18, 4)
+  taxTotal       Decimal              @default(0) @db.Decimal(18, 4)
+  total          Decimal              @default(0) @db.Decimal(18, 4)
+  paidTotal      Decimal              @default(0) @db.Decimal(18, 4)
+  balance        Decimal              @default(0) @db.Decimal(18, 4)
+  issuedAt       DateTime?
+  cancelledAt    DateTime?
+  createdById    String?
+  createdBy      User?                @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById    String?
+  updatedBy      User?                @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  metadata       Json?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  items          InvoiceItem[]
+  adjustments    AdjustmentDocument[]
+  fiscalDocument FiscalDocument?
+  imputations    PaymentImputation[]
 
   @@unique([companyId, visibleNumber])
   @@index([companyId, surgeryId, state])
@@ -573,6 +585,8 @@ model InvoiceItem {
   discount     Decimal  @default(0) @db.Decimal(18, 4)
   tax          Decimal  @default(0) @db.Decimal(18, 4)
   total        Decimal  @default(0) @db.Decimal(18, 4)
+  vatTreatment String   @default("GRAVADO")
+  vatRate      Decimal  @default(21.0000) @db.Decimal(18, 4)
   sourceType   String?
   sourceItemId String?
   metadata     Json?
@@ -583,6 +597,160 @@ model InvoiceItem {
   @@index([sku])
   @@index([sourceType, sourceItemId])
   @@map("invoice_item")
+}
+
+// ─── Evidencia fiscal DEV_ONLY ──────────────────────────────────────────────
+// Persiste snapshots inmutables e intentos de emisión; no contiene credenciales
+// ni política fiscal productiva.
+
+enum FiscalDocumentState {
+  READY
+  SUBMITTED
+  PENDING
+  AUTHORIZED
+  REJECTED
+  UNKNOWN
+}
+
+model FiscalDocument {
+  id                   String              @id @default(cuid())
+  companyId            String
+  invoiceId            String?             @unique(map: "uq_fiscal_document_invoice")
+  adjustmentDocumentId String?             @unique(map: "uq_fiscal_document_adjustment")
+  environment          String              @default("DEV_ONLY")
+  state                FiscalDocumentState @default(READY)
+  externalReference    String              @unique
+  snapshotHash         String              @db.Char(64)
+  snapshot             Json
+  createdAt            DateTime            @default(now())
+  submittedAt          DateTime?
+  authorizedAt         DateTime?
+  createdById          String?
+
+  company            Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invoice            Invoice?                @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  adjustmentDocument AdjustmentDocument?     @relation(fields: [adjustmentDocumentId], references: [id], onDelete: Restrict)
+  attempts           FiscalIssuanceAttempt[]
+
+  @@index([companyId, state], map: "ix_fiscal_document_company_state")
+  @@index([invoiceId], map: "ix_fiscal_document_invoice")
+  @@index([adjustmentDocumentId], map: "ix_fiscal_document_adjustment")
+  @@map("fiscal_document")
+}
+
+// ─── Documentos de Ajuste (Notas de Crédito y Débito) ─────────────────────────
+
+model AdjustmentDocument {
+  id            String  @id @default(cuid())
+  companyId     String
+  company       Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  visibleNumber Int?
+  type          String // "CREDITO" | "DEBITO"
+  state         String  @default("Borrador") // Borrador | Emitida | Anulada
+  originType    String  @default("INTERNAL_INVOICE") // INTERNAL_INVOICE | EXTERNAL_INVOICE | PERIOD
+
+  // Vínculo si origen es Factura Interna OSSUM
+  internalInvoiceId String?
+  internalInvoice   Invoice? @relation(fields: [internalInvoiceId], references: [id], onDelete: SetNull)
+
+  // Snapshot inmutable si origen es Comprobante Externo
+  externalDocType    String? // "FACTURA A", "FACTURA B", etc.
+  externalPtoVta     Int?
+  externalNumber     Int?
+  externalIssueDate  DateTime?
+  externalIssuerCuit String?
+  externalCae        String?
+
+  // Período si aplica
+  periodFrom DateTime?
+  periodTo   DateTime?
+
+  // Datos comerciales y de contexto
+  surgeryId            String?
+  surgery              Surgery? @relation(fields: [surgeryId], references: [id], onDelete: SetNull)
+  clientName           String?
+  clientDocumentType   String?
+  clientDocumentNumber String?
+  clientVatCondition   String?
+
+  modalidad     String  @default("TOTAL") // TOTAL | PARCIAL | MANUAL
+  motivo        String
+  observaciones String? @db.Text
+
+  currency String  @default("ARS")
+  subtotal Decimal @default(0) @db.Decimal(18, 4)
+  taxTotal Decimal @default(0) @db.Decimal(18, 4)
+  total    Decimal @default(0) @db.Decimal(18, 4)
+
+  issuedAt    DateTime?
+  cancelledAt DateTime?
+
+  createdById String?
+  createdBy   User?   @relation("AdjustmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById String?
+  updatedBy   User?   @relation("AdjustmentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items          AdjustmentDocumentItem[]
+  fiscalDocument FiscalDocument?
+
+  @@unique([companyId, visibleNumber], map: "uq_adjustment_company_visible_number")
+  @@index([companyId, state, createdAt], map: "ix_adjustment_company_state_created")
+  @@index([companyId, originType], map: "ix_adjustment_company_origin")
+  @@index([internalInvoiceId], map: "ix_adjustment_internal_invoice")
+  @@map("adjustment_document")
+}
+
+model AdjustmentDocumentItem {
+  id                   String             @id @default(cuid())
+  adjustmentDocumentId String
+  adjustmentDocument   AdjustmentDocument @relation(fields: [adjustmentDocumentId], references: [id], onDelete: Cascade)
+
+  description String
+  quantity    Decimal @default(1) @db.Decimal(18, 4)
+  unitPrice   Decimal @default(0) @db.Decimal(18, 4)
+  discount    Decimal @default(0) @db.Decimal(18, 4)
+  tax         Decimal @default(0) @db.Decimal(18, 4)
+  total       Decimal @default(0) @db.Decimal(18, 4)
+
+  vatTreatment String  @default("GRAVADO")
+  vatRate      Decimal @default(21.0000) @db.Decimal(18, 4)
+
+  originalQuantity Decimal? @db.Decimal(18, 4)
+  sourceItemId     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([adjustmentDocumentId])
+  @@map("adjustment_document_item")
+}
+
+model FiscalIssuanceAttempt {
+  id                String              @id @default(cuid())
+  companyId         String
+  fiscalDocumentId  String
+  attemptNumber     Int
+  state             FiscalDocumentState @default(READY)
+  externalReference String
+  correlationId     String?
+  requestPayload    Json
+  responsePayload   Json?
+  errorCode         String?
+  errorMessage      String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  fiscalDocument FiscalDocument @relation(fields: [fiscalDocumentId], references: [id], onDelete: Restrict)
+
+  @@unique([fiscalDocumentId, attemptNumber], map: "uq_fiscal_attempt_document_number")
+  @@index([companyId, state], map: "ix_fiscal_attempt_company_state")
+  @@index([externalReference], map: "ix_fiscal_attempt_external_reference")
+  @@map("fiscal_issuance_attempt")
 }
 
 model Payment {

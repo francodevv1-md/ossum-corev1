@@ -13,6 +13,8 @@ export type InvoiceItemApiRow = {
   discount: string
   tax: string
   total: string
+  vatTreatment?: string
+  vatRate?: string
   sourceType: string | null
   sourceItemId: string | null
   metadata: unknown
@@ -99,6 +101,38 @@ export async function fetchAllInvoices(companyId: string, params?: Omit<ListInvo
     rows.push(...page)
     if (page.length < take) return rows
   }
+}
+
+export type CreateInvoiceItemPayload = {
+  sku?: string
+  description: string
+  quantity: string | number
+  unit?: string
+  unitPrice?: string | number
+  discount?: string | number
+  tax?: string | number
+  vatTreatment?: string
+  vatRate?: string | number
+  sourceType?: string
+  sourceItemId?: string
+  metadata?: Record<string, unknown>
+}
+
+export type CreateInvoicePayload = {
+  surgeryId?: string
+  base?: InvoiceBase
+  type?: string
+  currency?: string
+  items: CreateInvoiceItemPayload[]
+  metadata?: Record<string, unknown> | null
+}
+
+export function createInvoiceDraft(companyId: string, payload: CreateInvoicePayload) {
+  return apiFetch<InvoiceApiRow>(basePath(companyId), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
 }
 
 export function createManualInvoiceDraft(companyId: string, payload: CreateManualInvoiceDraftPayload) {

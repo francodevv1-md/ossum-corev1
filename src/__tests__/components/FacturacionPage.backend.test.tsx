@@ -13,6 +13,16 @@ const mocks = vi.hoisted(() => ({
   fetchSurgeries: vi.fn(),
 }))
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  usePathname: () => "/ventas/facturacion",
+  useSearchParams: () => new URLSearchParams(),
+}))
+
 vi.mock("@/hooks/useInvoices", () => ({ useInvoices: mocks.useInvoices }))
 vi.mock("@/hooks/usePayments", () => ({ usePayments: mocks.usePayments }))
 vi.mock("@/lib/store", () => ({ useOrtoTrackStore: mocks.useStore }))

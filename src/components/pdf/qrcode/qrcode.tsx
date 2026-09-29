@@ -1,4 +1,4 @@
-import QRCode from "qrcode";
+import qrcodeLib from "qrcode";
 
 import {
   usePdfcnTheme,
@@ -23,7 +23,8 @@ export type QRCodeErrorLevel = "L" | "M" | "Q" | "H";
  * @see {@link PdfQRCodeProps}
  */
 export interface PdfQRCodeProps extends Omit<PDFComponentProps, "children"> {
-  value: string;
+  value?: string;
+  data?: string;
   size?: number;
   color?: string;
   backgroundColor?: string;
@@ -32,6 +33,8 @@ export interface PdfQRCodeProps extends Omit<PDFComponentProps, "children"> {
   caption?: string;
   children?: never;
 }
+
+export type QRCodeProps = PdfQRCodeProps;
 
 const createQRCodeStyles = (t: PdfcnTheme) => {
   const { spacing } = t.primitives;
@@ -52,31 +55,38 @@ const generateQRMatrix = (
   errorLevel: QRCodeErrorLevel,
   margin: number
 ): boolean[][] => {
-  const qr = QRCode.create(value, { errorCorrectionLevel: errorLevel });
-  const { size, data } = qr.modules;
-  const totalSize = size + margin * 2;
-  const matrix: boolean[][] = [];
-  for (let row = 0; row < totalSize; row += 1) {
-    const rowData: boolean[] = [];
-    for (let col = 0; col < totalSize; col += 1) {
-      const isInMargin =
-        row < margin ||
-        row >= size + margin ||
-        col < margin ||
-        col >= size + margin;
-      if (isInMargin) {
-        rowData.push(false);
-      } else {
-        rowData.push(data[(row - margin) * size + (col - margin)] === 1);
+  if (!value) return [];
+  try {
+    const qr = qrcodeLib.create(value, { errorCorrectionLevel: errorLevel });
+
+    const { size, data } = qr.modules;
+    const totalSize = size + margin * 2;
+    const matrix: boolean[][] = [];
+    for (let row = 0; row < totalSize; row += 1) {
+      const rowData: boolean[] = [];
+      for (let col = 0; col < totalSize; col += 1) {
+        const isInMargin =
+          row < margin ||
+          row >= size + margin ||
+          col < margin ||
+          col >= size + margin;
+        if (isInMargin) {
+          rowData.push(false);
+        } else {
+          rowData.push(data[(row - margin) * size + (col - margin)] === 1);
+        }
       }
+      matrix.push(rowData);
     }
-    matrix.push(rowData);
+    return matrix;
+  } catch {
+    return [];
   }
-  return matrix;
 };
 
 export const PdfQRCode = ({
   value,
+  data,
   size = 100,
   color = "#000000",
   backgroundColor = "#ffffff",
@@ -85,13 +95,14 @@ export const PdfQRCode = ({
   caption,
   style,
 }: PdfQRCodeProps) => {
+  const resolvedValue = value ?? data ?? "";
   const theme = usePdfcnTheme();
   const styles = useSafeMemo(() => createQRCodeStyles(theme), [theme]);
   const matrix = useSafeMemo(
-    () => generateQRMatrix(value, errorLevel, margin),
-    [value, errorLevel, margin]
+    () => generateQRMatrix(resolvedValue, errorLevel, margin),
+    [resolvedValue, errorLevel, margin]
   );
-  const moduleSize = size / matrix.length;
+  const moduleSize = matrix.length > 0 ? size / matrix.length : 0;
   const resolvedColor = resolveColor(color, theme.colors);
   const resolvedBgColor =
     backgroundColor === "transparent"
@@ -100,6 +111,10 @@ export const PdfQRCode = ({
   const containerStyles: Style[] = [styles.container];
   if (style) {
     containerStyles.push(...[style].flat());
+  }
+
+  if (!resolvedValue || matrix.length === 0) {
+    return <View style={containerStyles} />;
   }
 
   return (
@@ -129,3 +144,6 @@ export const PdfQRCode = ({
     </View>
   );
 };
+
+export const QRCode = PdfQRCode;
+export default PdfQRCode;

@@ -30,6 +30,8 @@ export function requireCompanyMutationAccess(
   }
 }
 
+export const requireCompanyMutationRole = requireCompanyMutationAccess;
+
 /**
  * Temporary implementation-verification mapping for Seguimiento event mutations.
  * Replace only this mapping when an approved responsible-ingresos capability exists.

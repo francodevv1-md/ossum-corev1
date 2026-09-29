@@ -45,6 +45,7 @@ import {
   PanelLeftOpen,
   PieChart,
   Receipt,
+  Scale,
   Scissors,
   Search,
   Settings,
@@ -98,8 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Facturación", href: "/ventas/facturacion", icon: Receipt },
       { label: "Pendientes Facturar", href: "/ventas/pendientes-facturar", icon: Clock3 },
-      { label: "Notas Crédito", href: "/ventas/notas-credito", icon: FileMinus },
-      { label: "Notas Débito", href: "/ventas/notas-debito", icon: FilePlus },
+      { label: "Documentos de ajuste", href: "/ventas/documentos-ajuste", icon: Scale },
       { label: "Cobros", href: "/ventas/cobros", icon: CreditCard },
       { label: "Recibos", href: "/ventas/recibos", icon: FileCheck },
       { label: "Comprobantes", href: "/ventas/comprobantes", icon: Link2 },

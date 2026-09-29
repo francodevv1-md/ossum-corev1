@@ -6,7 +6,7 @@ import { Table, TableHeader, TableBody, TableRow, TableCell } from "@/components
 import { Section } from "@/components/pdf/section/section"
 import { KeyValue } from "@/components/pdf/key-value/key-value"
 import { PageFooter } from "@/components/pdf/page-footer/page-footer"
-import { QRCode } from "@/components/pdf/qrcode/qrcode"
+import { PdfQRCode } from "@/components/pdf/qrcode/qrcode"
 import { formatDate } from "@/lib/formatters"
 import type { RemitoDocumentData } from "./types"
 
@@ -239,7 +239,7 @@ export function RemitoPDF({ data }: { data: RemitoDocumentData }) {
           {/* Sección de Conformidad y Recepción en Quirófano */}
           <View style={styles.receptionSection}>
             <View style={{ width: "20%", alignItems: "center", justifyContent: "center" }}>
-              <QRCode data={qrValidationUrl} size={54} />
+              <PdfQRCode value={qrValidationUrl} size={54} />
               <Text style={{ fontSize: 6.5, color: "#64748b", marginTop: 2, textAlign: "center" }}>
                 Validar entrega online
               </Text>
