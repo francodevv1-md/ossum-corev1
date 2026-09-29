@@ -1,0 +1,25 @@
+# Ownership Lock — ADJUSTMENT-DOCUMENTS-IMPLEMENTATION-001
+
+- **Task:** `ADJUSTMENT-DOCUMENTS-IMPLEMENTATION-001`
+- **Agent Role:** Backend / DB / Fiscal DEV / Frontend integration
+- **Selected Model:** `openai/gpt-5.6-sol`
+- **Status:** `editing`
+- **Owned Files & Folders:**
+  - `prisma/schema.prisma` (modelos AdjustmentDocument, AdjustmentDocumentItem y relaciones)
+  - `prisma/migrations/20260929150000_adjustment_documents_multi_origin/**`
+  - `src/lib/services/adjustment-document.service.ts`
+  - `src/lib/validators/adjustment-document.ts`
+  - `src/lib/api/adjustment-documents.ts`
+  - `src/app/api/companies/[companyId]/adjustment-documents/**`
+  - `src/lib/services/fiscal-tusfacturas.service.ts`
+  - `src/lib/validators/fiscal-tusfacturas.ts`
+  - `src/hooks/useDocumentosAjuste.ts`
+  - `src/components/documentos-ajuste/**`
+  - `src/components/pdf/documents/DocumentoAjustePDF.tsx`
+  - `src/__tests__/components/DocumentosAjuste.test.tsx`
+  - `src/__tests__/components/DocumentoAjustePDF.test.tsx`
+  - `src/__tests__/unit/adjustment-document.service.test.ts`
+- **Non-interference Guarantee:**
+  - No toca `prisma/schema.prisma` en áreas de Órdenes de Compra.
+  - No toca ningún archivo de `OC-BACKEND-AUTHORITY-DEV-001` (`useOrdenesCompra.ts`, `orden-compra.service.ts`, `app/compras/ordenes-compra/**`).
+  - No toca `src/app/cirugias/**` ni `useInvoices` core.
