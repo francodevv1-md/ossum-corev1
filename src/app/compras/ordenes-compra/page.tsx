@@ -1,7 +1,13 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
+import React, { useEffect, useMemo, useState } from "react"
+import { useOrdenesCompra } from "@/hooks/useOrdenesCompra"
+import { useProveedores } from "@/hooks/useProveedores"
+import { CreateOrdenCompraDialog } from "@/components/compras/CreateOrdenCompraDialog"
+import { ReceiveOrdenCompraDialog } from "@/components/compras/ReceiveOrdenCompraDialog"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { searchArticlesApi } from "@/lib/api/articles"
+import type { OrdenCompraApiRow } from "@/lib/api/ordenes-compra"
 import { formatCurrency, formatDate } from "@/lib/formatters"
 import {
   StatsCard, StateBadge, SearchInput, FilterSelect,
@@ -10,9 +16,6 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -21,13 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,22 +36,23 @@ import { toast } from "sonner"
 import {
   FileText, Clock, Truck, Package, DollarSign,
   Plus, Eye, MoreHorizontal, ChevronDown, ChevronRight,
-  CheckCircle2, ArrowRightLeft,
+  CheckCircle2,
 } from "lucide-react"
-import type { OrdenCompraState } from "@/types"
 
 const STATE_OPTIONS = [
   { value: "", label: "Todos los estados" },
   { value: "Borrador", label: "Borrador" },
   { value: "Emitida", label: "Emitida" },
   { value: "Enviada", label: "Enviada" },
-  { value: "Parcialmente recibida", label: "Parcialmente recibida" },
+  { value: "Parcialmente_recibida", label: "Parcialmente recibida" },
   { value: "Recibida", label: "Recibida" },
   { value: "Cancelada", label: "Cancelada" },
 ]
 
 export default function OrdenesCompraPage() {
-  const store = useOrtoTrackStore()
+  const { activeCompany } = useAuth()
+  const { ordenes: backendOrdenes, error: backendError, create, enviar, recibir } = useOrdenesCompra()
+  const { proveedores: backendProveedores } = useProveedores()
 
   const [search, setSearch] = useState("")
   const [stateFilter, setStateFilter] = useState("")
@@ -65,18 +62,29 @@ export default function OrdenesCompraPage() {
   // Dialogs
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
-  const [movimientosDialogOpen, setMovimientosDialogOpen] = useState(false)
-
-  // Create form
-  const [formProveedorId, setFormProveedorId] = useState("")
-  const [formObservaciones, setFormObservaciones] = useState("")
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
+  const [catalog, setCatalog] = useState<Array<{ id: string; code: string; name: string }>>([])
 
   // Detail
-  const [detailOC, setDetailOC] = useState<typeof store.ordenesCompra[0] | null>(null)
-  const [movimientosOC, setMovimientosOC] = useState<typeof store.movimientosCompra>([])
+  const [detailOC, setDetailOC] = useState<OrdenCompraApiRow | null>(null)
+  const [receiveOC, setReceiveOC] = useState<OrdenCompraApiRow | null>(null)
 
-  const ordenes = store.ordenesCompra
-  const proveedores = store.proveedores.filter((p) => p.active)
+  const ordenes = backendOrdenes
+  const proveedores = backendProveedores
+
+  useEffect(() => {
+    let cancelled = false
+    if (!activeCompany?.id) {
+      setCatalog([])
+      return
+    }
+    void searchArticlesApi(activeCompany.id, "", 100).then(rows => {
+      if (!cancelled) setCatalog(rows.map(row => ({ id: row.id, code: row.sku, name: row.description })))
+    }).catch(() => {
+      if (!cancelled) setCatalog([])
+    })
+    return () => { cancelled = true }
+  }, [activeCompany?.id])
 
   const provFilterOptions = useMemo(() => [
     { value: "", label: "Todos los proveedores" },
@@ -104,7 +112,7 @@ export default function OrdenesCompraPage() {
     const emitidas = ordenes.filter((oc) => oc.state === "Emitida").length
     const enTransito = ordenes.filter((oc) => oc.state === "Enviada").length
     const recibidas = ordenes.filter((oc) => oc.state === "Recibida").length
-    const monto = ordenes.reduce((sum, oc) => sum + oc.total, 0)
+    const monto = ordenes.reduce((sum, oc) => sum + Number(oc.total), 0)
     return { total, emitidas, enTransito, recibidas, monto }
   }, [ordenes])
 
@@ -117,50 +125,12 @@ export default function OrdenesCompraPage() {
     })
   }
 
-  const handleCreate = () => {
-    if (!formProveedorId) {
-      toast.error("Seleccione un proveedor")
-      return
-    }
-    const prov = proveedores.find((p) => p.id === formProveedorId)
-    if (!prov) return
-    const oc = store.createOrdenCompra({
-      proveedorId: formProveedorId,
-      proveedorName: prov.name,
-      items: [],
-      total: 0,
-      state: "Borrador",
-      observaciones: formObservaciones || undefined,
-      necesidadCompraIds: [],
-    })
-    toast.success(`Orden de compra ${oc.id} creada`)
-    setCreateDialogOpen(false)
-    setFormProveedorId("")
-    setFormObservaciones("")
-  }
 
-  const handleMarcarEnviada = (id: string) => {
-    store.updateOrdenCompra(id, { state: "Enviada" as OrdenCompraState, enviadaAt: new Date().toISOString().split("T")[0] })
-    toast.success("OC marcada como enviada")
-  }
+  const handleMarcarEnviada = async (id: string) => { try { await enviar(id); toast.success("OC marcada como enviada") } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo enviar la OC") } }
 
-  const handleRegistrarRecepcion = (id: string) => {
-    const oc = ordenes.find((o) => o.id === id)
-    if (!oc) return
-    const allReceived = oc.items.every((i) => i.received >= i.quantity)
-    const someReceived = oc.items.some((i) => i.received > 0)
-    const newState: OrdenCompraState = allReceived ? "Recibida" : someReceived ? "Parcialmente recibida" : "Parcialmente recibida"
-    store.updateOrdenCompra(id, {
-      state: newState,
-      recibidaAt: allReceived ? new Date().toISOString().split("T")[0] : undefined,
-    })
-    toast.success(`Recepción registrada — OC ${allReceived ? "completa" : "parcial"}`)
-  }
-
-  const handleVerMovimientos = (ocId: string) => {
-    const movs = store.movimientosCompra.filter((m) => m.ordenCompraId === ocId)
-    setMovimientosOC(movs)
-    setMovimientosDialogOpen(true)
+  const handleRegistrarRecepcion = (ordenCompra: OrdenCompraApiRow) => {
+    setReceiveOC(ordenCompra)
+    setReceiveDialogOpen(true)
   }
 
   return (
@@ -176,6 +146,7 @@ export default function OrdenesCompraPage() {
         </Button>
       </div>
 
+      {backendError && <p className="text-sm text-destructive">{backendError}</p>}
       {/* Stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatsCard title="Total OC" value={stats.total} icon={FileText} />
@@ -235,8 +206,8 @@ export default function OrdenesCompraPage() {
                         <td className="px-3 py-2.5 font-medium text-primary">{oc.id}</td>
                         <td className="px-3 py-2.5">{oc.proveedorName}</td>
                         <td className="px-3 py-2.5 text-right">{oc.items.length}</td>
-                        <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(oc.total)}</td>
-                        <td className="px-3 py-2.5"><StateBadge status={oc.state} /></td>
+                        <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(Number(oc.total))}</td>
+                        <td className="px-3 py-2.5"><StateBadge status={oc.stateLabel} /></td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{formatDate(oc.createdAt)}</td>
                         <td className="px-3 py-2.5">
                           <div className="flex items-center justify-end gap-1">
@@ -257,14 +228,11 @@ export default function OrdenesCompraPage() {
                                     <Truck className="size-4" /> Marcar enviada
                                   </DropdownMenuItem>
                                 )}
-                                {(oc.state === "Enviada" || oc.state === "Parcialmente recibida") && (
-                                  <DropdownMenuItem onClick={() => handleRegistrarRecepcion(oc.id)}>
+                                {(oc.state === "Enviada" || oc.state === "Parcialmente_recibida") && (
+                                  <DropdownMenuItem onClick={() => handleRegistrarRecepcion(oc)}>
                                     <Package className="size-4" /> Registrar recepción
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem onClick={() => handleVerMovimientos(oc.id)}>
-                                  <ArrowRightLeft className="size-4" /> Ver movimientos
-                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -295,10 +263,10 @@ export default function OrdenesCompraPage() {
                                       </td>
                                       <td className="py-1.5 font-mono">{item.code}</td>
                                       <td className="py-1.5 text-right">{item.quantity}</td>
-                                      <td className="py-1.5 text-right">{formatCurrency(item.unitPrice)}</td>
-                                      <td className="py-1.5 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                                      <td className="py-1.5 text-right">{formatCurrency(Number(item.unitPrice))}</td>
+                                      <td className="py-1.5 text-right font-medium">{formatCurrency(Number(item.subtotal))}</td>
                                       <td className="py-1.5 text-right">
-                                        <span className={item.received >= item.quantity ? "text-emerald-600" : item.received > 0 ? "text-amber-600" : "text-muted-foreground"}>
+                                        <span className={Number(item.received) >= Number(item.quantity) ? "text-emerald-600" : Number(item.received) > 0 ? "text-amber-600" : "text-muted-foreground"}>
                                           {item.received}/{item.quantity}
                                         </span>
                                       </td>
@@ -326,39 +294,6 @@ export default function OrdenesCompraPage() {
         </CardContent>
       </Card>
 
-      {/* ── Create OC Dialog ── */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nueva Orden de Compra</DialogTitle>
-            <DialogDescription>Crear una orden de compra vacía en estado borrador</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label>Proveedor *</Label>
-              <Select value={formProveedorId} onValueChange={setFormProveedorId}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar proveedor" /></SelectTrigger>
-                <SelectContent>
-                  {proveedores.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Observaciones</Label>
-              <Textarea value={formObservaciones} onChange={(e) => setFormObservaciones(e.target.value)} placeholder="Notas adicionales..." rows={2} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={!formProveedorId} className="bg-emerald-600 hover:bg-emerald-700">
-              Crear OC
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* ── Detail Dialog ── */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="sm:max-w-xl">
@@ -370,11 +305,11 @@ export default function OrdenesCompraPage() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">Proveedor:</span><p className="font-medium">{detailOC.proveedorName}</p></div>
-                <div><span className="text-muted-foreground">Estado:</span><p><StateBadge status={detailOC.state} /></p></div>
+                <div><span className="text-muted-foreground">Estado:</span><p><StateBadge status={detailOC.stateLabel} /></p></div>
                 <div><span className="text-muted-foreground">Fecha creación:</span><p>{formatDate(detailOC.createdAt)}</p></div>
                 <div><span className="text-muted-foreground">Fecha envío:</span><p>{detailOC.enviadaAt ? formatDate(detailOC.enviadaAt) : "—"}</p></div>
                 <div><span className="text-muted-foreground">Fecha recepción:</span><p>{detailOC.recibidaAt ? formatDate(detailOC.recibidaAt) : "—"}</p></div>
-                <div><span className="text-muted-foreground">Total:</span><p className="font-bold text-lg">{formatCurrency(detailOC.total)}</p></div>
+                <div><span className="text-muted-foreground">Total:</span><p className="font-bold text-lg">{formatCurrency(Number(detailOC.total))}</p></div>
               </div>
               {detailOC.observaciones && (
                 <div className="border rounded-lg p-3 text-sm">
@@ -405,8 +340,8 @@ export default function OrdenesCompraPage() {
                             </div>
                           </td>
                           <td className="px-3 py-2 text-right">{item.quantity}</td>
-                          <td className="px-3 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(Number(item.unitPrice))}</td>
+                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(Number(item.subtotal))}</td>
                           <td className="px-3 py-2 text-right">{item.received}/{item.quantity}</td>
                         </tr>
                       ))}
@@ -427,50 +362,8 @@ export default function OrdenesCompraPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Movimientos Dialog ── */}
-      <Dialog open={movimientosDialogOpen} onOpenChange={setMovimientosDialogOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Movimientos de la OC</DialogTitle>
-            <DialogDescription>Recepciones y verificaciones asociadas</DialogDescription>
-          </DialogHeader>
-          <div className="py-4 max-h-[60vh] overflow-y-auto">
-            {movimientosOC.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Sin movimientos registrados</p>
-            ) : (
-              <div className="space-y-3">
-                {movimientosOC.map((mov) => (
-                  <div key={mov.id} className="border rounded-lg p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{mov.id}</span>
-                        <StateBadge status={mov.state} />
-                      </div>
-                      <span className="text-xs text-muted-foreground">{formatDate(mov.date)}</span>
-                    </div>
-                    {mov.remitoEntrada && (
-                      <div className="text-xs text-muted-foreground">Remito: {mov.remitoEntrada}</div>
-                    )}
-                    <div className="text-xs space-y-1">
-                      {mov.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between">
-                          <span>{item.name}</span>
-                          <span>x{item.quantity} — {formatCurrency(item.unitPrice * item.quantity)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="text-right font-medium text-sm">{formatCurrency(mov.total)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMovimientosDialogOpen(false)}>Cerrar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      <CreateOrdenCompraDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} proveedores={proveedores} catalog={catalog} onSubmit={async payload => { await create(payload); toast.success("Orden de compra creada") }} />
+      <ReceiveOrdenCompraDialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen} ordenCompra={receiveOC} onSubmit={async payload => { if (!receiveOC) return; await recibir(receiveOC.id, payload); toast.success("Recepción registrada") }} />
       <SurgeryDrawer />
     </div>
   )

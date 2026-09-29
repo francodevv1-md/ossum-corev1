@@ -98,6 +98,8 @@ model Company {
   surgeryDocumentChecklists        SurgeryDocumentChecklist[]               @relation("CompanyDocumentChecklists")
   surgeryDocumentItems             SurgeryDocumentItem[]                    @relation("CompanyDocumentItems")
   vehicles                         Vehicle[]
+  ordenesCompra                    OrdenCompra[]                            @relation("CompanyOrdenesCompra")
+  facturasCompra                   FacturaCompra[]                          @relation("CompanyFacturasCompra")
 }
 
 model Vehicle {
@@ -308,6 +310,7 @@ model ContactCompanyLink {
   company                        Company                  @relation(fields: [companyId], references: [id])
   articleIdentifierSupplierLinks ArticleIdentifier[]      @relation("ArticleIdentifierSupplierLink")
   articleSupplierMappingLinks    ArticleSupplierMapping[] @relation("ArticleSupplierMappingSupplierLink")
+  facturasCompra                 FacturaCompra[]          @relation("ContactCompanyFacturaCompra")
 
   @@unique([contactId, companyId])
   @@unique([companyId, code], map: "uq_contact_company_code")
@@ -2807,4 +2810,106 @@ model StockArticleEligibility {
   @@unique([companyId, articleId], map: "uq_stock_article_eligibility")
   @@index([companyId, version], map: "ix_stock_article_eligibility_company_version")
   @@map("stock_article_eligibility")
+}
+
+enum OrdenCompraState {
+  Borrador
+  Emitida
+  Enviada
+  Parcialmente_recibida
+  Recibida
+  Cancelada
+}
+
+model OrdenCompra {
+  id                 String           @id @default(cuid())
+  companyId          String
+  proveedorId        String
+  proveedorName      String
+  total              Decimal          @default(0) @db.Decimal(14, 4)
+  state              OrdenCompraState @default(Borrador)
+  createdAt          DateTime         @default(now())
+  emitidaAt          DateTime?
+  enviadaAt          DateTime?
+  recibidaAt         DateTime?
+  canceladaAt        DateTime?
+  observaciones      String?
+  necesidadCompraIds String[]         @default([])
+
+  company        Company           @relation("CompanyOrdenesCompra", fields: [companyId], references: [id], onDelete: Restrict)
+  items          OrdenCompraItem[]
+  facturasCompra FacturaCompra[]   @relation("OrdenCompraFacturasCompra")
+
+  @@unique([companyId, id], map: "uq_orden_compra_company_id")
+  @@index([companyId, state], map: "ix_orden_compra_company_state")
+  @@index([companyId, createdAt(sort: Desc)], map: "ix_orden_compra_company_created")
+  @@index([companyId, proveedorId], map: "ix_orden_compra_company_proveedor")
+}
+
+model OrdenCompraItem {
+  id               String  @id @default(cuid())
+  ordenCompraId    String
+  stockItemId      String
+  name             String
+  code             String
+  quantity         Decimal @db.Decimal(14, 4)
+  unitPrice        Decimal @db.Decimal(14, 4)
+  subtotal         Decimal @db.Decimal(14, 4)
+  received         Decimal @default(0) @db.Decimal(14, 4)
+  isArticuloZ      Boolean @default(false)
+  descripcionLibre String?
+
+  ordenCompra OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+
+  @@index([ordenCompraId], map: "ix_orden_compra_item_oc")
+}
+
+enum FacturaCompraState {
+  Pendiente
+  Pagada
+  Anulada
+}
+
+model FacturaCompra {
+  id            String             @id @default(cuid())
+  companyId     String
+  proveedorId   String
+  proveedorName String
+  number        String
+  date          DateTime
+  total         Decimal            @default(0) @db.Decimal(14, 4)
+  state         FacturaCompraState @default(Pendiente)
+  ordenCompraId String?
+  createdAt     DateTime           @default(now())
+  pagadaAt      DateTime?
+  anuladaAt     DateTime?
+  observaciones String?
+
+  company       Company             @relation("CompanyFacturasCompra", fields: [companyId], references: [id], onDelete: Restrict)
+  proveedorLink ContactCompanyLink  @relation("ContactCompanyFacturaCompra", fields: [proveedorId, companyId], references: [contactId, companyId], onDelete: Restrict)
+  ordenCompra   OrdenCompra?        @relation("OrdenCompraFacturasCompra", fields: [companyId, ordenCompraId], references: [companyId, id], onDelete: Restrict)
+  items         FacturaCompraItem[]
+
+  @@unique([companyId, id], map: "uq_factura_compra_company_id")
+  @@unique([companyId, proveedorId, number], map: "uq_factura_compra_supplier_number")
+  @@index([companyId, state], map: "ix_factura_compra_company_state")
+  @@index([companyId, date(sort: Desc)], map: "ix_factura_compra_company_date")
+  @@index([companyId, proveedorId], map: "ix_factura_compra_company_proveedor")
+  @@index([companyId, ordenCompraId], map: "ix_factura_compra_company_orden_compra")
+}
+
+model FacturaCompraItem {
+  id               String  @id @default(cuid())
+  facturaCompraId  String
+  stockItemId      String
+  name             String
+  code             String
+  quantity         Decimal @db.Decimal(14, 4)
+  unitPrice        Decimal @db.Decimal(14, 4)
+  subtotal         Decimal @db.Decimal(14, 4)
+  descripcionLibre String?
+
+  facturaCompra FacturaCompra @relation(fields: [facturaCompraId], references: [id], onDelete: Cascade)
+
+  @@index([facturaCompraId], map: "ix_factura_compra_item_fc")
 }

@@ -9,6 +9,8 @@ import * as React from "react"
 import { toast } from "sonner"
 
 import { useAuth } from "@/components/auth/AuthProvider"
+import { useProveedores } from "@/hooks/useProveedores"
+import { createFacturaCompra } from "@/lib/api/facturas-compra"
 import { apiFetch, ApiClientError } from "@/lib/api/client"
 import { useOrtoTrackStore } from "@/lib/store"
 import { matchOcrItemToStock, type ItemMatchResult } from "@/lib/compras-matching"
@@ -51,14 +53,15 @@ function confidenceLevel(c: number): "low" | "medium" | "high" {
 
 export interface UseComprasOcrFormOptions {
   tipo: ComprasOcrTipo
-  onSuccess?: () => void
+  onSuccess?: () => void | Promise<void>
 }
 
 export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions) {
   const { activeCompany } = useAuth()
   const store = useOrtoTrackStore()
-  const proveedores = store.proveedores.filter((p) => p.active)
-  const stockItems = store.stock
+  const proveedoresQuery = useProveedores()
+  const proveedores = tipo === "factura-compra" ? proveedoresQuery.proveedores : store.proveedores.filter((p) => p.active)
+  const stockItems = tipo === "remito-proveedor" ? store.stock : []
 
   const [phase, setPhase] = React.useState<Phase>("upload")
   const [isProcessing, setIsProcessing] = React.useState(false)
@@ -321,7 +324,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
     setProveedorName(prov.name)
   }, [])
 
-  const handleConfirm = React.useCallback(() => {
+  const handleConfirm = React.useCallback(async () => {
     // Allow saving in both IA mode (result exists) and manual mode (no result)
     const proveedor = proveedores.find((p) => p.id === proveedorId)
     const resolvedProveedorName = proveedor?.name || proveedorName.trim()
@@ -418,7 +421,28 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
         stockItemId: linkedStockIds[idx] || undefined,
       }))
 
-      store.createFacturaCompra(payload)
+      if (!activeCompany?.id || !proveedorId) {
+        toast.error("Elegí un proveedor vinculado antes de guardar.")
+        return
+      }
+      if (items.some((_, index) => !linkedStockIds[index])) {
+        toast.error("Vinculá cada item al catálogo antes de guardar la factura de compra.")
+        return
+      }
+      await createFacturaCompra(activeCompany.id, {
+        proveedorId,
+        proveedorName: resolvedProveedorName,
+        number: payload.number,
+        date: payload.date,
+        ordenCompraId: payload.ordenCompraId,
+        items: payload.items.map((item, index) => ({
+          stockItemId: linkedStockIds[index]!,
+          name: item.name,
+          code: item.code,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+      })
       toast.success(
         `Factura de compra guardada.${warnings.length > 0 ? " Revisá las advertencias." : ""}`
       )
@@ -426,7 +450,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
         warnings.forEach((w) => toast.warning(w))
       }
       resetState()
-      onSuccess?.()
+      await onSuccess?.()
     }
   }, [
     proveedores,
@@ -444,7 +468,7 @@ export function useComprasOcrForm({ tipo, onSuccess }: UseComprasOcrFormOptions)
     store,
     linkedStockIds,
     resetState,
-    onSuccess,
+    onSuccess, activeCompany,
   ])
 
   const looksLike = result

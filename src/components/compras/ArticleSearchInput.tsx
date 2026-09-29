@@ -6,8 +6,8 @@ import { PackageSearch, X, Link2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useOrtoTrackStore } from "@/lib/store"
+import { getArticleApi, searchArticlesApi, type ArticleApiRow } from "@/lib/api/articles"
 import { normalizarDescripcion, similitudDescripcion } from "@/lib/comparativa.utils"
-import type { StockItem } from "@/types"
 
 const MAX_RESULTS = 8
 
@@ -15,11 +15,13 @@ export type ArticleSearchInputProps = {
   /** StockItemId seleccionado, si hay. */
   value?: string
   /** Callback cuando se selecciona un artículo. */
-  onSelect: (item: StockItem) => void
+  onSelect: (item: { id: string }) => void
   /** Callback cuando se desvincula. */
   onClear?: () => void
   /** Nombre del proveedor para narrowing (opcional). */
   proveedorName?: string
+  /** Empresa para consultar el catálogo backend en lugar del stock local. */
+  companyId?: string
   /** Placeholder. */
   placeholder?: string
   /** Texto inicial de búsqueda (ej: descripción del OCR). */
@@ -35,12 +37,13 @@ export function ArticleSearchInput({
   onSelect,
   onClear,
   proveedorName,
+  companyId,
   placeholder = "Buscar artículo por código o nombre…",
   initialQuery = "",
   compact = false,
   disabled = false,
 }: ArticleSearchInputProps) {
-  const stockItems = useOrtoTrackStore((s) => s.stock)
+  const stockItems = useOrtoTrackStore((s) => (companyId ? [] : s.stock))
 
   // ponytail: query reset handled by key={selectedId} on the input — avoids setState-in-effect.
   const [query, setQuery] = React.useState(initialQuery)
@@ -48,7 +51,67 @@ export function ArticleSearchInput({
   const [highlight, setHighlight] = React.useState(0)
   const containerRef = React.useRef<HTMLDivElement | null>(null)
 
-  const selected = selectedId ? stockItems.find((s) => s.id === selectedId) : null
+  const [apiSelected, setApiSelected] = React.useState<ArticleApiRow | null>(null)
+  const [apiResults, setApiResults] = React.useState<ArticleApiRow[]>([])
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [searchError, setSearchError] = React.useState<string | null>(null)
+  const localSelected = selectedId ? stockItems.find((s) => s.id === selectedId) : null
+
+  React.useEffect(() => {
+    if (!companyId || !selectedId) {
+      setApiSelected(null)
+      return
+    }
+
+    let cancelled = false
+    void getArticleApi(companyId, selectedId)
+      .then((article) => {
+        if (!cancelled) setApiSelected(article)
+      })
+      .catch(() => {
+        if (!cancelled) setApiSelected(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [companyId, selectedId])
+
+  React.useEffect(() => {
+    if (!companyId || !query.trim() || selectedId) {
+      setApiResults([])
+      setIsLoading(false)
+      setSearchError(null)
+      return
+    }
+
+    let cancelled = false
+    setIsLoading(true)
+    setSearchError(null)
+    void searchArticlesApi(companyId, query, MAX_RESULTS)
+      .then((articles) => {
+        if (!cancelled) setApiResults(articles)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setApiResults([])
+          setSearchError("No se pudo buscar en el catálogo.")
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [companyId, query, selectedId])
+
+  const selected = companyId
+    ? apiSelected
+      ? { id: apiSelected.id, code: apiSelected.sku, name: apiSelected.description, detail: apiSelected.brand }
+      : null
+    : localSelected
+      ? { id: localSelected.id, code: localSelected.code, name: localSelected.name, detail: `${localSelected.category} · ${localSelected.brand}` }
+      : null
 
   // Cerrar al click fuera
   React.useEffect(() => {
@@ -63,8 +126,8 @@ export function ArticleSearchInput({
   }, [open])
 
   // Filtrar y rankear resultados
-  const results = React.useMemo(() => {
-    if (!query.trim() || selected) return []
+  const localResults = React.useMemo(() => {
+    if (companyId || !query.trim() || selected) return []
     const q = normalizarDescripcion(query)
     if (!q) return []
 
@@ -88,7 +151,21 @@ export function ArticleSearchInput({
       .slice(0, MAX_RESULTS)
 
     return scored.map((x) => x.item)
-  }, [query, selected, stockItems, proveedorName])
+  }, [companyId, query, selected, stockItems, proveedorName])
+
+  const results = companyId
+    ? apiResults.map((article) => ({
+        id: article.id,
+        code: article.sku,
+        name: article.description,
+        detail: article.brand ?? article.family ?? "",
+      }))
+    : localResults.map((item) => ({
+        id: item.id,
+        code: item.code,
+        name: item.name,
+        detail: `${item.category} · ${item.brand}`,
+      }))
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open || results.length === 0) return
@@ -182,13 +259,15 @@ export function ArticleSearchInput({
               <div className="flex flex-col">
                 <span className="font-medium">{item.name}</span>
                 <span className="text-[10px] text-muted-foreground">
-                  {item.code} · {item.category} · {item.brand}
+                  {item.code}{item.detail ? ` · ${item.detail}` : ""}
                 </span>
               </div>
             </button>
           ))}
         </div>
       )}
+      {open && isLoading && <p className="mt-1 text-[10px] text-muted-foreground">Buscando…</p>}
+      {open && searchError && <p className="mt-1 text-[10px] text-destructive">{searchError}</p>}
     </div>
   )
 }

@@ -1,7 +1,9 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
+import { useFacturasCompra } from "@/hooks/useFacturasCompra"
+import { useProveedores } from "@/hooks/useProveedores"
+import type { FacturaCompraApiRow } from "@/lib/api/facturas-compra"
 import { formatCurrency, formatDate } from "@/lib/formatters"
 import {
   StatsCard, StateBadge, SearchInput, FilterSelect,
@@ -29,7 +31,7 @@ import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import {
   Receipt, Clock, CheckCircle2, DollarSign,
-  Eye, MoreHorizontal, FileText, CreditCard,
+  Eye, MoreHorizontal, CreditCard,
   ChevronDown, ChevronRight, Sparkles,
 } from "lucide-react"
 
@@ -41,7 +43,8 @@ const STATE_OPTIONS = [
 ]
 
 export default function FacturasCompraPage() {
-  const store = useOrtoTrackStore()
+  const { facturas: backendFacturas, pagar, error: backendError } = useFacturasCompra()
+  const { proveedores: backendProveedores } = useProveedores()
   const router = useRouter()
 
   const [search, setSearch] = useState("")
@@ -51,14 +54,12 @@ export default function FacturasCompraPage() {
 
   // Dialogs
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
-  const [detailFC, setDetailFC] = useState<typeof store.facturasCompra[0] | null>(null)
-  const [ocDialogOpen, setOcDialogOpen] = useState(false)
-  const [ocDetail, setOcDetail] = useState<typeof store.ordenesCompra[0] | null>(null)
+  const [detailFC, setDetailFC] = useState<FacturaCompraApiRow | null>(null)
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [payFCId, setPayFCId] = useState("")
 
-  const facturas = store.facturasCompra
-  const proveedores = store.proveedores.filter((p) => p.active)
+  const facturas = backendFacturas
+  const proveedores = backendProveedores
 
   const provFilterOptions = useMemo(() => [
     { value: "", label: "Todos los proveedores" },
@@ -85,7 +86,7 @@ export default function FacturasCompraPage() {
     const total = facturas.length
     const pendientes = facturas.filter((fc) => fc.state === "Pendiente").length
     const pagadas = facturas.filter((fc) => fc.state === "Pagada").length
-    const monto = facturas.reduce((sum, fc) => sum + fc.total, 0)
+    const monto = facturas.reduce((sum, fc) => sum + Number(fc.total), 0)
     return { total, pendientes, pagadas, monto }
   }, [facturas])
 
@@ -98,49 +99,12 @@ export default function FacturasCompraPage() {
     })
   }
 
-  const handleVerOC = (ocId: string | undefined) => {
-    if (!ocId) {
-      toast.info("Sin OC vinculada")
-      return
-    }
-    const oc = store.ordenesCompra.find((o) => o.id === ocId)
-    if (oc) {
-      setOcDetail(oc)
-      setOcDialogOpen(true)
-    } else {
-      toast.info("OC no encontrada")
-    }
-  }
-
   const handleRegistrarPago = (fcId: string) => {
     setPayFCId(fcId)
     setPayDialogOpen(true)
   }
 
-  const confirmPago = () => {
-    const updatedFacturas = facturas.map((f) =>
-      f.id === payFCId ? { ...f, state: "Pagada" as const } : f
-    )
-    useOrtoTrackStore.setState({ facturasCompra: updatedFacturas })
-    const fc = updatedFacturas.find((f) => f.id === payFCId)
-    if (!fc) return
-
-    // Also create an orden de pago
-    store.createOrdenPago({
-      proveedorId: fc.proveedorId,
-      proveedorName: fc.proveedorName,
-      facturaCompraId: fc.id,
-      importe: fc.total,
-      vencimiento: new Date().toISOString().split("T")[0],
-      state: "Pagada",
-      medioPago: "Transferencia",
-      fechaPago: new Date().toISOString().split("T")[0],
-    })
-
-    toast.success("Pago registrado y factura marcada como pagada")
-    setPayDialogOpen(false)
-    setPayFCId("")
-  }
+  const confirmPago = async () => { try { await pagar(payFCId); toast.success("Pago registrado y factura marcada como pagada"); setPayDialogOpen(false); setPayFCId("") } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo registrar el pago") } }
 
   return (
     <div className="space-y-4">
@@ -180,6 +144,7 @@ export default function FacturasCompraPage() {
         </CardContent>
       </Card>
 
+      {backendError && <p className="text-sm text-destructive">{backendError}</p>}
       {/* Table */}
       <Card>
         <CardContent className="p-0">
@@ -213,7 +178,7 @@ export default function FacturasCompraPage() {
                         </td>
                         <td className="px-3 py-2.5 font-mono text-xs font-medium">{fc.number}</td>
                         <td className="px-3 py-2.5">{fc.proveedorName}</td>
-                        <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(fc.total)}</td>
+                        <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(Number(fc.total))}</td>
                         <td className="px-3 py-2.5"><StateBadge status={fc.state} /></td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{formatDate(fc.date)}</td>
                         <td className="px-3 py-2.5 font-mono text-xs">{fc.ordenCompraId || "—"}</td>
@@ -230,9 +195,6 @@ export default function FacturasCompraPage() {
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => { setDetailFC(fc); setDetailDialogOpen(true) }}>
                                   <Eye className="size-4" /> Ver detalle
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleVerOC(fc.ordenCompraId)}>
-                                  <FileText className="size-4" /> Ver OC
                                 </DropdownMenuItem>
                                 {fc.state === "Pendiente" && (
                                   <DropdownMenuItem onClick={() => handleRegistrarPago(fc.id)}>
@@ -265,15 +227,15 @@ export default function FacturasCompraPage() {
                                       <td className="py-1.5">{item.name}</td>
                                       <td className="py-1.5 font-mono">{item.code}</td>
                                       <td className="py-1.5 text-right">{item.quantity}</td>
-                                      <td className="py-1.5 text-right">{formatCurrency(item.unitPrice)}</td>
-                                      <td className="py-1.5 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                                      <td className="py-1.5 text-right">{formatCurrency(Number(item.unitPrice))}</td>
+                                      <td className="py-1.5 text-right font-medium">{formatCurrency(Number(item.subtotal))}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                                 <tfoot>
                                   <tr className="font-medium">
                                     <td colSpan={4} className="py-1.5 text-right">Total:</td>
-                                    <td className="py-1.5 text-right">{formatCurrency(fc.total)}</td>
+                                    <td className="py-1.5 text-right">{formatCurrency(Number(fc.total))}</td>
                                   </tr>
                                 </tfoot>
                               </table>
@@ -312,7 +274,7 @@ export default function FacturasCompraPage() {
                 <div><span className="text-muted-foreground">Estado:</span><p><StateBadge status={detailFC.state} /></p></div>
                 <div><span className="text-muted-foreground">Fecha:</span><p>{formatDate(detailFC.date)}</p></div>
                 <div><span className="text-muted-foreground">OC vinculada:</span><p className="font-mono">{detailFC.ordenCompraId || "—"}</p></div>
-                <div><span className="text-muted-foreground">Total:</span><p className="font-bold text-lg">{formatCurrency(detailFC.total)}</p></div>
+                <div><span className="text-muted-foreground">Total:</span><p className="font-bold text-lg">{formatCurrency(Number(detailFC.total))}</p></div>
               </div>
               <div className="space-y-2">
                 <span className="text-xs font-medium text-muted-foreground">Items ({detailFC.items.length})</span>
@@ -331,8 +293,8 @@ export default function FacturasCompraPage() {
                         <tr key={idx} className="border-b last:border-0">
                           <td className="px-3 py-2">{item.name}</td>
                           <td className="px-3 py-2 text-right">{item.quantity}</td>
-                          <td className="px-3 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(Number(item.unitPrice))}</td>
+                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(Number(item.subtotal))}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -343,51 +305,6 @@ export default function FacturasCompraPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── OC Detail Dialog ── */}
-      <Dialog open={ocDialogOpen} onOpenChange={setOcDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Detalle de OC</DialogTitle>
-            <DialogDescription>{ocDetail?.id} — {ocDetail?.proveedorName}</DialogDescription>
-          </DialogHeader>
-          {ocDetail && (
-            <div className="grid gap-3 py-4 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div><span className="text-muted-foreground">Estado:</span><p><StateBadge status={ocDetail.state} /></p></div>
-                <div><span className="text-muted-foreground">Total:</span><p className="font-bold">{formatCurrency(ocDetail.total)}</p></div>
-                <div><span className="text-muted-foreground">Fecha creación:</span><p>{formatDate(ocDetail.createdAt)}</p></div>
-                <div><span className="text-muted-foreground">Items:</span><p>{ocDetail.items.length}</p></div>
-              </div>
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="px-3 py-2 text-left font-medium">Artículo</th>
-                      <th className="px-3 py-2 text-right font-medium">Cant.</th>
-                      <th className="px-3 py-2 text-right font-medium">Precio</th>
-                      <th className="px-3 py-2 text-right font-medium">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ocDetail.items.map((item, idx) => (
-                      <tr key={idx} className="border-b last:border-0">
-                        <td className="px-3 py-2">{item.name}</td>
-                        <td className="px-3 py-2 text-right">{item.quantity}</td>
-                        <td className="px-3 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                        <td className="px-3 py-2 text-right font-medium">{formatCurrency(item.subtotal)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOcDialogOpen(false)}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -406,7 +323,7 @@ export default function FacturasCompraPage() {
                 <div className="border rounded-lg p-3 space-y-1">
                   <div className="flex justify-between"><span className="text-muted-foreground">Factura:</span><span className="font-mono font-medium">{fc.number}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Proveedor:</span><span>{fc.proveedorName}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Monto:</span><span className="font-bold text-lg">{formatCurrency(fc.total)}</span></div>
+                   <div className="flex justify-between"><span className="text-muted-foreground">Monto:</span><span className="font-bold text-lg">{formatCurrency(Number(fc.total))}</span></div>
                 </div>
                 <p className="text-xs text-muted-foreground">Se creará una orden de pago y se marcará la factura como pagada.</p>
               </div>

@@ -31,7 +31,6 @@ import { CreateProveedorModal } from "@/components/compras/CreateProveedorModal"
 import { ArticleSearchInput } from "@/components/compras/ArticleSearchInput"
 import { useComprasOcrForm, type ComprasOcrTipo } from "@/hooks/useComprasOcrForm"
 import { cn } from "@/lib/utils"
-import type { Proveedor } from "@/types"
 
 // ─── OSSUM brand surface (scoped) ────────────────────────────────────────────
 const NAVY = "bg-[var(--ossum-navy)] text-white"
@@ -225,23 +224,25 @@ export function ComprasOcrWorkspace({
                             <SelectValue placeholder="Elegir proveedor…" />
                           </SelectTrigger>
                           <SelectContent>
-                            {form.proveedores.map((p: Proveedor) => (
+                            {form.proveedores.map((p) => (
                               <SelectItem key={p.id} value={p.id}>
                                 {p.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 shrink-0 gap-1 border-[var(--ossum-line)]"
-                          onClick={form.openCreateProveedor}
-                        >
-                          <UserPlus className="size-3.5" />
-                          Crear
-                        </Button>
+                        {isRemito && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 shrink-0 gap-1 border-[var(--ossum-line)]"
+                            onClick={form.openCreateProveedor}
+                          >
+                            <UserPlus className="size-3.5" />
+                            Crear
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -469,6 +470,7 @@ export function ComprasOcrWorkspace({
                                   onSelect={(item) => form.linkItemToStock(idx, item.id)}
                                   onClear={() => form.unlinkItem(idx)}
                                   proveedorName={form.proveedorName}
+                                  companyId={isRemito ? undefined : form.activeCompany?.id}
                                   initialQuery={it.descripcion}
                                 />
                               </td>
@@ -534,20 +536,24 @@ export function ComprasOcrWorkspace({
       </main>
 
       {/* ── MODALS ── */}
-      <CreateArticleModal
-        key={`art-${form.createArticleForIdx ?? "none"}`}
-        open={form.createArticleOpen}
-        onOpenChange={form.setCreateArticleOpen}
-        prefill={form.createArticlePrefill}
-        onCreated={form.handleArticleCreated}
-      />
-      <CreateProveedorModal
-        key={`prov-${form.createProvPrefill?.name ?? "none"}`}
-        open={form.createProvOpen}
-        onOpenChange={form.setCreateProvOpen}
-        prefill={form.createProvPrefill}
-        onCreated={form.handleProveedorCreated}
-      />
+      {isRemito && (
+        <>
+          <CreateArticleModal
+            key={`art-${form.createArticleForIdx ?? "none"}`}
+            open={form.createArticleOpen}
+            onOpenChange={form.setCreateArticleOpen}
+            prefill={form.createArticlePrefill}
+            onCreated={form.handleArticleCreated}
+          />
+          <CreateProveedorModal
+            key={`prov-${form.createProvPrefill?.name ?? "none"}`}
+            open={form.createProvOpen}
+            onOpenChange={form.setCreateProvOpen}
+            prefill={form.createProvPrefill}
+            onCreated={form.handleProveedorCreated}
+          />
+        </>
+      )}
     </div>
   )
 }

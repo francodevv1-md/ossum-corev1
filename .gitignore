@@ -43,3 +43,6 @@ Thumbs.db
 .DS_Store
 
 _local_backups/
+repomix-output.xml
+*.XLS
+*.xls
