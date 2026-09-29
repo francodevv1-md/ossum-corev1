@@ -8,7 +8,6 @@ import {
   SurgeryDrawer,
 } from "@/components/shared"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useExpedienteDrawer } from "@/components/layout/app-shell"
@@ -17,7 +16,7 @@ import {
   BookOpen, FileCheck, FileX, FileClock,
   FolderOpen, FileText, Printer,
 } from "lucide-react"
-import type { DocumentStatus, DocumentChecklistType, Surgery } from "@/types"
+import type { DocumentChecklistType, Surgery } from "@/types"
 import { DocumentViewerDialog, type DocumentType } from "@/components/pdf/DocumentViewerDialog"
 
 const STATUS_OPTIONS = [

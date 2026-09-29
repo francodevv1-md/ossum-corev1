@@ -42,8 +42,19 @@ export type SeguimientoEntryView = {
   photoMeta: SeguimientoPhotoMeta | null;
   imageEvidenceMeta: SeguimientoPhotoMeta | null;
   documentMeta: SeguimientoDocumentMeta | null;
+  logisticsMeta: SeguimientoLogisticsMeta | null;
   editHistory: SeguimientoEditHistoryEntry[] | null;
   mentions: MentionRef[];
+};
+
+export type SeguimientoLogisticsMeta = {
+  remitoId?: string;
+  remitoVisibleNumber?: number | string;
+  receivedBy?: string;
+  actualDate?: string;
+  notes?: string;
+  sourceSurgeryId?: string;
+  sourceRemitoId?: string;
 };
 
 export type SeguimientoDocumentMeta = {
@@ -318,6 +329,17 @@ export function mapApiEntryToView(row: SeguimientoEntryApiRow): SeguimientoEntry
     mailMeta: row.entryType === "mail_evidence" ? mapMailMeta(evidenceRef) : null,
     photoMeta: row.entryType === "file_photo_evidence" ? mapPhotoMeta(evidenceRef) : null,
     documentMeta: row.entryType === "document_evidence" ? mapDocumentMeta(evidenceRef) : null,
+    logisticsMeta: row.entryType === "logistics_delivery" || row.entryType === "logistics_transfer"
+      ? {
+          remitoId: toOptionalString(evidenceRef?.remitoId),
+          remitoVisibleNumber: evidenceRef?.remitoVisibleNumber !== undefined ? String(evidenceRef.remitoVisibleNumber) : undefined,
+          receivedBy: toOptionalString(evidenceRef?.receivedBy),
+          actualDate: toOptionalString(evidenceRef?.actualDate),
+          notes: toOptionalString(evidenceRef?.notes),
+          sourceSurgeryId: toOptionalString(evidenceRef?.sourceSurgeryId),
+          sourceRemitoId: toOptionalString(evidenceRef?.sourceRemitoId),
+        }
+      : null,
     imageEvidenceMeta: row.entryType === "note" || row.entryType === "authorization_evidence"
       ? mapPhotoMetaValue(evidenceRef?.imageEvidence)
       : null,

@@ -62,6 +62,26 @@ export type CreateAuthorizationEvidenceInput = {
   imageEvidence?: { files: SeguimientoPhotoEvidenceFileInput[] };
 };
 
+export type AddLogisticsDeliveryInput = {
+  remitoId: string;
+  remitoVisibleNumber?: number | string | null;
+  receivedBy?: string;
+  actualDate?: string;
+  notes?: string;
+};
+
+export type AddLogisticsTransferInput = {
+  boxId?: string;
+  boxName?: string;
+  sourceSurgeryId?: string;
+  sourceSurgeryNumber?: string | number;
+  targetSurgeryId?: string;
+  targetSurgeryNumber?: string | number;
+  remitoId?: string;
+  remitoVisibleNumber?: number | string;
+  notes?: string;
+};
+
 function normalizeMentions(mentions?: MentionRef[]) {
   if (!mentions) return undefined;
 
@@ -407,6 +427,96 @@ export function useSeguimientoFeed(surgeryId: string | undefined) {
     }
   }, [companyId, surgeryId, fetchEntries]);
 
+  const addLogisticsDelivery = useCallback(
+    async (input: AddLogisticsDeliveryInput) => {
+      if (!companyId || !surgeryId) {
+        throw new Error("Missing company or surgery context");
+      }
+
+      const visibleRef = input.remitoVisibleNumber
+        ? `Nº ${input.remitoVisibleNumber}`
+        : input.remitoId;
+      const content = `Entrega confirmada en nosocomio para Remito ${visibleRef}${
+        input.receivedBy ? `. Recibió: ${input.receivedBy}` : ""
+      }${input.notes ? `. Obs: ${input.notes}` : ""}`;
+
+      await apiFetch<SeguimientoEntryApiRow>(
+        `/api/companies/${companyId}/surgeries/${surgeryId}/seguimiento`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entryType: "logistics_delivery",
+            content,
+            summary: `Remito ${visibleRef} entregado`,
+            evidenceRef: {
+              remitoId: input.remitoId,
+              remitoVisibleNumber: input.remitoVisibleNumber,
+              receivedBy: input.receivedBy,
+              actualDate: input.actualDate,
+              notes: input.notes,
+            },
+          }),
+        }
+      );
+
+      await fetchEntries();
+    },
+    [companyId, surgeryId, fetchEntries]
+  );
+
+  const addLogisticsTransfer = useCallback(
+    async (input: AddLogisticsTransferInput) => {
+      if (!companyId || !surgeryId) {
+        throw new Error("Missing company or surgery context");
+      }
+
+      const boxLabel = input.boxName ? `Caja ${input.boxName}` : "Caja instrumental";
+      const sourceLabel = input.sourceSurgeryNumber
+        ? `CX-${input.sourceSurgeryNumber}`
+        : input.sourceSurgeryId || "origen";
+      const targetLabel = input.targetSurgeryNumber
+        ? `CX-${input.targetSurgeryNumber}`
+        : input.targetSurgeryId || "destino";
+      const remitoLabel = input.remitoVisibleNumber
+        ? `Remito Nº ${input.remitoVisibleNumber}`
+        : input.remitoId
+        ? `Remito ${input.remitoId}`
+        : "Nuevo remito";
+
+      const content = `Traslado directo de ${boxLabel} desde ${sourceLabel} hacia ${targetLabel}. ${remitoLabel} generado. Revisión física en depósito pendiente.${
+        input.notes ? ` Obs: ${input.notes}` : ""
+      }`;
+
+      await apiFetch<SeguimientoEntryApiRow>(
+        `/api/companies/${companyId}/surgeries/${surgeryId}/seguimiento`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entryType: "logistics_transfer",
+            content,
+            summary: `Traslado directo ${boxLabel}`,
+            evidenceRef: {
+              boxId: input.boxId,
+              boxName: input.boxName,
+              sourceSurgeryId: input.sourceSurgeryId,
+              sourceSurgeryNumber: input.sourceSurgeryNumber,
+              targetSurgeryId: input.targetSurgeryId,
+              targetSurgeryNumber: input.targetSurgeryNumber,
+              remitoId: input.remitoId,
+              remitoVisibleNumber: input.remitoVisibleNumber,
+              notes: input.notes,
+            },
+          }),
+        }
+      );
+
+      await fetchEntries();
+    },
+    [companyId, surgeryId, fetchEntries]
+  );
+
   const highlightedEntries = useMemo(
     () => entries.filter((entry) => entry.isHighlighted),
     [entries]
@@ -434,6 +544,8 @@ export function useSeguimientoFeed(surgeryId: string | undefined) {
     addDocumentEvidence,
     downloadDocumentEvidence,
     createAuthorizationEvidence,
+    addLogisticsDelivery,
+    addLogisticsTransfer,
     importFromMail,
     addingNote,
     addingPhotoEvidence,

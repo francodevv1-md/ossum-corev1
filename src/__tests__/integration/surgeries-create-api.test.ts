@@ -11,6 +11,20 @@ const prismaMock = vi.hoisted(() => {
     },
     contactCompanyLink: {
       create: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    contactGroup: {
+      findMany: vi.fn().mockResolvedValue([]),
+      upsert: vi.fn(),
+    },
+    contactGroupMembership: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    contactAddress: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      update: vi.fn(),
     },
   }
 
@@ -105,6 +119,39 @@ describe("POST /api/companies/[companyId]/surgeries", () => {
 
     prismaMock.__tx.contact.create.mockResolvedValue({ id: "db-doctor-new" })
     prismaMock.__tx.contactCompanyLink.create.mockResolvedValue({ id: "link-doctor" })
+    prismaMock.__tx.contactCompanyLink.findUnique.mockResolvedValue({
+      id: "link-doctor",
+      contactId: "db-doctor-new",
+      companyId: "company-1",
+      code: "C-01",
+      role: "doctor",
+      roles: ["proveedor"],
+      isActive: true,
+      isPayer: false,
+      vatCondition: null,
+      paymentTerms: null,
+      defaultPriceList: null,
+      usualDiscount: null,
+      doctorLicense: null,
+      specialty: null,
+      deliveryNotes: null,
+      contact: {
+        id: "db-doctor-new",
+        firstName: "Dr",
+        lastName: "House",
+        legalName: null,
+        tradeName: null,
+        notes: null,
+        isCompany: false,
+        email: null,
+        phone: null,
+        documentType: null,
+        documentNumber: null,
+        contactType: null,
+        addresses: [],
+        groupMemberships: [],
+      },
+    })
 
     const response = await POST(
       new Request("http://localhost/api/companies/company-1/surgeries", {

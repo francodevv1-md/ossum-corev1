@@ -215,6 +215,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     return created(surgery);
   } catch (error) {
+    console.error("SURGERY_POST_ROUTE_ERROR:", error);
     return errorResponse(error);
   }
 }

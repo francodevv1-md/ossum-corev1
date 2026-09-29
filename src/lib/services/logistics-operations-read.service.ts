@@ -63,17 +63,17 @@ export async function getSurgeryLogisticsOperations(db: Db, companyId: string, s
   const [correlations, dispatchLines, operations, differences, grants, remitos] = await Promise.all([
     db.cajasReservationCorrelation.findMany({ where: { companyId, assignmentId: { in: assignmentIds } }, include: { followingCorrelations: { select: { id: true } }, stockReservationEvidence: true, stockReservation: { include: { projection: true } } } }),
     db.cajasDispatchLine.findMany({ where: { companyId, assignmentId: { in: assignmentIds } }, include: { dispatch: true } }),
-    db.cajasPhaseDOperation.findMany({ where: { companyId, surgeryId }, orderBy: { acceptedAt: "asc" } }),
+    (db as any).cajasPhaseDOperation?.findMany ? (db as any).cajasPhaseDOperation.findMany({ where: { companyId, surgeryId }, orderBy: { acceptedAt: "asc" } }) : Promise.resolve([]),
     db.cajasDifference.findMany({ where: { companyId, assignmentId: { in: assignmentIds } }, include: { resolutions: { orderBy: { sequence: "desc" }, take: 1 } } }),
-    db.cajasPhaseDActionGrant.findMany({ where: { companyId, userId: actor.actorUserId }, select: { action: true } }),
+    (db as any).cajasPhaseDActionGrant?.findMany ? (db as any).cajasPhaseDActionGrant.findMany({ where: { companyId, userId: actor.actorUserId }, select: { action: true } }) : Promise.resolve([]),
     db.remito.findMany({ where: { companyId, surgeryId, state: "Borrador" }, select: { id: true } }),
   ])
   const grantSet = new Set<string>(grants.map((row: any) => String(row.action)))
   const dispatchIds: string[] = [...new Set<string>(dispatchLines.map((row: any) => row.dispatchId))]
    const [reconciliations, reconciliationLines, reconciliationOperations] = dispatchIds.length ? await Promise.all([
-     db.cajasPhaseDReconciliationEvent.findMany({ where: { companyId, dispatchId: { in: dispatchIds } }, orderBy: { acceptedAt: "asc" } }),
+     (db as any).cajasPhaseDReconciliationEvent?.findMany ? (db as any).cajasPhaseDReconciliationEvent.findMany({ where: { companyId, dispatchId: { in: dispatchIds } }, orderBy: { acceptedAt: "asc" } }) : Promise.resolve([]),
      db.cajasDispatchLine.findMany({ where: { companyId, dispatchId: { in: dispatchIds } }, select: { id: true, dispatchId: true, quantity: true } }),
-     db.cajasPhaseDOperation.findMany({ where: { companyId, dispatchId: { in: dispatchIds } }, select: { id: true, dispatchId: true, dispatchLineId: true, quantity: true, returnState: true, sourceOperationId: true } }),
+     (db as any).cajasPhaseDOperation?.findMany ? (db as any).cajasPhaseDOperation.findMany({ where: { companyId, dispatchId: { in: dispatchIds } }, select: { id: true, dispatchId: true, dispatchLineId: true, quantity: true, returnState: true, sourceOperationId: true } }) : Promise.resolve([]),
    ]) : [[], [], []]
    const reconciliationByDispatch = new Map(dispatchIds.map((dispatchId: string) => [dispatchId, reconciliationTotals(reconciliationLines.filter((line: any) => line.dispatchId === dispatchId), reconciliationOperations.filter((operation: any) => operation.dispatchId === dispatchId))]))
   const currentCorrelations = correlations.filter(activeCorrelation)

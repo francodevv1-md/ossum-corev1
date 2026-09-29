@@ -228,12 +228,31 @@ export function LogisticaPanel({ surgery, logistics, box, remitos }: LogisticaPa
     }
   }, [box?.preparedAt, box?.returnedAt, box?.sentAt, latestRemito, logistics?.fechaEnvioMateriales, logistics?.registroDevolucion, logistics?.registroRetiro, logistics?.registroSalida, logistics?.vuelta, remitos, surgery.fechaEnvioMaterial, surgery.preparationState])
 
+  const hasDirectTransfer = useMemo(() => {
+    return remitos.some((r: any) => {
+      const meta = (r as any).metadata || {}
+      return meta.directTransfer === true || meta.transferType === "direct_cx_transfer" || r.salidaReason === "traslado"
+    })
+  }, [remitos])
+
   if (!logistics && remitos.length === 0 && !box) {
     return <EmptyState />
   }
 
   return (
     <div className="space-y-2.5">
+      {hasDirectTransfer && (
+        <div className="rounded-md border border-amber-300 bg-amber-50/80 p-2.5 text-[11px] text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300 flex items-start gap-2">
+          <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
+          <div>
+            <p className="font-semibold">Caja transferida directamente entre nosocomios</p>
+            <p className="text-[10px] text-amber-800 dark:text-amber-400 mt-0.5">
+              Material trasladado desde otra cirugía sin control físico de depósito intermedio. Revisión de contenido pendiente.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">

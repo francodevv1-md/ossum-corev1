@@ -6,6 +6,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import type { MentionLookupUser, MentionRef } from "@/lib/mentions/types";
 import { resolveRawMentionFallbacks } from "@/lib/mentions/utils";
 import { badRequest, conflict, notFound } from "@/lib/api/errors";
+import { createAuditEvent } from "@/lib/audit";
 import { emitSeguimientoMentionNotifications } from "@/lib/services/internal-notifications.service";
 import type {
   SeguimientoAuthorizationCreateBody,
@@ -644,6 +645,56 @@ export async function createSeguimientoEntry(
       resolvedMentions,
       "replace"
     );
+
+    // Si es una confirmación de entrega logística con remitoId, sincronizar el remito atómicamente
+    if (
+      input.entryType === "logistics_delivery" &&
+      evidenceRef.remitoId &&
+      typeof evidenceRef.remitoId === "string"
+    ) {
+      const remito = await tx.remito.findFirst({
+        where: {
+          id: evidenceRef.remitoId,
+          companyId: input.companyId,
+          surgeryId: input.surgeryId,
+        },
+        select: {
+          id: true,
+          state: true,
+          visibleNumber: true,
+          deliveredAt: true,
+        },
+      });
+
+      if (remito && (remito.state === "Emitido" || remito.state === "En_transito")) {
+        const deliveredAt =
+          evidenceRef.actualDate && typeof evidenceRef.actualDate === "string"
+            ? new Date(evidenceRef.actualDate)
+            : new Date();
+
+        await tx.remito.update({
+          where: { id: remito.id },
+          data: {
+            state: "Entregado",
+            deliveredAt: remito.deliveredAt ?? deliveredAt,
+            updatedById: input.authorId,
+          },
+        });
+
+        await createAuditEvent({
+          prisma: tx as unknown as PrismaClient,
+          companyId: input.companyId,
+          userId: input.authorId,
+          entityType: "Remito",
+          entityId: remito.id,
+          action: "remito.state_changed",
+          module: "remito",
+          oldValue: { state: remito.state },
+          newValue: { state: "Entregado" },
+          detail: "Entrega confirmada vía Panel de Seguimiento",
+        });
+      }
+    }
 
     const entry = await tx.seguimientoEntry.create({
       data: {

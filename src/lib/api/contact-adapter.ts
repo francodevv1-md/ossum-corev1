@@ -152,10 +152,9 @@ export function mapContactoToApiPayload(
   // Person type → isCompany + name split
   if (formData.tipoPersona === "juridica") {
     payload.isCompany = true
-    if (formData.nombre?.trim()) {
-      payload.legalName = formData.nombre.trim()
-    } else if (formData.razonSocial?.trim()) {
-      payload.legalName = formData.razonSocial.trim()
+    const legal = formData.razonSocial?.trim() || formData.nombre?.trim()
+    if (legal) {
+      payload.legalName = legal
     }
   } else {
     payload.isCompany = false

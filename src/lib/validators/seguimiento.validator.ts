@@ -171,6 +171,8 @@ export const SEGUIMIENTO_ENTRY_TYPES = [
   "authorization_evidence",
   "file_photo_evidence",
   "mail_evidence",
+  "logistics_delivery",
+  "logistics_transfer",
 ] as const;
 
 export type SeguimientoEntryType = (typeof SEGUIMIENTO_ENTRY_TYPES)[number];
