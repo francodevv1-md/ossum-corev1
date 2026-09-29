@@ -108,6 +108,10 @@ export interface StockItem {
 
   // ── Comercial ──
   iva?: string
+  ivaKey?: string
+  vatTreatment?: "GRAVADO" | "EXENTO" | "NO_GRAVADO"
+  vatRate?: number
+  articleId?: string | null
   priceList?: string
   marginTarget?: number
 
@@ -235,6 +239,7 @@ export function traceControlOf(control: StockControl): TraceControl {
     case "serie": return { method: "serie", expiry: false }
     case "lote-vencimiento": return { method: "lote", expiry: true }
     case "serie-vencimiento": return { method: "serie", expiry: true }
+    default: return { method: "lote", expiry: false }
   }
 }
 

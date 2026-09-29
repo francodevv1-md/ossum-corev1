@@ -193,8 +193,11 @@ export interface StockItem {
   sterilizationDate?: string
   unitPrice: number
   ingresoComprobante?: string
-  /** CHATZAI-025: Alícuota de IVA por artículo. Key de IVA_OPTIONS ("21", "10.5", "exento", "0", "27"). Default "21". */
+  /** CHATZAI-025: Alícuota de IVA por artículo. Key de IVA_OPTIONS ("21", "10.5", "exento", "0", "27", "no_gravado"). Default "21". */
   ivaKey?: string
+  vatTreatment?: "GRAVADO" | "EXENTO" | "NO_GRAVADO"
+  vatRate?: number
+  articleId?: string | null
 }
 
 // ===== Stock Movement =====
@@ -315,6 +318,8 @@ export interface PresupuestoItem {
   descripcionLibre?: string
   /** CHATZAI-025: Alícuota de IVA por ítem. Key de IVA_OPTIONS. Default = global presupuesto IVA. */
   ivaKey?: string
+  vatTreatment?: "GRAVADO" | "EXENTO" | "NO_GRAVADO"
+  vatRate?: number
 }
 
 // ===== Consumo =====

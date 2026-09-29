@@ -8,6 +8,7 @@ import {
   FileText,
   HelpCircle,
   ImagePlus,
+  Loader2,
   MoreHorizontal,
   Package,
   Paperclip,
@@ -20,6 +21,9 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { useAuth } from "@/components/auth/AuthProvider"
+import { updateArticleVatApi } from "@/lib/api/articles"
+import { parseVatOptionKey, getVatKeyFromTreatmentAndRate, type VatTreatment } from "@/lib/commercial/vat"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -218,10 +222,18 @@ interface FichaCtx {
   method: TraceMethod
   expiry: boolean
   active: boolean
+  vatOption: string
+  savedVatOption: string
+  canonicalArticleId: string | null
+  isSavingVat: boolean
+  vatSaveStatus: "idle" | "saving" | "saved" | "error"
+  vatSaveError: string | null
   setArticleType: (t: StockArticleType) => void
   setMethod: (m: TraceMethod) => void
   setExpiry: (b: boolean) => void
   setActive: (b: boolean) => void
+  setVatOption: (v: string) => void
+  handleSaveVat: () => Promise<void>
   setTab: (t: FichaTab) => void
 }
 
@@ -460,18 +472,71 @@ function ComprasTab({ item }: { item: StockItem }) {
   )
 }
 
-function ComercialTab({ item }: { item: StockItem }) {
+function ComercialTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
   const suggested = suggestedPrice(item)
   const margin = item.marginTarget ?? 40
   const below = item.price < suggested
+  const isCanonical = Boolean(ctx.canonicalArticleId)
+  const hasVatChanges = isCanonical && ctx.vatOption !== ctx.savedVatOption
+
   return (
     <div className="space-y-5">
       <section>
-        <SectionTitle hint="Simple: no es un módulo contable">Comercial</SectionTitle>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="IVA" hint="Alicuota de IVA aplicada.">
-            <select defaultValue={item.iva ?? "21%"} className="h-8 w-full rounded-md border border-[var(--ossum-line)] bg-white px-2.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-[var(--ossum-action)]">
-              <option value="21%">21%</option><option value="10.5%">10.5%</option><option value="0%">0% (Exento)</option>
+        <div className="flex items-center justify-between gap-2">
+          <SectionTitle hint="Simple: no es un módulo contable">Comercial</SectionTitle>
+          {isCanonical ? (
+            <div className="flex items-center gap-2">
+              {ctx.vatSaveStatus === "saved" && !hasVatChanges && (
+                <span className="text-[11px] font-medium text-emerald-600" aria-live="polite">
+                  ✓ IVA guardado
+                </span>
+              )}
+              {ctx.vatSaveStatus === "saving" && (
+                <span className="flex items-center gap-1 text-[11px] font-medium text-gray-500" aria-live="polite">
+                  <Loader2 className="size-3 animate-spin" /> Guardando...
+                </span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!hasVatChanges || ctx.isSavingVat}
+                onClick={ctx.handleSaveVat}
+                className="h-7 text-xs"
+              >
+                Guardar IVA
+              </Button>
+            </div>
+          ) : (
+            <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+              Sin artículo canónico vinculado
+            </span>
+          )}
+        </div>
+
+        {ctx.vatSaveStatus === "error" && ctx.vatSaveError && (
+          <div role="alert" className="mt-2 rounded-md border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+            {ctx.vatSaveError}
+          </div>
+        )}
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Field
+            label="IVA"
+            hint={isCanonical ? "Alícuota persistida en el catálogo de artículos." : "Lectura: sin artículo canónico vinculado."}
+          >
+            <select
+              aria-label="Alícuota de IVA"
+              value={ctx.vatOption}
+              disabled={!isCanonical || ctx.isSavingVat}
+              onChange={(e) => ctx.setVatOption(e.target.value)}
+              className="h-8 w-full rounded-md border border-[var(--ossum-line)] bg-white px-2.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-[var(--ossum-action)] disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+            >
+              <option value="21%">21%</option>
+              <option value="10.5%">10.5%</option>
+              <option value="27%">27%</option>
+              <option value="0%">0%</option>
+              <option value="exento">Exento</option>
+              <option value="no_gravado">No gravado</option>
             </select>
           </Field>
           <Field label="Precio base" hint="Precio de venta de referencia."><Input type="number" defaultValue={item.price} className="h-8 text-xs" /></Field>
@@ -618,7 +683,7 @@ function FichaTabContent({ item, tab, ctx, onOpenBox }: { item: StockItem; tab: 
     case "identificacion": return <IdentificacionTab item={item} ctx={ctx} />
     case "stock": return <StockTab item={item} ctx={ctx} />
     case "compras": return <ComprasTab item={item} />
-    case "comercial": return <ComercialTab item={item} />
+    case "comercial": return <ComercialTab item={item} ctx={ctx} />
     case "trazabilidad": return <TrazabilidadTab item={item} ctx={ctx} />
     case "cajas": return <CajasTab item={item} onOpenBox={onOpenBox} />
     case "adjuntos": return <AdjuntosTab />
@@ -664,20 +729,115 @@ function ContextPanel({ item, method, expiry }: { item: StockItem; method: Trace
 
 // ─── Ficha body (header + tabs + content + footer) ────────
 
-export function StockArticleFicha({ item, initialTab = "general", onCancel }: {
-  item: StockItem; initialTab?: FichaTab; onCancel?: () => void
+export function StockArticleFicha({
+  item,
+  initialTab = "general",
+  onCancel,
+  companyId: explicitCompanyId,
+  onItemUpdated,
+}: {
+  item: StockItem
+  initialTab?: FichaTab
+  onCancel?: () => void
+  companyId?: string
+  onItemUpdated?: (updated: StockItem) => void
 }) {
+  const { activeCompany } = useAuth()
+  const companyId = explicitCompanyId ?? activeCompany?.id ?? ""
+
+  const canonicalArticleId = item.articleId ?? (item.id && !item.id.startsWith("stock-") && !item.id.startsWith("mock-") ? item.id : null)
+
   const [tab, setTab] = useState<FichaTab>(initialTab)
   const [articleType, setArticleType] = useState<StockArticleType>(item.articleType)
   const initialTrace = traceControlOf(item.control)
   const [method, setMethod] = useState<TraceMethod>(initialTrace.method)
   const [expiry, setExpiry] = useState<boolean>(initialTrace.expiry)
   const [active, setActive] = useState(item.masterStatus === "Activo")
+  const initialVatOption = item.vatTreatment === "EXENTO"
+    ? "exento"
+    : item.vatTreatment === "NO_GRAVADO"
+    ? "no_gravado"
+    : item.vatRate !== undefined
+    ? `${item.vatRate}%`
+    : (item.iva ?? "21%")
+  const [vatOption, setVatOption] = useState<string>(initialVatOption)
+  const [savedVatOption, setSavedVatOption] = useState<string>(initialVatOption)
+  const [isSavingVat, setIsSavingVat] = useState(false)
+  const [vatSaveStatus, setVatSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [vatSaveError, setVatSaveError] = useState<string | null>(null)
   const [image, setImage] = useState<string | null>(null)
   const [codesOpen, setCodesOpen] = useState(false)
   const [openBox, setOpenBox] = useState<string | null>(null)
 
-  const ctx: FichaCtx = { articleType, method, expiry, active, setArticleType, setMethod, setExpiry, setActive, setTab }
+  const handleSaveVat = async () => {
+    if (!canonicalArticleId) {
+      toast.error("Sin artículo canónico vinculado")
+      return
+    }
+    if (!companyId) {
+      setVatSaveStatus("error")
+      setVatSaveError("No hay empresa activa seleccionada")
+      toast.error("No hay empresa activa seleccionada")
+      return
+    }
+    if (isSavingVat) return // Block double submit
+
+    setIsSavingVat(true)
+    setVatSaveStatus("saving")
+    setVatSaveError(null)
+
+    try {
+      const { treatment, rate } = parseVatOptionKey(vatOption)
+      const res = await updateArticleVatApi(companyId, canonicalArticleId, {
+        vatTreatment: treatment,
+        vatRate: rate,
+      })
+
+      const nextKey = getVatKeyFromTreatmentAndRate(
+        (res.vatTreatment as VatTreatment) ?? treatment,
+        res.vatRate ?? rate
+      )
+      const nextOption = nextKey === "exento" || nextKey === "no_gravado" ? nextKey : `${nextKey}%`
+      setVatOption(nextOption)
+      setSavedVatOption(nextOption)
+      setVatSaveStatus("saved")
+      toast.success("IVA del artículo actualizado correctamente")
+      onItemUpdated?.({
+        ...item,
+        vatTreatment: (res.vatTreatment as any) ?? treatment,
+        vatRate: res.vatRate ?? rate,
+        iva: nextOption,
+        ivaKey: nextKey,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error al guardar el IVA del artículo"
+      setVatSaveStatus("error")
+      setVatSaveError(msg)
+      toast.error(msg)
+    } finally {
+      setIsSavingVat(false)
+    }
+  }
+
+  const ctx: FichaCtx = {
+    articleType,
+    method,
+    expiry,
+    active,
+    vatOption,
+    savedVatOption,
+    canonicalArticleId,
+    isSavingVat,
+    vatSaveStatus,
+    vatSaveError,
+    setArticleType,
+    setMethod,
+    setExpiry,
+    setActive,
+    setVatOption,
+    handleSaveVat,
+    setTab,
+  }
 
   const hasBoxes = articleBoxes(item.id).length > 0
   const visibleTabs = FICHA_TABS.filter((t) => t.id !== "cajas" || hasBoxes)
@@ -773,8 +933,8 @@ export function StockArticleFicha({ item, initialTab = "general", onCancel }: {
 
 // ─── Fullscreen sheet (modal) ─────────────────────────────
 
-export function StockArticleSheet({ item, initialTab, open, onOpenChange }: {
-  item: StockItem | null; initialTab?: FichaTab; open: boolean; onOpenChange: (v: boolean) => void
+export function StockArticleSheet({ item, initialTab, open, onOpenChange, companyId, onItemUpdated }: {
+  item: StockItem | null; initialTab?: FichaTab; open: boolean; onOpenChange: (v: boolean) => void; companyId?: string; onItemUpdated?: (updated: StockItem) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -784,7 +944,13 @@ export function StockArticleSheet({ item, initialTab, open, onOpenChange }: {
       >
         <DialogTitle className="sr-only">Ficha del artículo</DialogTitle>
         {item ? (
-          <StockArticleFicha item={item} initialTab={initialTab} onCancel={() => onOpenChange(false)} />
+          <StockArticleFicha
+            item={item}
+            initialTab={initialTab}
+            onCancel={() => onOpenChange(false)}
+            companyId={companyId}
+            onItemUpdated={onItemUpdated}
+          />
         ) : null}
       </DialogContent>
     </Dialog>
