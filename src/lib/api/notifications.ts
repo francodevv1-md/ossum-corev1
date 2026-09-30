@@ -5,8 +5,11 @@ export type InternalNotificationListItem = {
   companyId: string
   recipientUserId: string
   actorUserId: string
-  surgeryId: string
+  surgeryId: string | null
   sourceEntityId: string
+  domain: string
+  severity: string
+  linkHref: string | null
   type: string
   title: string
   body: string | null
@@ -15,13 +18,19 @@ export type InternalNotificationListItem = {
   createdAt: string
   updatedAt: string
   actorName: string
-  patientName: string | null
+  patientName?: string | null
 }
 
 export type InternalNotificationCategoryCounts = {
   all: number
   mention: number
   operational: number
+  cirugias: number
+  logistica: number
+  stock: number
+  consumos: number
+  comparativa: number
+  cobros: number
 }
 
 export type InternalNotificationCategory = keyof InternalNotificationCategoryCounts
@@ -43,9 +52,45 @@ export type MarkAllInternalNotificationsReadResponse = {
   readAt: string
 }
 
+export type NotificationCatalogItem = {
+  type: string
+  domain: string
+  defaultSeverity: string
+  label: string
+  description: string
+  defaultRoles: string[]
+}
+
+export type NotificationRolePolicyItem = {
+  role: string
+  notificationType: string
+  domain: string
+  label: string
+  description: string
+  inAppEnabled: boolean
+  isDefault: boolean
+}
+
+export type NotificationUserPrefItem = {
+  notificationType: string
+  domain: string
+  label: string
+  description: string
+  roleEnabled: boolean
+  inAppMuted: boolean
+}
+
+export type NotificationPoliciesResponse = {
+  isAdmin: boolean
+  userRole: string
+  rolePolicies: NotificationRolePolicyItem[]
+  userPreferences: NotificationUserPrefItem[]
+  catalog: NotificationCatalogItem[]
+}
+
 export async function fetchInternalNotifications(
   companyId: string,
-  take = 8,
+  take = 20,
   unreadOnly = false,
   category: InternalNotificationCategory = "all"
 ) {
@@ -70,17 +115,39 @@ export async function fetchInternalNotificationsUnreadCount(companyId: string) {
 export async function markInternalNotificationAsRead(companyId: string, notificationId: string) {
   return apiFetch<InternalNotificationListItem>(
     `/api/companies/${encodeURIComponent(companyId)}/notifications/${encodeURIComponent(notificationId)}/read`,
-    {
-      method: "PATCH",
-    }
+    { method: "PATCH" }
   )
 }
 
 export async function markAllInternalNotificationsAsRead(companyId: string) {
   return apiFetch<MarkAllInternalNotificationsReadResponse>(
     `/api/companies/${encodeURIComponent(companyId)}/notifications/read-all`,
-    {
-      method: "PATCH",
-    }
+    { method: "PATCH" }
+  )
+}
+
+export async function fetchNotificationPolicies(companyId: string) {
+  return apiFetch<NotificationPoliciesResponse>(
+    `/api/companies/${encodeURIComponent(companyId)}/notifications/policies`
+  )
+}
+
+export async function updateRoleNotificationPolicyApi(
+  companyId: string,
+  payload: { role: string; notificationType: string; inAppEnabled: boolean }
+) {
+  return apiFetch<{ success: boolean }>(
+    `/api/companies/${encodeURIComponent(companyId)}/notifications/policies/role`,
+    { method: "PUT", body: JSON.stringify(payload) }
+  )
+}
+
+export async function updateUserNotificationPrefApi(
+  companyId: string,
+  payload: { notificationType: string; inAppMuted: boolean }
+) {
+  return apiFetch<{ success: boolean }>(
+    `/api/companies/${encodeURIComponent(companyId)}/notifications/policies/user`,
+    { method: "PUT", body: JSON.stringify(payload) }
   )
 }

@@ -3,7 +3,7 @@
 // Contact references are global and MUST be validated through ContactCompanyLink.
 // Services receive prisma as dependency injection.
 
-import { Prisma } from "@prisma/client";
+import { InternalNotificationType, Prisma } from "@prisma/client";
 import type { PrismaClient, Surgery } from "@prisma/client";
 
 import { assertContactsBelongToCompany } from "./contact.service";
@@ -11,6 +11,7 @@ import { serializeSurgeryCoordinatorReadModel } from "./surgery-coordinator-read
 import { createAuditEvent } from "../audit";
 import { badRequest, conflict } from "../api/errors";
 import { requireCompanyId } from "../tenant";
+import { emitCrossDomainNotification } from "./internal-notifications.service";
 import {
   validateCreateSurgeryInput,
   validateCxStatusTransition,
@@ -953,6 +954,50 @@ export async function updateSurgeryCxStatus(
       metadata: auditMetadata(scopedContext),
     });
 
+    try {
+      let notifType: InternalNotificationType = InternalNotificationType.surgery_critical_change;
+      let severity: "INFO" | "WARNING" | "CRITICAL" | "SUCCESS" = "INFO";
+      let title = `Cirugía ${updatedSurgery?.visibleNumber ?? surgeryId} actualizada`;
+      let body = `Estado cambiado a ${validatedData.cxStatus}`;
+
+      if (validatedData.cxStatus === "authorized") {
+        notifType = InternalNotificationType.surgery_authorized;
+        severity = "SUCCESS";
+        title = `Cirugía ${updatedSurgery?.visibleNumber ?? surgeryId} autorizada`;
+        body = "La cirugía ha sido autorizada.";
+      } else if (validatedData.cxStatus === "cancelled" || validatedData.cxStatus === "suspended") {
+        notifType = InternalNotificationType.surgery_blocked;
+        severity = "CRITICAL";
+        title = `Cirugía ${updatedSurgery?.visibleNumber ?? surgeryId} ${validatedData.cxStatus === "cancelled" ? "cancelada" : "suspendida"}`;
+        body = `La cirugía fue ${validatedData.cxStatus === "cancelled" ? "cancelada" : "suspendida"}.`;
+      } else if (validatedData.cxStatus === "scheduled") {
+        notifType = InternalNotificationType.surgery_critical_change;
+        severity = "INFO";
+        title = `Cirugía ${updatedSurgery?.visibleNumber ?? surgeryId} programada`;
+        body = "La cirugía ha pasado a estado programada.";
+      }
+
+      await emitCrossDomainNotification(tx, {
+        companyId: scopedCompanyId,
+        actorUserId: scopedContext.actorUserId,
+        type: notifType,
+        domain: "CIRUGIAS",
+        severity,
+        surgeryId,
+        sourceEntityId: surgeryId,
+        linkHref: `/cirugias/${encodeURIComponent(surgeryId)}`,
+        title,
+        body,
+        metadata: {
+          cxStatus: validatedData.cxStatus,
+          previousStatus: currentSurgery.cxStatus,
+          visibleNumber: updatedSurgery?.visibleNumber,
+        },
+      });
+    } catch (err) {
+      console.error("[surgery.service] emitCrossDomainNotification failed:", err);
+    }
+
     return updatedSurgery;
   });
 }
@@ -1099,6 +1144,28 @@ export async function executeScheduledSurgery(
         deliveredRemitos,
       },
     });
+
+    try {
+      await emitCrossDomainNotification(tx, {
+        companyId: scopedCompanyId,
+        actorUserId: scopedContext.actorUserId,
+        type: InternalNotificationType.surgery_critical_change,
+        domain: "CIRUGIAS",
+        severity: "INFO",
+        surgeryId,
+        sourceEntityId: surgeryId,
+        linkHref: `/cirugias/${encodeURIComponent(surgeryId)}`,
+        title: `Cirugía ${performedSurgery?.visibleNumber ?? surgeryId} ejecutada`,
+        body: "La intervención quirúrgica fue realizada.",
+        metadata: {
+          cxStatus: "performed",
+          performedAt: performedAt.toISOString(),
+          visibleNumber: performedSurgery?.visibleNumber,
+        },
+      });
+    } catch (err) {
+      console.error("[surgery.service] emitCrossDomainNotification failed:", err);
+    }
 
     return performedSurgery;
   });

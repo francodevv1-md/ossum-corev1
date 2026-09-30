@@ -35,6 +35,7 @@ import {
   UserCheck,
 } from "lucide-react"
 import { UsuariosRolesView } from "@/components/configuracion/UsuariosRolesView"
+import { NotificacionesConfigView } from "@/components/configuracion/NotificacionesConfigView"
 
 function ConfiguracionContent() {
   const searchParams = useSearchParams()
@@ -42,7 +43,11 @@ function ConfiguracionContent() {
   const tabParam = searchParams.get("tab")
 
   const [activeTab, setActiveTab] = useState<string>(
-    tabParam === "usuarios" || tabParam === "users" ? "usuarios" : "general"
+    tabParam === "usuarios" || tabParam === "users"
+      ? "usuarios"
+      : tabParam === "notificaciones"
+      ? "notificaciones"
+      : "general"
   )
 
   const store = useOrtoTrackStore()
@@ -68,6 +73,10 @@ function ConfiguracionContent() {
   useEffect(() => {
     if (tabParam === "usuarios" || tabParam === "users") {
       setActiveTab("usuarios")
+    } else if (tabParam === "notificaciones") {
+      setActiveTab("notificaciones")
+    } else if (tabParam === "general") {
+      setActiveTab("general")
     }
   }, [tabParam])
 
@@ -81,6 +90,8 @@ function ConfiguracionContent() {
     setActiveTab(value)
     if (value === "usuarios") {
       router.replace("/configuracion?tab=usuarios")
+    } else if (value === "notificaciones") {
+      router.replace("/configuracion?tab=notificaciones")
     } else {
       router.replace("/configuracion")
     }
@@ -93,15 +104,19 @@ function ConfiguracionContent() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Configuración del Sistema</h1>
           <p className="text-xs text-muted-foreground">
-            Ajustes generales, preferencias operativas, usuarios y roles.
+            Ajustes generales, preferencias operativas, notificaciones, usuarios y roles.
           </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-auto">
-          <TabsList className="grid grid-cols-2 h-9">
+          <TabsList className="grid grid-cols-3 h-9">
             <TabsTrigger value="general" className="text-xs gap-1.5 px-3">
               <Settings className="size-3.5" />
               <span>General</span>
+            </TabsTrigger>
+            <TabsTrigger value="notificaciones" className="text-xs gap-1.5 px-3">
+              <Bell className="size-3.5" />
+              <span>Notificaciones</span>
             </TabsTrigger>
             <TabsTrigger value="usuarios" className="text-xs gap-1.5 px-3">
               <Users className="size-3.5" />
@@ -113,6 +128,8 @@ function ConfiguracionContent() {
 
       {activeTab === "usuarios" ? (
         <UsuariosRolesView embeddedInConfig />
+      ) : activeTab === "notificaciones" ? (
+        <NotificacionesConfigView />
       ) : (
         <div className="space-y-4">
           {/* Action Header for General */}

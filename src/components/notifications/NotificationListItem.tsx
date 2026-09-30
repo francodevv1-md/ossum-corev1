@@ -37,6 +37,10 @@ export function NotificationListItem({
     : (appearance.summary ?? notification.body)
   const statusLabel = unread ? "Nuevo" : "Visto"
 
+  const contextLabel = notification.surgeryId
+    ? `Caso ${notification.surgeryId}`
+    : notification.domain || "General"
+
   if (variant === "dropdown") {
     return (
       <div className={cn("relative w-full", className)}>
@@ -57,7 +61,7 @@ export function NotificationListItem({
               <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 <span className={cn("shrink-0", appearance.labelClassName)}>{appearance.label}</span>
                 <span className="text-muted-foreground/40">•</span>
-                <span className="truncate">Caso {notification.surgeryId}</span>
+                <span className="truncate">{contextLabel}</span>
               </div>
               <span className="shrink-0 pt-0.5 text-[10px] text-muted-foreground transition-opacity duration-150 ease-out motion-reduce:transition-none group-hover:opacity-100 group-data-[highlighted]:opacity-100">
                 {marking ? "Marcando..." : formatRelativeTime(notification.createdAt)}
@@ -114,9 +118,14 @@ export function NotificationListItem({
               <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 <span className={appearance.labelClassName}>{appearance.label}</span>
                 <span className="text-muted-foreground/40">•</span>
-                <span>Caso {notification.surgeryId}</span>
+                <span>{contextLabel}</span>
                 <span className="text-muted-foreground/40">•</span>
                 <span>{notification.actorName}</span>
+                {notification.domain && (
+                  <Badge variant="secondary" className="h-4 px-1.5 text-[9px] uppercase font-mono">
+                    {notification.domain}
+                  </Badge>
+                )}
               </div>
               <div className="mt-2 flex items-start gap-2">
                 <span
@@ -195,5 +204,3 @@ export function NotificationListItem({
     </motion.article>
   )
 }
-
-

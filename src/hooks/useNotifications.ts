@@ -10,16 +10,29 @@ import {
   markAllInternalNotificationsAsRead,
   markInternalNotificationAsRead,
   type InternalNotificationListItem,
+  fetchNotificationPolicies,
+  updateRoleNotificationPolicyApi,
+  updateUserNotificationPrefApi,
+  type NotificationRolePolicyItem,
+  type NotificationUserPrefItem,
+  type NotificationCatalogItem,
 } from "@/lib/api/notifications"
 
-const DEFAULT_TAKE = 8
+const DEFAULT_TAKE = 20
 const COUNT_POLL_INTERVAL_MS = 60_000
 const DEFERRED_INITIAL_COUNT_TIMEOUT_MS = 1_300
 const NOTIFICATIONS_SYNC_EVENT = "ossum-notifications-sync"
+
 const EMPTY_CATEGORY_COUNTS: InternalNotificationCategoryCounts = {
   all: 0,
   mention: 0,
   operational: 0,
+  cirugias: 0,
+  logistica: 0,
+  stock: 0,
+  consumos: 0,
+  comparativa: 0,
+  cobros: 0,
 }
 
 type UseNotificationsOptions = {
@@ -84,6 +97,12 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         all: Math.max(0, data.categoryCounts?.all ?? data.unreadCount ?? 0),
         mention: Math.max(0, data.categoryCounts?.mention ?? 0),
         operational: Math.max(0, data.categoryCounts?.operational ?? 0),
+        cirugias: Math.max(0, data.categoryCounts?.cirugias ?? 0),
+        logistica: Math.max(0, data.categoryCounts?.logistica ?? 0),
+        stock: Math.max(0, data.categoryCounts?.stock ?? 0),
+        consumos: Math.max(0, data.categoryCounts?.consumos ?? 0),
+        comparativa: Math.max(0, data.categoryCounts?.comparativa ?? 0),
+        cobros: Math.max(0, data.categoryCounts?.cobros ?? 0),
       })
       setCountError(null)
     } catch (error) {
@@ -113,6 +132,12 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         all: Math.max(0, data.categoryCounts?.all ?? data.totalCount ?? 0),
         mention: Math.max(0, data.categoryCounts?.mention ?? 0),
         operational: Math.max(0, data.categoryCounts?.operational ?? 0),
+        cirugias: Math.max(0, data.categoryCounts?.cirugias ?? 0),
+        logistica: Math.max(0, data.categoryCounts?.logistica ?? 0),
+        stock: Math.max(0, data.categoryCounts?.stock ?? 0),
+        consumos: Math.max(0, data.categoryCounts?.consumos ?? 0),
+        comparativa: Math.max(0, data.categoryCounts?.comparativa ?? 0),
+        cobros: Math.max(0, data.categoryCounts?.cobros ?? 0),
       })
       setListError(null)
       setCountError(null)
@@ -171,7 +196,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         return next
       })
     }
-  }, [companyId, items])
+  }, [companyId, items, unreadOnly])
 
   const markAllAsRead = useCallback(async () => {
     if (!companyId) {
@@ -211,7 +236,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     } finally {
       setMarkingAll(false)
     }
-  }, [companyId, items])
+  }, [companyId, items, unreadOnly])
 
   useEffect(() => {
     if (autoloadList) {
@@ -303,4 +328,91 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     markAllAsRead,
     isMarking: (notificationId: string) => Boolean(markingIds[notificationId]),
   }), [categoryCounts, companyId, countError, items, listError, loadingCount, loadingList, markAllAsRead, markAsRead, markingAll, markingIds, refreshList, refreshUnreadCount, totalCount, unreadCategoryCounts, unreadCount])
+}
+
+export function useNotificationPolicies() {
+  const { activeCompany } = useAuth()
+  const companyId = activeCompany?.id
+
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [userRole, setUserRole] = useState("")
+  const [rolePolicies, setRolePolicies] = useState<NotificationRolePolicyItem[]>([])
+  const [userPreferences, setUserPreferences] = useState<NotificationUserPrefItem[]>([])
+  const [catalog, setCatalog] = useState<NotificationCatalogItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [savingKey, setSavingKey] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    if (!companyId) return
+    setLoading(true)
+    try {
+      const data = await fetchNotificationPolicies(companyId)
+      setIsAdmin(data.isAdmin)
+      setUserRole(data.userRole)
+      setRolePolicies(data.rolePolicies)
+      setUserPreferences(data.userPreferences)
+      setCatalog(data.catalog)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar configuración de notificaciones")
+    } finally {
+      setLoading(false)
+    }
+  }, [companyId])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const setRolePolicy = useCallback(async (role: string, notificationType: string, inAppEnabled: boolean) => {
+    if (!companyId) return
+    const key = `role:${role}:${notificationType}`
+    setSavingKey(key)
+    try {
+      await updateRoleNotificationPolicyApi(companyId, { role, notificationType, inAppEnabled })
+      setRolePolicies((prev) =>
+        prev.map((item) =>
+          item.role === role && item.notificationType === notificationType
+            ? { ...item, inAppEnabled, isDefault: false }
+            : item
+        )
+      )
+    } finally {
+      setSavingKey(null)
+    }
+  }, [companyId])
+
+  const setUserPreference = useCallback(async (notificationType: string, inAppMuted: boolean) => {
+    if (!companyId) return
+    const key = `user:${notificationType}`
+    setSavingKey(key)
+    try {
+      await updateUserNotificationPrefApi(companyId, { notificationType, inAppMuted })
+      setUserPreferences((prev) =>
+        prev.map((item) =>
+          item.notificationType === notificationType
+            ? { ...item, inAppMuted }
+            : item
+        )
+      )
+    } finally {
+      setSavingKey(null)
+    }
+  }, [companyId])
+
+  return {
+    companyId,
+    isAdmin,
+    userRole,
+    rolePolicies,
+    userPreferences,
+    catalog,
+    loading,
+    error,
+    savingKey,
+    refresh,
+    setRolePolicy,
+    setUserPreference,
+  }
 }

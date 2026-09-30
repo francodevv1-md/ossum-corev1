@@ -4,12 +4,13 @@
 // Catálogos (origin / state / transitions) viven acá para single source of truth.
 // schema.prisma queda intocable (schema phase1 cerrado).
 
-import { Prisma } from "@prisma/client";
+import { InternalNotificationType, Prisma } from "@prisma/client";
 import type { PrismaClient, Remito as PrismaRemito } from "@prisma/client";
 
 import { createAuditEvent, type AuditPrismaClient } from "../audit";
 import { requireCompanyId } from "../tenant";
 import { ApiError, badRequest, notFound } from "../api/errors";
+import { emitCrossDomainNotification } from "./internal-notifications.service";
 import {
   confirmDevolucion,
   createDevolucion,
@@ -877,6 +878,22 @@ export async function emitirRemito(input: EmitirRemitoInput) {
               oldValue: { state: current.state },
               newValue: { state: result.state, visibleNumber: result.visibleNumber },
             });
+
+            await emitCrossDomainNotification(tx as unknown as PrismaClient, {
+              companyId,
+              actorUserId: updatedById,
+              type: InternalNotificationType.remito_prepared,
+              domain: "LOGISTICA",
+              severity: "INFO",
+              surgeryId: result.surgeryId,
+              sourceEntityId: result.id,
+              linkHref: `/remitos/${result.id}`,
+              title: `Remito ${result.visibleNumber || result.id} emitido / preparado`,
+              body: `Remito de salida emitido para ${result.surgeryId ? `cirugía ${result.surgeryId}` : "traslado / venta"}.`,
+              eventKeyPrefix: "remito:issued",
+            }).catch((err) => {
+              console.error("[notifications] Failed to emit remito_prepared:", err);
+            });
           }
 
           return result;
@@ -999,6 +1016,45 @@ export async function updateRemitoState(input: UpdateRemitoStateInput) {
         oldValue: { state: currentState },
         newValue: { state: newState },
       });
+
+      let notifType: InternalNotificationType | null = null;
+      let title = "";
+      let body = "";
+      let severity: "INFO" | "WARNING" | "CRITICAL" | "SUCCESS" = "INFO";
+
+      if (newState === "En_transito") {
+        notifType = InternalNotificationType.remito_dispatched;
+        title = `Remito ${result.visibleNumber || result.id} despachado`;
+        body = `El remito se encuentra en tránsito hacia su destino.`;
+      } else if (newState === "Entregado") {
+        notifType = InternalNotificationType.remito_delivered;
+        title = `Remito ${result.visibleNumber || result.id} entregado`;
+        body = `Entrega confirmada en destino.`;
+        severity = "SUCCESS";
+      } else if (newState === "Anulado") {
+        notifType = InternalNotificationType.logistics_incident;
+        title = `Incidencia / Anulación en Remito ${result.visibleNumber || result.id}`;
+        body = `El remito fue anulado desde estado ${currentState}.`;
+        severity = "WARNING";
+      }
+
+      if (notifType) {
+        await emitCrossDomainNotification(tx as unknown as PrismaClient, {
+          companyId,
+          actorUserId: updatedById,
+          type: notifType,
+          domain: "LOGISTICA",
+          severity,
+          surgeryId: result.surgeryId,
+          sourceEntityId: result.id,
+          linkHref: `/remitos/${result.id}`,
+          title,
+          body,
+          eventKeyPrefix: `remito:state:${newState}`,
+        }).catch((err) => {
+          console.error("[notifications] Failed to emit remito state change notification:", err);
+        });
+      }
     }
 
     return result;

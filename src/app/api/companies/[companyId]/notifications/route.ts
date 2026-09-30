@@ -14,12 +14,22 @@ type RouteContext = {
 }
 
 const ROUTE_TAG = "[api][notifications][list]"
-const VALID_CATEGORIES = new Set<InternalNotificationCategory>(["all", "mention", "operational"])
+const VALID_CATEGORIES = new Set<InternalNotificationCategory>([
+  "all",
+  "mention",
+  "operational",
+  "cirugias",
+  "logistica",
+  "stock",
+  "consumos",
+  "comparativa",
+  "cobros",
+])
 
 function getCategoryParam(searchParams: URLSearchParams): InternalNotificationCategory {
   const category = searchParams.get("category") ?? "all"
   if (!VALID_CATEGORIES.has(category as InternalNotificationCategory)) {
-    throw badRequest("category must be all, mention, or operational")
+    throw badRequest("category must be all, mention, operational, cirugias, logistica, stock, consumos, comparativa, or cobros")
   }
 
   return category as InternalNotificationCategory
