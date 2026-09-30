@@ -56,6 +56,8 @@ model Company {
   auditEvents                      AuditEvent[]
   seguimientoEntries               SeguimientoEntry[]
   internalNotifications            InternalNotification[]
+  notificationRolePolicies         NotificationRolePolicy[]
+  notificationUserPreferences      NotificationUserPreference[]
   operationalAssignees             CompanyOperationalAssignee[]             @relation("AvailabilityCompanyOperationalAssignees")
   availabilityRequests             AvailabilityRequest[]                    @relation("AvailabilityCompanyRequests")
   availabilityRecipientAssignments AvailabilityRequestRecipientAssignment[] @relation("AvailabilityCompanyRecipientAssignments")
@@ -100,6 +102,13 @@ model Company {
   vehicles                         Vehicle[]
   ordenesCompra                    OrdenCompra[]                            @relation("CompanyOrdenesCompra")
   facturasCompra                   FacturaCompra[]                          @relation("CompanyFacturasCompra")
+  receipts                         Receipt[]                                @relation("CompanyReceipts")
+  receiptLines                     ReceiptLine[]                            @relation("CompanyReceiptLines")
+  receiptScans                     ReceiptScan[]                            @relation("CompanyReceiptScans")
+  stockMovements                   StockMovement[]                          @relation("CompanyStockMovements")
+  necesidadesCompra                NecesidadCompra[]                        @relation("CompanyNecesidadesCompra")
+  ordenesPago                      OrdenPago[]                              @relation("CompanyOrdenesPago")
+  ordenPagoImputaciones            OrdenPagoImputacion[]                    @relation("CompanyOrdenPagoImputaciones")
 }
 
 model Vehicle {
@@ -168,6 +177,7 @@ model User {
   seguimientoEntries                    SeguimientoEntry[]
   receivedInternalNotifications         InternalNotification[]                   @relation("InternalNotificationRecipient")
   sentInternalNotifications             InternalNotification[]                   @relation("InternalNotificationActor")
+  notificationUserPreferences           NotificationUserPreference[]
   createdSurgeries                      Surgery[]                                @relation("SurgeryCreatedBy")
   createdOperationalAssignees           CompanyOperationalAssignee[]             @relation("CompanyOperationalAssigneeCreatedBy")
   updatedOperationalAssignees           CompanyOperationalAssignee[]             @relation("CompanyOperationalAssigneeUpdatedBy")
@@ -211,6 +221,11 @@ model User {
   acceptedCajasCommands                 CajasCommandAcceptance[]                 @relation("CajasCommandAcceptedBy")
   cajasCommandAttempts                  CajasCommandAttempt[]                    @relation("CajasAttemptActor")
   cajasProjectionReconciliations        CajasProjectionReconciliation[]          @relation("CajasReconciliationComparedBy")
+  confirmedReceipts                     Receipt[]                                @relation("ReceiptConfirmedBy")
+  createdStockMovements                 StockMovement[]                          @relation("StockMovementCreatedBy")
+  createdNecesidadesCompra              NecesidadCompra[]                        @relation("NecesidadCompraCreatedBy")
+  createdOrdenesPago                    OrdenPago[]                              @relation("OrdenPagoCreatedBy")
+  updatedOrdenesPago                    OrdenPago[]                              @relation("OrdenPagoUpdatedBy")
 }
 
 // ─── Preferencias de Vista por Módulo ───────────────────────────────
@@ -254,6 +269,8 @@ model UserCompanyAccess {
   updatedDocumentItems         SurgeryDocumentItem[]                    @relation("SurgeryDocumentItemUpdatedByAccess")
 
   @@unique([userId, companyId])
+  @@index([companyId, isActive])
+  @@index([companyId, role])
 }
 
 // ─── Contacto ────────────────────────────────────────────────────────
@@ -311,6 +328,7 @@ model ContactCompanyLink {
   articleIdentifierSupplierLinks ArticleIdentifier[]      @relation("ArticleIdentifierSupplierLink")
   articleSupplierMappingLinks    ArticleSupplierMapping[] @relation("ArticleSupplierMappingSupplierLink")
   facturasCompra                 FacturaCompra[]          @relation("ContactCompanyFacturaCompra")
+  ordenesPago                    OrdenPago[]              @relation("ContactCompanyOrdenPago")
 
   @@unique([contactId, companyId])
   @@unique([companyId, code], map: "uq_contact_company_code")
@@ -429,6 +447,7 @@ model Surgery {
   payments              Payment[]
   cajasAssignments      CajasAssignment[]          @relation("CajasSurgeryAssignments")
   documentChecklist     SurgeryDocumentChecklist?  @relation("SurgeryDocumentChecklistSurgery")
+  necesidadesCompra     NecesidadCompra[]          @relation("SurgeryNecesidadesCompra")
 
   @@unique([companyId, id], map: "uq_surgery_company_id")
   @@unique([companyId, visibleNumber], map: "Surgery_companyId_visibleNumber_key")
@@ -992,6 +1011,28 @@ enum InternalNotificationType {
   availability_request_actionable
   availability_request_completed
   availability_pivot_reassigned
+  surgery_critical_change
+  surgery_reassigned
+  surgery_date_assigned
+  surgery_authorized
+  surgery_blocked
+  remito_prepared
+  remito_dispatched
+  remito_delivered
+  logistics_incident
+  stock_receipt_confirmed
+  stock_low
+  stock_expiry
+  stock_difference
+  consumo_pending_validation
+  consumo_validated
+  devolucion_confirmed
+  consumo_incident
+  comparativa_deviation
+  comparativa_pending_review
+  payment_recorded
+  payment_cancelled
+  invoice_due
 }
 
 model InternalNotification {
@@ -999,8 +1040,11 @@ model InternalNotification {
   companyId             String
   recipientUserId       String
   actorUserId           String
-  surgeryId             String
+  surgeryId             String?
   sourceEntityId        String
+  domain                String                   @default("CIRUGIAS")
+  severity              String                   @default("INFO")
+  linkHref              String?
   // DB CHECK requires this link for all three availability notification types; unrelated types remain nullable.
   availabilityRequestId String?
   type                  InternalNotificationType
@@ -1015,7 +1059,7 @@ model InternalNotification {
   company             Company              @relation(fields: [companyId], references: [id])
   recipient           User                 @relation("InternalNotificationRecipient", fields: [recipientUserId], references: [id])
   actor               User                 @relation("InternalNotificationActor", fields: [actorUserId], references: [id])
-  surgery             Surgery              @relation(fields: [surgeryId], references: [id], onDelete: Cascade)
+  surgery             Surgery?             @relation(fields: [surgeryId], references: [id], onDelete: Cascade)
   availabilityRequest AvailabilityRequest? @relation("InternalNotificationAvailabilityRequest", fields: [companyId, surgeryId, availabilityRequestId], references: [companyId, surgeryId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_internal_notification_availability_request")
 
   @@unique([companyId, eventKey])
@@ -1023,7 +1067,39 @@ model InternalNotification {
   @@index([recipientUserId, createdAt])
   @@index([surgeryId, createdAt])
   @@index([sourceEntityId])
+  @@index([companyId, domain, recipientUserId, readAt])
   @@index([companyId, availabilityRequestId, createdAt], map: "ix_internal_notification_company_availability_request")
+}
+
+model NotificationRolePolicy {
+  id               String                   @id @default(cuid())
+  companyId        String
+  role             String
+  notificationType InternalNotificationType
+  inAppEnabled     Boolean                  @default(true)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, role, notificationType])
+  @@index([companyId, role])
+}
+
+model NotificationUserPreference {
+  id               String                   @id @default(cuid())
+  companyId        String
+  userId           String
+  notificationType InternalNotificationType
+  inAppMuted       Boolean                  @default(false)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([companyId, userId, notificationType])
+  @@index([companyId, userId])
 }
 
 enum DigitalReceiptStatus {
@@ -2726,6 +2802,10 @@ model Article {
   identifiers        ArticleIdentifier[]         @relation("ArticleIdentifiers")
   supplierMappings   ArticleSupplierMapping[]    @relation("ArticleSupplierMappings")
   tracePolicies      ArticleTraceabilityPolicy[] @relation("ArticleTracePolicies")
+  receiptLines       ReceiptLine[]               @relation("ArticleReceiptLines")
+  receiptScans       ReceiptScan[]               @relation("ArticleReceiptScans")
+  stockMovements     StockMovement[]             @relation("ArticleStockMovements")
+  necesidadesCompra  NecesidadCompra[]           @relation("ArticleNecesidadesCompra")
 
   @@unique([organizationId, sku], map: "uq_article_org_sku")
   @@unique([organizationId, id], map: "uq_article_org_id")
@@ -2839,6 +2919,7 @@ model OrdenCompra {
   company        Company           @relation("CompanyOrdenesCompra", fields: [companyId], references: [id], onDelete: Restrict)
   items          OrdenCompraItem[]
   facturasCompra FacturaCompra[]   @relation("OrdenCompraFacturasCompra")
+  necesidades    NecesidadCompra[] @relation("OrdenCompraNecesidades")
 
   @@unique([companyId, id], map: "uq_orden_compra_company_id")
   @@index([companyId, state], map: "ix_orden_compra_company_state")
@@ -2885,10 +2966,11 @@ model FacturaCompra {
   anuladaAt     DateTime?
   observaciones String?
 
-  company       Company             @relation("CompanyFacturasCompra", fields: [companyId], references: [id], onDelete: Restrict)
-  proveedorLink ContactCompanyLink  @relation("ContactCompanyFacturaCompra", fields: [proveedorId, companyId], references: [contactId, companyId], onDelete: Restrict)
-  ordenCompra   OrdenCompra?        @relation("OrdenCompraFacturasCompra", fields: [companyId, ordenCompraId], references: [companyId, id], onDelete: Restrict)
+  company       Company               @relation("CompanyFacturasCompra", fields: [companyId], references: [id], onDelete: Restrict)
+  proveedorLink ContactCompanyLink    @relation("ContactCompanyFacturaCompra", fields: [proveedorId, companyId], references: [contactId, companyId], onDelete: Restrict)
+  ordenCompra   OrdenCompra?          @relation("OrdenCompraFacturasCompra", fields: [companyId, ordenCompraId], references: [companyId, id], onDelete: Restrict)
   items         FacturaCompraItem[]
+  imputaciones  OrdenPagoImputacion[] @relation("FacturaCompraOrdenPagoImputaciones")
 
   @@unique([companyId, id], map: "uq_factura_compra_company_id")
   @@unique([companyId, proveedorId, number], map: "uq_factura_compra_supplier_number")
@@ -2912,4 +2994,252 @@ model FacturaCompraItem {
   facturaCompra FacturaCompra @relation(fields: [facturaCompraId], references: [id], onDelete: Cascade)
 
   @@index([facturaCompraId], map: "ix_factura_compra_item_fc")
+}
+
+// ─── Recepciones de Mercadería y Movimientos de Stock ───────────────────────
+
+enum ReceiptStatus {
+  PREPARED
+  IN_CONTROL
+  CONFIRMED
+  CANCELLED
+}
+
+enum ReceiptScanStatus {
+  RESOLVED
+  PENDING
+}
+
+model Receipt {
+  id                String        @id @default(cuid())
+  companyId         String        @map("company_id")
+  documentReference String?       @map("document_reference")
+  supplierId        String?       @map("supplier_id")
+  idempotencyKey    String?       @map("idempotency_key")
+  status            ReceiptStatus @default(PREPARED)
+  notes             String?       @db.Text
+  metadata          Json?
+  confirmedAt       DateTime?     @map("confirmed_at") @db.Timestamptz(6)
+  confirmedById     String?       @map("confirmed_by_id")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company        Company         @relation("CompanyReceipts", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  confirmedBy    User?           @relation("ReceiptConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lines          ReceiptLine[]   @relation("ReceiptLines")
+  scans          ReceiptScan[]   @relation("ReceiptScans")
+  stockMovements StockMovement[] @relation("ReceiptStockMovements")
+
+  @@unique([companyId, id], map: "uq_receipt_company_id")
+  @@unique([companyId, idempotencyKey], map: "uq_receipt_idempotency", where: raw("\"idempotency_key\" IS NOT NULL"))
+  @@index([companyId, status], map: "ix_receipt_company_status")
+  @@index([companyId, createdAt(sort: Desc)], map: "ix_receipt_company_created")
+  @@map("receipt")
+}
+
+model ReceiptLine {
+  id                  String            @id @default(cuid())
+  companyId           String            @map("company_id")
+  receiptId           String            @map("receipt_id")
+  lineNumber          Int               @map("line_number")
+  articleId           String?           @map("article_id")
+  expectedCode        String?           @map("expected_code")
+  expectedDescription String?           @map("expected_description") @db.Text
+  expectedQuantity    Decimal?          @map("expected_quantity") @db.Decimal(18, 4)
+  receivedQuantity    Decimal           @default(0) @map("received_quantity") @db.Decimal(18, 4)
+  lotCode             String?           @map("lot_code")
+  serialNumber        String?           @map("serial_number")
+  expirationDate      DateTime?         @map("expiration_date") @db.Date
+  resolutionStatus    ReceiptScanStatus @default(RESOLVED) @map("resolution_status")
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company        Company         @relation("CompanyReceiptLines", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  receipt        Receipt         @relation("ReceiptLines", fields: [companyId, receiptId], references: [companyId, id], onDelete: Cascade, onUpdate: Cascade)
+  article        Article?        @relation("ArticleReceiptLines", fields: [articleId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  scans          ReceiptScan[]   @relation("ReceiptLineScans")
+  stockMovements StockMovement[] @relation("ReceiptLineStockMovements")
+
+  @@unique([companyId, id], map: "uq_receipt_line_company_id")
+  @@unique([receiptId, lineNumber], map: "uq_receipt_line_receipt_number")
+  @@index([companyId, receiptId], map: "ix_receipt_line_receipt")
+  @@index([companyId, articleId], map: "ix_receipt_line_article")
+  @@map("receipt_line")
+}
+
+model ReceiptScan {
+  id               String            @id @default(cuid())
+  companyId        String            @map("company_id")
+  receiptId        String            @map("receipt_id")
+  receiptLineId    String?           @map("receipt_line_id")
+  rawValue         String            @map("raw_value") @db.Text
+  resolutionStatus ReceiptScanStatus @default(RESOLVED) @map("resolution_status")
+  articleId        String?           @map("article_id")
+  lotCode          String?           @map("lot_code")
+  serialNumber     String?           @map("serial_number")
+  expirationDate   DateTime?         @map("expiration_date") @db.Date
+  quantity         Decimal           @default(1) @map("quantity") @db.Decimal(18, 4)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company     Company      @relation("CompanyReceiptScans", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  receipt     Receipt      @relation("ReceiptScans", fields: [companyId, receiptId], references: [companyId, id], onDelete: Cascade, onUpdate: Cascade)
+  receiptLine ReceiptLine? @relation("ReceiptLineScans", fields: [receiptLineId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  article     Article?     @relation("ArticleReceiptScans", fields: [articleId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([companyId, id], map: "uq_receipt_scan_company_id")
+  @@index([companyId, receiptId], map: "ix_receipt_scan_receipt")
+  @@index([companyId, receiptLineId], map: "ix_receipt_scan_line")
+  @@index([companyId, resolutionStatus], map: "ix_receipt_scan_status")
+  @@map("receipt_scan")
+}
+
+enum StockMovementType {
+  RECEIPT_IN
+  DISPATCH_OUT
+  ADJUSTMENT
+  RETURN_IN
+  TRANSFER
+}
+
+model StockMovement {
+  id               String            @id @default(cuid())
+  companyId        String            @map("company_id")
+  articleId        String            @map("article_id")
+  movementType     StockMovementType @default(RECEIPT_IN) @map("movement_type")
+  quantity         Decimal           @map("quantity") @db.Decimal(18, 4)
+  lotCode          String?           @map("lot_code")
+  serialNumber     String?           @map("serial_number")
+  expirationDate   DateTime?         @map("expiration_date") @db.Date
+  location         String?           @map("location")
+  boxId            String?           @map("box_id")
+  receiptId        String?           @map("receipt_id")
+  receiptLineId    String?           @map("receipt_line_id")
+  remitoId         String?           @map("remito_id")
+  remitoItemId     String?           @map("remito_item_id")
+  consumoId        String?           @map("consumo_id")
+  consumoItemId    String?           @map("consumo_item_id")
+  devolucionId     String?           @map("devolucion_id")
+  devolucionItemId String?           @map("devolucion_item_id")
+  surgeryId        String?           @map("surgery_id")
+  idempotencyKey   String?           @map("idempotency_key")
+  notes            String?           @db.Text
+  metadata         Json?             @map("metadata")
+  createdById      String?           @map("created_by_id")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company     Company      @relation("CompanyStockMovements", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  article     Article      @relation("ArticleStockMovements", fields: [articleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  receipt     Receipt?     @relation("ReceiptStockMovements", fields: [receiptId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  receiptLine ReceiptLine? @relation("ReceiptLineStockMovements", fields: [receiptLineId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdBy   User?        @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([companyId, id], map: "uq_stock_movement_company_id")
+  @@unique([companyId, idempotencyKey], map: "uq_stock_movement_idempotency", where: raw("\"idempotency_key\" IS NOT NULL"))
+  @@index([companyId, articleId], map: "ix_stock_movement_article")
+  @@index([companyId, receiptId], map: "ix_stock_movement_receipt")
+  @@index([companyId, remitoId], map: "ix_stock_movement_remito")
+  @@index([companyId, surgeryId], map: "ix_stock_movement_surgery")
+  @@index([companyId, lotCode], map: "ix_stock_movement_lot")
+  @@index([companyId, createdAt(sort: Desc)], map: "ix_stock_movement_created")
+  @@map("stock_movement")
+}
+
+// ─── Necesidades de Compra y Órdenes de Pago (Fase Compras) ────────────────
+
+enum NecesidadCompraState {
+  Pendiente
+  En_OC
+  Enviada
+  Recibida
+  Cancelada
+}
+
+model NecesidadCompra {
+  id                    String               @id @default(cuid())
+  companyId             String               @map("company_id")
+  articleId             String?              @map("article_id")
+  isArticuloZ           Boolean              @default(false) @map("is_articulo_z")
+  descripcionLibre      String?              @map("descripcion_libre")
+  code                  String?              @map("code")
+  name                  String               @map("name")
+  quantity              Decimal              @db.Decimal(14, 4)
+  priority              String               @default("media") @map("priority")
+  origin                String               @default("manual") @map("origin")
+  originReference       String?              @map("origin_reference")
+  suggestedSupplierId   String?              @map("suggested_supplier_id")
+  suggestedSupplierName String?              @map("suggested_supplier_name")
+  surgeryId             String?              @map("surgery_id")
+  observaciones         String?              @db.Text
+  state                 NecesidadCompraState @default(Pendiente)
+  ordenCompraId         String?              @map("orden_compra_id")
+  idempotencyKey        String?              @map("idempotency_key")
+  createdById           String?              @map("created_by_id")
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company     Company      @relation("CompanyNecesidadesCompra", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  article     Article?     @relation("ArticleNecesidadesCompra", fields: [articleId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  surgery     Surgery?     @relation("SurgeryNecesidadesCompra", fields: [companyId, surgeryId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade)
+  ordenCompra OrdenCompra? @relation("OrdenCompraNecesidades", fields: [companyId, ordenCompraId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy   User?        @relation("NecesidadCompraCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([companyId, id], map: "uq_necesidad_compra_company_id")
+  @@unique([companyId, idempotencyKey], map: "uq_necesidad_compra_idempotency", where: raw("\"idempotency_key\" IS NOT NULL"))
+  @@index([companyId, state], map: "ix_necesidad_compra_company_state")
+  @@index([companyId, origin], map: "ix_necesidad_compra_company_origin")
+  @@index([companyId, createdAt(sort: Desc)], map: "ix_necesidad_compra_company_created")
+  @@map("necesidad_compra")
+}
+
+enum OrdenPagoState {
+  Emitida
+  Anulada
+}
+
+model OrdenPago {
+  id            String         @id @default(cuid())
+  visibleNumber Int?           @map("visible_number")
+  companyId     String         @map("company_id")
+  proveedorId   String         @map("proveedor_id")
+  proveedorName String         @map("proveedor_name")
+  total         Decimal        @default(0) @db.Decimal(14, 4)
+  method        String?        @map("method")
+  paymentDate   DateTime       @default(now()) @map("payment_date") @db.Timestamptz(6)
+  state         OrdenPagoState @default(Emitida)
+  observaciones String?        @db.Text
+  createdById   String?        @map("created_by_id")
+  updatedById   String?        @map("updated_by_id")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company       Company               @relation("CompanyOrdenesPago", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  proveedorLink ContactCompanyLink    @relation("ContactCompanyOrdenPago", fields: [proveedorId, companyId], references: [contactId, companyId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy     User?                 @relation("OrdenPagoCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  updatedBy     User?                 @relation("OrdenPagoUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  imputaciones  OrdenPagoImputacion[] @relation("OrdenPagoImputaciones")
+
+  @@unique([companyId, id], map: "uq_orden_pago_company_id")
+  @@index([companyId, state], map: "ix_orden_pago_company_state")
+  @@index([companyId, proveedorId], map: "ix_orden_pago_company_proveedor")
+  @@index([companyId, paymentDate(sort: Desc)], map: "ix_orden_pago_company_date")
+  @@map("orden_pago")
+}
+
+model OrdenPagoImputacion {
+  id              String   @id @default(cuid())
+  companyId       String   @map("company_id")
+  ordenPagoId     String   @map("orden_pago_id")
+  facturaCompraId String   @map("factura_compra_id")
+  amount          Decimal  @db.Decimal(14, 4)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company       Company       @relation("CompanyOrdenPagoImputaciones", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ordenPago     OrdenPago     @relation("OrdenPagoImputaciones", fields: [companyId, ordenPagoId], references: [companyId, id], onDelete: Cascade, onUpdate: Cascade)
+  facturaCompra FacturaCompra @relation("FacturaCompraOrdenPagoImputaciones", fields: [companyId, facturaCompraId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([companyId, id], map: "uq_orden_pago_imputacion_company_id")
+  @@unique([companyId, ordenPagoId, facturaCompraId], map: "uq_orden_pago_imputacion_unique")
+  @@index([companyId, ordenPagoId], map: "ix_orden_pago_imputacion_op")
+  @@index([companyId, facturaCompraId], map: "ix_orden_pago_imputacion_fc")
+  @@map("orden_pago_imputacion")
 }
