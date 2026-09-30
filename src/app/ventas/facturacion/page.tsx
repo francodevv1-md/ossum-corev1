@@ -69,7 +69,7 @@ import { useInvoices } from "@/hooks/useInvoices"
 import { usePayments } from "@/hooks/usePayments"
 import { fetchBackendActiveSurgeries } from "@/lib/api/backend-surgeries"
 import type { InvoiceApiRow, InvoiceBase, InvoiceState } from "@/lib/api/invoices"
-import type { CreateInvoicePaymentPayload } from "@/lib/api/payments"
+import type { CreatePaymentPayload } from "@/lib/api/payments"
 import { formatDecimalCurrency, parseDecimalScale4 } from "@/lib/decimal-money"
 import { canSendFinancialDocumentEmail } from "@/lib/permissions/financial-document-email"
 import { formatDate } from "@/lib/formatters"
@@ -446,10 +446,10 @@ export default function FacturacionPage() {
     }
   }
 
-  const registerPayment = async (payload: CreateInvoicePaymentPayload) => {
+  const registerPayment = async (payload: CreatePaymentPayload) => {
     setActionError(null)
     try {
-      await paymentsApi.create(payload)
+      await paymentsApi.createPayment(payload)
       await invoicesApi.refresh()
       toast.success("Cobro operativo registrado")
     } catch (cause) {
@@ -1294,7 +1294,8 @@ export default function FacturacionPage() {
         <CobroFormDialog
           open={paymentInvoice != null}
           onOpenChange={(open) => { if (!open) setPaymentSelection(null) }}
-          invoice={paymentInvoice}
+          invoices={invoicesApi.invoices}
+          initialInvoice={paymentInvoice}
           onSubmit={registerPayment}
           submitting={paymentsApi.mutatingId === "__create__"}
         />

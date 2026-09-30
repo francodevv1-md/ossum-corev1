@@ -39,6 +39,24 @@ export type ListPaymentsParams = {
   skip?: number
 }
 
+export type PaymentImputationPayload = {
+  invoiceId: string
+  amount: string | number
+  metadata?: Record<string, unknown>
+}
+
+export type CreatePaymentPayload = {
+  surgeryId?: string
+  amount: string | number
+  method?: PaymentMethod | string
+  currency?: string
+  receivedAt?: string
+  reference?: string
+  notes?: string
+  imputations?: PaymentImputationPayload[]
+  metadata?: Record<string, unknown>
+}
+
 export type CreateInvoicePaymentPayload = {
   invoiceId: string
   surgeryId?: string
@@ -79,8 +97,9 @@ export async function fetchAllPayments(companyId: string, params?: Omit<ListPaym
   }
 }
 
-export function createInvoicePayment(companyId: string, payload: CreateInvoicePaymentPayload) {
+export function createPayment(companyId: string, payload: CreatePaymentPayload) {
   const metadata = {
+    ...(payload.metadata ?? {}),
     ...(payload.reference ? { reference: payload.reference } : {}),
     ...(payload.notes ? { notes: payload.notes } : {}),
   }
@@ -90,12 +109,28 @@ export function createInvoicePayment(companyId: string, payload: CreateInvoicePa
     body: JSON.stringify({
       surgeryId: payload.surgeryId,
       method: payload.method,
-      currency: "ARS",
-      amount: payload.amount,
+      currency: payload.currency ?? "ARS",
+      amount: String(payload.amount),
       receivedAt: payload.receivedAt,
-      imputations: [{ invoiceId: payload.invoiceId, amount: payload.amount }],
+      imputations: (payload.imputations ?? []).map((imp) => ({
+        invoiceId: imp.invoiceId,
+        amount: String(imp.amount),
+        metadata: imp.metadata,
+      })),
       metadata: Object.keys(metadata).length ? metadata : undefined,
     }),
+  })
+}
+
+export function createInvoicePayment(companyId: string, payload: CreateInvoicePaymentPayload) {
+  return createPayment(companyId, {
+    surgeryId: payload.surgeryId,
+    amount: payload.amount,
+    method: payload.method,
+    receivedAt: payload.receivedAt,
+    reference: payload.reference,
+    notes: payload.notes,
+    imputations: [{ invoiceId: payload.invoiceId, amount: payload.amount }],
   })
 }
 

@@ -1,13 +1,14 @@
 // OSSUM COR — Payment service (Fase 1D)
 // Cobros independientes con imputación formal a facturas por invoiceId FK real.
 
-import { Prisma } from "@prisma/client";
+import { InternalNotificationType, Prisma } from "@prisma/client";
 import type { PrismaClient, Payment as PrismaPayment } from "@prisma/client";
 
 import { createAuditEvent } from "../audit";
 import { badRequest, notFound } from "../api/errors";
 import { requireCompanyId } from "../tenant";
 import { recomputeInvoicePaymentState } from "./invoice.service";
+import { emitCrossDomainNotification } from "./internal-notifications.service";
 
 export const PAYMENT_STATES = ["Registrado", "Anulado"] as const;
 export type PaymentState = (typeof PAYMENT_STATES)[number];
@@ -206,6 +207,23 @@ export async function createPayment(input: CreatePaymentInput) {
         oldValue: null,
         newValue: { id: payment.id, visibleNumber: payment.visibleNumber, amount: payment.amount.toString(), invoiceIds },
       });
+
+      try {
+        await emitCrossDomainNotification(tx, {
+          companyId,
+          actorUserId: createdById,
+          type: InternalNotificationType.payment_recorded,
+          domain: "COBROS",
+          severity: "SUCCESS",
+          title: `Cobro registrado: REC-${payment.visibleNumber || payment.id.slice(-6)}`,
+          body: `Cobro por $${payment.amount.toString()} registrado con éxito.`,
+          sourceEntityId: payment.id,
+          linkHref: `/ventas/cobros`,
+          metadata: { paymentId: payment.id, amount: payment.amount.toString(), method: payment.method },
+        });
+      } catch (e) {
+        console.warn("[notification] Failed to emit payment_recorded notification", e);
+      }
     }
     return payment;
   });
@@ -244,7 +262,26 @@ export async function cancelPayment(input: CancelPaymentInput) {
     for (const invoiceId of invoiceIds) {
       await recomputeInvoicePaymentState({ companyId, invoiceId, prisma: tx });
     }
-    if (updatedById) await createAuditEvent({ prisma: tx as unknown as PrismaClient, companyId, userId: updatedById, entityType: "Payment", entityId: payment.id, action: "payment_cancelled", module: "payment", oldValue: { state: current.state }, newValue: { state: payment.state, invoiceIds } });
+    if (updatedById) {
+      await createAuditEvent({ prisma: tx as unknown as PrismaClient, companyId, userId: updatedById, entityType: "Payment", entityId: payment.id, action: "payment_cancelled", module: "payment", oldValue: { state: current.state }, newValue: { state: payment.state, invoiceIds } });
+
+      try {
+        await emitCrossDomainNotification(tx, {
+          companyId,
+          actorUserId: updatedById,
+          type: InternalNotificationType.payment_cancelled,
+          domain: "COBROS",
+          severity: "WARNING",
+          title: `Cobro anulado: REC-${payment.visibleNumber || payment.id.slice(-6)}`,
+          body: `El cobro por $${payment.amount.toString()} fue anulado y los saldos revertidos.`,
+          sourceEntityId: payment.id,
+          linkHref: `/ventas/cobros`,
+          metadata: { paymentId: payment.id, amount: payment.amount.toString() },
+        });
+      } catch (e) {
+        console.warn("[notification] Failed to emit payment_cancelled notification", e);
+      }
+    }
     return payment;
   });
 }
