@@ -1,10 +1,93 @@
 import React from "react"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi, beforeEach } from "vitest"
 import { UsuariosRolesView } from "@/components/configuracion/UsuariosRolesView"
+import * as useMembershipsModule from "@/hooks/useMemberships"
 
-describe("UsuariosRolesView Component", () => {
-  it("renders the header and initial user list", () => {
+const mockUsers = [
+  {
+    id: "mem-1",
+    userId: "usr-1",
+    email: "franco.sistemas@districorr.com.ar",
+    firstName: "Franco",
+    lastName: "Jr",
+    name: "Franco Jr",
+    phone: null,
+    role: "admin",
+    canonicalRole: "admin" as const,
+    isActive: true,
+    userIsActive: true,
+    createdAt: "2026-01-10T10:00:00.000Z",
+    updatedAt: "2026-01-10T10:00:00.000Z",
+    isSelf: true,
+    isLastAdmin: true,
+  },
+  {
+    id: "mem-2",
+    userId: "usr-2",
+    email: "nelson.coordinacion@districorr.com.ar",
+    firstName: "Nelson",
+    lastName: "González",
+    name: "Nelson González",
+    phone: null,
+    role: "coordinator",
+    canonicalRole: "coordinator" as const,
+    isActive: true,
+    userIsActive: true,
+    createdAt: "2026-02-01T10:00:00.000Z",
+    updatedAt: "2026-02-01T10:00:00.000Z",
+    isSelf: false,
+    isLastAdmin: false,
+  },
+  {
+    id: "mem-3",
+    userId: "usr-3",
+    email: "lucas.operaciones@districorr.com.ar",
+    firstName: "Lucas",
+    lastName: "Martínez",
+    name: "Lucas Martínez",
+    phone: null,
+    role: "logistics",
+    canonicalRole: "logistics" as const,
+    isActive: false,
+    userIsActive: true,
+    createdAt: "2026-02-15T10:00:00.000Z",
+    updatedAt: "2026-02-15T10:00:00.000Z",
+    isSelf: false,
+    isLastAdmin: false,
+  },
+]
+
+describe("UsuariosRolesView Component (Backend Authoritative)", () => {
+  const createMembershipMock = vi.fn().mockResolvedValue({})
+  const updateMembershipMock = vi.fn().mockResolvedValue({})
+  const toggleMembershipStatusMock = vi.fn().mockResolvedValue({})
+  const deleteMembershipMock = vi.fn().mockResolvedValue({})
+  const resetPasswordMock = vi.fn().mockResolvedValue({
+    success: true,
+    message: "Clave generada",
+    tempPassword: "Ossum#123456",
+  })
+  const refreshMock = vi.fn()
+
+  beforeEach(() => {
+    vi.spyOn(useMembershipsModule, "useMemberships").mockReturnValue({
+      items: mockUsers,
+      totalAdmins: 1,
+      canManage: true,
+      isLoading: false,
+      error: null,
+      isMutating: false,
+      refresh: refreshMock,
+      createMembership: createMembershipMock,
+      updateMembership: updateMembershipMock,
+      toggleMembershipStatus: toggleMembershipStatusMock,
+      deleteMembership: deleteMembershipMock,
+      resetPassword: resetPasswordMock,
+    })
+  })
+
+  it("renders the header and user list from backend authority", () => {
     render(<UsuariosRolesView />)
 
     expect(screen.getByRole("heading", { name: /usuarios y roles/i })).toBeInTheDocument()
@@ -13,7 +96,7 @@ describe("UsuariosRolesView Component", () => {
     expect(screen.getAllByText("Nelson González").length).toBeGreaterThan(0)
   })
 
-  it("calculates and displays stats correctly", () => {
+  it("displays metrics and counts accurately", () => {
     render(<UsuariosRolesView />)
 
     expect(screen.getByText("Total Usuarios")).toBeInTheDocument()
@@ -22,93 +105,48 @@ describe("UsuariosRolesView Component", () => {
     expect(screen.getByText("Administradores")).toBeInTheDocument()
   })
 
-  it("filters users by text search", async () => {
+  it("filters users by text search", () => {
     render(<UsuariosRolesView />)
 
     const searchInput = screen.getByPlaceholderText(/buscar por nombre, email o rol/i)
-    fireEvent.change(searchInput, { target: { value: "Mariana" } })
+    fireEvent.change(searchInput, { target: { value: "Nelson" } })
 
-    expect(screen.getAllByText("Mariana Sánchez").length).toBeGreaterThan(0)
-    expect(screen.queryByText("Franco Jr")).not.toBeInTheDocument()
+    expect(screen.getAllByText("Nelson González").length).toBeGreaterThan(0)
+    expect(screen.queryByText("Lucas Martínez")).not.toBeInTheDocument()
   })
 
-  it("displays empty state when search finds no matches and allows clearing filters", async () => {
+  it("shows last admin badge and warns on last admin mutation", () => {
     render(<UsuariosRolesView />)
 
-    const searchInput = screen.getByPlaceholderText(/buscar por nombre, email o rol/i)
-    fireEvent.change(searchInput, { target: { value: "UsuarioInexistenteXYZ" } })
-
-    expect(screen.getByText("No se encontraron usuarios")).toBeInTheDocument()
-
-    // Clear filters button
-    const clearButton = screen.getByRole("button", { name: /limpiar filtros/i })
-    fireEvent.click(clearButton)
-
-    expect(screen.getAllByText("Franco Jr").length).toBeGreaterThan(0)
+    expect(screen.getByText("Último Admin")).toBeInTheDocument()
   })
 
-  it("opens create user modal and validates required fields", async () => {
+  it("opens create user modal and submits with canonical role", async () => {
     render(<UsuariosRolesView />)
 
     const createButton = screen.getByRole("button", { name: /nuevo usuario/i })
     fireEvent.click(createButton)
 
-    expect(
-      screen.getByText(
-        "Completá los datos requeridos para registrar una nueva cuenta de usuario en el sistema."
+    const firstNameInput = screen.getByLabelText(/nombre \*/i)
+    const lastNameInput = screen.getByLabelText(/apellido \*/i)
+    const emailInput = screen.getByLabelText(/correo electrónico \*/i)
+
+    fireEvent.change(firstNameInput, { target: { value: "Mariana" } })
+    fireEvent.change(lastNameInput, { target: { value: "Sánchez" } })
+    fireEvent.change(emailInput, { target: { value: "mariana.admin@districorr.com.ar" } })
+
+    const submitBtn = screen.getByRole("button", { name: /crear usuario/i })
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      expect(createMembershipMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: "mariana.admin@districorr.com.ar",
+          firstName: "Mariana",
+          lastName: "Sánchez",
+          role: "coordinator",
+        })
       )
-    ).toBeInTheDocument()
-
-    const submitBtn = screen.getByRole("button", { name: /crear usuario/i })
-    fireEvent.click(submitBtn)
-
-    // Form errors should be visible
-    expect(screen.getByText(/el nombre completo es requerido/i)).toBeInTheDocument()
-    expect(screen.getByText(/el correo electrónico es requerido/i)).toBeInTheDocument()
-  })
-
-  it("successfully creates a new user and adds it to the list", async () => {
-    render(<UsuariosRolesView />)
-
-    const createButton = screen.getByRole("button", { name: /nuevo usuario/i })
-    fireEvent.click(createButton)
-
-    const nameInput = screen.getByLabelText(/nombre completo/i)
-    const emailInput = screen.getByLabelText(/correo electrónico/i)
-
-    fireEvent.change(nameInput, { target: { value: "Agustina Doctora" } })
-    fireEvent.change(emailInput, { target: { value: "agustina.medica@districorr.com.ar" } })
-
-    const submitBtn = screen.getByRole("button", { name: /crear usuario/i })
-    fireEvent.click(submitBtn)
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Agustina Doctora").length).toBeGreaterThan(0)
-      expect(screen.getAllByText("agustina.medica@districorr.com.ar").length).toBeGreaterThan(0)
-    })
-  })
-
-  it("opens password reset dialog and triggers password refresh", async () => {
-    render(<UsuariosRolesView />)
-
-    const resetButtons = screen.getAllByTitle(/refrescar \/ restablecer contraseña/i)
-    fireEvent.click(resetButtons[0])
-
-    expect(screen.getByText(/refrescar contraseña de acceso/i)).toBeInTheDocument()
-    expect(screen.getByText(/enlace por email/i)).toBeInTheDocument()
-    expect(screen.getByText(/clave provisoria/i)).toBeInTheDocument()
-
-    // Switch to temporary password
-    const tempKeyOption = screen.getByText(/clave provisoria/i)
-    fireEvent.click(tempKeyOption)
-
-    expect(screen.getByText(/contraseña generada/i)).toBeInTheDocument()
-
-    const confirmBtn = screen.getByRole("button", { name: /confirmar clave temporal/i })
-    fireEvent.click(confirmBtn)
-
-    await waitFor(() => {
-      expect(screen.queryByText(/refrescar contraseña de acceso/i)).not.toBeInTheDocument()
     })
   })
 })

@@ -1,31 +1,68 @@
-// OSSUM COR — API guards for company-scoped access.
+// OSSUM COR — API guards for company-scoped access and RBAC enforcement.
 // Guards expect a pre-resolved ApiAuthContext from getApiAuthContext().
-// No direct header parsing here — auth resolution is centralized in auth-context.ts.
+// Deny-by-default: invalid roles or ungranted capabilities throw 403 ApiError.
 
 import type { ApiAuthContext } from "./auth-context";
 import { forbidden } from "./errors";
-import { SEGUIMIENTO_EVENT_MUTATION_ALLOWED_ROLES } from "../permissions/seguimiento";
+import {
+  type AppCapability,
+  hasCapability,
+  isRoleAdmin,
+} from "../permissions/capabilities";
+import { resolveCanonicalRole } from "../permissions/canonical-roles";
 
 export { type ApiAuthContext } from "./auth-context";
+export { type AppCapability } from "../permissions/capabilities";
 
 /**
- * Validate that the actor has read access to the target company.
- * Any active company membership grants read access.
+ * Validate that the actor has an active company membership.
+ * Access already checked during context resolution — acts as semantic marker.
  */
-export function requireCompanyReadAccess(ctx: ApiAuthContext): void {
-  // Access already validated in getApiAuthContext — guard is a defensive no-op
-  // but provides semantic clarity in route code.
-  void ctx;
+export function requireCompanyMembership(ctx: ApiAuthContext): void {
+  if (!ctx.companyId || !ctx.actorUserId) {
+    throw forbidden("Company membership required", "company_membership_required");
+  }
+}
+
+export const requireCompanyReadAccess = requireCompanyMembership;
+
+/**
+ * Validate that the actor has a specific capability within the target company.
+ * Deny-by-default: throws 403 if role lacks capability.
+ */
+export function requireCompanyCapability(
+  ctx: ApiAuthContext,
+  capability: AppCapability
+): void {
+  if (!hasCapability(ctx.role, capability)) {
+    throw forbidden(
+      `Permission denied: actor lacks required capability '${capability}'`,
+      "capability_denied"
+    );
+  }
 }
 
 /**
- * Validate that the actor has mutation access with an allowed role.
+ * Validate that the actor has admin role within the target company.
+ */
+export function requireCompanyAdmin(ctx: ApiAuthContext): void {
+  if (!isRoleAdmin(ctx.role)) {
+    throw forbidden("Administrator access required", "admin_role_required");
+  }
+}
+
+/**
+ * Validate that the actor's role matches one of the allowed roles (canonical or alias).
  */
 export function requireCompanyMutationAccess(
   ctx: ApiAuthContext,
   allowedRoles: readonly string[]
 ): void {
-  if (!allowedRoles.includes(ctx.role)) {
+  const canonicalAllowed = allowedRoles
+    .map((r) => resolveCanonicalRole(r))
+    .filter(Boolean);
+
+  if (!canonicalAllowed.includes(ctx.canonicalRole)) {
     throw forbidden("Company mutation access denied", "company_mutation_access_denied");
   }
 }
@@ -33,12 +70,8 @@ export function requireCompanyMutationAccess(
 export const requireCompanyMutationRole = requireCompanyMutationAccess;
 
 /**
- * Temporary implementation-verification mapping for Seguimiento event mutations.
- * Replace only this mapping when an approved responsible-ingresos capability exists.
- */
-/**
  * Require company mutation access for Seguimiento event mutations.
  */
 export function requireSeguimientoEventMutationAccess(ctx: ApiAuthContext): void {
-  requireCompanyMutationAccess(ctx, SEGUIMIENTO_EVENT_MUTATION_ALLOWED_ROLES);
+  requireCompanyCapability(ctx, "cirugias:mutate");
 }

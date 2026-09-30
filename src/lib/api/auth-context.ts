@@ -6,6 +6,10 @@ import { forbidden, unauthorized } from "./errors";
 import prisma from "../prisma";
 import { supabaseServerClient } from "../supabase/server";
 import { createHash } from "node:crypto";
+import {
+  type CanonicalRole,
+  resolveCanonicalRole,
+} from "../permissions/canonical-roles";
 
 export interface ApiAuthContext {
   /** Internal User.id (cuid) */
@@ -14,8 +18,12 @@ export interface ApiAuthContext {
   supabaseAuthId: string | null;
   /** Target company for this request */
   companyId: string;
-  /** User role within this company */
-  role: string;
+  /** Canonical user role within this company */
+  role: CanonicalRole;
+  /** Explicit canonical role type */
+  canonicalRole: CanonicalRole;
+  /** Raw role string from database before normalization */
+  rawRole: string;
   /** Minimal non-sensitive user payload reused by /me */
   user: {
     id: string;
@@ -151,11 +159,18 @@ async function resolveSupabaseAuthContext(
     throw forbidden("Company access denied", "company_access_denied");
   }
 
+  const canonicalRole = resolveCanonicalRole(access.role);
+  if (!canonicalRole) {
+    throw forbidden("Invalid or unassigned company role", "invalid_company_role");
+  }
+
   return {
     actorUserId: user.id,
     supabaseAuthId,
     companyId,
-    role: access.role,
+    role: canonicalRole,
+    canonicalRole,
+    rawRole: access.role,
     user: {
       id: user.id,
       email: user.email,
@@ -307,11 +322,18 @@ export async function getApiAuthContext(
     throw forbidden("Company access denied", "company_access_denied");
   }
 
+  const canonicalRole = resolveCanonicalRole(access.role);
+  if (!canonicalRole) {
+    throw forbidden("Invalid or unassigned company role", "invalid_company_role");
+  }
+
   return {
     actorUserId: user.id,
     supabaseAuthId: null,
     companyId,
-    role: access.role,
+    role: canonicalRole,
+    canonicalRole,
+    rawRole: access.role,
     user: {
       id: user.id,
       email: user.email,
