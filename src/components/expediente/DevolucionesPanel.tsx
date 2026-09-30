@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { AlertTriangle, ChevronDown, ChevronRight, Check, Loader2, Plus, RotateCcw, Send, Trash2 } from "lucide-react"
 
@@ -271,17 +271,6 @@ export function DevolucionesPanel({ surgeryId, selectedRemito, selectedConsumo, 
     : quantityValidationMessage ? "devolucion-quantity-error" : undefined
   const canCreateDraft = Boolean(selectedRemito && effectiveSelectedItem && !quantityValidationMessage && mutatingId !== "__create__")
 
-  useEffect(() => {
-    if (!effectiveSelectedItem) return
-
-    setReturnedQuantity((currentQuantity) => {
-      const currentValue = Number(currentQuantity)
-      if (!currentQuantity.trim() || !Number.isFinite(currentValue) || currentValue <= 0) return "1"
-
-      return String(Math.min(currentValue, effectiveSelectedItem.maxQuantity))
-    })
-  }, [effectiveSelectedItem?.id, effectiveSelectedItem?.maxQuantity])
-
   const totals = useMemo(() => ({
     count: devoluciones.length,
     items: devoluciones.reduce((sum, devolucion) => sum + (devolucion.items?.length ?? 0), 0),
@@ -384,7 +373,18 @@ export function DevolucionesPanel({ surgeryId, selectedRemito, selectedConsumo, 
           <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Ítem</span>
           <select
             value={effectiveSelectedItem?.id ?? ""}
-            onChange={(event) => setSelectedItemId(event.target.value)}
+            onChange={(event) => {
+              const newId = event.target.value
+              setSelectedItemId(newId)
+              const nextItem = sourceItems.find((item) => item.id === newId)
+              if (nextItem) {
+                setReturnedQuantity((curr) => {
+                  const val = Number(curr)
+                  if (!curr.trim() || !Number.isFinite(val) || val <= 0) return "1"
+                  return String(Math.min(val, nextItem.maxQuantity))
+                })
+              }
+            }}
             className="h-9 w-full rounded-md border bg-background px-2 text-xs"
             disabled={sourceItems.length === 0}
           >

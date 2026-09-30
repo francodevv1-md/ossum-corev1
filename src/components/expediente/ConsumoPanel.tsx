@@ -795,15 +795,8 @@ function ConsumoPanelBackend({
     removeDraft,
   } = useConsumos(consumoFilters)
   const { remitos: backendRemitos, loading: remitosLoading, refresh: refreshRemitos } = useRemitos(remitoFilters)
-  const remitoLabels = useMemo(
-    () => Object.fromEntries(backendRemitos.map((remito) => [remito.id, getRemitoVisibleNumber(remito)])),
-    [backendRemitos]
-  )
   const {
     trace,
-    loading: traceLoading,
-    ready: traceReady,
-    error: traceError,
     refresh: refreshTrace,
   } = useTrazabilidad(surgeryBackendId)
 
@@ -913,13 +906,7 @@ function ConsumoPanelBackend({
           </CardContent>
         </Card>
         <EmptyState />
-        <ComparativaOperativaV0
-          rows={trace?.items ?? []}
-          summary={trace?.summary ?? null}
-          loading={!traceReady || traceLoading}
-          error={traceError}
-          remitoLabels={remitoLabels}
-        />
+        <ComparativaOperativaV0 surgeryId={surgeryBackendId} />
         <DevolucionesPanel surgeryId={surgeryBackendId} selectedRemito={selectedRemito} selectedConsumo={null} onConfirmed={onDevolucionConfirmed} />
       </div>
     )
@@ -1035,13 +1022,7 @@ function ConsumoPanelBackend({
         </CardContent>
       </Card>
 
-      <ComparativaOperativaV0
-        rows={trace?.items ?? []}
-        summary={trace?.summary ?? null}
-        loading={!traceReady || traceLoading}
-        error={traceError}
-        remitoLabels={remitoLabels}
-      />
+      <ComparativaOperativaV0 surgeryId={surgeryBackendId} />
 
       <ConsumoActionBar
         state={state}

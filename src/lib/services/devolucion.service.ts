@@ -7,12 +7,13 @@
 // Al confirmarse, aplica la devolución sobre RemitoItem.returnedQuantity y
 // recalcula el estado operativo del Remito en la misma transacción.
 
-import { Prisma } from "@prisma/client";
+import { InternalNotificationType, Prisma } from "@prisma/client";
 import type { PrismaClient, Devolucion as PrismaDevolucion } from "@prisma/client";
 
 import { createAuditEvent } from "../audit";
 import { requireCompanyId } from "../tenant";
 import { badRequest, notFound } from "../api/errors";
+import { emitCrossDomainNotification } from "./internal-notifications.service";
 
 // ─── Catálogos (single source of truth; validator re-exporta estos) ─────────
 export const DEVOLUCION_STATES = [
@@ -666,6 +667,24 @@ export async function confirmDevolucion(input: ConfirmDevolucionInput) {
         oldValue: { state: current.state },
         newValue: { state: result.state, validatedAt: serializeDate(result.validatedAt) },
       });
+    }
+
+    try {
+      await emitCrossDomainNotification(tx, {
+        companyId,
+        actorUserId: updatedById ?? "system",
+        type: InternalNotificationType.devolucion_confirmed,
+        domain: "CONSUMOS",
+        severity: "INFO",
+        surgeryId: result.surgeryId,
+        sourceEntityId: result.id,
+        linkHref: result.surgeryId ? `/cirugias/${encodeURIComponent(result.surgeryId)}` : null,
+        title: `Devolución #${result.visibleNumber ?? result.id.slice(-6)} confirmada`,
+        body: "Reintegro físico de sobrante de cirugía auditado en depósito.",
+        metadata: { devolucionId: result.id, remitoId: result.remitoId, visibleNumber: result.visibleNumber },
+      });
+    } catch (err) {
+      console.error("[devolucion.service] emitCrossDomainNotification failed:", err);
     }
 
     return result;

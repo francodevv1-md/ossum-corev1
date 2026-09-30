@@ -6,12 +6,13 @@
 //
 // Repara conflicto C6: consumo.remitoId es FK OBLIGATORIA (NOT NULL + RESTRICT).
 
-import { Prisma } from "@prisma/client";
+import { InternalNotificationType, Prisma } from "@prisma/client";
 import type { PrismaClient, Consumo as PrismaConsumo } from "@prisma/client";
 
 import { createAuditEvent } from "../audit";
 import { requireCompanyId } from "../tenant";
 import { badRequest, conflict, notFound } from "../api/errors";
+import { emitCrossDomainNotification } from "./internal-notifications.service";
 
 // ─── Catálogos (single source of truth; validator re-exporta estos) ─────────
 export const CONSUMO_STATES = [
@@ -794,6 +795,24 @@ export async function validateConsumption(input: ValidateConsumptionInput) {
       });
     }
 
+    try {
+      await emitCrossDomainNotification(tx, {
+        companyId,
+        actorUserId: updatedById ?? "system",
+        type: InternalNotificationType.consumo_validated,
+        domain: "CONSUMOS",
+        severity: "SUCCESS",
+        surgeryId: result.surgeryId,
+        sourceEntityId: result.id,
+        linkHref: result.surgeryId ? `/cirugias/${encodeURIComponent(result.surgeryId)}` : null,
+        title: `Consumo #${result.visibleNumber ?? result.id.slice(-6)} validado`,
+        body: "El consumo quirúrgico ha sido validado para facturación.",
+        metadata: { consumoId: result.id, remitoId: result.remitoId, visibleNumber: result.visibleNumber },
+      });
+    } catch (err) {
+      console.error("[consumo.service] emitCrossDomainNotification failed:", err);
+    }
+
     return result;
   });
 }
@@ -1018,6 +1037,24 @@ export async function emitirConsumo(input: EmitirConsumoInput) {
               oldValue: { state: current.state },
               newValue: { state: result.state, visibleNumber: result.visibleNumber },
             });
+          }
+
+          try {
+            await emitCrossDomainNotification(tx, {
+              companyId,
+              actorUserId: updatedById ?? "system",
+              type: InternalNotificationType.consumo_pending_validation,
+              domain: "CONSUMOS",
+              severity: "INFO",
+              surgeryId: result.surgeryId,
+              sourceEntityId: result.id,
+              linkHref: result.surgeryId ? `/cirugias/${encodeURIComponent(result.surgeryId)}` : null,
+              title: `Consumo #${result.visibleNumber ?? result.id.slice(-6)} pendiente de validación`,
+              body: "Consumo emitido. Requiere validación de materiales.",
+              metadata: { consumoId: result.id, remitoId: result.remitoId, visibleNumber: result.visibleNumber },
+            });
+          } catch (err) {
+            console.error("[consumo.service] emitCrossDomainNotification failed:", err);
           }
 
           return result;
