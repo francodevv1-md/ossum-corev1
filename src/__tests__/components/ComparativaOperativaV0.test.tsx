@@ -1,161 +1,183 @@
 import { render, screen, within } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import { ComparativaOperativaV0 } from "@/components/comparativa/ComparativaOperativaV0"
-import type { TraceItemRow, TraceSummary } from "@/lib/api/trazabilidad"
+import type { SurgeryComparativaResponse } from "@/lib/api/comparativa"
 
-const summary: TraceSummary = {
-  remitosCount: 2,
-  consumosCount: 2,
-  devolucionesCount: 1,
-  eventsCount: 8,
-  itemRowsCount: 2,
-  totalSentQuantity: 11,
-  totalConsumedQuantity: 8,
-  totalReturnedQuantity: 3,
-  rowsWithDifference: 1,
-  rowsWithUnknownLotOrSerial: 0,
-  hasStockMovements: false,
-}
+vi.mock("@/components/auth/AuthProvider", () => ({
+  useAuth: () => ({ activeCompany: { id: "company-1" }, currentAccess: { role: "admin" } }),
+}))
 
-function traceRow(overrides: Partial<TraceItemRow> = {}): TraceItemRow {
-  return {
-    id: "remito-item-1",
-    remitoId: "remito-1",
-    remitoItemId: "remito-item-1",
-    consumoIds: ["consumo-1"],
-    consumoItemIds: ["consumo-item-1"],
-    devolucionIds: [],
-    devolucionItemIds: [],
-    itemId: "item-1",
-    sku: "SKU-SHARED",
-    description: "Tornillo",
-    unit: "u",
-    lot: "LOT-1",
-    serial: null,
-    expiry: null,
-    brand: null,
-    department: null,
-    sentQuantity: 7,
-    consumedQuantity: 5,
-    returnedQuantity: 1,
-    pendingQuantity: 1,
-    matchConfidence: "direct",
-    status: "pending",
-    sourceFlags: {
-      hasRemito: true,
-      hasConsumo: true,
-      hasDevolucion: false,
-      hasStockMovement: false,
+const mockComparativa: SurgeryComparativaResponse = {
+  companyId: "company-1",
+  surgeryId: "surg-1",
+  generatedAt: "2026-09-30T10:00:00.000Z",
+  sources: {
+    hasPresupuesto: true,
+    presupuestoId: "pr-1",
+    presupuestoVisibleNumber: 1,
+    presupuestoState: "aprobado",
+    hasRemitos: true,
+    remitosCount: 2,
+    remitoNumbers: ["R-0001", "remito-2"],
+    hasConsumos: true,
+    consumosCount: 1,
+    consumoNumbers: ["CON-0001"],
+    hasDevoluciones: true,
+    devolucionesCount: 1,
+    devolucionNumbers: ["DEV-0001"],
+    hasInvoices: false,
+    invoicesCount: 0,
+    invoiceNumbers: [],
+    fuentesFaltantes: [],
+  },
+  summary: {
+    totalPresupuestado: 10,
+    totalRemitido: 11,
+    totalConsumido: 8,
+    totalDevuelto: 3,
+    totalFacturado: 0,
+    totalPendienteFacturar: 8,
+    totalUnidadesPresupuestadas: 10,
+    totalUnidadesRemitidas: 11,
+    totalUnidadesConsumidas: 8,
+    totalUnidadesDevueltas: 3,
+    totalUnidadesFacturadas: 0,
+    totalUnidadesPendienteFacturar: 8,
+    deltaEconomico: -200,
+    deltaEconomicoEstimado: false,
+    lineasCount: 2,
+    lineasCoincidentes: 1,
+    lineasConDiferencia: 1,
+    lineasRevisionManual: 0,
+  },
+  lineas: [
+    {
+      key: "sku:sku-shared",
+      catalogItemId: "cat-1",
+      sku: "SKU-SHARED",
+      codigo: "SKU-SHARED",
+      descripcion: "Tornillo",
+      unit: "u",
+      metodoMatch: "codigo",
+      necesitaRevision: false,
+      observaciones: [],
+      presupuestado: 7,
+      remitido: 7,
+      consumido: 5,
+      devuelto: 1,
+      facturado: 0,
+      pendienteFisico: 1,
+      pendienteFacturar: 5,
+      precioUnitario: 100,
+      precioEstimado: false,
+      importePresupuestado: 700,
+      importeConsumido: 500,
+      importeFacturado: 0,
+      deltaCantidad: -2,
+      deltaEconomico: -200,
+      estadoLinea: "consumido_de_menos",
+      explicacion: "Consumo menor al presupuestado",
+      presupuestoItemIds: ["pr-1"],
+      remitoItemIds: ["rem-1"],
+      consumoItemIds: ["con-1"],
+      devolucionItemIds: ["dev-1"],
+      invoiceItemIds: [],
     },
-    warnings: [],
-    ...overrides,
-  }
+    {
+      key: "sku:sku-2",
+      catalogItemId: "cat-2",
+      sku: "SKU-2",
+      codigo: "SKU-2",
+      descripcion: "Placa",
+      unit: "u",
+      metodoMatch: "codigo",
+      necesitaRevision: false,
+      observaciones: [],
+      presupuestado: 4,
+      remitido: 4,
+      consumido: 3,
+      devuelto: 1,
+      facturado: 0,
+      pendienteFisico: 0,
+      pendienteFacturar: 3,
+      precioUnitario: 300,
+      precioEstimado: false,
+      importePresupuestado: 1200,
+      importeConsumido: 900,
+      importeFacturado: 0,
+      deltaCantidad: -1,
+      deltaEconomico: -300,
+      estadoLinea: "consumido_de_menos",
+      explicacion: "Consumo menor al presupuestado",
+      presupuestoItemIds: ["pr-2"],
+      remitoItemIds: ["rem-2"],
+      consumoItemIds: ["con-2"],
+      devolucionItemIds: ["dev-2"],
+      invoiceItemIds: [],
+    },
+  ],
 }
 
 describe("ComparativaOperativaV0", () => {
-  it("keeps equal SKUs from different remitos as separate semantic rows with verbatim measures", () => {
+  it("renders comparative lines and metrics from canonical backend response", () => {
     render(
       <ComparativaOperativaV0
-        rows={[
-          traceRow(),
-          traceRow({
-            id: "remito-item-2",
-            remitoId: "remito-2",
-            remitoItemId: "remito-item-2",
-            sentQuantity: 4,
-            consumedQuantity: 3,
-            returnedQuantity: 1,
-            pendingQuantity: 0,
-            status: "ok",
-          }),
-        ]}
-        summary={summary}
+        comparativa={mockComparativa}
         loading={false}
         error={null}
-        remitoLabels={{ "remito-1": "R-0001" }}
       />
     )
 
-    expect(screen.getByText("Comparativa operativa preliminar")).toBeInTheDocument()
-    expect(screen.getByText(/solo lectura/i)).toBeInTheDocument()
-    expect(screen.queryByText(/stock|facturación|valores comerciales|conciliación/i)).not.toBeInTheDocument()
-    expect(screen.getAllByText("SKU-SHARED")).toHaveLength(2)
+    expect(screen.getByText("Tornillo")).toBeInTheDocument()
+    expect(screen.getByText("Placa")).toBeInTheDocument()
+    expect(screen.getByText("SKU-SHARED")).toBeInTheDocument()
+    expect(screen.getByText("SKU-2")).toBeInTheDocument()
 
-    const firstRow = screen.getByText(/remito-item-1/).closest("tr")
-    const secondRow = screen.getByText(/remito-item-2/).closest("tr")
-    expect(firstRow).not.toBeNull()
-    expect(secondRow).not.toBeNull()
-    expect(within(firstRow!).getByText("R-0001")).toBeInTheDocument()
-    expect(within(firstRow!).getByText("7")).toBeInTheDocument()
-    expect(within(firstRow!).getByText("5")).toBeInTheDocument()
-    expect(within(firstRow!).getAllByText("1")).toHaveLength(2)
-    expect(within(secondRow!).getByText("remito-2")).toBeInTheDocument()
-
+    expect(screen.getByRole("columnheader", { name: "Presup." })).toBeInTheDocument()
     expect(screen.getByRole("columnheader", { name: "Remitido" })).toBeInTheDocument()
     expect(screen.getByRole("columnheader", { name: "Consumido" })).toBeInTheDocument()
     expect(screen.getByRole("columnheader", { name: "Devuelto" })).toBeInTheDocument()
-    expect(screen.getByRole("columnheader", { name: "Pendiente" })).toBeInTheDocument()
-    expect(screen.queryByRole("button")).not.toBeInTheDocument()
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument()
   })
 
-  it("keeps difference, unmatched, and warning rows visible with textual attention", () => {
+  it("suppresses stale content and shows loading / error status", () => {
+    const { rerender } = render(
+      <ComparativaOperativaV0
+        comparativa={null}
+        loading={true}
+        error={null}
+      />
+    )
+
+    expect(screen.getByText(/calculando comparativa/i)).toBeInTheDocument()
+
+    rerender(
+      <ComparativaOperativaV0
+        comparativa={null}
+        loading={false}
+        error="Comparativa no disponible"
+      />
+    )
+
+    expect(screen.getByText(/comparativa no disponible/i)).toBeInTheDocument()
+  })
+
+  it("shows an empty state when comparativa has 0 lines", () => {
     render(
       <ComparativaOperativaV0
-        rows={[
-          traceRow({
-            id: "difference-row",
-            sentQuantity: 2,
-            consumedQuantity: 3,
-            returnedQuantity: 1,
-            pendingQuantity: 0,
-            status: "difference",
-          }),
-          traceRow({
-            id: "unmatched-row",
-            remitoId: undefined,
-            remitoItemId: undefined,
-            description: "Pinza sin asociación",
-            matchConfidence: "unmatched",
-            status: "unknown",
-            warnings: ["RETURNED_QUANTITY_SOURCE_CONFLICT"],
-          }),
-        ]}
-        summary={summary}
+        comparativa={{
+          ...mockComparativa,
+          lineas: [],
+          summary: {
+            ...mockComparativa.summary,
+            lineasCount: 0,
+          },
+        }}
         loading={false}
         error={null}
       />
     )
 
-    expect(screen.getByText(/estado trace: diferencia/i)).toBeInTheDocument()
-    expect(within(screen.getByText(/estado trace: diferencia/i).closest("tr")!).getByText("0")).toBeInTheDocument()
-    expect(screen.getByText("Pinza sin asociación")).toBeInTheDocument()
-    expect(screen.getAllByText(/sin asociación de remito/i)).toHaveLength(2)
-    expect(screen.getByText(/conflicto entre fuentes de devolución/i)).toBeInTheDocument()
-  })
-
-  it.each([
-    { loading: true, error: null, message: /cargando comparativa operativa/i },
-    { loading: false, error: "Trace no disponible", message: /trace no disponible/i },
-  ])("suppresses stale rows for loading and error states", ({ loading, error, message }) => {
-    render(
-      <ComparativaOperativaV0
-        rows={[traceRow()]}
-        summary={summary}
-        loading={loading}
-        error={error}
-      />
-    )
-
-    expect(screen.getByRole("status")).toHaveTextContent(message)
-    expect(screen.queryByText("Tornillo")).not.toBeInTheDocument()
-  })
-
-  it("shows an explicit accessible empty state", () => {
-    render(<ComparativaOperativaV0 rows={[]} summary={summary} loading={false} error={null} />)
-
-    expect(screen.getByRole("status")).toHaveTextContent(/no hay filas operativas/i)
-    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+    expect(screen.getByText(/sin movimientos de materiales/i)).toBeInTheDocument()
   })
 })

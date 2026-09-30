@@ -1,61 +1,79 @@
 "use client"
 
-import { useMemo } from "react"
-import type { ResumenComparativaMateriales } from "@/types"
-import { useOrtoTrackStore } from "@/lib/store"
-import { getComparativaMaterialesBySurgery } from "@/lib/comparativa.utils"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { ApiClientError } from "@/lib/api/client"
+import {
+  fetchSurgeryComparativa,
+  type SurgeryComparativaResponse,
+} from "@/lib/api/comparativa"
 
-/**
- * CHATZAI-024B.1: Fixed infinite re-render loop (React #185).
- *
- * Previous code used inline selectors that called store getters returning
- * new array references via .filter() on every invocation:
- *   useOrtoTrackStore((s) => s.getPresupuestosBySurgeryId(surgeryId))
- *
- * Zustand's default Object.is comparison saw different references each time,
- * triggering re-render → selector → new reference → re-render → infinite loop.
- *
- * Fix: subscribe to stable state slices (s.presupuestos, s.remitos, s.consumos, s.stock)
- * and derive data via useMemo with stable dependencies.
- */
-export function useComparativa(surgeryId: string): {
-  resumen: ResumenComparativaMateriales | null
-  tieneDatosSuficientes: boolean
-} {
-  // Subscribe to stable state slices instead of calling getters in selectors
-  const presupuestos = useOrtoTrackStore((s) => s.presupuestos)
-  const remitosAll = useOrtoTrackStore((s) => s.remitos)
-  const consumos = useOrtoTrackStore((s) => s.consumos)
-  const stockItems = useOrtoTrackStore((s) => s.stock)
+export function useComparativa(surgeryId?: string | null) {
+  const { activeCompany, currentUserLoading, isAuthenticated, isLoading } = useAuth()
+  const [comparativa, setComparativa] = useState<SurgeryComparativaResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const requestSequence = useRef(0)
 
-  // Derive surgery-specific data via useMemo — stable references until underlying data changes
-  const presupuesto = useMemo(
-    () => presupuestos.find((p) => p.surgeryId === surgeryId),
-    [presupuestos, surgeryId]
-  )
+  const companyId = activeCompany?.id
+  const targetSurgeryId = surgeryId?.trim() || undefined
 
-  const remitos = useMemo(
-    () => remitosAll.filter((r) => r.surgeryId === surgeryId),
-    [remitosAll, surgeryId]
-  )
+  const refresh = useCallback(async () => {
+    const requestId = ++requestSequence.current
+    if (isLoading || (isAuthenticated && currentUserLoading)) {
+      setLoading(false)
+      setReady(false)
+      setError(null)
+      return
+    }
 
-  const consumo = useMemo(
-    () => consumos.find((c) => c.surgeryId === surgeryId),
-    [consumos, surgeryId]
-  )
+    if (!companyId || !targetSurgeryId) {
+      setLoading(false)
+      setReady(true)
+      setComparativa(null)
+      setError(null)
+      return
+    }
 
-  const resumen = useMemo(() => {
-    if (!presupuesto && remitos.length === 0 && !consumo) return null
+    setLoading(true)
+    setError(null)
 
-    return getComparativaMaterialesBySurgery(
-      presupuesto,
-      remitos,
-      consumo,
-      stockItems,
-    )
-  }, [presupuesto, remitos, consumo, stockItems])
+    try {
+      const data = await fetchSurgeryComparativa(companyId, targetSurgeryId)
+      if (requestSequence.current !== requestId) return
+      setComparativa(data)
+      setReady(true)
+    } catch (err) {
+      if (requestSequence.current !== requestId) return
+      const message =
+        err instanceof ApiClientError
+          ? err.message
+          : "No se pudo cargar la comparativa de la cirugía"
+      setError(message)
+      setComparativa(null)
+      setReady(true)
+    } finally {
+      if (requestSequence.current === requestId) setLoading(false)
+    }
+  }, [companyId, currentUserLoading, isAuthenticated, isLoading, targetSurgeryId])
 
-  const tieneDatosSuficientes = !!(presupuesto || remitos.length > 0 || consumo)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+    return () => {
+      requestSequence.current += 1
+    }
+  }, [refresh])
 
-  return { resumen, tieneDatosSuficientes }
+  return {
+    companyId,
+    surgeryId: targetSurgeryId,
+    comparativa,
+    loading,
+    ready,
+    error,
+    refresh,
+    blocked: ready && (!companyId || !targetSurgeryId),
+  }
 }
