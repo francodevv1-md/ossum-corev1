@@ -95,7 +95,29 @@ export function ReceiptOperationalWorkspace({ initialReceipt }: { initialReceipt
     try {
       const result = await apiFetch<ScanResult>(`${companyPath(activeCompany.id)}/receipts/${receipt.id}/scan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rawValue }) })
       setScan(result)
-      if (result.line) { const line = result.line as ReceiptLine; setReceipt((current) => current ? { ...current, lines: current.lines.some((currentLine) => currentLine.id === line.id) ? current.lines.map((currentLine) => currentLine.id === line.id ? { ...line, scans: [...(currentLine.scans ?? []), result.event] } : currentLine) : [...current.lines, { ...line, scans: [result.event] }] } : current) }
+      if (result.line) {
+        const line = result.line as ReceiptLine
+        setReceipt((current) =>
+          current
+            ? {
+                ...current,
+                lines: current.lines.some((currentLine) => currentLine.id === line.id)
+                  ? current.lines.map((currentLine) =>
+                      currentLine.id === line.id
+                        ? {
+                            ...line,
+                            scans: line.scans ?? [
+                              ...(currentLine.scans?.filter((s) => s.id !== result.event.id) ?? []),
+                              result.event,
+                            ],
+                          }
+                        : currentLine
+                    )
+                  : [...current.lines, { ...line, scans: line.scans ?? [result.event] }],
+              }
+            : current
+        )
+      }
       setScanValue("")
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo consultar el artículo") } finally { setLoading(false) }
   }
@@ -105,7 +127,26 @@ export function ReceiptOperationalWorkspace({ initialReceipt }: { initialReceipt
     setLoading(true); setError(null)
     try {
       const result = await apiFetch<{ event: UnitScan; line: ReceiptLine }>(`${companyPath(activeCompany.id)}/receipts/${receipt.id}/scans/${scan.event.id}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ articleId: pendingArticleId.trim() }) })
-      setReceipt((current) => current ? { ...current, lines: current.lines.some((line) => line.id === result.line.id) ? current.lines.map((line) => line.id === result.line.id ? { ...result.line, scans: [...(line.scans ?? []), result.event] } : line) : [...current.lines, { ...result.line, scans: [result.event] }] } : current)
+      setReceipt((current) =>
+        current
+          ? {
+              ...current,
+              lines: current.lines.some((line) => line.id === result.line.id)
+                ? current.lines.map((line) =>
+                    line.id === result.line.id
+                      ? {
+                          ...result.line,
+                          scans: result.line.scans ?? [
+                            ...(line.scans?.filter((s) => s.id !== result.event.id) ?? []),
+                            result.event,
+                          ],
+                        }
+                      : line
+                  )
+                : [...current.lines, { ...result.line, scans: result.line.scans ?? [result.event] }],
+            }
+          : current
+      )
       setScan({ ...scan, event: result.event, status: "RESOLVED", line: result.line })
       setPendingArticleId("")
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo vincular el artículo") } finally { setLoading(false) }

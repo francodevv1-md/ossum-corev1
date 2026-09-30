@@ -64,6 +64,7 @@ import { StockArticleSheet, type FichaTab } from "@/components/stock/StockArticl
 import { ArticleCodesDialog } from "@/components/stock/ArticleCodesDialog"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { apiFetch } from "@/lib/api/client"
+import { useStock } from "@/hooks/useStock"
 
 // ─── Sort ─────────────────────────────────────────────────
 
@@ -390,8 +391,6 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
 
 export default function StockPage() {
   const { activeCompany } = useAuth()
-  const activeCompanyId = activeCompany?.id
-  const [canonicalArticles, setCanonicalArticles] = useState<Array<{ id: string; sku: string; description: string; articleType?: string | null; brand?: string | null; manufacturer?: string | null; family?: string | null; unit: string; identifiers: Array<{ type: string; value: string }> }>>([])
   const [search, setSearch] = useState("")
   const [depositFilter, setDepositFilter] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("")
@@ -423,31 +422,58 @@ export default function StockPage() {
   const [articlePrefill, setArticlePrefill] = useState<ArticlePrefill | undefined>(scannedArticlePrefill)
   const [newOpen, setNewOpen] = useState(() => Boolean(scannedArticlePrefill()))
 
-  const loadCanonicalArticles = useCallback(async () => {
-    if (!activeCompanyId) return
-    try {
-      const result = await apiFetch<typeof canonicalArticles>(`/api/companies/${encodeURIComponent(activeCompanyId)}/articles?take=100`)
-      setCanonicalArticles(result)
-    } catch { /* Existing mock list remains usable when API is unavailable. */ }
-  }, [activeCompanyId])
+  const {
+    items: stockItems,
+    summary,
+    loading: stockLoading,
+    ready: stockReady,
+    error: stockError,
+    refresh: refreshStock,
+  } = useStock({
+    search: search || undefined,
+    family: familyFilter || undefined,
+    brand: brandFilter || undefined,
+    articleType: typeFilter || undefined,
+    quickFilter,
+    sortKey,
+    sortDir,
+  })
 
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      if (!activeCompanyId) return
-      try {
-        const result = await apiFetch<typeof canonicalArticles>(`/api/companies/${encodeURIComponent(activeCompanyId)}/articles?take=100`)
-        if (!cancelled) setCanonicalArticles(result)
-      } catch { /* Existing mock list remains usable when API is unavailable. */ }
-    }
-    void load()
-    return () => { cancelled = true }
-  }, [activeCompanyId])
-
-  const canonicalStockItems = useMemo<StockItem[]>(() => canonicalArticles.map((article) => ({
-    id: article.id, code: article.sku, name: article.description, descriptionExtra: "", family: (article.family || "Insumos") as Family, category: "", rubro: "", seccion: "", linea: "", brand: article.brand || "", type: article.articleType || "Otro", unit: article.unit, unitBuy: article.unit, manufacturer: article.manufacturer || "", gtin: article.identifiers.find((item) => item.type === "GTIN_EAN")?.value || "", pm: "", sterile: false, preferredSupplier: "", cost: 0, price: 0, available: 0, reserved: 0, inTransit: 0, min: 0, state: "Pendiente", masterStatus: "Activo", control: "cantidad", lots: [], movements: [], articleType: (article.articleType || "Otro") as StockItem["articleType"], suppliers: [],
-  })), [canonicalArticles])
-  const allStockItems = useMemo(() => [...STOCK_ITEMS.filter((item) => !canonicalArticles.some((article) => article.id === item.id)), ...canonicalStockItems], [canonicalArticles, canonicalStockItems])
+  const allStockItems = useMemo<StockItem[]>(() => {
+    return stockItems.map((article) => ({
+      id: article.id,
+      code: article.code,
+      name: article.name,
+      descriptionExtra: "",
+      family: (article.family || "Insumos") as Family,
+      category: article.category || "",
+      rubro: "",
+      seccion: "",
+      linea: "",
+      brand: article.brand || "",
+      type: article.articleType || "Otro",
+      unit: article.unit || "u",
+      unitBuy: article.unit || "u",
+      manufacturer: article.manufacturer || "",
+      gtin: article.gtin || "",
+      pm: "",
+      sterile: false,
+      preferredSupplier: "",
+      cost: 0,
+      price: 0,
+      available: article.available,
+      reserved: article.reserved,
+      inTransit: article.inTransit,
+      min: article.min,
+      state: (article.state === "Bajo stock" || article.state === "Sin stock" ? "Pendiente" : article.state === "En tránsito" ? "En tránsito" : "Disponible") as StockItem["state"],
+      masterStatus: article.masterStatus,
+      control: article.control,
+      lots: [],
+      movements: [],
+      articleType: (article.articleType || "Otro") as StockItem["articleType"],
+      suppliers: [],
+    }))
+  }, [stockItems])
 
   const visibleColumns = useMemo<StockColumn[]>(() => {
     const view = STOCK_VIEWS.find((v) => v.key === viewKey) ?? STOCK_VIEWS[0]
@@ -459,13 +485,7 @@ export default function StockPage() {
   const stickyLeft = useMemo(() => pinnedOffsets(visibleColumns), [visibleColumns])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const data = allStockItems.filter((i) => {
-      if (q) {
-        const haystack = [i.code, i.name, i.descriptionExtra, i.category, i.rubro, i.seccion, i.linea, i.brand, i.type, i.family, i.manufacturer, i.gtin, i.pm, i.preferredSupplier].filter(Boolean).join(" ").toLowerCase()
-        if (!haystack.includes(q)) return false
-      }
-      if (depositFilter && !i.lots.some((l) => l.deposit === depositFilter)) return false
+    return allStockItems.filter((i) => {
       if (categoryFilter && i.category !== categoryFilter) return false
       if (brandFilter && i.brand !== brandFilter) return false
       if (statusFilter && i.state !== statusFilter) return false
@@ -481,37 +501,9 @@ export default function StockPage() {
       if (sterileFilter === "no" && i.sterile) return false
       if (gtinFilter && !i.gtin.toLowerCase().includes(gtinFilter.trim().toLowerCase())) return false
       if (pmFilter && !i.pm.toLowerCase().includes(pmFilter.trim().toLowerCase())) return false
-      if (quickFilter === "bajo" && !(i.available > 0 && i.available <= i.min)) return false
-      if (quickFilter === "sinstock" && i.available !== 0) return false
-      if (quickFilter === "transito" && i.inTransit <= 0) return false
       return true
     })
-
-    const dir = sortDir === "asc" ? 1 : -1
-    return data.sort((a, b) => {
-      let cmp = 0
-      switch (sortKey) {
-        case "codigo": cmp = a.code.localeCompare(b.code); break
-        case "articulo": cmp = a.name.localeCompare(b.name, "es", { sensitivity: "base" }); break
-        case "categoria": cmp = a.category.localeCompare(b.category, "es"); break
-        case "marca": cmp = a.brand.localeCompare(b.brand, "es"); break
-        case "disponible": cmp = a.available - b.available; break
-        case "reservado": cmp = a.reserved - b.reserved; break
-        case "transito": cmp = a.inTransit - b.inTransit; break
-        case "estado": cmp = STOCK_STATE_ORDER[a.state] - STOCK_STATE_ORDER[b.state]; break
-        case "costo": cmp = a.cost - b.cost; break
-        case "precio": cmp = a.price - b.price; break
-      }
-      return cmp * dir
-    })
-  }, [allStockItems, search, depositFilter, categoryFilter, brandFilter, statusFilter, typeFilter, rubroFilter, seccionFilter, lineaFilter, familyFilter, fabricanteFilter, proveedorFilter, controlFilter, sterileFilter, gtinFilter, pmFilter, quickFilter, sortKey, sortDir])
-
-  const summary = useMemo(() => ({
-    total: allStockItems.length,
-    bajo: allStockItems.filter((i) => i.available > 0 && i.available <= i.min).length,
-    sinstock: allStockItems.filter((i) => i.available === 0).length,
-    transito: allStockItems.filter((i) => i.inTransit > 0).length,
-  }), [allStockItems])
+  }, [allStockItems, categoryFilter, brandFilter, statusFilter, typeFilter, rubroFilter, seccionFilter, lineaFilter, familyFilter, fabricanteFilter, proveedorFilter, controlFilter, sterileFilter, gtinFilter, pmFilter])
 
   const onSortChange = (key: SortKey) => {
     if (key === sortKey) {
@@ -712,7 +704,7 @@ export default function StockPage() {
         </div>
       </div>
 
-      {newOpen && <NewArticleDialog key={articlePrefill?.rawValue ?? "new"} open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open && articlePrefill) { setArticlePrefill(undefined); window.history.replaceState(null, "", "/stock") } }} companyId={activeCompany?.id} prefill={articlePrefill} onCreated={() => { setArticlePrefill(undefined); void loadCanonicalArticles() }} />}
+      {newOpen && <NewArticleDialog key={articlePrefill?.rawValue ?? "new"} open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open && articlePrefill) { setArticlePrefill(undefined); window.history.replaceState(null, "", "/stock") } }} companyId={activeCompany?.id} prefill={articlePrefill} onCreated={() => { setArticlePrefill(undefined); void refreshStock() }} />}
       <StockArticleSheet item={sheet?.item ?? null} initialTab={sheet?.tab} open={Boolean(sheet)} onOpenChange={(v) => { if (!v) setSheet(null) }} />
       <ArticleCodesDialog item={codesItem} open={Boolean(codesItem)} onOpenChange={(v) => { if (!v) setCodesItem(null) }} />
     </div>

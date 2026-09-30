@@ -59,6 +59,8 @@ import { FamilyThumb } from "@/components/stock/StockColumns"
 import { ExistenciasTable, MovimientosTable } from "@/components/stock/StockArticleTabs"
 import { ArticleCodesDialog } from "@/components/stock/ArticleCodesDialog"
 import { BoxFichaSheet } from "@/components/stock/BoxFicha"
+import { useArticleStockDetail } from "@/hooks/useStock"
+import type { ArticleStockDetailResponse } from "@/lib/api/stock"
 
 // ─── Tabs ─────────────────────────────────────────────────
 
@@ -215,6 +217,148 @@ function ArticleImage({ item, image, onImage }: { item: StockItem; image: string
   )
 }
 
+// ─── Stock Adjustment Dialog ──────────────────────────────
+
+function StockAdjustmentDialog({
+  open,
+  onOpenChange,
+  articleCode,
+  articleName,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  articleCode: string
+  articleName: string
+  onConfirm: (input: { quantity: string; reason: string; lotCode?: string; serialNumber?: string; expirationDate?: string; location?: string }) => Promise<void>
+}) {
+  const [quantity, setQuantity] = useState("")
+  const [reason, setReason] = useState("")
+  const [lotCode, setLotCode] = useState("")
+  const [serialNumber, setSerialNumber] = useState("")
+  const [expirationDate, setExpirationDate] = useState("")
+  const [location, setLocation] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!quantity || Number(quantity) === 0) {
+      toast.error("Ingresá una cantidad distinta de 0 (+ para ingreso, - para egreso)")
+      return
+    }
+    if (!reason.trim()) {
+      toast.error("El motivo del ajuste es obligatorio para auditoría")
+      return
+    }
+    setSaving(true)
+    try {
+      await onConfirm({
+        quantity,
+        reason: reason.trim(),
+        lotCode: lotCode.trim() || undefined,
+        serialNumber: serialNumber.trim() || undefined,
+        expirationDate: expirationDate || undefined,
+        location: location.trim() || undefined,
+      })
+      toast.success("Ajuste de inventario registrado en el ledger")
+      onOpenChange(false)
+      setQuantity("")
+      setReason("")
+      setLotCode("")
+      setSerialNumber("")
+      setExpirationDate("")
+      setLocation("")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al registrar ajuste")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogTitle className="text-base text-[var(--ossum-navy)]">Ajuste de inventario</DialogTitle>
+        <p className="text-xs text-gray-500">
+          Registrá un movimiento de ajuste auditado en el ledger para {articleCode} · {articleName}.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-3 pt-2">
+          <div className="space-y-1">
+            <span className="text-[11px] font-medium text-gray-700">Cantidad (+ ingreso / - egreso)</span>
+            <Input
+              type="number"
+              step="any"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="Ej: 5 o -2"
+              className="h-8 text-xs"
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <span className="text-[11px] font-medium text-gray-700">Motivo del ajuste (auditoría)</span>
+            <Input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Ej: Conteo físico mensual, merma, rotura"
+              className="h-8 text-xs"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-gray-700">Lote (opcional)</span>
+              <Input
+                value={lotCode}
+                onChange={(e) => setLotCode(e.target.value)}
+                placeholder="Lote"
+                className="h-8 font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-gray-700">Serie (opcional)</span>
+              <Input
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="Serie"
+                className="h-8 font-mono text-xs"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-gray-700">Vencimiento (opcional)</span>
+              <Input
+                type="date"
+                value={expirationDate}
+                onChange={(e) => setExpirationDate(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-gray-700">Ubicación (opcional)</span>
+              <Input
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Depósito Central"
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" size="sm" disabled={saving} className="bg-[var(--ossum-action)] text-white hover:bg-[#1830a8]">
+              {saving ? "Registrando..." : "Confirmar ajuste"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Ficha context (shared editable state) ────────────────
 
 interface FichaCtx {
@@ -228,6 +372,9 @@ interface FichaCtx {
   isSavingVat: boolean
   vatSaveStatus: "idle" | "saving" | "saved" | "error"
   vatSaveError: string | null
+  liveDetail: ArticleStockDetailResponse | null
+  isLiveLoading: boolean
+  onOpenAdjustment: () => void
   setArticleType: (t: StockArticleType) => void
   setMethod: (m: TraceMethod) => void
   setExpiry: (b: boolean) => void
@@ -392,10 +539,52 @@ function IdentificacionTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
 
 function StockTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
   const sections = fichaSections(ctx.articleType)
+  const summary = ctx.liveDetail?.summary
+
   return (
     <div className="space-y-5">
+      {/* Disponibilidad en tiempo real */}
+      <section className="rounded-md border border-[var(--ossum-line)] bg-white p-4">
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--ossum-line)] pb-3">
+          <div>
+            <SectionTitle hint="Ledger y disponibilidad en tiempo real">Estado y existencias de stock</SectionTitle>
+            <p className="text-xs text-gray-500">
+              Disponibilidad calculada a partir de recepciones, consumos, devoluciones y ajustes auditados.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs border-[var(--ossum-action)] text-[var(--ossum-action)] hover:bg-[#eef0ff]"
+            onClick={ctx.onOpenAdjustment}
+          >
+            Ajustar inventario
+          </Button>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-md bg-gray-50 p-2.5">
+            <span className="text-[11px] text-gray-500">Stock físico total</span>
+            <p className="text-base font-semibold text-gray-900">{fmtQty(summary?.physical ?? item.available)}</p>
+          </div>
+          <div className="rounded-md bg-gray-50 p-2.5">
+            <span className="text-[11px] text-gray-500">Reservado (Cirugías)</span>
+            <p className="text-base font-semibold text-amber-700">{fmtQty(summary?.reserved ?? item.reserved)}</p>
+          </div>
+          <div className="rounded-md bg-gray-50 p-2.5">
+            <span className="text-[11px] text-gray-500">En tránsito (Remitos)</span>
+            <p className="text-base font-semibold text-blue-700">{fmtQty(summary?.inTransit ?? item.inTransit)}</p>
+          </div>
+          <div className="rounded-md bg-[#eef0ff] p-2.5">
+            <span className="text-[11px] font-medium text-[var(--ossum-action)]">Disponible real</span>
+            <p className="text-base font-bold text-[var(--ossum-action)]">{fmtQty(summary?.available ?? item.available)}</p>
+          </div>
+        </div>
+      </section>
+
       <section>
-        <SectionTitle hint="Las cantidades se derivan de movimientos reales — no son editables">Configuración de stock</SectionTitle>
+        <SectionTitle hint="Parámetros de control">Configuración de stock</SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Unidad de stock" hint="Unidad en la que se mide el stock disponible.">
             <select defaultValue={item.unit} className="h-8 w-full rounded-md border border-[var(--ossum-line)] bg-white px-2.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-[var(--ossum-action)]">
@@ -416,12 +605,6 @@ function StockTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
             </>
           )}
         </div>
-      </section>
-
-      <section className="rounded-md border border-[var(--ossum-line)] bg-[var(--ossum-surface)] px-4 py-2.5">
-        <p className="text-[11px] text-gray-500">
-          Disponible, Reservado y En tránsito se calculan automáticamente desde los movimientos reales. Para modificarlos, registrá un movimiento o una reserva.
-        </p>
       </section>
     </div>
   )
@@ -558,11 +741,22 @@ function ComercialTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
 
 function TrazabilidadTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
   const flags = traceFlags(ctx.method, ctx.expiry)
-  const mov = lastMovement(item)
+  const mov = ctx.liveDetail?.movements[0] || lastMovement(item)
   return (
     <div className="space-y-5">
       <section>
-        <SectionTitle hint={`Derivado del método de trazabilidad (${traceControlLabel(ctx.method, ctx.expiry)})`}>Requisitos de trazabilidad</SectionTitle>
+        <div className="flex items-center justify-between gap-2">
+          <SectionTitle hint={`Derivado del método de trazabilidad (${traceControlLabel(ctx.method, ctx.expiry)})`}>Requisitos de trazabilidad</SectionTitle>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-[var(--ossum-action)] text-[var(--ossum-action)] hover:bg-[#eef0ff]"
+            onClick={ctx.onOpenAdjustment}
+          >
+            Ajuste de inventario
+          </Button>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {[
             { label: "Requiere lote", on: flags.lot },
@@ -581,17 +775,14 @@ function TrazabilidadTab({ item, ctx }: { item: StockItem; ctx: FichaCtx }) {
       <section>
         <SectionTitle hint="Registros reales por lote / serie">Existencias trazables</SectionTitle>
         <div className="h-52">
-          <ExistenciasTable item={item} />
+          <ExistenciasTable item={item} liveLots={ctx.liveDetail?.lots} />
         </div>
       </section>
 
       <section>
-        <SectionTitle hint="Historial de movimientos reales">Movimientos</SectionTitle>
+        <SectionTitle hint="Historial de movimientos reales en el ledger inmutable">Movimientos (Ledger)</SectionTitle>
         <div className="h-60">
-          <MovimientosTable item={item} />
-        </div>
-        <div className="mt-2 text-right">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => toast.info("Trazabilidad completa (próximamente)")}>Ver trazabilidad completa</Button>
+          <MovimientosTable item={item} liveMovements={ctx.liveDetail?.movements} />
         </div>
       </section>
 
@@ -694,13 +885,27 @@ function FichaTabContent({ item, tab, ctx, onOpenBox }: { item: StockItem; tab: 
 
 // ─── Contextual read-only panel ───────────────────────────
 
-function ContextPanel({ item, method, expiry }: { item: StockItem; method: TraceMethod; expiry: boolean }) {
+function ContextPanel({
+  item,
+  method,
+  expiry,
+  liveDetail,
+}: {
+  item: StockItem
+  method: TraceMethod
+  expiry: boolean
+  liveDetail?: ArticleStockDetailResponse | null
+}) {
   const low = isLowStock(item)
-  const mov = lastMovement(item)
+  const mov = liveDetail?.movements[0] || lastMovement(item)
+  const available = liveDetail?.summary.available ?? item.available
+  const reserved = liveDetail?.summary.reserved ?? item.reserved
+  const inTransit = liveDetail?.summary.inTransit ?? item.inTransit
+
   const rows: Array<{ label: string; value: React.ReactNode; tone?: "red" | "amber" }> = [
-    { label: "Disponible", value: fmtQty(item.available), tone: item.available === 0 ? "red" : low ? "amber" : undefined },
-    { label: "Reservado", value: fmtQty(item.reserved) },
-    { label: "En tránsito", value: fmtQty(item.inTransit) },
+    { label: "Disponible", value: fmtQty(available), tone: available === 0 ? "red" : low ? "amber" : undefined },
+    { label: "Reservado", value: fmtQty(reserved) },
+    { label: "En tránsito", value: fmtQty(inTransit) },
     { label: "Stock mínimo", value: fmtQty(item.min) },
     { label: "Depósito principal", value: item.defaultDeposit ?? "—" },
     { label: "Modo de control", value: traceControlLabel(method, expiry) },
@@ -722,7 +927,7 @@ function ContextPanel({ item, method, expiry }: { item: StockItem; method: Trace
           </div>
         ))}
       </dl>
-      <p className="text-[10px] leading-relaxed text-gray-400">Valores derivados de movimientos y reservas reales. No se editan desde esta ficha.</p>
+      <p className="text-[10px] leading-relaxed text-gray-400">Valores derivados de movimientos y reservas reales en el ledger backend. No se editan desde esta ficha.</p>
     </aside>
   )
 }
@@ -768,6 +973,14 @@ export function StockArticleFicha({
   const [image, setImage] = useState<string | null>(null)
   const [codesOpen, setCodesOpen] = useState(false)
   const [openBox, setOpenBox] = useState<string | null>(null)
+  const [adjustmentOpen, setAdjustmentOpen] = useState(false)
+
+  const {
+    data: liveDetail,
+    loading: isLiveLoading,
+    recordAdjustment,
+    refresh: refreshLiveDetail,
+  } = useArticleStockDetail(canonicalArticleId || item.id)
 
   const handleSaveVat = async () => {
     if (!canonicalArticleId) {
@@ -830,6 +1043,9 @@ export function StockArticleFicha({
     isSavingVat,
     vatSaveStatus,
     vatSaveError,
+    liveDetail,
+    isLiveLoading,
+    onOpenAdjustment: () => setAdjustmentOpen(true),
     setArticleType,
     setMethod,
     setExpiry,
@@ -841,6 +1057,10 @@ export function StockArticleFicha({
 
   const hasBoxes = articleBoxes(item.id).length > 0
   const visibleTabs = FICHA_TABS.filter((t) => t.id !== "cajas" || hasBoxes)
+
+  const availableDisplay = liveDetail?.summary.available ?? item.available
+  const reservedDisplay = liveDetail?.summary.reserved ?? item.reserved
+  const inTransitDisplay = liveDetail?.summary.inTransit ?? item.inTransit
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -857,11 +1077,11 @@ export function StockArticleFicha({
               </h2>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-500">
                 <MasterStatusBadge active={active} />
-                <span>Disponible <b className="tabular-nums text-gray-800">{fmtQty(item.available)}</b></span>
+                <span>Disponible <b className="tabular-nums text-gray-800">{fmtQty(availableDisplay)}</b></span>
                 <span className="text-gray-300">·</span>
-                <span>Reservado <b className="tabular-nums text-gray-800">{fmtQty(item.reserved)}</b></span>
+                <span>Reservado <b className="tabular-nums text-gray-800">{fmtQty(reservedDisplay)}</b></span>
                 <span className="text-gray-300">·</span>
-                <span>En tránsito <b className="tabular-nums text-gray-800">{fmtQty(item.inTransit)}</b></span>
+                <span>En tránsito <b className="tabular-nums text-gray-800">{fmtQty(inTransitDisplay)}</b></span>
                 <span className="text-gray-300">·</span>
                 <span>{item.category}</span>
                 <span className="text-gray-300">·</span>
@@ -913,7 +1133,7 @@ export function StockArticleFicha({
           <FichaTabContent item={item} tab={tab} ctx={ctx} onOpenBox={setOpenBox} />
         </div>
         <aside className="hidden w-[256px] shrink-0 overflow-y-auto border-l border-[var(--ossum-line)] bg-[var(--ossum-surface)] px-3.5 py-3 lg:block">
-          <ContextPanel item={item} method={method} expiry={expiry} />
+          <ContextPanel item={item} method={method} expiry={expiry} liveDetail={liveDetail} />
         </aside>
       </div>
 
@@ -927,6 +1147,18 @@ export function StockArticleFicha({
 
       <ArticleCodesDialog item={item} open={codesOpen} onOpenChange={setCodesOpen} />
       <BoxFichaSheet boxId={openBox} open={Boolean(openBox)} onOpenChange={(v) => { if (!v) setOpenBox(null) }} />
+      {adjustmentOpen && (
+        <StockAdjustmentDialog
+          open={adjustmentOpen}
+          onOpenChange={setAdjustmentOpen}
+          articleCode={item.code}
+          articleName={item.name}
+          onConfirm={async (input) => {
+            await recordAdjustment(input)
+            await refreshLiveDetail()
+          }}
+        />
+      )}
     </div>
   )
 }
