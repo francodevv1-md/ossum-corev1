@@ -1,14 +1,14 @@
-"use client"
+"use client";
 
-import React, { useState, useMemo } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
+import React, { useState, useMemo } from "react";
 import {
-  StatsCard, SearchInput, FilterSelect,
-  SurgeryDrawer,
-} from "@/components/shared"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+  StatsCard,
+  SearchInput,
+  FilterSelect,
+} from "@/components/shared";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -16,39 +16,36 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { toast } from "sonner"
-import {
-  BarChart3, AlertTriangle, Package, Clock,
-  ChevronDown, ChevronRight, ShoppingCart,
-  TrendingDown, XCircle,
-} from "lucide-react"
-import type { NecesidadCompraPriority, NecesidadCompraOrigin } from "@/types"
+  BarChart3,
+  AlertTriangle,
+  Package,
+  Clock,
+  ShoppingCart,
+  RefreshCw,
+  Plus,
+  CheckCircle2,
+} from "lucide-react";
+import { useComprasForecast, useNecesidadesCompra } from "@/hooks/useCompras";
+import type { ComprasForecastItem } from "@/lib/api/compras";
 
-// ── Priority badge for forecast ──
-function ForecastPriorityBadge({ priority }: { priority: string }) {
-  const config: Record<string, { className: string }> = {
-    Urgente: { className: "bg-red-600 text-white border-transparent" },
-    Alta: { className: "bg-orange-500 text-white border-transparent" },
-    Media: { className: "bg-yellow-500 text-white border-transparent" },
-    Baja: { className: "bg-emerald-600 text-white border-transparent" },
-  }
-  const c = config[priority] || config.Media
-  return <Badge className={c.className}>{priority}</Badge>
+function ForecastPriorityBadge({ urgency }: { urgency: string }) {
+  const config: Record<string, { className: string; label: string }> = {
+    critica: { className: "bg-red-600 text-white border-transparent", label: "Crítica" },
+    alta: { className: "bg-orange-500 text-white border-transparent", label: "Alta" },
+    media: { className: "bg-yellow-500 text-white border-transparent", label: "Media" },
+    normal: { className: "bg-emerald-600 text-white border-transparent", label: "Normal" },
+  };
+  const c = config[urgency] || config.normal;
+  return <Badge className={c.className}>{c.label}</Badge>;
 }
 
-// ── Stock level indicator ──
 function StockIndicator({ actual, min }: { actual: number; min: number }) {
-  const ratio = min > 0 ? actual / min : 1
-  const isBelow = ratio < 1
-  const isClose = ratio >= 1 && ratio <= 1.5
+  const ratio = min > 0 ? actual / min : 1;
+  const isBelow = ratio < 1;
+  const isClose = ratio >= 1 && ratio <= 1.5;
 
   return (
     <div className="flex items-center gap-2">
@@ -60,293 +57,236 @@ function StockIndicator({ actual, min }: { actual: number; min: number }) {
           style={{ width: `${Math.min(ratio * 100, 100)}%` }}
         />
       </div>
-      <span className={`text-xs font-medium ${isBelow ? "text-red-600" : isClose ? "text-amber-600" : "text-emerald-600"}`}>
+      <span
+        className={`text-xs font-medium ${
+          isBelow ? "text-red-600" : isClose ? "text-amber-600" : "text-emerald-600"
+        }`}
+      >
         {actual}/{min}
       </span>
     </div>
-  )
+  );
 }
 
-const PRIORITY_OPTIONS = [
-  { value: "", label: "Todas las prioridades" },
-  { value: "Urgente", label: "Urgente" },
-  { value: "Alta", label: "Alta" },
-  { value: "Media", label: "Media" },
-  { value: "Baja", label: "Baja" },
-]
+const URGENCY_OPTIONS = [
+  { value: "", label: "Todas las urgencias" },
+  { value: "critica", label: "Crítica" },
+  { value: "alta", label: "Alta" },
+  { value: "media", label: "Media" },
+];
 
-const CATEGORY_OPTIONS = [
-  { value: "", label: "Todas las categorías" },
-  { value: "Implantes", label: "Implantes" },
-  { value: "Instrumental", label: "Instrumental" },
-  { value: "Descartable", label: "Descartable" },
-  { value: "Insumos", label: "Insumos" },
-]
+export default function ComprasForecastPage() {
+  const { data: forecast, loading, error, refresh } = useComprasForecast();
+  const { createNecesidad } = useNecesidadesCompra();
 
-export default function ForecastPage() {
-  const store = useOrtoTrackStore()
+  const [search, setSearch] = useState("");
+  const [urgencyFilter, setUrgencyFilter] = useState("");
+  const [generateTarget, setGenerateTarget] = useState<ComprasForecastItem | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const [search, setSearch] = useState("")
-  const [priorityFilter, setPriorityFilter] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("")
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-
-  // Generate necesidad dialog
-  const [genDialogOpen, setGenDialogOpen] = useState(false)
-  const [genItem, setGenItem] = useState<typeof store.forecast[0] | null>(null)
-  const [genOrigin, setGenOrigin] = useState<NecesidadCompraOrigin>("Consumo")
-
-  const forecast = store.forecast
+  const items = forecast?.items ?? [];
 
   const filtered = useMemo(() => {
-    let data = forecast.slice()
+    let data = items.slice();
     if (search) {
-      const q = search.toLowerCase()
+      const q = search.toLowerCase();
       data = data.filter(
-        (f) =>
-          f.articleName.toLowerCase().includes(q) ||
-          f.articleCode.toLowerCase().includes(q)
-      )
+        (it) =>
+          it.articleName.toLowerCase().includes(q) ||
+          it.articleCode.toLowerCase().includes(q) ||
+          (it.suggestedSupplierName && it.suggestedSupplierName.toLowerCase().includes(q)) ||
+          it.category.toLowerCase().includes(q)
+      );
     }
-    if (priorityFilter) data = data.filter((f) => f.prioridad === priorityFilter)
-    if (categoryFilter) data = data.filter((f) => f.category === categoryFilter)
-    // Sort by priority then stock level
-    const prioOrder: Record<string, number> = { Urgente: 0, Alta: 1, Media: 2, Baja: 3 }
-    return data.sort((a, b) => {
-      const pa = prioOrder[a.prioridad] ?? 2
-      const pb = prioOrder[b.prioridad] ?? 2
-      if (pa !== pb) return pa - pb
-      return (a.stockActual / Math.max(a.stockMinimo, 1)) - (b.stockActual / Math.max(b.stockMinimo, 1))
-    })
-  }, [forecast, search, priorityFilter, categoryFilter])
+    if (urgencyFilter) data = data.filter((it) => it.urgency === urgencyFilter);
+    return data;
+  }, [items, search, urgencyFilter]);
 
-  const stats = useMemo(() => {
-    const total = forecast.length
-    const urgentes = forecast.filter((f) => f.prioridad === "Urgente").length
-    const bajoMinimo = forecast.filter((f) => f.stockActual < f.stockMinimo).length
-    const vencimientos = forecast.filter((f) => f.vencimientosProximos > 0).length
-    return { total, urgentes, bajoMinimo, vencimientos }
-  }, [forecast])
+  const handleGenerateNecesidad = async () => {
+    if (!generateTarget) return;
+    setIsGenerating(true);
+    try {
+      await createNecesidad({
+        articleId: generateTarget.articleId,
+        code: generateTarget.articleCode,
+        name: generateTarget.articleName,
+        quantity: generateTarget.suggestedOrderQty,
+        priority: generateTarget.urgency === "critica" ? "critica" : generateTarget.urgency === "alta" ? "alta" : "media",
+        origin: generateTarget.currentStock === 0 ? "stock_bajo" : "manual",
+        suggestedSupplierId: generateTarget.suggestedSupplierId,
+        suggestedSupplierName: generateTarget.suggestedSupplierName,
+        observaciones: `Generado automáticamente desde Forecast: ${generateTarget.rationale.join("; ")}`,
+      });
 
-  const toggleRow = (id: string) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const handleGenerarNecesidad = () => {
-    if (!genItem) return
-    store.createNecesidadCompra({
-      stockItemId: genItem.stockItemId,
-      articleName: genItem.articleName,
-      articleCode: genItem.articleCode,
-      isArticuloZ: false,
-      cantidad: genItem.sugerenciaCompra,
-      priority: genItem.prioridad as NecesidadCompraPriority,
-      origin: genOrigin,
-      state: "Pendiente",
-    })
-    toast.success(`Necesidad de compra generada para ${genItem.articleName} (x${genItem.sugerenciaCompra})`)
-    setGenDialogOpen(false)
-    setGenItem(null)
-  }
+      toast.success(
+        `Necesidad de compra creada para ${generateTarget.articleName} (${generateTarget.suggestedOrderQty} u.)`
+      );
+      setGenerateTarget(null);
+      await refresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Error al crear la necesidad de compra");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold">Forecast de Compras</h1>
-          <p className="text-sm text-muted-foreground">Análisis de demanda y sugerencias de compra</p>
+          <h1 className="text-xl font-bold tracking-tight">Forecast y Sugerencias de Compra</h1>
+          <p className="text-sm text-muted-foreground">
+            Cálculo determinístico basado en stock disponible, mínimos de seguridad, vencimientos próximos y pedidos en tránsito
+          </p>
         </div>
+        <Button variant="outline" onClick={() => refresh()} className="gap-2">
+          <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+          Recalcular Forecast
+        </Button>
       </div>
 
       {/* Stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatsCard title="Total artículos" value={stats.total} icon={BarChart3} />
         <StatsCard
-          title="Urgentes"
-          value={stats.urgentes}
-          icon={XCircle}
-          className={stats.urgentes > 0 ? "border-red-200" : ""}
+          title="Artículos Evaluados"
+          value={forecast?.totalArticlesEvaluated ?? 0}
+          icon={BarChart3}
         />
         <StatsCard
-          title="Bajo mínimo"
-          value={stats.bajoMinimo}
-          icon={TrendingDown}
-          className={stats.bajoMinimo > 0 ? "border-amber-200" : ""}
+          title="Urgencia Crítica"
+          value={forecast?.criticalCount ?? 0}
+          icon={AlertTriangle}
         />
         <StatsCard
-          title="Vencimientos próximos"
-          value={stats.vencimientos}
+          title="Urgencia Alta"
+          value={forecast?.highCount ?? 0}
           icon={Clock}
-          className={stats.vencimientos > 0 ? "border-amber-200" : ""}
+        />
+        <StatsCard
+          title="Unidades Sugeridas"
+          value={forecast?.totalSuggestedOrderQty ?? 0}
+          icon={ShoppingCart}
         />
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-wrap gap-2">
-            <SearchInput value={search} onChange={setSearch} placeholder="Artículo, código..." className="w-full sm:w-72" />
-            <FilterSelect value={priorityFilter} onChange={setPriorityFilter} options={PRIORITY_OPTIONS} />
-            <FilterSelect value={categoryFilter} onChange={setCategoryFilter} options={CATEGORY_OPTIONS} />
-            {(priorityFilter || categoryFilter || search) && (
-              <Button variant="ghost" size="sm" className="text-xs h-9" onClick={() => { setSearch(""); setPriorityFilter(""); setCategoryFilter("") }}>
-                Limpiar
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <SearchInput
+          placeholder="Buscar artículo, código, categoría o proveedor..."
+          value={search}
+          onChange={setSearch}
+          className="sm:w-80"
+        />
+        <FilterSelect
+          options={URGENCY_OPTIONS}
+          value={urgencyFilter}
+          onChange={setUrgencyFilter}
+        />
+      </div>
 
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <span className="text-sm text-muted-foreground">{filtered.length} artículo{filtered.length !== 1 ? "s" : ""}</span>
-          </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="px-3 py-2.5 w-8"></th>
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Artículo</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Código</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Categoría</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">3m</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">6m</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">12m</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Stock act/mín</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">Venc.</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">CX futuras</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap">Sugerencia</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Prioridad</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground whitespace-nowrap"></th>
+            <table className="w-full text-left text-sm">
+              <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3">Artículo</th>
+                  <th className="px-4 py-3">Categoría</th>
+                  <th className="px-4 py-3">Stock / Mínimo</th>
+                  <th className="px-4 py-3 text-center">Vence &lt;60d</th>
+                  <th className="px-4 py-3 text-center">En OC (Tránsito)</th>
+                  <th className="px-4 py-3 text-center">Necesidades Abiertas</th>
+                  <th className="px-4 py-3 text-right">Cantidad Sugerida</th>
+                  <th className="px-4 py-3">Urgencia</th>
+                  <th className="px-4 py-3">Criterio / Motivo</th>
+                  <th className="px-4 py-3 text-right">Acción</th>
                 </tr>
               </thead>
-              <tbody>
-                {filtered.map((f) => {
-                  const isExpanded = expandedRows.has(f.id)
-                  const isBelowMin = f.stockActual < f.stockMinimo
-                  const isCloseToMin = f.stockActual >= f.stockMinimo && f.stockActual <= f.stockMinimo * 1.5
-
-                  return (
-                    <React.Fragment key={f.id}>
-                      <tr className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${isBelowMin ? "bg-red-50/50 dark:bg-red-950/20" : isCloseToMin ? "bg-amber-50/30 dark:bg-amber-950/10" : ""}`}>
-                        <td className="px-3 py-2.5">
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => toggleRow(f.id)}>
-                            {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                          </Button>
-                        </td>
-                        <td className="px-3 py-2.5 font-medium">{f.articleName}</td>
-                        <td className="px-3 py-2.5 font-mono text-xs">{f.articleCode}</td>
-                        <td className="px-3 py-2.5">
-                          <Badge variant="outline" className="text-[10px]">{f.category}</Badge>
-                        </td>
-                        <td className="px-3 py-2.5 text-right">{f.consumoHistorico3m}</td>
-                        <td className="px-3 py-2.5 text-right">{f.consumoHistorico6m}</td>
-                        <td className="px-3 py-2.5 text-right">{f.consumoHistorico12m}</td>
-                        <td className="px-3 py-2.5">
-                          <StockIndicator actual={f.stockActual} min={f.stockMinimo} />
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          {f.vencimientosProximos > 0 ? (
-                            <Badge variant="warning" className="text-[10px]">{f.vencimientosProximos}</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">0</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-right">{f.cirugiasFuturas}</td>
-                        <td className="px-3 py-2.5 text-right font-bold text-primary">{f.sugerenciaCompra}</td>
-                        <td className="px-3 py-2.5"><ForecastPriorityBadge priority={f.prioridad} /></td>
-                        <td className="px-3 py-2.5 text-right">
-                          {f.sugerenciaCompra > 0 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 text-xs h-7"
-                              onClick={() => { setGenItem(f); setGenDialogOpen(true) }}
-                            >
-                              <ShoppingCart className="size-3" /> Generar
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr className="border-b bg-muted/20">
-                          <td colSpan={13} className="px-6 py-4">
-                            <div className="grid gap-4 sm:grid-cols-3">
-                              {/* Consumo por médico */}
-                              <div className="space-y-2">
-                                <span className="text-xs font-medium text-muted-foreground">Consumo por Médico</span>
-                                {f.consumoPorMedico.map((m, i) => (
-                                  <div key={i} className="flex items-center justify-between text-xs">
-                                    <span className="truncate">{m.medico}</span>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                                        <div
-                                          className="h-full bg-primary/60 rounded-full"
-                                          style={{ width: `${(m.cantidad / Math.max(...f.consumoPorMedico.map((x) => x.cantidad), 1)) * 100}%` }}
-                                        />
-                                      </div>
-                                      <span className="font-medium w-6 text-right">{m.cantidad}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                              {/* Consumo por institución */}
-                              <div className="space-y-2">
-                                <span className="text-xs font-medium text-muted-foreground">Consumo por Institución</span>
-                                {f.consumoPorInstitucion.map((inst, i) => (
-                                  <div key={i} className="flex items-center justify-between text-xs">
-                                    <span className="truncate">{inst.institucion}</span>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                                        <div
-                                          className="h-full bg-sky-500/60 rounded-full"
-                                          style={{ width: `${(inst.cantidad / Math.max(...f.consumoPorInstitucion.map((x) => x.cantidad), 1)) * 100}%` }}
-                                        />
-                                      </div>
-                                      <span className="font-medium w-6 text-right">{inst.cantidad}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                              {/* Consumo por clasificación */}
-                              <div className="space-y-2">
-                                <span className="text-xs font-medium text-muted-foreground">Consumo por Clasificación</span>
-                                {f.consumoPorClasificacion.map((c, i) => (
-                                  <div key={i} className="flex items-center justify-between text-xs">
-                                    <span className="truncate">{c.clasificacion}</span>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                                        <div
-                                          className="h-full bg-emerald-500/60 rounded-full"
-                                          style={{ width: `${(c.cantidad / Math.max(...f.consumoPorClasificacion.map((x) => x.cantidad), 1)) * 100}%` }}
-                                        />
-                                      </div>
-                                      <span className="font-medium w-6 text-right">{c.cantidad}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  )
-                })}
-                {filtered.length === 0 && (
+              <tbody className="divide-y">
+                {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="px-4 py-12 text-center text-muted-foreground">
-                      No se encontraron artículos en forecast
+                    <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                      {loading
+                        ? "Calculando forecast de compras..."
+                        : "No hay artículos que requieran reposición o sugerencia de compra en este momento"}
                     </td>
                   </tr>
+                ) : (
+                  filtered.map((it) => (
+                    <tr key={it.articleId} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-foreground">{it.articleName}</div>
+                        <div className="text-xs text-muted-foreground font-mono">
+                          {it.articleCode}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs capitalize text-muted-foreground">
+                        {it.category}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StockIndicator actual={it.currentStock} min={it.minStock} />
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs">
+                        {it.expiringIn60Days > 0 ? (
+                          <Badge variant="destructive" className="text-[10px]">
+                            {it.expiringIn60Days} u.
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs">
+                        {it.incomingOcQty > 0 ? (
+                          <span className="font-semibold text-indigo-600">
+                            +{it.incomingOcQty}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs">
+                        {it.openNeedsQty > 0 ? (
+                          <span className="font-semibold text-amber-600">
+                            {it.openNeedsQty}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-foreground">
+                        {it.suggestedOrderQty > 0 ? `${it.suggestedOrderQty} u.` : "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <ForecastPriorityBadge urgency={it.urgency} />
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs">
+                        {it.rationale.length > 0 ? (
+                          <ul className="list-disc list-inside space-y-0.5">
+                            {it.rationale.map((r, i) => (
+                              <li key={i}>{r}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span>Stock balanceado</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {it.suggestedOrderQty > 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-xs bg-indigo-50/50 hover:bg-indigo-100 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border-indigo-200"
+                            onClick={() => setGenerateTarget(it)}
+                          >
+                            <Plus className="size-3.5" />
+                            Pedir
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -354,46 +294,53 @@ export default function ForecastPage() {
         </CardContent>
       </Card>
 
-      {/* ── Generate Necesidad Dialog ── */}
-      <Dialog open={genDialogOpen} onOpenChange={setGenDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+      {/* Dialog: Confirm Generate Necesidad */}
+      <Dialog open={!!generateTarget} onOpenChange={(open) => !open && setGenerateTarget(null)}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Generar Necesidad de Compra</DialogTitle>
-            <DialogDescription>Crear requerimiento desde forecast</DialogDescription>
+            <DialogTitle>Crear Necesidad de Compra</DialogTitle>
+            <DialogDescription>
+              ¿Desea crear una necesidad de compra en estado Pendiente para {generateTarget?.articleName}?
+            </DialogDescription>
           </DialogHeader>
-          {genItem && (
-            <div className="grid gap-4 py-4">
-              <div className="border rounded-lg p-3 space-y-1">
-                <p className="font-medium">{genItem.articleName}</p>
-                <p className="text-xs text-muted-foreground font-mono">{genItem.articleCode}</p>
-                <div className="flex items-center gap-3 mt-2 text-sm">
-                  <span>Sugerencia: <strong className="text-primary">{genItem.sugerenciaCompra}</strong> u.</span>
-                  <span>Stock: {genItem.stockActual}/{genItem.stockMinimo}</span>
-                </div>
+          {generateTarget && (
+            <div className="space-y-2 py-3 text-sm border-y my-2">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Artículo:</span>
+                <span className="font-medium">{generateTarget.articleName}</span>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Origen de la necesidad</label>
-                <Select value={genOrigin} onValueChange={(v) => setGenOrigin(v as NecesidadCompraOrigin)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(["Consumo", "Stock crítico", "Vencimiento próximo"] as NecesidadCompraOrigin[]).map((o) => (
-                      <SelectItem key={o} value={o}>{o}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Cantidad Sugerida:</span>
+                <span className="font-bold text-indigo-600">{generateTarget.suggestedOrderQty} unidades</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Proveedor Asignado:</span>
+                <span>{generateTarget.suggestedSupplierName || "Sin asignar"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Prioridad Resultante:</span>
+                <ForecastPriorityBadge urgency={generateTarget.urgency} />
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setGenDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleGenerarNecesidad} className="bg-emerald-600 hover:bg-emerald-700">
-              Generar Necesidad
+            <Button
+              variant="outline"
+              onClick={() => setGenerateTarget(null)}
+              disabled={isGenerating}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleGenerateNecesidad}
+              disabled={isGenerating}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {isGenerating ? "Generando..." : "Confirmar Necesidad"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <SurgeryDrawer />
     </div>
-  )
+  );
 }
