@@ -150,4 +150,52 @@ describe("NovedadesTabContent", () => {
     await waitFor(() => expect(editEntry).toHaveBeenLastCalledWith("note-1", expect.objectContaining({ noteType: "urgente" })))
     expect(editEntry).toHaveBeenLastCalledWith("note-1", expect.not.objectContaining({ summary: expect.anything(), entryType: expect.anything() }))
   })
+
+  it("does not open the image viewer when no photo index is active", () => {
+    authState.role = "admin"
+    feedState.entries = [
+      {
+        id: "note-photo-1",
+        entryType: "file_photo_evidence",
+        content: "Foto de prueba",
+        photoMeta: {
+          source: "composer",
+          fileCount: 1,
+          files: [{ name: "prueba.jpg", mimeType: "image/jpeg", sizeBytes: 2048, previewDataUrl: "data:image/jpeg;base64,123" }],
+        },
+        mentions: [],
+      },
+    ]
+    render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} />)
+
+    // Image thumbnail is rendered, but dialog is not open
+    expect(screen.getByAltText("prueba.jpg")).toBeInTheDocument()
+    expect(screen.queryByTitle("Acercar (+)")).not.toBeInTheDocument()
+  })
+
+  it("opens image viewer with download and share capabilities when an image is selected", async () => {
+    authState.role = "admin"
+    feedState.entries = [
+      {
+        id: "note-photo-1",
+        entryType: "file_photo_evidence",
+        content: "Foto de prueba",
+        photoMeta: {
+          source: "composer",
+          fileCount: 1,
+          files: [{ name: "evidencia-quirurgica.jpg", mimeType: "image/jpeg", sizeBytes: 2048, previewDataUrl: "data:image/jpeg;base64,123" }],
+        },
+        mentions: [],
+      },
+    ]
+    render(<NovedadesTabContent surgery={{ id: "surgery-1" } as never} />)
+
+    const imgThumbnail = screen.getByAltText("evidencia-quirurgica.jpg")
+    fireEvent.click(imgThumbnail.closest("button")!)
+
+    // Dialog should open showing image controls
+    expect(await screen.findByTitle("Acercar (+)")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Descargar/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Compartir/i })).toBeInTheDocument()
+  })
 })

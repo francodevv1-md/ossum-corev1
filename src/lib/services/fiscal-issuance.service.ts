@@ -533,7 +533,7 @@ export async function handleTusFacturasWebhookDev(
     },
   });
 
-  if (isAuthorized) {
+  if (isAuthorized && fiscalDoc.invoiceId) {
     await prisma.invoice?.updateMany?.({
       where: { id: fiscalDoc.invoiceId, state: "Borrador" },
       data: { state: "Emitido" },

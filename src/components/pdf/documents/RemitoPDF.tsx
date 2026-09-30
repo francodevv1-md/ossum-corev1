@@ -126,7 +126,7 @@ export function RemitoPDF({ data }: { data: RemitoDocumentData }) {
             </View>
 
             <View style={styles.metaCol}>
-              <Text weight="bold" variant="md" color="#0369a1">REMITO DE ENTREGA</Text>
+              <Text weight="bold" variant="base" color="#0369a1">REMITO DE ENTREGA</Text>
               <Text weight="bold" variant="sm" color="#0284c7">N° {data.number}</Text>
               <Text variant="xs" color="#64748b">Emisión: {data.date}</Text>
               {data.surgeryDate && <Text variant="xs" color="#0369a1" weight="semibold">Fecha CX: {formatDate(data.surgeryDate)}</Text>}
@@ -168,14 +168,15 @@ export function RemitoPDF({ data }: { data: RemitoDocumentData }) {
 
           {/* Cajas y Sets Quirúrgicos */}
           {data.boxes.length > 0 && (
-            <Section title="Cajas y Sets de Instrumental Quirúrgico Enviados">
+            <Section>
+              <Text style={styles.cardTitle}>Cajas y Sets de Instrumental Quirúrgico Enviados</Text>
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableCell weight="bold" style={{ width: "20%" }}>Código Caja</TableCell>
-                    <TableCell weight="bold" style={{ width: "45%" }}>Nombre del Set / Instrumental</TableCell>
-                    <TableCell weight="bold" style={{ width: "20%" }}>N° Precinto Seguridad</TableCell>
-                    <TableCell weight="bold" align="center" style={{ width: "15%" }}>Piezas</TableCell>
+                  <TableRow header>
+                    <TableCell style={{ width: "20%" }}>Código Caja</TableCell>
+                    <TableCell style={{ width: "45%" }}>Nombre del Set / Instrumental</TableCell>
+                    <TableCell style={{ width: "20%" }}>N° Precinto Seguridad</TableCell>
+                    <TableCell align="center" style={{ width: "15%" }}>Piezas</TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -197,15 +198,16 @@ export function RemitoPDF({ data }: { data: RemitoDocumentData }) {
           )}
 
           {/* Implantes y Descartables en Tránsito */}
-          <Section title="Detalle de Implantes, Prótesis y Material Descartable">
+          <Section>
+            <Text style={styles.cardTitle}>Detalle de Implantes, Prótesis y Material Descartable</Text>
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableCell weight="bold" style={{ width: "15%" }}>Código</TableCell>
-                  <TableCell weight="bold" style={{ width: "40%" }}>Descripción del Implante</TableCell>
-                  <TableCell weight="bold" style={{ width: "20%" }}>Lote / N° Serie</TableCell>
-                  <TableCell weight="bold" style={{ width: "15%" }}>Vencimiento</TableCell>
-                  <TableCell weight="bold" align="center" style={{ width: "10%" }}>Cant.</TableCell>
+                <TableRow header>
+                  <TableCell style={{ width: "15%" }}>Código</TableCell>
+                  <TableCell style={{ width: "40%" }}>Descripción del Implante</TableCell>
+                  <TableCell style={{ width: "20%" }}>Lote / N° Serie</TableCell>
+                  <TableCell style={{ width: "15%" }}>Vencimiento</TableCell>
+                  <TableCell align="center" style={{ width: "10%" }}>Cant.</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -221,8 +223,8 @@ export function RemitoPDF({ data }: { data: RemitoDocumentData }) {
                     <TableCell style={{ width: "15%" }}>
                       {item.expiryDate ? formatDate(item.expiryDate) : "—"}
                     </TableCell>
-                    <TableCell align="center" style={{ width: "10%" }} weight="bold">
-                      {item.quantity}
+                    <TableCell align="center" style={{ width: "10%" }}>
+                      <Text weight="bold">{item.quantity}</Text>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -258,7 +260,7 @@ export function RemitoPDF({ data }: { data: RemitoDocumentData }) {
             </View>
           </View>
 
-          <PageFooter title="Remito emitido bajo normas de trazabilidad de implantes quirúrgicos ANMAT" />
+          <PageFooter leftText="Remito emitido bajo normas de trazabilidad de implantes quirúrgicos ANMAT" />
         </PdfcnThemeProvider>
       </Page>
     </Document>

@@ -799,8 +799,16 @@ function TimelineCard({
                 totalCount={photoFiles.length}
                 onPrev={() => setPhotoViewerIndex((prev) => (prev !== null ? Math.max(0, prev - 1) : null))}
                 onNext={() => setPhotoViewerIndex((prev) => (prev !== null ? Math.min(photoFiles.length - 1, prev + 1) : null))}
-                onOpenInNewTab={() => photoViewerFile?.previewDataUrl && openImageDataUrlInNewTab(photoViewerFile.previewDataUrl)}
-                onDownload={() => photoViewerFile?.previewDataUrl && downloadImageDataUrl(photoViewerFile.previewDataUrl, photoViewerFile.name || undefined)}
+                onOpenInNewTab={() => {
+                  if (photoViewerFile?.previewDataUrl) {
+                    openImageDataUrlInNewTab(photoViewerFile.previewDataUrl)
+                  }
+                }}
+                onDownload={() => {
+                  if (photoViewerFile?.previewDataUrl) {
+                    downloadImageDataUrl(photoViewerFile.previewDataUrl, photoViewerFile.name || undefined)
+                  }
+                }}
                 onShare={async () => {
                   if (!photoViewerFile?.previewDataUrl) return
                   const shared = await shareImageDataUrl(photoViewerFile.previewDataUrl, photoViewerFile.name || undefined)
@@ -1238,6 +1246,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   const [mediaFiles, setMediaFiles] = useState<SeguimientoPhotoEvidenceFileInput[]>([])
   const [documentFile, setDocumentFile] = useState<File | null>(null)
   const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null)
+  const activeMediaViewerFile = mediaViewerIndex !== null ? mediaFiles[mediaViewerIndex] ?? null : null
   const [openImagePickerOnCompose, setOpenImagePickerOnCompose] = useState(false)
   const dictationRef = useRef<DictationRecognition | null>(null)
   const [isDictating, setIsDictating] = useState(false)
@@ -1854,22 +1863,29 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
               </div>
 
               <ImageViewerDialog
-                open={mediaViewerIndex !== null && Boolean(mediaFiles[mediaViewerIndex])}
+                open={Boolean(activeMediaViewerFile)}
                 onOpenChange={(open) => { if (!open) setMediaViewerIndex(null) }}
-                src={mediaFiles[mediaViewerIndex]?.previewDataUrl}
-                alt={mediaFiles[mediaViewerIndex]?.name || "Evidencia"}
-                title={mediaFiles[mediaViewerIndex]?.name || `Imagen ${(mediaViewerIndex ?? 0) + 1}`}
-                subtitle={mediaFiles[mediaViewerIndex]?.sizeBytes ? `${(mediaFiles[mediaViewerIndex].sizeBytes / 1024).toFixed(0)} KB` : undefined}
+                src={activeMediaViewerFile?.previewDataUrl}
+                alt={activeMediaViewerFile?.name || "Evidencia"}
+                title={activeMediaViewerFile?.name || `Imagen ${(mediaViewerIndex ?? 0) + 1}`}
+                subtitle={activeMediaViewerFile?.sizeBytes ? `${(activeMediaViewerFile.sizeBytes / 1024).toFixed(0)} KB` : undefined}
                 currentIndex={mediaViewerIndex ?? 0}
                 totalCount={mediaFiles.length}
                 onPrev={() => setMediaViewerIndex((prev) => (prev !== null ? Math.max(0, prev - 1) : null))}
                 onNext={() => setMediaViewerIndex((prev) => (prev !== null ? Math.min(mediaFiles.length - 1, prev + 1) : null))}
-                onOpenInNewTab={() => mediaFiles[mediaViewerIndex]?.previewDataUrl && openImageDataUrlInNewTab(mediaFiles[mediaViewerIndex].previewDataUrl)}
-                onDownload={() => mediaFiles[mediaViewerIndex]?.previewDataUrl && downloadImageDataUrl(mediaFiles[mediaViewerIndex].previewDataUrl, mediaFiles[mediaViewerIndex].name || undefined)}
+                onOpenInNewTab={() => {
+                  if (activeMediaViewerFile?.previewDataUrl) {
+                    openImageDataUrlInNewTab(activeMediaViewerFile.previewDataUrl)
+                  }
+                }}
+                onDownload={() => {
+                  if (activeMediaViewerFile?.previewDataUrl) {
+                    downloadImageDataUrl(activeMediaViewerFile.previewDataUrl, activeMediaViewerFile.name || undefined)
+                  }
+                }}
                 onShare={async () => {
-                  const activeFile = mediaFiles[mediaViewerIndex]
-                  if (!activeFile?.previewDataUrl) return
-                  const shared = await shareImageDataUrl(activeFile.previewDataUrl, activeFile.name || undefined)
+                  if (!activeMediaViewerFile?.previewDataUrl) return
+                  const shared = await shareImageDataUrl(activeMediaViewerFile.previewDataUrl, activeMediaViewerFile.name || undefined)
                   if (!shared) {
                     toast.error("Compartir no está disponible en este dispositivo")
                   }
@@ -2021,22 +2037,29 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           {/* Image viewer for media composer */}
           {/* Image viewer for media composer with Zoom & Rotation */}
           <ImageViewerDialog
-            open={mediaViewerIndex !== null && Boolean(mediaFiles[mediaViewerIndex])}
+            open={Boolean(activeMediaViewerFile)}
             onOpenChange={(open) => { if (!open) setMediaViewerIndex(null) }}
-            src={mediaFiles[mediaViewerIndex]?.previewDataUrl}
-            alt={mediaFiles[mediaViewerIndex]?.name || "Evidencia"}
-            title={mediaFiles[mediaViewerIndex]?.name || `Imagen ${(mediaViewerIndex ?? 0) + 1}`}
-            subtitle={mediaFiles[mediaViewerIndex]?.sizeBytes ? `${(mediaFiles[mediaViewerIndex].sizeBytes / 1024).toFixed(0)} KB` : undefined}
+            src={activeMediaViewerFile?.previewDataUrl}
+            alt={activeMediaViewerFile?.name || "Evidencia"}
+            title={activeMediaViewerFile?.name || `Imagen ${(mediaViewerIndex ?? 0) + 1}`}
+            subtitle={activeMediaViewerFile?.sizeBytes ? `${(activeMediaViewerFile.sizeBytes / 1024).toFixed(0)} KB` : undefined}
             currentIndex={mediaViewerIndex ?? 0}
             totalCount={mediaFiles.length}
             onPrev={() => setMediaViewerIndex((prev) => (prev !== null ? Math.max(0, prev - 1) : null))}
             onNext={() => setMediaViewerIndex((prev) => (prev !== null ? Math.min(mediaFiles.length - 1, prev + 1) : null))}
-            onOpenInNewTab={() => mediaFiles[mediaViewerIndex]?.previewDataUrl && openImageDataUrlInNewTab(mediaFiles[mediaViewerIndex].previewDataUrl)}
-            onDownload={() => mediaFiles[mediaViewerIndex]?.previewDataUrl && downloadImageDataUrl(mediaFiles[mediaViewerIndex].previewDataUrl, mediaFiles[mediaViewerIndex].name || undefined)}
+            onOpenInNewTab={() => {
+              if (activeMediaViewerFile?.previewDataUrl) {
+                openImageDataUrlInNewTab(activeMediaViewerFile.previewDataUrl)
+              }
+            }}
+            onDownload={() => {
+              if (activeMediaViewerFile?.previewDataUrl) {
+                downloadImageDataUrl(activeMediaViewerFile.previewDataUrl, activeMediaViewerFile.name || undefined)
+              }
+            }}
             onShare={async () => {
-              const activeFile = mediaFiles[mediaViewerIndex]
-              if (!activeFile?.previewDataUrl) return
-              const shared = await shareImageDataUrl(activeFile.previewDataUrl, activeFile.name || undefined)
+              if (!activeMediaViewerFile?.previewDataUrl) return
+              const shared = await shareImageDataUrl(activeMediaViewerFile.previewDataUrl, activeMediaViewerFile.name || undefined)
               if (!shared) {
                 toast.error("Compartir no está disponible en este dispositivo")
               }

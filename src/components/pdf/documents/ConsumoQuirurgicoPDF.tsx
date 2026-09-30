@@ -97,7 +97,7 @@ export function ConsumoQuirurgicoPDF({ data }: { data: ConsumoDocumentData }) {
             </View>
 
             <View style={styles.metaCol}>
-              <Text weight="bold" variant="md" color="#047857">ACTA DE CONSUMO</Text>
+              <Text weight="bold" variant="base" color="#047857">ACTA DE CONSUMO</Text>
               <Text weight="bold" variant="sm" color="#059669">N° {data.consumoNumber}</Text>
               <Text variant="xs" color="#64748b">Fecha Acto: {data.date}</Text>
             </View>
@@ -124,16 +124,17 @@ export function ConsumoQuirurgicoPDF({ data }: { data: ConsumoDocumentData }) {
           </View>
 
           {/* Tabla de Implantes: Remitido vs Consumido vs Devuelto */}
-          <Section title="Balance de Implantes y Materiales (Consumidos vs Devueltos)">
+          <Section>
+            <Text style={styles.cardTitle}>Balance de Implantes y Materiales (Consumidos vs Devueltos)</Text>
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableCell weight="bold" style={{ width: "15%" }}>Código</TableCell>
-                  <TableCell weight="bold" style={{ width: "35%" }}>Descripción del Implante</TableCell>
-                  <TableCell weight="bold" style={{ width: "20%" }}>Lote / Sticker</TableCell>
-                  <TableCell weight="bold" align="center" style={{ width: "10%" }}>Enviado</TableCell>
-                  <TableCell weight="bold" align="center" style={{ width: "10%" }}>Consumo</TableCell>
-                  <TableCell weight="bold" align="center" style={{ width: "10%" }}>Devuelto</TableCell>
+                <TableRow header>
+                  <TableCell style={{ width: "15%" }}>Código</TableCell>
+                  <TableCell style={{ width: "35%" }}>Descripción del Implante</TableCell>
+                  <TableCell style={{ width: "20%" }}>Lote / Sticker</TableCell>
+                  <TableCell align="center" style={{ width: "10%" }}>Enviado</TableCell>
+                  <TableCell align="center" style={{ width: "10%" }}>Consumo</TableCell>
+                  <TableCell align="center" style={{ width: "10%" }}>Devuelto</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -147,8 +148,8 @@ export function ConsumoQuirurgicoPDF({ data }: { data: ConsumoDocumentData }) {
                       <Text weight="bold" color="#047857">{item.lotNumber}</Text>
                     </TableCell>
                     <TableCell align="center" style={{ width: "10%" }}>{item.remittedQuantity}</TableCell>
-                    <TableCell align="center" style={{ width: "10%" }} weight="bold">
-                      <Text color="#059669">{item.consumedQuantity}</Text>
+                    <TableCell align="center" style={{ width: "10%" }}>
+                      <Text weight="bold" color="#059669">{item.consumedQuantity}</Text>
                     </TableCell>
                     <TableCell align="center" style={{ width: "10%" }}>
                       <Text color="#64748b">{item.returnedQuantity}</Text>
@@ -161,13 +162,14 @@ export function ConsumoQuirurgicoPDF({ data }: { data: ConsumoDocumentData }) {
 
           {/* Estado de Cajas e Instrumental */}
           {data.boxesUsed.length > 0 && (
-            <Section title="Control y Devolución de Cajas Quirúrgicas">
+            <Section>
+              <Text style={styles.cardTitle}>Control y Devolución de Cajas Quirúrgicas</Text>
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableCell weight="bold" style={{ width: "25%" }}>Código Set</TableCell>
-                    <TableCell weight="bold" style={{ width: "45%" }}>Nombre del Instrumental</TableCell>
-                    <TableCell weight="bold" style={{ width: "30%" }}>Estado de Devolución</TableCell>
+                  <TableRow header>
+                    <TableCell style={{ width: "25%" }}>Código Set</TableCell>
+                    <TableCell style={{ width: "45%" }}>Nombre del Instrumental</TableCell>
+                    <TableCell style={{ width: "30%" }}>Estado de Devolución</TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -205,7 +207,7 @@ export function ConsumoQuirurgicoPDF({ data }: { data: ConsumoDocumentData }) {
             </View>
           </View>
 
-          <PageFooter title="Documento quirúrgico legal para cotejo, trazabilidad ANMAT y liquidación" />
+          <PageFooter leftText="Documento quirúrgico legal para cotejo, trazabilidad ANMAT y liquidación" />
         </PdfcnThemeProvider>
       </Page>
     </Document>

@@ -15,6 +15,7 @@ import {
   Maximize2,
 } from "lucide-react"
 import { ImageViewerDialog } from "@/components/shared/image/ImageViewerDialog"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { getAccessToken } from "@/lib/auth/client"
 import { toast } from "sonner"
 
@@ -106,6 +107,7 @@ interface TabPaneAdjuntosProps {
 }
 
 export function TabPaneAdjuntos({ surgery }: TabPaneAdjuntosProps) {
+  const { activeCompany } = useAuth()
   const backendId = surgery.backendId || surgery.id
   const { entries: feedEntries, addPhotoEvidence } = useSeguimientoFeed(backendId)
   const store = useOrtoTrackStore()
@@ -152,7 +154,7 @@ export function TabPaneAdjuntos({ surgery }: TabPaneAdjuntosProps) {
         const dateObj = new Date(entry.createdAt)
         const isImg = Boolean(doc.mimeType?.startsWith("image") || /\.(png|jpe?g|webp|gif|svg)$/i.test(doc.fileName))
         const docUrl = isImg
-          ? `/api/companies/${encodeURIComponent(surgery.companyId || "active")}/surgeries/${encodeURIComponent(surgery.backendId || surgery.id)}/seguimiento/documents/${encodeURIComponent(entry.id)}`
+          ? `/api/companies/${encodeURIComponent(activeCompany?.id || "active")}/surgeries/${encodeURIComponent(surgery.backendId || surgery.id)}/seguimiento/documents/${encodeURIComponent(entry.id)}`
           : undefined
 
         list.push({
@@ -395,7 +397,7 @@ export function TabPaneAdjuntos({ surgery }: TabPaneAdjuntosProps) {
         }}
         src={lightboxFile?.src}
         title={lightboxFile?.title}
-        fileName={lightboxFile?.fileName}
+        alt={lightboxFile?.fileName}
         onDownload={lightboxFile?.src ? () => {
           const a = document.createElement("a")
           a.href = lightboxFile.src

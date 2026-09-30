@@ -11,6 +11,8 @@ const ctx: ApiAuthContext = {
   supabaseAuthId: "supabase-1",
   companyId: "company-1",
   role: "admin",
+  canonicalRole: "admin",
+  rawRole: "admin",
   user: { id: "actor-1", email: "admin@x.test", firstName: "Ana", lastName: "Admin" },
   activeCompany: { id: "company-1", name: "Districorr DEV" },
   source: "supabase-auth",

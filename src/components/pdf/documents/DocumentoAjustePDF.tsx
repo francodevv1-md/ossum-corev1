@@ -209,7 +209,7 @@ export function DocumentoAjustePDF({ documento }: DocumentoAjustePDFProps) {
             </View>
 
             <View style={styles.metaCol}>
-              <Text weight="bold" variant="md" color={isCredit ? "#b45309" : "#4338ca"}>
+              <Text weight="bold" variant="base" color={isCredit ? "#b45309" : "#4338ca"}>
                 {isCredit ? "NOTA DE CRÉDITO" : "NOTA DE DÉBITO"}
               </Text>
               <Text weight="bold" variant="sm" color="#0f172a">

@@ -363,10 +363,10 @@ export function DefineDateModal({
                   </DialogTitle>
                 </div>
                 <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-3 mt-1 flex-wrap">
-                  {surgery.doctor ? (
+                  {surgery.surgeon ? (
                     <span className="inline-flex items-center gap-1">
                       <Stethoscope className="size-3 text-slate-400" />
-                      {surgery.doctor}
+                      {surgery.surgeon}
                     </span>
                   ) : null}
                   {surgery.institution ? (

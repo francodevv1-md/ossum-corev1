@@ -3,13 +3,17 @@ import {
   requireSeguimientoEventMutationAccess,
   type ApiAuthContext,
 } from "@/lib/api/guards";
+import { resolveCanonicalRole, type CanonicalRole } from "@/lib/permissions/canonical-roles";
 
-function createContext(role: string): ApiAuthContext {
+function createContext(roleInput: string): ApiAuthContext {
+  const canonical = resolveCanonicalRole(roleInput) ?? ("viewer" as CanonicalRole);
   return {
     actorUserId: "user-1",
     supabaseAuthId: null,
     companyId: "company-1",
-    role,
+    role: canonical,
+    canonicalRole: canonical,
+    rawRole: roleInput,
     user: {
       id: "user-1",
       email: "admin@example.com",
@@ -25,17 +29,18 @@ function createContext(role: string): ApiAuthContext {
 }
 
 describe("requireSeguimientoEventMutationAccess", () => {
-  it("permits exactly admin", () => {
+  it("permits admin and coordinator with cirugias:mutate capability", () => {
     expect(() => requireSeguimientoEventMutationAccess(createContext("admin"))).not.toThrow();
+    expect(() => requireSeguimientoEventMutationAccess(createContext("coordinator"))).not.toThrow();
   });
 
-  it.each(["coordinator", "operator", "arbitrary-role"])(
-    "denies %s with the company mutation access error",
+  it.each(["billing", "viewer", "arbitrary-role"])(
+    "denies %s with capability_denied",
     (role) => {
       expect(() => requireSeguimientoEventMutationAccess(createContext(role))).toThrow(
         expect.objectContaining({
           status: 403,
-          code: "company_mutation_access_denied",
+          code: "capability_denied",
         })
       );
     }

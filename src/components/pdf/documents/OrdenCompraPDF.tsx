@@ -128,7 +128,7 @@ export function OrdenCompraPDF({ data }: { data: OrdenCompraDocumentData }) {
             </View>
 
             <View style={styles.metaCol}>
-              <Text weight="bold" variant="md" color="#0f172a">ORDEN DE COMPRA</Text>
+              <Text weight="bold" variant="base" color="#0f172a">ORDEN DE COMPRA</Text>
               <Text weight="bold" variant="sm" color="#334155">N° {data.orderNumber}</Text>
               <Text variant="xs" color="#64748b">Fecha: {data.date}</Text>
               <Text variant="xs" color="#dc2626" weight="bold">Fecha Límite Entrega: {data.requiredDeliveryDate}</Text>
@@ -160,15 +160,16 @@ export function OrdenCompraPDF({ data }: { data: OrdenCompraDocumentData }) {
           </View>
 
           {/* Tabla de Artículos Solicitados */}
-          <Section title="Detalle de Implantes e Insumos Solicitados">
+          <Section>
+            <Text style={styles.cardTitle}>Detalle de Implantes e Insumos Solicitados</Text>
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableCell weight="bold" style={{ width: "15%" }}>Código Prov.</TableCell>
-                  <TableCell weight="bold" style={{ width: "45%" }}>Descripción del Material</TableCell>
-                  <TableCell weight="bold" align="center" style={{ width: "10%" }}>Cant.</TableCell>
-                  <TableCell weight="bold" align="right" style={{ width: "15%" }}>Precio Unit.</TableCell>
-                  <TableCell weight="bold" align="right" style={{ width: "15%" }}>Total</TableCell>
+                <TableRow header>
+                  <TableCell style={{ width: "15%" }}>Código Prov.</TableCell>
+                  <TableCell style={{ width: "45%" }}>Descripción del Material</TableCell>
+                  <TableCell align="center" style={{ width: "10%" }}>Cant.</TableCell>
+                  <TableCell align="right" style={{ width: "15%" }}>Precio Unit.</TableCell>
+                  <TableCell align="right" style={{ width: "15%" }}>Total</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -178,14 +179,14 @@ export function OrdenCompraPDF({ data }: { data: OrdenCompraDocumentData }) {
                     <TableCell style={{ width: "45%" }}>
                       <Text weight="medium">{item.description}</Text>
                     </TableCell>
-                    <TableCell align="center" style={{ width: "10%" }} weight="bold">
-                      {item.quantity}
+                    <TableCell align="center" style={{ width: "10%" }}>
+                      <Text weight="bold">{item.quantity}</Text>
                     </TableCell>
                     <TableCell align="right" style={{ width: "15%" }}>
                       {item.unitPrice ? formatCurrency(item.unitPrice) : "—"}
                     </TableCell>
-                    <TableCell align="right" style={{ width: "15%" }} weight="semibold">
-                      {item.subtotal ? formatCurrency(item.subtotal) : "—"}
+                    <TableCell align="right" style={{ width: "15%" }}>
+                      <Text weight="semibold">{item.subtotal ? formatCurrency(item.subtotal) : "—"}</Text>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -228,7 +229,7 @@ export function OrdenCompraPDF({ data }: { data: OrdenCompraDocumentData }) {
             </View>
           </View>
 
-          <PageFooter title="Orden de Compra válida únicamente con confirmación de recepción y número de remito de entrega" />
+          <PageFooter leftText="Orden de Compra válida únicamente con confirmación de recepción y número de remito de entrega" />
         </PdfcnThemeProvider>
       </Page>
     </Document>

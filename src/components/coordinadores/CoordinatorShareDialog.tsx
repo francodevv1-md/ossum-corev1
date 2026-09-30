@@ -315,7 +315,7 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
       presupuestos.forEach((pres) => {
         list.push({
           id: `pres-${pres.id}`,
-          entryLabel: `Presupuesto V${pres.version || 1} · ${pres.status || "Aprobado"}`,
+          entryLabel: `Presupuesto V${pres.version || 1} · ${pres.state || "Aprobado"}`,
           createdAt: pres.createdAt || new Date().toISOString(),
           authorName: "Comercial",
           fileName: `Presupuesto-${pres.id}-V${pres.version || 1}.pdf`,

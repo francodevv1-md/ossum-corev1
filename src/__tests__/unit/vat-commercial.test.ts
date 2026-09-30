@@ -653,7 +653,6 @@ describe("COMMERCIAL-GROSS-PRICE-UX-001 — Gross Price (IVA Included) Invariant
 
     const docTotals = calculateCommercialDocumentTotals([
       {
-        description: "Item 1",
         quantity: line1.quantity,
         unitPrice: line1.netUnitPrice,
         discount: line1.discountAmount,
@@ -665,7 +664,6 @@ describe("COMMERCIAL-GROSS-PRICE-UX-001 — Gross Price (IVA Included) Invariant
         total: line1.total,
       },
       {
-        description: "Item 2",
         quantity: line2.quantity,
         unitPrice: line2.netUnitPrice,
         discount: line2.discountAmount,

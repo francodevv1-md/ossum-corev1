@@ -77,11 +77,17 @@ export function NotificationMenu({ buttonClassName, label, title, dropdownSide, 
       const requestCandidate = availabilityRequestsEnabled
         ? getAvailabilityRequestCandidate(notification)
         : null
-       router.push(requestCandidate
-         ? `/notificaciones?accion=informar-disponibilidad&solicitud=${encodeURIComponent(requestCandidate)}`
-         : isCoordinatorAssignmentNotification(notification)
-           ? buildNotificationCirugiaLink(notification.surgeryId)
-           : buildNotificationExpedienteLink({ surgeryId: notification.surgeryId, entryId: getNotificationEntryId(notification) }))
+      if (requestCandidate) {
+        router.push(`/notificaciones?accion=informar-disponibilidad&solicitud=${encodeURIComponent(requestCandidate)}`)
+      } else if (notification.surgeryId) {
+        router.push(
+          isCoordinatorAssignmentNotification(notification)
+            ? buildNotificationCirugiaLink(notification.surgeryId)
+            : buildNotificationExpedienteLink({ surgeryId: notification.surgeryId, entryId: getNotificationEntryId(notification) })
+        )
+      } else {
+        router.push("/notificaciones")
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo actualizar la notificación")
     }

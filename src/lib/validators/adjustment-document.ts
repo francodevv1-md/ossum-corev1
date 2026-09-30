@@ -25,7 +25,7 @@ export const adjustmentDocumentItemInputSchema = z.object({
 
 export const createAdjustmentDocumentSchema = z
   .object({
-    type: z.enum(ADJUSTMENT_TYPES, { errorMap: () => ({ message: "Tipo debe ser CREDITO o DEBITO" }) }),
+    type: z.enum(ADJUSTMENT_TYPES),
     originType: z.enum(ADJUSTMENT_ORIGIN_TYPES).default("INTERNAL_INVOICE"),
 
     // Origen 1: Factura Interna OSSUM

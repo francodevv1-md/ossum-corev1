@@ -158,7 +158,7 @@ export async function getAdjustmentDocumentById(
       items: true,
       surgery: true,
       fiscalDocument: true,
-      createdBy: { select: { id: true, name: true, email: true } },
+      createdBy: { select: { id: true, firstName: true, lastName: true, email: true } },
     },
   });
 

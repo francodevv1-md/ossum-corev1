@@ -169,7 +169,7 @@ export function computeLineTotalsFromGross(
 export function AdjustmentWorkspace() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { invoices, isLoading: isLoadingInvoices } = useInvoices()
+  const { invoices, loading: isLoadingInvoices } = useInvoices()
   const { documentos, addDocumento } = useDocumentosAjuste()
 
   const initialTipoParam = searchParams.get("tipo")
@@ -1210,7 +1210,7 @@ export function AdjustmentWorkspace() {
                           />
                           {item.grossUnitPrice > 0 && item.vatRate > 0 && (
                             <span className="text-[9px] text-muted-foreground text-right px-2 pb-0.5 font-mono block">
-                              Neto: {formatDecimalCurrency(item.netUnitPrice)} · IVA {item.vatRate}%: {formatDecimalCurrency(item.vatUnitPrice)}
+                              Neto: {formatCurrency(item.netUnitPrice)} · IVA {item.vatRate}%: {formatCurrency(item.vatUnitPrice)}
                             </span>
                           )}
                         </div>

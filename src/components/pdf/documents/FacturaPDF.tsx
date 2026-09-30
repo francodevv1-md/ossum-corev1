@@ -138,7 +138,7 @@ export function FacturaPDF({ data }: { data: FacturaDocumentData }) {
             </View>
 
             <View style={styles.metaCol}>
-              <Text weight="bold" variant="md" color="#0f172a">FACTURA</Text>
+              <Text weight="bold" variant="base" color="#0f172a">FACTURA</Text>
               <Text weight="bold" variant="sm" color="#2563eb">N° {data.pointOfSale}-{data.number}</Text>
               <Text variant="xs" color="#64748b">Fecha de Emisión: {data.issueDate}</Text>
               <Text variant="xs" color="#64748b">Fecha de Vencimiento: {data.dueDate}</Text>
@@ -170,16 +170,17 @@ export function FacturaPDF({ data }: { data: FacturaDocumentData }) {
           </View>
 
           {/* Tabla de Conceptos e Implantes Facturados */}
-          <Section title="Detalle de Conceptos Facturados">
+          <Section>
+            <Text weight="bold" color="#0f172a" style={{ fontSize: 9, marginBottom: 4 }}>Detalle de Conceptos Facturados</Text>
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableCell weight="bold" style={{ width: "15%" }}>Código</TableCell>
-                  <TableCell weight="bold" style={{ width: "40%" }}>Descripción / Detalle</TableCell>
-                  <TableCell weight="bold" align="center" style={{ width: "10%" }}>Cant.</TableCell>
-                  <TableCell weight="bold" align="right" style={{ width: "15%" }}>Precio Unit.</TableCell>
-                  <TableCell weight="bold" align="center" style={{ width: "8%" }}>IVA</TableCell>
-                  <TableCell weight="bold" align="right" style={{ width: "12%" }}>Subtotal</TableCell>
+                <TableRow header>
+                  <TableCell style={{ width: "15%" }}>Código</TableCell>
+                  <TableCell style={{ width: "40%" }}>Descripción / Detalle</TableCell>
+                  <TableCell align="center" style={{ width: "10%" }}>Cant.</TableCell>
+                  <TableCell align="right" style={{ width: "15%" }}>Precio Unit.</TableCell>
+                  <TableCell align="center" style={{ width: "8%" }}>IVA</TableCell>
+                  <TableCell align="right" style={{ width: "12%" }}>Subtotal</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -196,8 +197,8 @@ export function FacturaPDF({ data }: { data: FacturaDocumentData }) {
                     <TableCell align="center" style={{ width: "8%" }}>
                       {item.ivaPercent ? `${item.ivaPercent}%` : "21%"}
                     </TableCell>
-                    <TableCell align="right" style={{ width: "12%" }} weight="semibold">
-                      {item.subtotal ? formatCurrency(item.subtotal) : "—"}
+                    <TableCell align="right" style={{ width: "12%" }}>
+                      <Text weight="semibold">{item.subtotal ? formatCurrency(item.subtotal) : "—"}</Text>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -246,7 +247,7 @@ export function FacturaPDF({ data }: { data: FacturaDocumentData }) {
             </View>
           </View>
 
-          <PageFooter title="Comprobante emitido según régimen de Facturación Electrónica ARCA/AFIP" />
+          <PageFooter leftText="Comprobante emitido según régimen de Facturación Electrónica ARCA/AFIP" />
         </PdfcnThemeProvider>
       </Page>
     </Document>

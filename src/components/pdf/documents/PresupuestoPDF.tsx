@@ -182,15 +182,16 @@ export function PresupuestoPDF({ data }: { data: PresupuestoDocumentData }) {
           </View>
 
           {/* Tabla de Materiales e Implantes */}
-          <Section title="Detalle de Materiales e Implantes Cotizados">
+          <Section>
+            <Text style={styles.cardTitle}>Detalle de Materiales e Implantes Cotizados</Text>
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableCell weight="bold" style={{ width: "15%" }}>Código</TableCell>
-                  <TableCell weight="bold" style={{ width: "45%" }}>Descripción del Implante / Insumo</TableCell>
-                  <TableCell weight="bold" align="center" style={{ width: "10%" }}>Cant.</TableCell>
-                  <TableCell weight="bold" align="right" style={{ width: "15%" }}>Precio Unit.</TableCell>
-                  <TableCell weight="bold" align="right" style={{ width: "15%" }}>Subtotal</TableCell>
+                <TableRow header>
+                  <TableCell style={{ width: "15%" }}>Código</TableCell>
+                  <TableCell style={{ width: "45%" }}>Descripción del Implante / Insumo</TableCell>
+                  <TableCell align="center" style={{ width: "10%" }}>Cant.</TableCell>
+                  <TableCell align="right" style={{ width: "15%" }}>Precio Unit.</TableCell>
+                  <TableCell align="right" style={{ width: "15%" }}>Subtotal</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -204,8 +205,8 @@ export function PresupuestoPDF({ data }: { data: PresupuestoDocumentData }) {
                     <TableCell align="right" style={{ width: "15%" }}>
                       {item.unitPrice ? formatCurrency(item.unitPrice) : "—"}
                     </TableCell>
-                    <TableCell align="right" style={{ width: "15%" }} weight="semibold">
-                      {item.subtotal ? formatCurrency(item.subtotal) : "—"}
+                    <TableCell align="right" style={{ width: "15%" }}>
+                      <Text weight="semibold">{item.subtotal ? formatCurrency(item.subtotal) : "—"}</Text>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -267,7 +268,7 @@ export function PresupuestoPDF({ data }: { data: PresupuestoDocumentData }) {
             </View>
           </View>
 
-          <PageFooter title="Documento generado automáticamente por OSSUM COR ERP Quirúrgico" />
+          <PageFooter leftText="Documento generado automáticamente por OSSUM COR ERP Quirúrgico" />
         </PdfcnThemeProvider>
       </Page>
     </Document>

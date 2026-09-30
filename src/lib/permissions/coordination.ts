@@ -1,7 +1,7 @@
-export const GLOBAL_COORDINATION_ROLES = ["admin", "operator"] as const
+export const GLOBAL_COORDINATION_ROLES = ["admin", "coordinator"] as const
 
 export function canAccessGlobalCoordination(role: string | null | undefined): boolean {
-  return role === "admin" || role === "operator"
+  return role === "admin" || role === "coordinator"
 }
 
 export function getCoordinationDestination(role: string | null | undefined): string {

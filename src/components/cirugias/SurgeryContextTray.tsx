@@ -103,7 +103,7 @@ export function SurgeryContextTray({
       if (entry.documentMeta) {
         const doc = entry.documentMeta
         const isImg = Boolean(doc.mimeType?.startsWith("image") || /\.(png|jpe?g|webp|gif|svg)$/i.test(doc.fileName))
-        const companyId = activeCompany?.id || surgery.companyId || process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID || "codevdistricorr1000000000"
+        const companyId = activeCompany?.id || process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID || "codevdistricorr1000000000"
         const surgeryBackendId = surgery.backendId || surgery.id
         const docUrl = `/api/companies/${encodeURIComponent(companyId)}/surgeries/${encodeURIComponent(surgeryBackendId)}/seguimiento/documents/${encodeURIComponent(entry.id)}`
         return {
@@ -154,9 +154,9 @@ export function SurgeryContextTray({
     )
     if (presupuesto && presupuesto.items && presupuesto.items.length > 0) {
       return presupuesto.items.map((item) => ({
-        description: item.description?.trim() || item.code?.trim() || "Material presupuestado",
+        description: item.name?.trim() || item.code?.trim() || "Material presupuestado",
         quantity: item.quantity || 1,
-        code: item.code && item.code !== item.description && item.code.length > 1 ? item.code : undefined,
+        code: item.code && item.code !== item.name && item.code.length > 1 ? item.code : undefined,
       }))
     }
 
@@ -166,9 +166,9 @@ export function SurgeryContextTray({
     )
     if (remito && remito.items && remito.items.length > 0) {
       return remito.items.map((item) => ({
-        description: item.description?.trim() || item.code?.trim() || "Material remitado",
-        quantity: item.quantity || 1,
-        code: item.code && item.code !== item.description && item.code.length > 1 ? item.code : undefined,
+        description: item.name?.trim() || item.code?.trim() || "Material remitado",
+        quantity: item.sentQuantity || 1,
+        code: item.code && item.code !== item.name && item.code.length > 1 ? item.code : undefined,
       }))
     }
 

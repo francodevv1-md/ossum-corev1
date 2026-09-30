@@ -11,6 +11,8 @@ const ctx: ApiAuthContext = {
   supabaseAuthId: "supabase-real",
   companyId: "company-1",
   role: "admin",
+  canonicalRole: "admin",
+  rawRole: "admin",
   user: { id: "actor-real", email: "ana@x.test", firstName: "Ana", lastName: "Admin" },
   activeCompany: { id: "company-1", name: "Districorr DEV" },
   source: "supabase-auth",
@@ -84,12 +86,12 @@ const env = {
 } as NodeJS.ProcessEnv;
 
 describe("coordination view service", () => {
-  it.each(["admin", "operator"])("permite producción global para %s", async (role) => {
+  it.each(["admin", "coordinator"] as const)("permite producción global para %s", async (role) => {
     const prisma = db();
     const view = await getCoordinationView({
       prisma: prisma as never,
       routeCompanyId: "company-1",
-      ctx: { ...ctx, role },
+      ctx: { ...ctx, role, canonicalRole: role, rawRole: role },
       request: { mode: "production", surface: "global" },
     });
     expect(view.context.surface).toBe("global");
@@ -117,12 +119,12 @@ describe("coordination view service", () => {
     expect(view.pagination).toEqual({ take: 2, skip: 10, hasMore: true });
   });
 
-  it("deniega coordinator global antes de enumerar contactos o cirugías", async () => {
+  it("deniega logística global antes de enumerar contactos o cirugías", async () => {
     const prisma = db();
     await expect(getCoordinationView({
       prisma: prisma as never,
       routeCompanyId: "company-1",
-      ctx: { ...ctx, role: "coordinator" },
+      ctx: { ...ctx, role: "logistics", canonicalRole: "logistics", rawRole: "logistics" },
       request: { mode: "production", surface: "global" },
     })).rejects.toMatchObject({
       status: 403,
