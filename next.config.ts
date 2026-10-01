@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   serverExternalPackages: ['@prisma/client', 'prisma'],
+  allowedDevOrigins: ['100.107.173.14', '100.107.68.126'],
 };
 
 export default nextConfig;
