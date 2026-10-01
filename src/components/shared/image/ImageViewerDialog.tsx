@@ -309,15 +309,22 @@ export function ImageViewerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex flex-col h-[92vh] max-h-[94vh] w-[95vw] max-w-[95vw] sm:max-w-5xl md:max-w-6xl lg:max-w-7xl xl:max-w-[1360px] overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950 p-0 text-slate-100 shadow-2xl gap-0"
+        // ponytail: mobile occupies the full dynamic viewport with safe-area
+        // insets respected; desktop keeps the original 92vh / 95vw envelope.
+        className="flex flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950 p-0 text-slate-100 shadow-2xl gap-0
+          h-[100dvh] max-h-[100dvh] w-screen max-w-[100vw]
+          sm:h-[92vh] sm:max-h-[94vh] sm:w-[95vw] sm:max-w-[95vw] sm:max-w-5xl md:max-w-6xl lg:max-w-7xl xl:max-w-[1360px]"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{subtitle || alt || "Visualizador y editor de vista previa de imagen"}</DialogDescription>
         </DialogHeader>
 
-        {/* Top Control Bar */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2.5 border-b border-slate-800/80 bg-slate-900/95 px-3.5 py-2 sm:px-4 sm:py-2.5 backdrop-blur-md">
+        {/* Top Control Bar — single row, horizontal scroll on mobile, no wrap */}
+        <div
+          className="flex shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-slate-800/80 bg-slate-900/95 px-3 py-2 backdrop-blur-md sm:gap-2.5 sm:px-4 sm:py-2.5"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
           {/* Left: Info + Multi-image pagination */}
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0">
@@ -456,7 +463,7 @@ export function ImageViewerDialog({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           onTouchCancel={handleTouchEnd}
-          style={{ touchAction: "none" }}
+          style={{ touchAction: "none", minHeight: 0 }}
           className={cn(
             "relative flex-1 min-h-0 w-full overflow-hidden bg-slate-950 flex items-center justify-center p-3 sm:p-6 select-none",
             zoom > 1 ? (isInteracting ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in"
@@ -557,7 +564,10 @@ export function ImageViewerDialog({
           )}
 
           {/* Quick hint banner on zoom / controls */}
-          <div className="pointer-events-none absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-slate-800/80 bg-slate-900/80 px-3 py-1 text-[10px] sm:text-xs text-slate-400 backdrop-blur-md shadow-md text-center max-w-[90vw] truncate">
+          <div
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-full border border-slate-800/80 bg-slate-900/80 px-3 py-1 text-[10px] sm:text-xs text-slate-400 backdrop-blur-md shadow-md text-center max-w-[90vw] truncate"
+            style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          >
             Pellizcar o doble toque para zoom · Arrastrar para mover
           </div>
         </div>

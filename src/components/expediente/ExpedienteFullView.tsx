@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
+import { ChevronLeft, ChevronRight, Mail, MoreHorizontal } from "lucide-react"
 import { ExpedienteHeader } from "./ExpedienteHeader"
 import { FichaTabContent } from "./FichaTabContent"
 import { ComercialTabContent } from "./ComercialTabContent"
@@ -463,7 +463,25 @@ export function ExpedienteFullView({
             </TabsContent>
 
             <TabsContent value="correo" className={tabContentClassName}>
-              {shouldBlockServerBackedFeatures ? (
+              {/* ponytail: Correo is desktop-only for now. Mobile gets an
+                  informational state instead of the full UI. Deep-links or
+                  restored tabs that land here must show this state, not the
+                  desktop layout. */}
+              {isMobile ? (
+                <div className="mx-auto mt-8 flex max-w-md flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex size-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                    <Mail className="size-6 text-slate-500 dark:text-slate-400" aria-hidden />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                      Correo en preparación
+                    </h3>
+                    <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                      Estamos trabajando en la experiencia móvil de este servicio. Por el momento está disponible únicamente desde la versión de escritorio.
+                    </p>
+                  </div>
+                </div>
+              ) : shouldBlockServerBackedFeatures ? (
                 <ServerBackedFeatureBlockedState
                   featureLabel="Correo"
                   isLegacyMockSurgery={isLegacyMockSurgery}

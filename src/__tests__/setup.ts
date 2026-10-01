@@ -38,3 +38,23 @@ class ResizeObserverMock {
 }
 
 global.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver
+
+// ── Polyfill window.matchMedia for jsdom (used by useMediaQuery / useIsMobile) ──
+// jsdom does not implement matchMedia. Components that subscribe to media
+// queries (mobile breakpoints, pointer queries) need a no-op stub to render
+// without throwing.
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  })
+}

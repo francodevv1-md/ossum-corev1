@@ -340,8 +340,12 @@ export default function CirugiasPage() {
      <div className="flex min-h-0 flex-1 flex-col bg-slate-100/70 dark:bg-slate-950">
         {/* ── EXPANDED VIEW: Full Expediente replaces everything ── */}
         {selection.panelState === "expanded" && selection.selectedSurgery ? (
-          <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">
-            <div className="min-h-0 flex-1 overflow-y-auto">
+          // ponytail: mobile shell = h-[100dvh] shell that lets the inner
+          // ExpedienteFullView manage its own scroll, with a fixed bottom
+          // nav. Desktop keeps the original flex column without the dvh lock
+          // so it can grow inside larger viewports.
+          <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-slate-100 sm:h-auto sm:overflow-visible dark:bg-slate-950">
+            <div className="min-h-0 flex-1">
               <ExpedienteFullView
                 surgery={selection.selectedSurgery}
                 presupuestos={selection.selPresupuestos}

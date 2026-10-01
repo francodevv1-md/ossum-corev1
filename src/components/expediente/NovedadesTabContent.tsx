@@ -18,6 +18,7 @@ import { ImportEvidenceFromMailModal } from "@/components/expediente/correo/Impo
 import { MailTextViewer } from "@/components/expediente/correo/MailTextViewer"
 import { MentionComposer } from "@/components/shared/mentions/MentionComposer"
 import { ImageViewerDialog } from "@/components/shared/image/ImageViewerDialog"
+import { useIsMobile } from "@/hooks/useIsMobile"
 import { cn } from "@/lib/utils"
 import { ApiClientError } from "@/lib/api/client"
 import { getAccessToken } from "@/lib/auth/client"
@@ -376,6 +377,7 @@ function TimelineCard({
   onDownloadDocument,
   editingEntryId,
   canModify,
+  isMobile = false,
 }: {
   entry: SeguimientoEntryView;
   companyId?: string;
@@ -385,6 +387,7 @@ function TimelineCard({
   onDownloadDocument?: (entryId: string, fileName: string) => Promise<void>;
   editingEntryId?: string | null;
   canModify: boolean;
+  isMobile?: boolean;
 }) {
   const meta = ENTRY_TYPE_MAP[entry.entryType] ?? ENTRY_TYPE_MAP.note
   const isUrgente = entry.noteType === "urgente"
@@ -567,45 +570,92 @@ function TimelineCard({
     )}>
       <div className={cn("absolute inset-y-0 left-0 w-0.5", tone.rail)} />
       <div className="pl-2">
-        {/* Header line */}
-        <div className="flex items-center justify-between gap-2">
-          {/* Izquierda: autor + tipo */}
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-100">{entry.authorName}</span>
-            <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", tone.badge)}>
-              {meta.label}
-            </Badge>
-            {noteTypeBadge && (
-              <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", noteTypeBadge.className)}>
-                {noteTypeBadge.label}
+        {/* Header line — mobile stacks author + time on top, badges below.
+            Desktop keeps the inline horizontal layout to preserve density. */}
+        {isMobile ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 break-words text-[13px] font-semibold leading-tight text-slate-800 dark:text-slate-100">
+                {entry.authorName}
+              </span>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className="text-[10px] font-medium tabular-nums text-slate-400 dark:text-slate-500">
+                  {timeStr}
+                </span>
+                {canEdit && !isEditing && !isThisEditing ? (
+                  <button
+                    type="button"
+                    onClick={handleStartEdit}
+                    className="text-slate-300 transition-colors hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-300"
+                    title="Editar novedad"
+                    aria-label="Editar novedad"
+                  >
+                    <Pencil className="size-3" />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", tone.badge)}>
+                {meta.label}
               </Badge>
-            )}
-            {priorityBadge && (
-              <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", priorityBadge.className)}>
-                {priorityBadge.label}
-              </Badge>
-            )}
-            {entry.isHighlighted && (
-              <Badge variant="outline" className="shrink-0 border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-                Fijado
-              </Badge>
-            )}
+              {noteTypeBadge ? (
+                <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", noteTypeBadge.className)}>
+                  {noteTypeBadge.label}
+                </Badge>
+              ) : null}
+              {priorityBadge ? (
+                <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", priorityBadge.className)}>
+                  {priorityBadge.label}
+                </Badge>
+              ) : null}
+              {entry.isHighlighted ? (
+                <Badge variant="outline" className="shrink-0 border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                  Fijado
+                </Badge>
+              ) : null}
+            </div>
           </div>
-          {/* Derecha: hora + editar */}
-          <div className="flex shrink-0 items-center gap-1">
-            <span className="text-[10px] text-slate-400 dark:text-slate-500">{timeStr}</span>
-            {canEdit && !isEditing && !isThisEditing && (
-              <button
-                type="button"
-                onClick={handleStartEdit}
-                className="text-slate-300 transition-colors hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-300"
-                title="Editar novedad"
-              >
-                <Pencil className="size-3" />
-              </button>
-            )}
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            {/* Izquierda: autor + tipo */}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[13px] font-semibold text-slate-800 dark:text-slate-100">{entry.authorName}</span>
+              <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", tone.badge)}>
+                {meta.label}
+              </Badge>
+              {noteTypeBadge && (
+                <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", noteTypeBadge.className)}>
+                  {noteTypeBadge.label}
+                </Badge>
+              )}
+              {priorityBadge && (
+                <Badge variant="outline" className={cn("shrink-0 px-1.5 py-0 text-[10px]", priorityBadge.className)}>
+                  {priorityBadge.label}
+                </Badge>
+              )}
+              {entry.isHighlighted && (
+                <Badge variant="outline" className="shrink-0 border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                  Fijado
+                </Badge>
+              )}
+            </div>
+            {/* Derecha: hora + editar */}
+            <div className="flex shrink-0 items-center gap-1">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500">{timeStr}</span>
+              {canEdit && !isEditing && !isThisEditing && (
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="text-slate-300 transition-colors hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-300"
+                  title="Editar novedad"
+                >
+                  <Pencil className="size-3" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Content */}
         <div className="mt-1">
@@ -623,12 +673,14 @@ function TimelineCard({
               {entry.content ? (
                 <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">{entry.content}</p>
               ) : null}
-              <div className="mt-1.5">
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={handleOpenCorreo}>
-                  <ExternalLink className="mr-1 size-3" />
-                  Ver correo
-                </Button>
-              </div>
+              {isMobile ? null : (
+                <div className="mt-1.5">
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={handleOpenCorreo}>
+                    <ExternalLink className="mr-1 size-3" />
+                    Ver correo
+                  </Button>
+                </div>
+              )}
             </div>
           ) : entry.entryType === "document_evidence" && entry.documentMeta ? (
             <div className="space-y-1.5">
@@ -847,10 +899,12 @@ function TimelineCard({
                     Ver texto completo
                   </Button>
                 ) : null}
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={handleOpenCorreo}>
-                  <ExternalLink className="mr-1 size-3" />
-                  Ver correo original
-                </Button>
+                {isMobile ? null : (
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={handleOpenCorreo}>
+                    <ExternalLink className="mr-1 size-3" />
+                    Ver correo original
+                  </Button>
+                )}
               </div>
               <MailTextViewer
                 open={mailTextViewerOpen}
@@ -1279,6 +1333,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   const { activeCompany, currentAccess } = useAuth()
   const companyId = activeCompany?.id
   const canModifySeguimiento = canMutateSeguimientoEvents(currentAccess?.role)
+  const isMobile = useIsMobile()
   const canCreateAuthorization = currentAccess?.role === "admin"
 
   const [search, setSearch] = useState("")
@@ -1314,11 +1369,19 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   )
 
   const allowedAddOptions = useMemo(() => {
-    const roleAllowed = canModifySeguimiento ? ADD_ACTIONS.filter((option) => option.id !== "auth" || canCreateAuthorization) : []
+    const roleAllowed = canModifySeguimiento
+      ? ADD_ACTIONS.filter((option) => {
+          if (option.id === "auth" && !canCreateAuthorization) return false
+          // ponytail: Correo is desktop-only for now — hide the entry-point on
+          // mobile so users don't tap into a flow that's not yet ready there.
+          if (isMobile && option.id === "mail") return false
+          return true
+        })
+      : []
     if (!availableAddActions || availableAddActions.length === 0) return roleAllowed
     const allowed = new Set(availableAddActions)
     return roleAllowed.filter((option) => allowed.has(option.id))
-  }, [availableAddActions, canCreateAuthorization, canModifySeguimiento])
+  }, [availableAddActions, canCreateAuthorization, canModifySeguimiento, isMobile])
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const mediaPhotoInputRef = useRef<HTMLInputElement>(null)
@@ -2009,7 +2072,9 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           ["archivos", "Archivos"],
           ["fotos", "Fotos"],
           ["correo", "Correo"],
-        ] as const).map(([value, label]) => {
+        ] as const)
+          .filter(([value]) => !(isMobile && value === "correo"))
+          .map(([value, label]) => {
           const isActive = feedFilter === value
           return (
             <button
@@ -2254,6 +2319,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                       onDownloadDocument={downloadDocumentEvidence}
                       editingEntryId={editingEntryId}
                       canModify={canModifySeguimiento}
+                      isMobile={isMobile}
                     />
                 ))}
               </div>
