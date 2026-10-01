@@ -159,39 +159,19 @@ describe("ExpedienteFullView legacy server-backed guards", () => {
     expect(consumoPropsMock).toHaveBeenLastCalledWith(expect.objectContaining({ freshnessKey: 1 }))
   })
 
-  it("verifica CX-0001 en backend y habilita Seguimiento", async () => {
-    apiFetchMock.mockResolvedValueOnce({ data: [] })
+  it("Seguimiento se monta inmediatamente sin esperar mail-links", async () => {
+    apiFetchMock.mockReset()
 
     renderView(makeSurgery({ id: "CX-0001" }), "novedades")
 
-    expect(screen.getByText("Verificando disponibilidad backend")).toBeInTheDocument()
-    expect(screen.queryByText("Función no disponible para esta cirugía")).not.toBeInTheDocument()
-
-    await waitFor(() => {
-      expect(screen.getByText("seguimiento-real-tab")).toBeInTheDocument()
-    })
-
-    expect(apiFetchMock).toHaveBeenCalledWith(
+    // ponytail: /mail-links is only relevant for the Correo tab. Seguimiento
+    // should be visible immediately and never trigger the legacy server-backed
+    // verification flow.
+    expect(screen.getByText("seguimiento-real-tab")).toBeInTheDocument()
+    expect(screen.queryByText("Verificando disponibilidad backend")).not.toBeInTheDocument()
+    expect(apiFetchMock).not.toHaveBeenCalledWith(
       "/api/companies/company-1/surgeries/CX-0001/mail-links"
     )
-    expect(screen.queryByText("Función no disponible para esta cirugía")).not.toBeInTheDocument()
-  })
-
-  it("bloquea CX-0001 si backend no encuentra la cirugía", async () => {
-    apiFetchMock.mockRejectedValueOnce(new ApiClientError("Surgery not found", 404, "surgery_not_found"))
-
-    renderView(makeSurgery({ id: "CX-0001" }), "novedades")
-
-    expect(screen.getByText("Verificando disponibilidad backend")).toBeInTheDocument()
-
-    await waitFor(() => {
-      expect(screen.getByText("Función no disponible para esta cirugía")).toBeInTheDocument()
-    })
-
-    expect(apiFetchMock).toHaveBeenCalledWith(
-      "/api/companies/company-1/surgeries/CX-0001/mail-links"
-    )
-    expect(screen.getByText(/store\/mock legacy y no se sincroniza automáticamente en DEV/i)).toBeInTheDocument()
   })
 
   it("verifica CX-0009 en backend y habilita Correo", async () => {
@@ -207,41 +187,6 @@ describe("ExpedienteFullView legacy server-backed guards", () => {
       "/api/companies/company-1/surgeries/CX-0009/mail-links"
     )
     expect(screen.queryByText("Función no disponible para esta cirugía")).not.toBeInTheDocument()
-  })
-
-  it("mantiene bloqueadas otras cirugías mock legacy no persistidas", async () => {
-    apiFetchMock.mockRejectedValueOnce(new ApiClientError("Surgery not found", 404, "surgery_not_found"))
-
-    renderView(makeSurgery({ id: "CX-0008" }), "novedades")
-
-    await waitFor(() => {
-      expect(screen.getByText("Función no disponible para esta cirugía")).toBeInTheDocument()
-    })
-
-    expect(screen.getByText("Requiere backend")).toBeInTheDocument()
-    expect(screen.getByText(/store\/mock legacy y no se sincroniza automáticamente en DEV/i)).toBeInTheDocument()
-    expect(screen.queryByText("seguimiento-real-tab")).not.toBeInTheDocument()
-    expect(apiFetchMock).toHaveBeenCalledWith(
-      "/api/companies/company-1/surgeries/CX-0008/mail-links"
-    )
-  })
-
-  it("bloquea legacy local-only no sembradas cuando backend no encuentra la cirugía", async () => {
-    apiFetchMock.mockRejectedValueOnce(new ApiClientError("Surgery not found", 404, "surgery_not_found"))
-
-    renderView(makeSurgery({ id: "CX-B65A77D77886" }), "novedades")
-
-    expect(screen.getByText("Verificando disponibilidad backend")).toBeInTheDocument()
-    expect(screen.queryByText("Función no disponible para esta cirugía")).not.toBeInTheDocument()
-
-    await waitFor(() => {
-      expect(screen.getByText("Función no disponible para esta cirugía")).toBeInTheDocument()
-    })
-
-    expect(screen.queryByText("seguimiento-real-tab")).not.toBeInTheDocument()
-    expect(apiFetchMock).toHaveBeenCalledWith(
-      "/api/companies/company-1/surgeries/CX-B65A77D77886/mail-links"
-    )
   })
 
   it("mantiene Seguimiento y Correo habilitados para cirugías persistidas verificadas", async () => {

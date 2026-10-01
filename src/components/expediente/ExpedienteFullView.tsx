@@ -68,6 +68,9 @@ interface ExpedienteFullViewProps {
   onSetDialogSurgery: (s: Surgery) => void
   onSetFacturarDialogOpen: (open: boolean) => void
   onAddNoteToSeguimiento: (s: Surgery) => void
+  /** Legacy entry point for surfaces that still own an AddNoteDialog
+   *  (e.g. CoordinatorInboxView). Unused in cirugias. */
+  onSetNoteDialogOpen?: (open: boolean) => void
   initialAddAction?: "note" | "mail" | "image" | "auth"
   initialAddActionKey?: number
   onSetSuspendDialogOpen: (open: boolean) => void
@@ -148,10 +151,12 @@ export function ExpedienteFullView({
       ? expTab
       : "ficha"
   const isLegacyMockSurgery = isLegacyMockSurgeryId(surgery.id)
-  const isServerBackedTab = validTab === "novedades" || validTab === "correo"
+  // ponytail: only Correo is the server-backed tab. Seguimiento mounts
+  // immediately and feeds itself via useSeguimientoFeed.
+  const isCorreoTab = validTab === "correo"
   const serverBackedAvailability = serverBackedAvailabilityBySurgeryId[surgery.id]
   const shouldVerifyServerBackedAvailability = Boolean(
-    activeCompany?.id && isServerBackedTab && !serverBackedAvailability
+    activeCompany?.id && isCorreoTab && !serverBackedAvailability
   )
   const isServerBackedAvailabilityPending = shouldVerifyServerBackedAvailability
   const shouldBlockServerBackedFeatures = serverBackedAvailability === "blocked"
@@ -406,20 +411,14 @@ export function ExpedienteFullView({
             </TabsContent>
 
             <TabsContent value="novedades" className={tabContentClassName}>
-              {shouldBlockServerBackedFeatures ? (
-                <ServerBackedFeatureBlockedState
-                  featureLabel="Seguimiento"
-                  isLegacyMockSurgery={isLegacyMockSurgery}
-                />
-              ) : isServerBackedAvailabilityPending ? (
-                <ServerBackedFeatureBlockedState featureLabel="Seguimiento" state="verifying" />
-              ) : (
-                <NovedadesTabContent
-                  surgery={surgery}
-                  initialAddAction={initialAddAction}
-                  initialAddActionKey={initialAddActionKey}
-                />
-              )}
+              {/* ponytail: Novedades mounts unconditionally. The /mail-links
+                  gate only applies to Correo. useSeguimientoFeed handles its
+                  own loading/skeleton state, so the tab feels instant. */}
+              <NovedadesTabContent
+                surgery={surgery}
+                initialAddAction={initialAddAction}
+                initialAddActionKey={initialAddActionKey}
+              />
             </TabsContent>
 
             <TabsContent value="comercial" className={tabContentClassName}>
