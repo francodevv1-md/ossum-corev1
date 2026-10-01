@@ -17,6 +17,8 @@ import { HistorialPanel } from "./HistorialPanel"
 import { ExpedienteCorreoTab } from "./correo/ExpedienteCorreoTab"
 import { EditFichaDrawer } from "./EditFichaDrawer"
 import { NovedadesTabContent } from "./NovedadesTabContent"
+import { MobileExpedienteTabs, type ExpTabKey } from "./MobileExpedienteTabs"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { EXPEDIENTE_TABS, EXPEDIENTE_MORE_TABS } from "@/lib/cirugias.constants"
 import type {
   Surgery,
@@ -112,6 +114,7 @@ export function ExpedienteFullView({
   setEditingConsumo,
 }: ExpedienteFullViewProps) {
   const { activeCompany } = useAuth()
+  const isMobile = useMediaQuery("(max-width: 767px)")
   const [isEditFichaOpen, setIsEditFichaOpen] = useState(false)
   const [operationalFreshnessKey, setOperationalFreshnessKey] = useState(0)
   const [serverBackedAvailabilityBySurgeryId, setServerBackedAvailabilityBySurgeryId] = useState<
@@ -221,7 +224,7 @@ export function ExpedienteFullView({
     <div className="flex h-full min-h-0 flex-col bg-background">
       <Tabs value={validTab} onValueChange={setExpTab} className="flex min-h-0 flex-1 flex-col">
         {/* Scrollable body containing Header at top, Sticky Tabs immediately below, and Tab Contents */}
-        <div className="flex-1 overflow-y-auto bg-[#F3F6FA] dark:bg-slate-950">
+        <div className={cn("flex-1 overflow-y-auto bg-[#F3F6FA] dark:bg-slate-950", isMobile && "pb-[calc(64px+env(safe-area-inset-bottom))]")}>
           {/* Header compacto de 2 niveles con navegación de regreso */}
           <ExpedienteHeader
             surgery={surgery}
@@ -250,7 +253,8 @@ export function ExpedienteFullView({
             onRecover={onRecover}
           />
 
-          {/* Sticky Tab Navigation Bar */}
+          {/* Sticky Tab Navigation Bar — desktop only; mobile uses bottom nav */}
+          {!isMobile ? (
           <div className="sticky top-0 z-20 flex shrink-0 items-center border-b border-slate-200/90 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 px-1 sm:px-3 shadow-2xs">
             {canScrollLeft && (
               <Button
@@ -375,6 +379,7 @@ export function ExpedienteFullView({
               </DropdownMenu>
             )}
           </div>
+          ) : null}
 
           {/* Tab Contents */}
           <div className="w-full px-2.5 py-2.5 sm:px-4 sm:py-3">
@@ -480,6 +485,14 @@ export function ExpedienteFullView({
           </div>
         </div>
       </Tabs>
+
+      {/* Mobile bottom navigation — only rendered on mobile */}
+      {isMobile ? (
+        <MobileExpedienteTabs
+          value={validTab as ExpTabKey}
+          onChange={(tab) => setExpTab(tab)}
+        />
+      ) : null}
 
       <EditFichaDrawer surgery={surgery} open={isEditFichaOpen} onOpenChange={setIsEditFichaOpen} />
     </div>

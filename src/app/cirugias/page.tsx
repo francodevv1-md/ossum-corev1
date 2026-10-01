@@ -341,37 +341,6 @@ export default function CirugiasPage() {
         {/* ── EXPANDED VIEW: Full Expediente replaces everything ── */}
         {selection.panelState === "expanded" && selection.selectedSurgery ? (
           <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">
-            {isMobile ? (
-              <header
-                className="sticky top-0 z-30 flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 pt-2 pb-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
-                style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)" }}
-              >
-                <button
-                  type="button"
-                  onClick={() => selection.closeExpediente()}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-700 transition active:scale-95 active:bg-slate-100 hover:bg-slate-100 dark:text-slate-200 dark:active:bg-slate-800 dark:hover:bg-slate-800"
-                  aria-label="Volver al listado"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <path d="m15 18-6-6 6-6" />
-                  </svg>
-                </button>
-                <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {selection.selectedSurgery.visibleNumber || selection.selectedSurgery.expedienteNumber || "Expediente"}
-                </h1>
-              </header>
-            ) : null}
             <div className="min-h-0 flex-1 overflow-y-auto">
               <ExpedienteFullView
                 surgery={selection.selectedSurgery}
