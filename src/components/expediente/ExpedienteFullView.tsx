@@ -18,7 +18,7 @@ import { ExpedienteCorreoTab } from "./correo/ExpedienteCorreoTab"
 import { EditFichaDrawer } from "./EditFichaDrawer"
 import { NovedadesTabContent } from "./NovedadesTabContent"
 import { MobileExpedienteTabs, type ExpTabKey } from "./MobileExpedienteTabs"
-import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { useIsMobile } from "@/hooks/useIsMobile"
 import { EXPEDIENTE_TABS, EXPEDIENTE_MORE_TABS } from "@/lib/cirugias.constants"
 import type {
   Surgery,
@@ -114,7 +114,7 @@ export function ExpedienteFullView({
   setEditingConsumo,
 }: ExpedienteFullViewProps) {
   const { activeCompany } = useAuth()
-  const isMobile = useMediaQuery("(max-width: 767px)")
+  const isMobile = useIsMobile()
   const [isEditFichaOpen, setIsEditFichaOpen] = useState(false)
   const [operationalFreshnessKey, setOperationalFreshnessKey] = useState(0)
   const [serverBackedAvailabilityBySurgeryId, setServerBackedAvailabilityBySurgeryId] = useState<

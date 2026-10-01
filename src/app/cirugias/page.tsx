@@ -14,7 +14,7 @@ import { useColumnVisibility } from "@/hooks/useColumnVisibility"
 import { useCirugiaActions } from "@/hooks/useCirugiaActions"
 import { useCirugiasSorting } from "@/hooks/useCirugiasSorting"
 import { useBackendActiveSurgeries } from "@/hooks/useBackendActiveSurgeries"
-import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { useIsMobile } from "@/hooks/useIsMobile"
 
 // Utils
 import { computeKpis, getFacturacionStatus, resolveKpiFilter } from "@/lib/cirugias.utils"
@@ -92,7 +92,7 @@ export default function CirugiasPage() {
   const actions = useCirugiaActions()
   const sorting = useCirugiasSorting()
   const backendSurgeries = useBackendActiveSurgeries()
-  const isMobile = useMediaQuery("(max-width: 767px)")
+  const isMobile = useIsMobile()
   const [reportsDialogOpen, setReportsDialogOpen] = useState(false)
   const [viewCustomizationOpen, setViewCustomizationOpen] = useState(false)
   const [showOperationPresets, setShowOperationPresets] = useState(true)
@@ -405,8 +405,11 @@ export default function CirugiasPage() {
                     actions.setChangeStateDialogOpen(true)
                   },
                   onAddNote: (s) => {
-                    actions.setDialogSurgery(s)
-                    actions.setNoteDialogOpen(true)
+                    // ponytail: mobile quick action opens the expediente on the
+                    // Seguimiento tab so the user gets the full composer with
+                    // voice dictation instead of a stripped-down dialog.
+                    selection.openExpediente(s.id)
+                    selection.setExpTab("novedades")
                   },
                   onFacturar: (s) => {
                     actions.setDialogSurgery(s)
