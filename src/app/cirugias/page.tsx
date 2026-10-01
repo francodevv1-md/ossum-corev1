@@ -421,6 +421,28 @@ export default function CirugiasPage() {
                 onOpen={(s) => selection.openExpediente(s.id)}
                 hasActiveFilters={filters.hasActiveFilters}
                 onClearFilters={clearAllFilters}
+                quickActions={{
+                  onChangeState: (s) => {
+                    actions.setDialogSurgery(s)
+                    actions.setChangeStateDialogOpen(true)
+                  },
+                  onAddNote: (s) => {
+                    actions.setDialogSurgery(s)
+                    actions.setNoteDialogOpen(true)
+                  },
+                  onFacturar: (s) => {
+                    actions.setDialogSurgery(s)
+                    actions.setFacturarDialogOpen(true)
+                  },
+                  onSuspender: (s) => {
+                    actions.setDialogSurgery(s)
+                    actions.setSuspendDialogOpen(true)
+                  },
+                  onCancelar: (s) => {
+                    actions.setDialogSurgery(s)
+                    actions.setCancelDialogOpen(true)
+                  },
+                }}
               />
             </div>
             <MobileCirugiaFiltersSheet
@@ -430,6 +452,16 @@ export default function CirugiasPage() {
               hasActiveFilters={filters.hasActiveFilters}
               activeFilterCount={filters.activeFilterCount}
               selectedPresetLabel={filters.selectedPreset}
+              stateFilters={filters.stateFilters}
+              onStateFilters={filters.setStateFilters}
+              prepFilters={filters.prepFilters}
+              onPrepFilters={filters.setPrepFilters}
+              docFilters={filters.docFilters}
+              onDocFilters={filters.setDocFilters}
+              factFilters={filters.factFilters}
+              onFactFilters={filters.setFactFilters}
+              urgenteFilter={filters.urgenteFilter}
+              onUrgenteFilter={filters.setUrgenteFilter}
             />
           </div>
         ) : (
