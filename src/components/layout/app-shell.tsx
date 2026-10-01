@@ -21,6 +21,10 @@ interface SidebarContextType {
    */
   hideMobileMenuButton: boolean
   setHideMobileMenuButton: (v: boolean) => void
+  /** Mobile drawer open/close state, lifted so the global app bar can
+   *  open the sidebar without prop-drilling. */
+  mobileOpen: boolean
+  setMobileOpen: (v: boolean) => void
 }
 
 const SidebarContext = createContext<SidebarContextType>({
@@ -32,6 +36,8 @@ const SidebarContext = createContext<SidebarContextType>({
   setCollapsed: () => {},
   hideMobileMenuButton: false,
   setHideMobileMenuButton: () => {},
+  mobileOpen: false,
+  setMobileOpen: () => {},
 })
 
 export function useSidebar() {
@@ -94,6 +100,7 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
   const [expedienteOpen, setExpedienteOpen] = useState(false)
   const [selectedSurgeryId, setSelectedSurgeryId] = useState<string | null>(null)
   const [hideMobileMenuButton, setHideMobileMenuButton] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -145,6 +152,8 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
         setCollapsed,
         hideMobileMenuButton,
         setHideMobileMenuButton,
+        mobileOpen,
+        setMobileOpen,
       }}
     >
       <ExpedienteDrawerContext.Provider

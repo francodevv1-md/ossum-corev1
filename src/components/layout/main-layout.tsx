@@ -3,6 +3,7 @@
 import React from "react"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "./app-shell"
+import { MobileAppBar } from "./MobileAppBar"
 import { cn } from "@/lib/utils"
 
 const MARGIN_MAP = {
@@ -29,6 +30,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       )}
       style={{ ["--shell-sidebar-offset" as string]: sidebarOffset }}
     >
+      {/* ponytail: mobile gets a single global app bar (menu + bell).
+          Desktop header keeps the existing route label + sidebar toggle. */}
+      <MobileAppBar />
       {children}
     </div>
   )

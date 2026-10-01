@@ -76,12 +76,12 @@ export function Header() {
           : "h-11 rounded-2xl border border-border/60 bg-background/90 px-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-3.5"
       )}
     >
-      {/* Sidebar toggle in header */}
+      {/* Sidebar toggle in header — desktop only. Mobile uses MobileAppBar. */}
       {!isCirugiasRoute && sidebarState === "hidden" ? (
         <Button
           variant="ghost"
           size="icon"
-          className="shrink-0 size-8"
+          className="shrink-0 size-8 hidden lg:flex"
           onClick={handleShowMenu}
           aria-label="Mostrar menú"
         >
