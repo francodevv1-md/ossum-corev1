@@ -450,6 +450,10 @@ function ProductiveCoordinatorInbox({ controller }: { controller: CoordinationVi
             onSetDialogSurgery={actions.setDialogSurgery}
             onSetFacturarDialogOpen={actions.setFacturarDialogOpen}
             onSetNoteDialogOpen={actions.setNoteDialogOpen}
+            onAddNoteToSeguimiento={(s) => {
+              actions.setDialogSurgery(s)
+              actions.setNoteDialogOpen(true)
+            }}
             onSetSuspendDialogOpen={actions.setSuspendDialogOpen}
             onSetCancelDialogOpen={actions.setCancelDialogOpen}
             onSetChangeStateDialogOpen={actions.setChangeStateDialogOpen}

@@ -315,6 +315,7 @@ export default function CirugiasPage() {
     getConsumoState: (id: string) => store.getConsumoBySurgeryId(id)?.state ?? null,
     getFacturacionStatus: facturacionStatusFor,
     getPrId: (id: string) => store.getPresupuestosBySurgeryId(id)[0]?.id,
+    onSetNoteDialogOpen: actions.setNoteDialogOpen,
     shipmentDateMap,
     circuitProgressMap,
     coordinatorCaseMap: coordinatorCases,
