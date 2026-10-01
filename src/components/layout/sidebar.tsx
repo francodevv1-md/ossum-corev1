@@ -174,6 +174,7 @@ function matchesQuery(label: string, query: string) {
 
 export function Sidebar({ embedded = false }: { embedded?: boolean }) {
   const pathname = usePathname()
+  const { hideMobileMenuButton } = useSidebar()
   const router = useRouter()
   const { currentAccess } = useAuth()
   const { sidebarState, setSidebarState, collapsedGroups, toggleGroup } = useSidebar()
@@ -220,15 +221,17 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="fixed left-3 top-3 z-50 size-8 lg:hidden"
-        onClick={() => setMobileOpen(true)}
-        aria-label="Abrir menú"
-      >
-        <Menu className="size-4" />
-      </Button>
+      {!hideMobileMenuButton ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="fixed left-3 top-3 z-50 size-8 lg:hidden"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menú"
+        >
+          <Menu className="size-4" />
+        </Button>
+      ) : null}
 
       {isHidden && (
         <Button

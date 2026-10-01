@@ -14,6 +14,13 @@ interface SidebarContextType {
   toggleGroup: (groupTitle: string) => void
   collapsed: boolean // backward compat
   setCollapsed: (v: boolean) => void
+  /**
+   * When true, the floating "open menu" button is hidden (mobile only).
+   * Used by surfaces that own the top-left corner of the viewport on
+   * mobile (e.g. cirugias expediente back button).
+   */
+  hideMobileMenuButton: boolean
+  setHideMobileMenuButton: (v: boolean) => void
 }
 
 const SidebarContext = createContext<SidebarContextType>({
@@ -23,6 +30,8 @@ const SidebarContext = createContext<SidebarContextType>({
   toggleGroup: () => {},
   collapsed: false,
   setCollapsed: () => {},
+  hideMobileMenuButton: false,
+  setHideMobileMenuButton: () => {},
 })
 
 export function useSidebar() {
@@ -84,6 +93,7 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [expedienteOpen, setExpedienteOpen] = useState(false)
   const [selectedSurgeryId, setSelectedSurgeryId] = useState<string | null>(null)
+  const [hideMobileMenuButton, setHideMobileMenuButton] = useState(false)
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -126,7 +136,16 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarContext.Provider
-      value={{ sidebarState, setSidebarState, collapsedGroups, toggleGroup, collapsed, setCollapsed }}
+      value={{
+        sidebarState,
+        setSidebarState,
+        collapsedGroups,
+        toggleGroup,
+        collapsed,
+        setCollapsed,
+        hideMobileMenuButton,
+        setHideMobileMenuButton,
+      }}
     >
       <ExpedienteDrawerContext.Provider
         value={{ open: expedienteOpen, selectedSurgeryId, openExpediente, closeExpediente }}

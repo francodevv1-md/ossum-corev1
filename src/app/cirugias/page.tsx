@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { useOrtoTrackStore } from "@/lib/store"
+import { useSidebar } from "@/components/layout/app-shell"
 // TooltipProvider is provided by the root layout — no page-level provider needed
 
 // Hooks
@@ -82,6 +83,7 @@ const ViewCustomizationDialog = dynamic(
 export default function CirugiasPage() {
   const { activeCompany } = useAuth()
   const store = useOrtoTrackStore()
+  const { setHideMobileMenuButton } = useSidebar()
 
   // ── Hooks ──
   const filters = useCirugiasFilters()
@@ -113,6 +115,13 @@ export default function CirugiasPage() {
     window.addEventListener("ossum:surgeries-refresh", refreshSurgeries)
     return () => window.removeEventListener("ossum:surgeries-refresh", refreshSurgeries)
   }, [backendSurgeries.refresh])
+
+  // ponytail: hide the floating Menu trigger when the mobile expediente owns
+  // the top-left corner with its own back button. Reset on unmount.
+  useEffect(() => {
+    setHideMobileMenuButton(isMobile && selection.panelState === "expanded")
+    return () => setHideMobileMenuButton(false)
+  }, [isMobile, selection.panelState, setHideMobileMenuButton])
 
   // ── KPIs (kept for potential future use) ──
   const _kpis = useMemo(() => computeKpis(store.surgeries, store.getDocStatus), [store.surgeries, store])
