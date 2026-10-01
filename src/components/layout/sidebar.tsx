@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth/AuthProvider"
+import { useIsMobile } from "@/hooks/useIsMobile"
 import { getCoordinationDestination } from "@/lib/permissions/coordination"
 import {
   Activity,
@@ -55,6 +56,7 @@ import {
   Tags,
   Truck,
   Users,
+  X as XIcon,
 } from "lucide-react"
 
 interface NavItem {
@@ -158,6 +160,9 @@ const NAV_GROUPS: NavGroup[] = [
 
 const SIDEBAR_WIDTH_EXPANDED = "248px"
 const SIDEBAR_WIDTH_COMPACT = "56px"
+// ponytail: mobile width is intentionally narrower than desktop so the
+// shell never feels like desktop crammed into a phone.
+const SIDEBAR_WIDTH_MOBILE = "220px"
 
 function isPathActive(pathname: string, href?: string) {
   if (!href) return false
@@ -174,16 +179,29 @@ function matchesQuery(label: string, query: string) {
 
 export function Sidebar({ embedded = false }: { embedded?: boolean }) {
   const pathname = usePathname()
-  const { hideMobileMenuButton } = useSidebar()
+  const isMobile = useIsMobile()
+  const { hideMobileMenuButton, setMobileOpen: setSidebarMobileOpen } = useSidebar()
   const router = useRouter()
   const { currentAccess } = useAuth()
   const { sidebarState, setSidebarState, collapsedGroups, toggleGroup } = useSidebar()
-  const [mobileOpen, setMobileOpen] = React.useState(false)
+  const [mobileOpenState, setMobileOpenState] = React.useState(false)
+  const mobileOpenFromCtx = useSidebar().mobileOpen
+  const mobileOpen = mobileOpenFromCtx || mobileOpenState
+  const setMobileOpen = React.useCallback(
+    (v: boolean) => {
+      setMobileOpenState(v)
+      setSidebarMobileOpen(v)
+    },
+    [setSidebarMobileOpen],
+  )
   const [query, setQuery] = React.useState("")
   const searchRef = React.useRef<HTMLInputElement>(null)
   const isExpanded = sidebarState === "expanded"
   const isHidden = sidebarState === "hidden"
   const normalizedQuery = query.trim().toLocaleLowerCase("es")
+  // ponytail: mobile uses one-open-at-a-time accordion; desktop keeps
+  // every group independently open/closed via collapsedGroups.
+  const [mobileExpandedGroup, setMobileExpandedGroup] = React.useState<string | null>(null)
 
   const navGroups = React.useMemo(
     () => NAV_GROUPS.map((group) => ({
@@ -214,24 +232,23 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
   }, [isExpanded, setSidebarState, router])
 
   const desktopWidth = isHidden ? "0px" : isExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COMPACT
-  const currentWidth = mobileOpen ? SIDEBAR_WIDTH_EXPANDED : desktopWidth
-  const navWidth = mobileOpen || isExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COMPACT
+  const currentWidth = mobileOpen
+    ? SIDEBAR_WIDTH_MOBILE
+    : desktopWidth
+  const navWidth = mobileOpen || isExpanded ? (mobileOpen ? SIDEBAR_WIDTH_MOBILE : SIDEBAR_WIDTH_EXPANDED) : SIDEBAR_WIDTH_COMPACT
   const showExpandedContent = mobileOpen || isExpanded
   const closeMobile = () => setMobileOpen(false)
+  // ponytail: mobile always renders expanded content (compact mode is
+  // desktop-only). On mobile, when a query is active the search filter
+  // reveals all matches regardless of collapsed state.
+  const isMobileExpanded = isMobile && mobileOpen
 
   return (
     <>
-      {!hideMobileMenuButton ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="fixed left-3 top-3 z-50 size-8 lg:hidden"
-          onClick={() => setMobileOpen(true)}
-          aria-label="Abrir menú"
-        >
-          <Menu className="size-4" />
-        </Button>
-      ) : null}
+      {/* Mobile menu trigger is rendered globally by MobileAppBar;
+          the sidebar only owns its drawer panel. The legacy fixed
+          floating button is removed to avoid duplicating the trigger. */}
+
 
       {isHidden && (
         <Button
@@ -262,7 +279,14 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        <div className={cn("relative flex h-[54px] shrink-0 items-center border-b border-[#E2E4E8] dark:border-border", showExpandedContent ? "gap-2.5 px-3" : "justify-center px-0")}>
+        <div className={cn(
+          "relative flex shrink-0 items-center border-b border-[#E2E4E8] dark:border-border",
+          isMobileExpanded
+            ? "h-11 gap-2 px-3"
+            : showExpandedContent
+              ? "h-[54px] gap-2.5 px-3"
+              : "h-[54px] justify-center px-0",
+        )}>
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-[#1D2FC0] text-white">
             <Scissors className="size-[15px]" strokeWidth={1.8} />
           </div>
@@ -270,25 +294,40 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
             <>
               <div className="min-w-0 flex-1 leading-none">
                 <div className="truncate text-[13px] font-semibold tracking-[-0.01em] text-[#071935] dark:text-foreground">OSSUM COR</div>
-                <div className="mt-1 truncate text-[10px] text-[#858A94]">ERP Operativo</div>
+                {!isMobileExpanded ? (
+                  <div className="mt-1 truncate text-[10px] text-[#858A94]">ERP Operativo</div>
+                ) : null}
               </div>
-              <button
-                type="button"
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-[#717680] hover:bg-[#F3F3F3] hover:text-[#071935] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D2FC0]/35 dark:hover:bg-accent dark:hover:text-foreground"
-                onClick={() => mobileOpen ? setMobileOpen(false) : setSidebarState("compact")}
-                aria-label={mobileOpen ? "Cerrar menú" : "Compactar menú"}
-              >
-                <PanelLeftClose className="size-[15px]" />
-              </button>
-              <button
-                type="button"
-                className="hidden size-7 shrink-0 items-center justify-center rounded-md text-[#717680] hover:bg-[#F3F3F3] hover:text-[#071935] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D2FC0]/35 dark:hover:bg-accent dark:hover:text-foreground lg:flex"
-                onClick={() => setSidebarState("hidden")}
-                aria-label="Ocultar menú"
-                title="Ocultar menú"
-              >
-                <EyeOff className="size-[15px]" />
-              </button>
+              {isMobileExpanded ? (
+                <button
+                  type="button"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-md text-[#717680] hover:bg-[#F3F3F3] hover:text-[#071935] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D2FC0]/35 dark:hover:bg-accent dark:hover:text-foreground"
+                  onClick={closeMobile}
+                  aria-label="Cerrar menú"
+                >
+                  <XIcon className="size-[15px]" />
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-md text-[#717680] hover:bg-[#F3F3F3] hover:text-[#071935] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D2FC0]/35 dark:hover:bg-accent dark:hover:text-foreground"
+                    onClick={() => setSidebarState("compact")}
+                    aria-label="Compactar menú"
+                  >
+                    <PanelLeftClose className="size-[15px]" />
+                  </button>
+                  <button
+                    type="button"
+                    className="hidden size-7 shrink-0 items-center justify-center rounded-md text-[#717680] hover:bg-[#F3F3F3] hover:text-[#071935] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D2FC0]/35 dark:hover:bg-accent dark:hover:text-foreground lg:flex"
+                    onClick={() => setSidebarState("hidden")}
+                    aria-label="Ocultar menú"
+                    title="Ocultar menú"
+                  >
+                    <EyeOff className="size-[15px]" />
+                  </button>
+                </>
+              )}
             </>
           )}
           {!showExpandedContent && (
@@ -302,7 +341,10 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
           )}
         </div>
 
-        {showExpandedContent && (
+        {/* Notifications + search — desktop only.
+            Mobile uses the global MobileAppBar (bell + draw) and skips the
+            sidebar search input. */}
+        {showExpandedContent && !isMobileExpanded && (
           <div className="shrink-0 space-y-2 px-2.5 pb-2.5 pt-2">
             <NotificationMenu
               label="Notificaciones"
@@ -331,7 +373,7 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
 
-        {!showExpandedContent && (
+        {!showExpandedContent && !isMobile && (
           <div className="shrink-0 border-b border-[#E2E4E8] py-1 dark:border-border">
             <NotificationMenu
               title="Notificaciones (Ctrl+J)"
@@ -351,7 +393,9 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
                 : group.items
               const visibleItems = rootMatches ? group.items : matchingItems
               const forcedOpen = Boolean(normalizedQuery)
-              const isOpen = forcedOpen || !(collapsedGroups[group.key] ?? false)
+              const isDesktopOpen = forcedOpen || !(collapsedGroups[group.key] ?? false)
+              const isMobileOpen = forcedOpen || mobileExpandedGroup === group.key
+              const isOpen = isMobileExpanded ? isMobileOpen : isDesktopOpen
 
               if (normalizedQuery && !rootMatches && matchingItems.length === 0) return null
 
@@ -363,7 +407,16 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
                   pathname={pathname}
                   open={isOpen}
                   forcedOpen={forcedOpen}
-                  onToggle={() => toggleGroup(group.key)}
+                  onToggle={() => {
+                    if (isMobileExpanded) {
+                      // ponytail: accordion — opening one closes the previous.
+                      setMobileExpandedGroup((current) =>
+                        current === group.key ? null : group.key,
+                      )
+                    } else {
+                      toggleGroup(group.key)
+                    }
+                  }}
                   onNavigate={closeMobile}
                 />
               ) : (
@@ -378,8 +431,16 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
           </nav>
         </ScrollArea>
 
-        <div className="h-[54px] shrink-0 border-t border-[#E2E4E8] bg-[#FBFBFB] p-1.5 dark:border-border dark:bg-background">
-          <UserMenu sidebar compact={!showExpandedContent} className="h-full w-full" />
+        <div className={cn(
+          "shrink-0 border-t border-[#E2E4E8] bg-[#FBFBFB] p-1.5 dark:border-border dark:bg-background",
+          isMobileExpanded ? "h-12" : "h-[54px]",
+        )}>
+          <UserMenu
+            sidebar
+            compact={!showExpandedContent}
+            mobile={isMobileExpanded}
+            className="h-full w-full"
+          />
         </div>
       </aside>
     </>
