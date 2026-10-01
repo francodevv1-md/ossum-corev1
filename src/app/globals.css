@@ -241,7 +241,7 @@
   }
 }
 
-/* ─── OCR processing animations ─────────────────────────────────── */
+/* OCR processing animations */
 
 /* Perceived progress bar — fast start, slow approach to 90%. */
 @keyframes ocr-progress {
@@ -284,7 +284,7 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── Notification badge pulse ──────────────────────────────────── */
+/* Notification badge pulse */
 
 /* Gentle scale pulse to draw attention to unread count. Only active
    when the dropdown is closed and there are unread notifications. */
@@ -301,3 +301,18 @@
   }
 }
 
+
+/* Mobile card entrance used by MobileCirugiaList cards.
+   Respects prefers-reduced-motion. */
+@keyframes mobile-card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-mobile-card-in {
+  animation: mobile-card-in 220ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-mobile-card-in {
+    animation: none;
+  }
+}
