@@ -1148,30 +1148,73 @@ function AddToSeguimientoSheet({
 }) {
   const isDesktop = useIsDesktop()
 
+  const canDictate =
+    typeof window !== "undefined" &&
+    (Boolean((window as DictationWindow).SpeechRecognition) ||
+      Boolean((window as DictationWindow).webkitSpeechRecognition))
+
   const actionList = (
-    <div className="space-y-1.5">
-      {actionOptions.map((option) => {
-        const Icon = option.Icon
-        return (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => {
-              onAction(option.id)
-              onOpenChange(false)
-            }}
-            className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/80 dark:hover:bg-slate-900"
-          >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800">
-              <Icon className="size-4 text-slate-600 dark:text-slate-300" />
+    <div className="space-y-3">
+      {/* emil: voice-dictation gets the visual weight because it's the
+          fastest path on mobile. Highlighted card, large icon, gradient
+          background. The remaining actions are lower contrast to keep
+          the hierarchy honest. */}
+      {canDictate ? (
+        <button
+          type="button"
+          onClick={() => {
+            onAction("note")
+            onOpenChange(false)
+          }}
+          className="group relative flex w-full items-center gap-3.5 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-600 to-blue-700 p-4 text-left text-white shadow-md shadow-blue-600/20 transition-[transform,box-shadow] duration-[160ms] ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.99] active:shadow-sm dark:border-blue-500/40"
+        >
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/20 backdrop-blur-sm">
+            <Mic className="size-6" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold leading-tight">Dictar con voz</div>
+            <div className="mt-0.5 text-[11px] leading-snug text-blue-50/90">
+              Hablá y la nota se escribe sola (es-AR).
             </div>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{option.label}</div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">{option.description}</div>
-            </div>
-          </button>
-        )
-      })}
+          </div>
+          <Sparkles className="size-4 shrink-0 text-blue-200/80" aria-hidden />
+        </button>
+      ) : null}
+
+      <div>
+        <p className="px-1 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
+          Otras acciones
+        </p>
+        <ul className="space-y-1.5" role="list">
+          {actionOptions.map((option) => {
+            const Icon = option.Icon
+            return (
+              <li key={option.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAction(option.id)
+                    onOpenChange(false)
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition-[background-color,transform,border-color] duration-[160ms] ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.99] active:border-slate-300 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/80 dark:active:border-slate-700 dark:hover:bg-slate-900"
+                >
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+                    <Icon className="size-4 text-slate-600 dark:text-slate-300" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      {option.label}
+                    </div>
+                    <div className="text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+                      {option.description}
+                    </div>
+                  </div>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
     </div>
   )
 
@@ -1191,12 +1234,19 @@ function AddToSeguimientoSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="sm:hidden">
-        <SheetHeader className="px-4 pb-1 pt-3">
-          <SheetTitle className="text-sm">Otras acciones de seguimiento</SheetTitle>
-          <SheetDescription>Importá un correo o registrá una autorización.</SheetDescription>
+      <SheetContent side="bottom" className="rounded-t-2xl px-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-0 sm:hidden">
+        {/* emil: drag handle is the established affordance for bottom sheets.
+            Gives the user a target they can grab. */}
+        <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-700" />
+        <SheetHeader className="px-5 pt-3">
+          <SheetTitle className="text-base font-semibold tracking-tight">
+            Agregar al seguimiento
+          </SheetTitle>
+          <SheetDescription className="text-xs">
+            Elegí cómo querés registrar la novedad.
+          </SheetDescription>
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto px-4 pb-6 pt-1">{actionList}</div>
+        <div className="flex-1 overflow-y-auto px-4 pb-2 pt-2">{actionList}</div>
       </SheetContent>
     </Sheet>
   )
