@@ -42,7 +42,7 @@ describe("MobileCirugiaCard", () => {
 
     expect(screen.getByText("Pendiente")).toBeInTheDocument()
     expect(screen.getByText("Sin preparar")).toBeInTheDocument()
-    expect(screen.getByText("2026-10-15 08:30")).toBeInTheDocument()
+    expect(screen.getByText("2026-10-15 · 08:30")).toBeInTheDocument()
   })
 
   it("shows urgente / autorizado / facturado indicators when flags are on", () => {

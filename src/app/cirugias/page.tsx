@@ -39,6 +39,7 @@ import type { CirugiasColumnContext } from "@/lib/cirugias/cirugias-columns"
 // Mobile
 import { MobileCirugiasToolbar } from "@/components/cirugias/MobileCirugiasToolbar"
 import { MobileCirugiasList } from "@/components/cirugias/MobileCirugiasList"
+import { MobileCirugiaFiltersSheet } from "@/components/cirugias/MobileCirugiaFiltersSheet"
 
 // Dialogs
 import { ChangeStateDialog } from "@/components/cirugias/dialogs/ChangeStateDialog"
@@ -93,6 +94,7 @@ export default function CirugiasPage() {
   const [reportsDialogOpen, setReportsDialogOpen] = useState(false)
   const [viewCustomizationOpen, setViewCustomizationOpen] = useState(false)
   const [showOperationPresets, setShowOperationPresets] = useState(true)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const presetOwnershipRef = useRef<CxOperationPresetOwnership | null>(null)
 
   useEffect(() => {
@@ -329,39 +331,74 @@ export default function CirugiasPage() {
      <div className="flex min-h-0 flex-1 flex-col bg-slate-100/70 dark:bg-slate-950">
         {/* ── EXPANDED VIEW: Full Expediente replaces everything ── */}
         {selection.panelState === "expanded" && selection.selectedSurgery ? (
-          <ExpedienteFullView
-            surgery={selection.selectedSurgery}
-            presupuestos={selection.selPresupuestos}
-            comprobantes={selection.selComprobantes}
-            remitos={selection.selRemitos}
-            consumo={selection.selConsumo}
-            notes={selection.selNotes}
-            history={selection.selHistory}
-            docChecklist={selection.selDocChecklist}
-            logistics={selection.selLogistics}
-            docStatus={selection.selDocStatus}
-            materialTransito={selection.selMaterialTransito}
-            instrumentadorSurgery={selection.selInstrumentadorSurgery}
-            box={selection.selBox}
-            resumenCobranza={selection.selResumenCobranza}
-            facturacionStatus={selectedFacturacionStatus}
-            expTab={selection.expTab}
-            setExpTab={selection.setExpTab}
-            onBack={() => selection.closeExpediente()}
-            onSetDialogSurgery={actions.setDialogSurgery}
-            onSetFacturarDialogOpen={actions.setFacturarDialogOpen}
-            onSetNoteDialogOpen={actions.setNoteDialogOpen}
-            onSetSuspendDialogOpen={actions.setSuspendDialogOpen}
-            onSetCancelDialogOpen={actions.setCancelDialogOpen}
-            onSetChangeStateDialogOpen={actions.setChangeStateDialogOpen}
-            onSetChangeDateDialogOpen={actions.setChangeDateDialogOpen}
-            onSetNewState={actions.setNewState}
-            onRecover={actions.handleRecover}
-            onAutorizar={actions.handleAutorizar}
-            onOpenPresupuestoDialog={actions.openPresupuestoDialog}
-            editingConsumo={actions.editingConsumo}
-            setEditingConsumo={actions.setEditingConsumo}
-          />
+          <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">
+            {isMobile ? (
+              <header
+                className="sticky top-0 z-30 flex items-center gap-2 border-b border-slate-200 bg-white/95 px-3 pt-2 pb-2 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
+                style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)" }}
+              >
+                <button
+                  type="button"
+                  onClick={() => selection.closeExpediente()}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-700 transition active:scale-95 active:bg-slate-100 hover:bg-slate-100 dark:text-slate-200 dark:active:bg-slate-800 dark:hover:bg-slate-800"
+                  aria-label="Volver al listado"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+                <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {selection.selectedSurgery.visibleNumber || selection.selectedSurgery.expedienteNumber || "Expediente"}
+                </h1>
+              </header>
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ExpedienteFullView
+                surgery={selection.selectedSurgery}
+                presupuestos={selection.selPresupuestos}
+                comprobantes={selection.selComprobantes}
+                remitos={selection.selRemitos}
+                consumo={selection.selConsumo}
+                notes={selection.selNotes}
+                history={selection.selHistory}
+                docChecklist={selection.selDocChecklist}
+                logistics={selection.selLogistics}
+                docStatus={selection.selDocStatus}
+                materialTransito={selection.selMaterialTransito}
+                instrumentadorSurgery={selection.selInstrumentadorSurgery}
+                box={selection.selBox}
+                resumenCobranza={selection.selResumenCobranza}
+                facturacionStatus={selectedFacturacionStatus}
+                expTab={selection.expTab}
+                setExpTab={selection.setExpTab}
+                onBack={() => selection.closeExpediente()}
+                onSetDialogSurgery={actions.setDialogSurgery}
+                onSetFacturarDialogOpen={actions.setFacturarDialogOpen}
+                onSetNoteDialogOpen={actions.setNoteDialogOpen}
+                onSetSuspendDialogOpen={actions.setSuspendDialogOpen}
+                onSetCancelDialogOpen={actions.setCancelDialogOpen}
+                onSetChangeStateDialogOpen={actions.setChangeStateDialogOpen}
+                onSetChangeDateDialogOpen={actions.setChangeDateDialogOpen}
+                onSetNewState={actions.setNewState}
+                onRecover={actions.handleRecover}
+                onAutorizar={actions.handleAutorizar}
+                onOpenPresupuestoDialog={actions.openPresupuestoDialog}
+                editingConsumo={actions.editingConsumo}
+                setEditingConsumo={actions.setEditingConsumo}
+              />
+            </div>
+          </div>
         ) : isMobile ? (
           // ponytail: mobile-first vertical list, separate render path. Replaces
           // the desktop toolbar+grid entirely. Mirrors desktop state via callbacks
@@ -374,7 +411,7 @@ export default function CirugiasPage() {
               activeFilterCount={filters.activeFilterCount}
               hasActiveFilters={filters.hasActiveFilters}
               onClearFilters={clearAllFilters}
-              onOpenFilters={() => filters.setFiltersOpen(true)}
+              onOpenFilters={() => setMobileFiltersOpen(true)}
               onNewSurgery={actions.openNewSurgeryDialog}
               resultCount={filtered.length}
             />
@@ -386,6 +423,14 @@ export default function CirugiasPage() {
                 onClearFilters={clearAllFilters}
               />
             </div>
+            <MobileCirugiaFiltersSheet
+              open={mobileFiltersOpen}
+              onOpenChange={setMobileFiltersOpen}
+              onClearAll={clearAllFilters}
+              hasActiveFilters={filters.hasActiveFilters}
+              activeFilterCount={filters.activeFilterCount}
+              selectedPresetLabel={filters.selectedPreset}
+            />
           </div>
         ) : (
           <>
