@@ -13,6 +13,7 @@ import { useColumnVisibility } from "@/hooks/useColumnVisibility"
 import { useCirugiaActions } from "@/hooks/useCirugiaActions"
 import { useCirugiasSorting } from "@/hooks/useCirugiasSorting"
 import { useBackendActiveSurgeries } from "@/hooks/useBackendActiveSurgeries"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
 
 // Utils
 import { computeKpis, getFacturacionStatus, resolveKpiFilter } from "@/lib/cirugias.utils"
@@ -34,6 +35,10 @@ import { getAuthorizedSubgroup, getCoordinatorAssignmentBaseDate, getCoordinator
 // Table
 import { CirugiasDataGrid } from "@/components/cirugias/CirugiasDataGrid"
 import type { CirugiasColumnContext } from "@/lib/cirugias/cirugias-columns"
+
+// Mobile
+import { MobileCirugiasToolbar } from "@/components/cirugias/MobileCirugiasToolbar"
+import { MobileCirugiasList } from "@/components/cirugias/MobileCirugiasList"
 
 // Dialogs
 import { ChangeStateDialog } from "@/components/cirugias/dialogs/ChangeStateDialog"
@@ -84,6 +89,7 @@ export default function CirugiasPage() {
   const actions = useCirugiaActions()
   const sorting = useCirugiasSorting()
   const backendSurgeries = useBackendActiveSurgeries()
+  const isMobile = useMediaQuery("(max-width: 767px)")
   const [reportsDialogOpen, setReportsDialogOpen] = useState(false)
   const [viewCustomizationOpen, setViewCustomizationOpen] = useState(false)
   const [showOperationPresets, setShowOperationPresets] = useState(true)
@@ -356,6 +362,31 @@ export default function CirugiasPage() {
             editingConsumo={actions.editingConsumo}
             setEditingConsumo={actions.setEditingConsumo}
           />
+        ) : isMobile ? (
+          // ponytail: mobile-first vertical list, separate render path. Replaces
+          // the desktop toolbar+grid entirely. Mirrors desktop state via callbacks
+          // (no fork of business logic). Add bottom-sheet filters as separate component
+          // when filter UX becomes a bottleneck.
+          <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">
+            <MobileCirugiasToolbar
+              search={filters.search}
+              onSearchChange={filters.setSearch}
+              activeFilterCount={filters.activeFilterCount}
+              hasActiveFilters={filters.hasActiveFilters}
+              onClearFilters={clearAllFilters}
+              onOpenFilters={() => filters.setFiltersOpen(true)}
+              onNewSurgery={actions.openNewSurgeryDialog}
+              resultCount={filtered.length}
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <MobileCirugiasList
+                surgeries={filtered}
+                onOpen={(s) => selection.openExpediente(s.id)}
+                hasActiveFilters={filters.hasActiveFilters}
+                onClearFilters={clearAllFilters}
+              />
+            </div>
+          </div>
         ) : (
           <>
             {/* ═══════════════════════════════════════════════════════════ */}
