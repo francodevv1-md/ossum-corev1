@@ -6,6 +6,13 @@ import { LogOut, Moon, MoreHorizontal, Sun, User } from "lucide-react"
 import { useTheme } from "next-themes"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Button } from "@/components/ui/button"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -20,10 +27,11 @@ import { useAuth } from "@/components/auth/AuthProvider"
 interface UserMenuProps {
   compact?: boolean
   sidebar?: boolean
+  mobile?: boolean
   className?: string
 }
 
-export function UserMenu({ compact = false, sidebar = false, className }: UserMenuProps) {
+export function UserMenu({ compact = false, sidebar = false, mobile = false, className }: UserMenuProps) {
   const { user, currentUser, currentAccess, activeCompany, signOut } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
@@ -35,6 +43,7 @@ export function UserMenu({ compact = false, sidebar = false, className }: UserMe
 
   const [avatarSeed, setAvatarSeed] = useState<string>("")
   const [avatarBg, setAvatarBg] = useState<"squircle" | "circle" | "square" | false>("squircle")
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     const updateFromStorage = () => {
@@ -52,6 +61,104 @@ export function UserMenu({ compact = false, sidebar = false, className }: UserMe
   }, [email])
 
   const effectiveSeed = avatarSeed || email
+
+  // ponytail: mobile renders a compact one-line trigger and opens a
+  // Bottom Sheet with the full menu (email / empresa / theme / sign out).
+  // The previous DropdownMenu could overflow viewport on narrow phones.
+  if (mobile) {
+    return (
+      <>
+        <Button
+          variant="ghost"
+          className={cn(
+            "flex h-10 w-full items-center gap-2.5 rounded-md px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-accent",
+            className,
+          )}
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menú de usuario"
+        >
+          <UserAvatar
+            seed={effectiveSeed}
+            size={32}
+            background={avatarBg}
+            animate="hover"
+            className="shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+              {displayName}
+            </div>
+            <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+              {email}
+            </div>
+          </div>
+          <MoreHorizontal className="size-4 shrink-0 text-slate-500 dark:text-slate-400" />
+        </Button>
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent
+            side="bottom"
+            className="rounded-t-2xl px-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-0"
+          >
+            <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-700" />
+            <SheetHeader className="px-5 pt-3">
+              <SheetTitle className="text-base">Mi cuenta</SheetTitle>
+              <SheetDescription className="text-xs">
+                {roleLabel}
+                {companyName ? ` · ${companyName}` : null}
+              </SheetDescription>
+            </SheetHeader>
+            <div className="space-y-2 px-3 pb-2 pt-1">
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                <UserAvatar seed={effectiveSeed} size={40} background={avatarBg} className="shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {displayName}
+                  </div>
+                  <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    {email}
+                  </div>
+                </div>
+              </div>
+              <ul className="flex flex-col gap-1" role="list">
+                <li>
+                  <Link
+                    href="/perfil"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-800 transition active:scale-[0.99] active:bg-slate-100 hover:bg-slate-50 dark:text-slate-100 dark:active:bg-slate-800 dark:hover:bg-slate-900"
+                  >
+                    <User className="size-4 shrink-0" aria-hidden />
+                    Mi Perfil
+                  </Link>
+                </li>
+                {mounted ? (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => setTheme(isDarkMode ? "light" : "dark")}
+                      className="flex w-full min-h-[48px] items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-slate-800 transition active:scale-[0.99] active:bg-slate-100 hover:bg-slate-50 dark:text-slate-100 dark:active:bg-slate-800 dark:hover:bg-slate-900"
+                    >
+                      {isDarkMode ? <Sun className="size-4 shrink-0" aria-hidden /> : <Moon className="size-4 shrink-0" aria-hidden />}
+                      {isDarkMode ? "Desactivar modo oscuro" : "Activar modo oscuro"}
+                    </button>
+                  </li>
+                ) : null}
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => void signOut()}
+                    className="flex w-full min-h-[48px] items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-red-600 transition active:scale-[0.99] active:bg-red-50 hover:bg-red-50 dark:text-red-400 dark:active:bg-red-950/30 dark:hover:bg-red-950/30"
+                  >
+                    <LogOut className="size-4 shrink-0" aria-hidden />
+                    Cerrar sesión
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </>
+    )
+  }
 
   return (
     <DropdownMenu>
