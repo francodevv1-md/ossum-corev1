@@ -1,8 +1,9 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
 import { ChevronDown, Inbox, Loader2, X } from "lucide-react"
 import type { Surgery } from "@/types"
+import type { FilterChip } from "@/lib/cirugias.types"
 import { MobileCirugiaCard, type MobileCardPrimaryAction } from "./MobileCirugiaCard"
 import { cn } from "@/lib/utils"
 import type { SearchChip } from "@/lib/cirugias.types"
@@ -28,7 +29,7 @@ interface MobileCirugiasListProps {
   /** Items added each time the user taps "Cargar más". */
   pageStep?: number
   /** Compact active-filter chips rendered above the list. */
-  activeFilterChips?: SearchChip[]
+  activeFilterChips?: FilterChip[]
 }
 
 export function MobileCirugiasList({
@@ -42,7 +43,7 @@ export function MobileCirugiasList({
   pageStep = 25,
   activeFilterChips = [],
 }: MobileCirugiasListProps) {
-  const [visibleCount, setVisibleCount] = useState(pageSize)
+  const [visibleCount, setVisibleCount] = useState(pageSize ?? 25)
   const [loading, setLoading] = useState(false)
 
   const effectiveVisible = Math.min(visibleCount, surgeries.length)
@@ -52,7 +53,7 @@ export function MobileCirugiasList({
   const loadMore = () => {
     setLoading(true)
     window.setTimeout(() => {
-      setVisibleCount((prev) => prev + pageStep)
+      setVisibleCount((prev) => prev + (pageStep ?? 25))
       setLoading(false)
     }, 180)
   }
@@ -96,9 +97,9 @@ export function MobileCirugiasList({
         >
           {activeFilterChips.map((chip) => (
             <button
-              key={chip.id}
+              key={chip.key}
               type="button"
-              onClick={() => chip.onClear?.()}
+              onClick={() => chip.onClear()}
               className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition active:scale-95 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               aria-label={`Quitar filtro ${chip.label}`}
             >
