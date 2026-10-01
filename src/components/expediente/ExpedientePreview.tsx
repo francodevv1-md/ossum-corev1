@@ -17,7 +17,7 @@ interface ExpedientePreviewProps {
   onMinimize: () => void; onExpand: () => void; onClose: () => void
   onSetExpTab: (tab: string) => void
   onOpenPresupuestoDialog: (surgery: Surgery) => void
-  onSetFacturarDialogOpen: (open: boolean) => void; onSetDialogSurgery: (s: Surgery) => void; onSetNoteDialogOpen: (open: boolean) => void
+  onSetFacturarDialogOpen: (open: boolean) => void; onSetDialogSurgery: (s: Surgery) => void; onAddNoteToSeguimiento: (s: Surgery) => void
 }
 
 function MiniBadge({ label, status, colorMap }: { label: string; status: string; colorMap: Record<string, string> }) {
@@ -27,7 +27,7 @@ function MiniBadge({ label, status, colorMap }: { label: string; status: string;
 
 export function ExpedientePreview({
   surgery: s, docStatus, presupuestoId, remitoId, fvNumber, consumoState, box, cobrosTotal, facturacionStatus,
-  onMinimize, onExpand, onClose, onSetExpTab, onOpenPresupuestoDialog, onSetFacturarDialogOpen, onSetDialogSurgery, onSetNoteDialogOpen,
+  onMinimize, onExpand, onClose, onSetExpTab, onOpenPresupuestoDialog, onSetFacturarDialogOpen, onSetDialogSurgery, onAddNoteToSeguimiento,
 }: ExpedientePreviewProps) {
   const pendiente = getPendientePrincipal(s, docStatus, consumoState ? { state: consumoState } : undefined, box)
   const canAuthFV = canAutorizarFV(s, docStatus, consumoState)
@@ -108,7 +108,7 @@ export function ExpedientePreview({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               {canAuthFV.allowed && <DropdownMenuItem onClick={() => { onSetDialogSurgery(s); onSetFacturarDialogOpen(true) }}><Receipt className="size-4 mr-2" /> Autorizar FV</DropdownMenuItem>}
-              <DropdownMenuItem onClick={() => { onSetDialogSurgery(s); onSetNoteDialogOpen(true) }}><StickyNote className="size-4 mr-2" /> Agregar nota</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddNoteToSeguimiento(s)}><StickyNote className="size-4 mr-2" /> Agregar nota al seguimiento</DropdownMenuItem>
               <DropdownMenuItem onClick={() => { onExpand(); onSetExpTab("documentacion") }}><BookOpen className="size-4 mr-2" /> Documentación</DropdownMenuItem>
               <DropdownMenuItem onClick={() => { onExpand(); onSetExpTab("trazabilidad") }}><Search className="size-4 mr-2" /> Trazabilidad</DropdownMenuItem>
               <DropdownMenuItem><ExternalLink className="size-4 mr-2" /> Abrir en nueva pestaña</DropdownMenuItem>

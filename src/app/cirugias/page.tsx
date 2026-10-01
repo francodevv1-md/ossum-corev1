@@ -40,14 +40,16 @@ import type { CirugiasColumnContext } from "@/lib/cirugias/cirugias-columns"
 // Mobile
 import { MobileCirugiasToolbar } from "@/components/cirugias/MobileCirugiasToolbar"
 import { MobileCirugiasList } from "@/components/cirugias/MobileCirugiasList"
+import { MobileCirugiaActionSheet } from "@/components/cirugias/MobileCirugiaActionSheet"
 import { MobileCirugiaFiltersSheet } from "@/components/cirugias/MobileCirugiaFiltersSheet"
+import type { MobileCardPrimaryAction } from "@/components/cirugias/MobileCirugiaCard"
+import { canAutorizarFV, canCargarConsumo, canRemitirNR } from "@/lib/businessRules"
 
 // Dialogs
 import { ChangeStateDialog } from "@/components/cirugias/dialogs/ChangeStateDialog"
 import { ChangeDateDialog } from "@/components/cirugias/dialogs/ChangeDateDialog"
 import { SuspendDialog } from "@/components/cirugias/dialogs/SuspendDialog"
 import { CancelDialog } from "@/components/cirugias/dialogs/CancelDialog"
-import { AddNoteDialog } from "@/components/cirugias/dialogs/AddNoteDialog"
 import { PresupuestoDialog } from "@/components/cirugias/dialogs/PresupuestoDialog"
 
 const ExpedienteFullView = dynamic(
@@ -97,7 +99,68 @@ export default function CirugiasPage() {
   const [viewCustomizationOpen, setViewCustomizationOpen] = useState(false)
   const [showOperationPresets, setShowOperationPresets] = useState(true)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const [mobileActionSheetSurgery, setMobileActionSheetSurgery] = useState<Surgery | null>(null)
+  const [mobileActionSheetOpen, setMobileActionSheetOpen] = useState(false)
+  const [noteComposerKey, setNoteComposerKey] = useState(0)
   const presetOwnershipRef = useRef<CxOperationPresetOwnership | null>(null)
+
+  // ponytail: open the expediente on the Seguimiento tab and bump the composer
+  // key so NovedadesTabContent's useEffect re-opens the composer even if the
+  // user is already inside Seguimiento. Real flow — no AddNoteDialog.
+  const openSeguimientoComposer = useCallback((s: Surgery) => {
+    selection.openExpediente(s.id)
+    selection.setExpTab("novedades")
+    setNoteComposerKey((prev) => prev + 1)
+  }, [selection])
+
+  const openMobileActionSheet = useCallback((s: Surgery) => {
+    setMobileActionSheetSurgery(s)
+    setMobileActionSheetOpen(true)
+  }, [])
+  const closeMobileActionSheet = useCallback(() => {
+    setMobileActionSheetOpen(false)
+  }, [])
+
+  // ponytail: business rules are evaluated in cirugias/page.tsx using the
+  // existing helpers. The card just renders whatever primary action we
+  // already computed — no rule logic inside the mobile component.
+  const primaryActionFor = useCallback(
+    (s: Surgery): MobileCardPrimaryAction | null => {
+      const docStatus = store.getDocStatus(s.id)
+      const consumoState = store.getConsumoBySurgeryId(s.id)?.state ?? null
+      if (canAutorizarFV(s, docStatus, consumoState).allowed) {
+        return {
+          id: "facturar",
+          label: "Facturar",
+          onSelect: () => {
+            actions.setDialogSurgery(s)
+            actions.setFacturarDialogOpen(true)
+          },
+        }
+      }
+      if (canCargarConsumo(s).allowed && !s.facturado) {
+        return {
+          id: "consumo",
+          label: "Cargar consumo",
+          onSelect: () => {
+            actions.setDialogSurgery(s)
+            actions.setFacturarDialogOpen(true)
+          },
+        }
+      }
+      if (canRemitirNR(s).allowed && !s.presupuestoId) {
+        return {
+          id: "remitir",
+          label: "Remitir (NR)",
+          onSelect: () => {
+            actions.openPresupuestoDialog(s)
+          },
+        }
+      }
+      return null
+    },
+    [store, actions],
+  )
 
   useEffect(() => {
     const handleOpenDeleteDialog = (event: Event) => {
@@ -266,7 +329,7 @@ export default function CirugiasPage() {
     onSetChangeDateDialogOpen: actions.setChangeDateDialogOpen,
     onSetSuspendDialogOpen: actions.setSuspendDialogOpen,
     onSetCancelDialogOpen: actions.setCancelDialogOpen,
-    onSetNoteDialogOpen: actions.setNoteDialogOpen,
+    onAddNoteToSeguimiento: openSeguimientoComposer,
     onSetFacturarDialogOpen: actions.setFacturarDialogOpen,
     onRecover: actions.handleRecover,
     canFacturar: actions.canFacturar,
@@ -289,7 +352,7 @@ export default function CirugiasPage() {
     actions.setChangeDateDialogOpen,
     actions.setSuspendDialogOpen,
     actions.setCancelDialogOpen,
-    actions.setNoteDialogOpen,
+    openSeguimientoComposer,
     actions.setFacturarDialogOpen,
     actions.handleRecover,
     actions.canFacturar,
@@ -367,7 +430,9 @@ export default function CirugiasPage() {
                 onBack={() => selection.closeExpediente()}
                 onSetDialogSurgery={actions.setDialogSurgery}
                 onSetFacturarDialogOpen={actions.setFacturarDialogOpen}
-                onSetNoteDialogOpen={actions.setNoteDialogOpen}
+                onAddNoteToSeguimiento={openSeguimientoComposer}
+                initialAddAction="note"
+                initialAddActionKey={noteComposerKey}
                 onSetSuspendDialogOpen={actions.setSuspendDialogOpen}
                 onSetCancelDialogOpen={actions.setCancelDialogOpen}
                 onSetChangeStateDialogOpen={actions.setChangeStateDialogOpen}
@@ -403,33 +468,53 @@ export default function CirugiasPage() {
                 onOpen={(s) => selection.openExpediente(s.id)}
                 hasActiveFilters={filters.hasActiveFilters}
                 onClearFilters={clearAllFilters}
-                quickActions={{
-                  onChangeState: (s) => {
-                    actions.setDialogSurgery(s)
-                    actions.setChangeStateDialogOpen(true)
-                  },
-                  onAddNote: (s) => {
-                    // ponytail: mobile quick action opens the expediente on the
-                    // Seguimiento tab so the user gets the full composer with
-                    // voice dictation instead of a stripped-down dialog.
-                    selection.openExpediente(s.id)
-                    selection.setExpTab("novedades")
-                  },
-                  onFacturar: (s) => {
-                    actions.setDialogSurgery(s)
-                    actions.setFacturarDialogOpen(true)
-                  },
-                  onSuspender: (s) => {
-                    actions.setDialogSurgery(s)
-                    actions.setSuspendDialogOpen(true)
-                  },
-                  onCancelar: (s) => {
-                    actions.setDialogSurgery(s)
-                    actions.setCancelDialogOpen(true)
-                  },
-                }}
+                onOpenActions={openMobileActionSheet}
+                primaryActionFor={primaryActionFor}
+                activeFilterChips={filters.activeFilterChips}
               />
             </div>
+            <MobileCirugiaActionSheet
+              open={mobileActionSheetOpen}
+              onOpenChange={setMobileActionSheetOpen}
+              surgery={mobileActionSheetSurgery}
+              onOpenExpediente={(s) => {
+                setMobileActionSheetOpen(false)
+                selection.openExpediente(s.id)
+              }}
+              onChangeState={(s) => {
+                actions.setDialogSurgery(s)
+                actions.setChangeStateDialogOpen(true)
+              }}
+              onChangeDate={(s) => {
+                actions.setDialogSurgery(s)
+                actions.setChangeDateDialogOpen(true)
+              }}
+              onAddNoteToSeguimiento={(s) => {
+                setMobileActionSheetOpen(false)
+                openSeguimientoComposer(s)
+              }}
+              onCreatePresupuesto={(s) => {
+                actions.openPresupuestoDialog(s)
+              }}
+              onViewPresupuesto={(s) => {
+                setMobileActionSheetOpen(false)
+                selection.openExpediente(s.id)
+                selection.setExpTab("comercial")
+              }}
+              onRemitir={(s) => {
+                actions.setDialogSurgery(s)
+                actions.openPresupuestoDialog(s)
+              }}
+              onConsumo={(s) => {
+                actions.setDialogSurgery(s)
+                actions.setFacturarDialogOpen(true)
+              }}
+              onFacturar={(s) => {
+                actions.setDialogSurgery(s)
+                actions.setFacturarDialogOpen(true)
+              }}
+              hasPresupuesto={Boolean(mobileActionSheetSurgery?.presupuestoId)}
+            />
             <MobileCirugiaFiltersSheet
               open={mobileFiltersOpen}
               onOpenChange={setMobileFiltersOpen}
@@ -603,8 +688,7 @@ export default function CirugiasPage() {
                 onOpenExpediente={selection.openExpediente}
                 onAddNote={() => {
                   if (selection.selectedSurgery) {
-                    actions.setDialogSurgery(selection.selectedSurgery)
-                    actions.setNoteDialogOpen(true)
+                    openSeguimientoComposer(selection.selectedSurgery)
                   }
                 }}
                 onClose={selection.deselectSurgery}
@@ -655,14 +739,6 @@ export default function CirugiasPage() {
         dialogSurgery={actions.dialogSurgery}
         reason={actions.reason} setReason={actions.setReason}
         onConfirm={actions.handleCancel}
-      />
-      <AddNoteDialog
-        open={actions.noteDialogOpen} onOpenChange={actions.setNoteDialogOpen}
-        surgeryId={actions.dialogSurgery?.id || selection.selectedSurgeryId || undefined}
-        noteText={actions.noteText} setNoteText={actions.setNoteText}
-        noteType={actions.noteType} setNoteType={actions.setNoteType}
-        notePriority={actions.notePriority} setNotePriority={actions.setNotePriority}
-        onConfirm={() => actions.handleAddNote(selection.selectedSurgery ?? null)}
       />
       {actions.facturarDialogOpen ? (
         <FacturarDialogNuevo

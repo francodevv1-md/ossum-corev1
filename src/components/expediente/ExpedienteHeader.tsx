@@ -61,7 +61,7 @@ export interface ExpedienteHeaderProps {
   onViewConsumo: () => void
   onSetDialogSurgery: (s: Surgery) => void
   onSetFacturarDialogOpen: (open: boolean) => void
-  onSetNoteDialogOpen: (open: boolean) => void
+  onAddNoteToSeguimiento: (s: Surgery) => void
   onSetSuspendDialogOpen: (open: boolean) => void
   onSetCancelDialogOpen: (open: boolean) => void
   onSetChangeStateDialogOpen: (open: boolean) => void
@@ -79,7 +79,7 @@ export function ExpedienteHeader({
   onBack,
   onSetDialogSurgery,
   onSetFacturarDialogOpen,
-  onSetNoteDialogOpen,
+  onAddNoteToSeguimiento,
   onSetSuspendDialogOpen,
   onSetCancelDialogOpen,
   onSetChangeStateDialogOpen,
@@ -319,11 +319,10 @@ export function ExpedienteHeader({
                 <DropdownMenuItem
                   className="text-slate-700 focus:bg-slate-100 focus:text-slate-950 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:text-slate-50"
                   onClick={() => {
-                    onSetDialogSurgery(s)
-                    onSetNoteDialogOpen(true)
+                    onAddNoteToSeguimiento(s)
                   }}
                 >
-                  <StickyNote className="mr-2 size-4" /> Agregar nota
+                  <StickyNote className="mr-2 size-4" /> Agregar nota al seguimiento
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-slate-700 focus:bg-slate-100 focus:text-slate-950 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:text-slate-50"

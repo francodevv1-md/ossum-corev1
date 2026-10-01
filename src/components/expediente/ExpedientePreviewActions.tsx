@@ -9,10 +9,10 @@ import type { Surgery, ConsumoState } from "@/types"
 interface ExpedientePreviewActionsProps {
   surgery: Surgery; docStatus: string; consumoState?: ConsumoState; hasPresupuesto: boolean
   onExpand: () => void; onSetExpTab: (tab: string) => void; onOpenPresupuestoDialog: () => void
-  onSetFacturarDialogOpen: (open: boolean) => void; onSetDialogSurgery: (s: Surgery) => void; onSetNoteDialogOpen: (open: boolean) => void
+  onSetFacturarDialogOpen: (open: boolean) => void; onSetDialogSurgery: (s: Surgery) => void; onAddNoteToSeguimiento: (s: Surgery) => void
 }
 
-export function ExpedientePreviewActions({ surgery: s, docStatus, consumoState, hasPresupuesto, onExpand, onSetExpTab, onOpenPresupuestoDialog, onSetFacturarDialogOpen, onSetDialogSurgery, onSetNoteDialogOpen }: ExpedientePreviewActionsProps) {
+export function ExpedientePreviewActions({ surgery: s, docStatus, consumoState, hasPresupuesto, onExpand, onSetExpTab, onOpenPresupuestoDialog, onSetFacturarDialogOpen, onSetDialogSurgery, onAddNoteToSeguimiento }: ExpedientePreviewActionsProps) {
   const canAuthFV = canAutorizarFV(s, docStatus, consumoState)
   const canRemit = canRemitirNR(s)
   const canLoadConsumo = canCargarConsumo(s)
@@ -29,7 +29,7 @@ export function ExpedientePreviewActions({ surgery: s, docStatus, consumoState, 
             <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-7 gap-1 text-[10px]"><MoreHorizontal className="size-3" /> Más...</Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               {canAuthFV.allowed && <DropdownMenuItem onClick={() => { onSetDialogSurgery(s); onSetFacturarDialogOpen(true) }}><Receipt className="size-4" /> Autorizar FV</DropdownMenuItem>}
-              <DropdownMenuItem onClick={() => { onSetDialogSurgery(s); onSetNoteDialogOpen(true) }}><StickyNote className="size-4" /> Agregar nota</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddNoteToSeguimiento(s)}><StickyNote className="size-4" /> Agregar nota al seguimiento</DropdownMenuItem>
               <DropdownMenuItem onClick={() => { onExpand(); onSetExpTab("documentacion") }}><BookOpen className="size-4" /> Ver documentación</DropdownMenuItem>
               <DropdownMenuItem onClick={() => { onExpand(); onSetExpTab("trazabilidad") }}><Search className="size-4" /> Ver trazabilidad</DropdownMenuItem>
             </DropdownMenuContent>

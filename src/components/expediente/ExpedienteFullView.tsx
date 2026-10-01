@@ -67,7 +67,9 @@ interface ExpedienteFullViewProps {
   onBack: () => void
   onSetDialogSurgery: (s: Surgery) => void
   onSetFacturarDialogOpen: (open: boolean) => void
-  onSetNoteDialogOpen: (open: boolean) => void
+  onAddNoteToSeguimiento: (s: Surgery) => void
+  initialAddAction?: "note" | "mail" | "image" | "auth"
+  initialAddActionKey?: number
   onSetSuspendDialogOpen: (open: boolean) => void
   onSetCancelDialogOpen: (open: boolean) => void
   onSetChangeStateDialogOpen: (open: boolean) => void
@@ -101,7 +103,9 @@ export function ExpedienteFullView({
   onBack,
   onSetDialogSurgery,
   onSetFacturarDialogOpen,
-  onSetNoteDialogOpen,
+  onAddNoteToSeguimiento,
+  initialAddAction = "note",
+  initialAddActionKey = 0,
   onSetSuspendDialogOpen,
   onSetCancelDialogOpen,
   onSetChangeStateDialogOpen,
@@ -244,7 +248,7 @@ export function ExpedienteFullView({
             onViewConsumo={() => setExpTab("consumo")}
             onSetDialogSurgery={onSetDialogSurgery}
             onSetFacturarDialogOpen={onSetFacturarDialogOpen}
-            onSetNoteDialogOpen={onSetNoteDialogOpen}
+            onAddNoteToSeguimiento={onAddNoteToSeguimiento}
             onSetSuspendDialogOpen={onSetSuspendDialogOpen}
             onSetCancelDialogOpen={onSetCancelDialogOpen}
             onSetChangeStateDialogOpen={onSetChangeStateDialogOpen}
@@ -394,7 +398,7 @@ export function ExpedienteFullView({
                 resumenCobranza={resumenCobranza}
                 onAddNote={() => {
                   onSetDialogSurgery(surgery)
-                  onSetNoteDialogOpen(true)
+                  onAddNoteToSeguimiento(surgery)
                 }}
                 onEditFicha={() => setIsEditFichaOpen(true)}
                 onViewRemitos={() => setExpTab("logistica")}
@@ -410,7 +414,11 @@ export function ExpedienteFullView({
               ) : isServerBackedAvailabilityPending ? (
                 <ServerBackedFeatureBlockedState featureLabel="Seguimiento" state="verifying" />
               ) : (
-                <NovedadesTabContent surgery={surgery} />
+                <NovedadesTabContent
+                  surgery={surgery}
+                  initialAddAction={initialAddAction}
+                  initialAddActionKey={initialAddActionKey}
+                />
               )}
             </TabsContent>
 

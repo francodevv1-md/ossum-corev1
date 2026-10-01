@@ -1,10 +1,11 @@
 "use client"
 
-import React, { useState } from "react"
-import { ChevronDown, Inbox, Loader2 } from "lucide-react"
+import React from "react"
+import { ChevronDown, Inbox, Loader2, X } from "lucide-react"
 import type { Surgery } from "@/types"
-import { MobileCirugiaCard } from "./MobileCirugiaCard"
+import { MobileCirugiaCard, type MobileCardPrimaryAction } from "./MobileCirugiaCard"
 import { cn } from "@/lib/utils"
+import type { SearchChip } from "@/lib/cirugias.types"
 
 interface QuickActionHandlers {
   onChangeState?: (s: Surgery) => void
@@ -19,11 +20,15 @@ interface MobileCirugiasListProps {
   onOpen: (surgery: Surgery) => void
   hasActiveFilters: boolean
   onClearFilters: () => void
-  quickActions?: QuickActionHandlers
+  onOpenActions: (surgery: Surgery) => void
+  /** Already-computed primary action per surgery. Component just renders it. */
+  primaryActionFor?: (surgery: Surgery) => MobileCardPrimaryAction | null
   /** Initial visible item count. */
   pageSize?: number
   /** Items added each time the user taps "Cargar más". */
   pageStep?: number
+  /** Compact active-filter chips rendered above the list. */
+  activeFilterChips?: SearchChip[]
 }
 
 export function MobileCirugiasList({
@@ -31,22 +36,21 @@ export function MobileCirugiasList({
   onOpen,
   hasActiveFilters,
   onClearFilters,
-  quickActions,
+  onOpenActions,
+  primaryActionFor,
   pageSize = 25,
   pageStep = 25,
+  activeFilterChips = [],
 }: MobileCirugiasListProps) {
   const [visibleCount, setVisibleCount] = useState(pageSize)
   const [loading, setLoading] = useState(false)
 
-  // When the underlying list shrinks (filters change) we never want to keep an
-  // inflated visibleCount. Resync when total drops below the window.
   const effectiveVisible = Math.min(visibleCount, surgeries.length)
   const hasMore = effectiveVisible < surgeries.length
   const visible = surgeries.slice(0, effectiveVisible)
 
   const loadMore = () => {
     setLoading(true)
-    // tiny artificial delay so the spinner is visible — gives the action weight
     window.setTimeout(() => {
       setVisibleCount((prev) => prev + pageStep)
       setLoading(false)
@@ -84,13 +88,35 @@ export function MobileCirugiasList({
 
   return (
     <div className="flex flex-1 flex-col">
-      <ul className="flex flex-col gap-2.5 px-3 pt-2" role="list">
+      {activeFilterChips.length > 0 ? (
+        <div
+          className="flex gap-1.5 overflow-x-auto px-3 pb-1.5 pt-2"
+          style={{ scrollbarWidth: "none" }}
+          aria-label="Filtros activos"
+        >
+          {activeFilterChips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              onClick={() => chip.onClear?.()}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition active:scale-95 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              aria-label={`Quitar filtro ${chip.label}`}
+            >
+              <span>{chip.label}</span>
+              <X className="h-3 w-3 opacity-60" aria-hidden />
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <ul className="flex flex-col gap-2.5 px-3 pt-1" role="list">
         {visible.map((surgery, idx) => (
           <li key={surgery.id} style={{ animationDelay: `${Math.min(idx, 12) * 30}ms` }}>
             <MobileCirugiaCard
               surgery={surgery}
               onOpen={onOpen}
-              {...(quickActions ?? {})}
+              onOpenActions={onOpenActions}
+              primaryAction={primaryActionFor?.(surgery) ?? null}
             />
           </li>
         ))}
