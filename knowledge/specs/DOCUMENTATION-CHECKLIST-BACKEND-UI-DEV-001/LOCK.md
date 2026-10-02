@@ -1,0 +1,19 @@
+# Ownership
+- task: DOCUMENTATION-CHECKLIST-BACKEND-UI-DEV-001
+- agent role: implementation owner
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned files:
+  - src/components/expediente/DocumentacionPanel.tsx
+  - src/lib/api/documentation.ts
+  - src/hooks/useSurgeryDocumentation.ts
+  - src/__tests__/components/DocumentacionPanel.backend.test.tsx
+  - knowledge/specs/DOCUMENTATION-CHECKLIST-BACKEND-UI-DEV-001/*
+- Starting hashes: see TASK_BRIEF.md. New files absent at reservation.
+- No shared validation output (.next) reserved; no other owner's process may be changed.
+- Stable review snapshot SHA256:
+  - DocumentacionPanel.tsx: EB47C691E809ADAB5E871673D3A2687D64092C0C24269B00BCF399FF34D788A7
+  - useSurgeryDocumentation.ts: 362D6F0D0AC84DBBA40B1060937A6DDE6F1499356B6C710079B082C25301D577
+  - documentation.ts: E820DA04554651A35DEAE509BDD08615FA89699C7E3CED446FC4AD9F85D4E103
+  - DocumentacionPanel.backend.test.tsx: E0E7082BE8174084DB3D9B5E2D97757DFC75B4DDECAB476205DE61D1DDB56D62
+- Released after marginal-coffee-mastodon independently rechecked matching pre/post source/test hashes, 55 passing tests and clean scoped ESLint. No remaining writer; no shared resource/process reservation to release.

@@ -1,40 +1,18 @@
 "use client"
 
-import React, { useMemo, useCallback, useState } from "react"
-import {
-  BookOpen, Check, Circle, AlertTriangle, Upload, Eye,
-  MoreHorizontal, Send, X,
-} from "lucide-react"
+import { useState } from "react"
+import { BookOpen } from "lucide-react"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Separator } from "@/components/ui/separator"
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Tooltip, TooltipContent, TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter, DialogDescription,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { cn } from "@/lib/utils"
-import { formatDate } from "@/lib/formatters"
-import { DOC_STATUS_COLORS } from "@/lib/cirugias.constants"
-import { computeDocProgress } from "@/lib/cirugias.utils"
-import { useOrtoTrackStore } from "@/lib/store"
+import { useSurgeryDocumentation } from "@/hooks/useSurgeryDocumentation"
+import { DOCUMENTATION_STATES, isDocumentationTransitionAllowed, type DocumentationState } from "@/lib/validators/documentation.validator"
 import { toast } from "sonner"
-import type {
-  Surgery, SurgeryDocumentChecklist, DocumentChecklistItem,
-} from "@/types"
-
-// ═══════════════════════════════════════════════════════════════
-// PROPS
-// ═══════════════════════════════════════════════════════════════
+import type { Surgery, SurgeryDocumentChecklist } from "@/types"
 
 interface DocumentacionPanelProps {
   surgery: Surgery
@@ -42,500 +20,111 @@ interface DocumentacionPanelProps {
   docStatus: string
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ITEM STATUS HELPERS
-// ═══════════════════════════════════════════════════════════════
+const states = {
+  pending: { label: "Pendiente", color: "border-amber-200 bg-amber-50 text-amber-800" },
+  received: { label: "Recibido", color: "border-sky-200 bg-sky-50 text-sky-800" },
+  observed: { label: "Observado", color: "border-red-200 bg-red-50 text-red-800" },
+  approved: { label: "Aprobado", color: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+}
+const summary = { not_required: "No requerida", observed: "Observada", ready: "Lista", incomplete: "Incompleta" }
 
-type ItemStatus = "completado" | "pendiente" | "observado"
-
-function getItemStatus(item: DocumentChecklistItem): ItemStatus {
-  if (item.completed) return "completado"
-  if (item.observations && item.observations.trim().length > 0) return "observado"
-  return "pendiente"
+export function DocumentacionPanel({ surgery }: DocumentacionPanelProps) {
+  const { activeCompany, currentAccess, currentUser, currentUserLoading, isLoading } = useAuth()
+  const backendId = surgery.backendId?.trim()
+  if (isLoading || currentUserLoading) return <Panel><p role="status">Cargando contexto de documentación…</p></Panel>
+  if (!activeCompany?.id || !backendId) return <Panel><p>Documentación no disponible: se requiere una empresa activa y una cirugía persistida.</p></Panel>
+  return <DocumentationScope key={JSON.stringify([activeCompany.id, backendId, currentUser?.id])}
+    companyId={activeCompany.id} surgeryId={backendId} role={currentAccess?.role ?? ""} />
 }
 
-const STATUS_ICON_MAP: Record<ItemStatus, React.ElementType> = {
-  completado: Check,
-  pendiente: Circle,
-  observado: AlertTriangle,
+function Panel({ children }: { children: React.ReactNode }) {
+  return <section aria-label="Checklist documental" className="overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-800 dark:bg-slate-900/90">
+    <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800">
+      <BookOpen className="size-4" aria-hidden="true" />
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em]">Checklist documental</h2>
+    </div>
+    <div className="space-y-3 px-3 py-3 text-xs">{children}</div>
+  </section>
 }
 
-const STATUS_COLOR_MAP: Record<ItemStatus, string> = {
-  completado: "text-emerald-600",
-  pendiente: "text-amber-500",
-  observado: "text-red-500",
-}
-
-const STATUS_BG_MAP: Record<ItemStatus, string> = {
-  completado: "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10",
-  pendiente: "border-amber-200 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-500/10",
-  observado: "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10",
-}
-
-const STATUS_LABEL_MAP: Record<ItemStatus, string> = {
-  completado: "Completado",
-  pendiente: "Pendiente",
-  observado: "Observado",
-}
-
-const STATUS_BADGE_MAP: Record<ItemStatus, string> = {
-  completado: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200",
-  pendiente: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200",
-  observado: "border-red-300 bg-red-100 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200",
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PROGRESS BAR COLOR HELPER
-// ═══════════════════════════════════════════════════════════════
-
-function getProgressColor(percent: number): string {
-  if (percent === 100) return "[&>div]:bg-emerald-600"
-  if (percent >= 60) return "[&>div]:bg-sky-500"
-  if (percent >= 30) return "[&>div]:bg-amber-500"
-  return "[&>div]:bg-red-500"
-}
-
-// ═══════════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ═══════════════════════════════════════════════════════════════
-
-export function DocumentacionPanel({
-  surgery,
-  docChecklist,
-  docStatus,
-}: DocumentacionPanelProps) {
-  const updateDocumentationChecklist = useOrtoTrackStore(
-    (s) => s.updateDocumentationChecklist
-  )
-
-  // ── State for observation dialog ──
-  const [obsDialogOpen, setObsDialogOpen] = useState(false)
-  const [obsItemType, setObsItemType] = useState<string>("")
+function DocumentationScope({ companyId, surgeryId, role }: { companyId: string; surgeryId: string; role: string }) {
+  const { documentation, loading, mutating, error, conflict, canMutate, refresh, initialize, transition } = useSurgeryDocumentation(companyId, surgeryId, role)
+  const [obsItemId, setObsItemId] = useState<string | null>(null)
   const [obsText, setObsText] = useState("")
+  const obsItem = documentation?.items.find((item) => item.id === obsItemId)
+  const disabled = loading || mutating || conflict || !canMutate
+  const canObserve = obsItem && isDocumentationTransitionAllowed(obsItem.state as DocumentationState, "observed")
+  const progress = documentation && documentation.progress.total > 0 ? 100 * documentation.progress.approved / documentation.progress.total : 0
 
-  // ── State for request doc dialog ──
-  const [requestDialogOpen, setRequestDialogOpen] = useState(false)
-  const [requestItemType, setRequestItemType] = useState<string>("")
-  const [requestNote, setRequestNote] = useState("")
-
-  // ── Computed values ──
-  const progress = useMemo(
-    () => computeDocProgress(docChecklist),
-    [docChecklist]
-  )
-
-  const items = docChecklist?.items ?? []
-
-  const completedCount = useMemo(
-    () => items.filter((i) => getItemStatus(i) === "completado").length,
-    [items]
-  )
-  const pendingCount = useMemo(
-    () => items.filter((i) => getItemStatus(i) === "pendiente").length,
-    [items]
-  )
-  const observedCount = useMemo(
-    () => items.filter((i) => getItemStatus(i) === "observado").length,
-    [items]
-  )
-
-  // ── Handlers ──
-  const handleToggleComplete = useCallback(
-    (itemType: string, currentCompleted: boolean) => {
-      updateDocumentationChecklist(surgery.id, itemType, !currentCompleted)
-      toast.success(
-        !currentCompleted
-          ? `"${itemType}" marcado como completo`
-          : `"${itemType}" marcado como pendiente`
-      )
-    },
-    [surgery.id, updateDocumentationChecklist]
-  )
-
-  const handleOpenObserve = useCallback((itemType: string) => {
-    setObsItemType(itemType)
-    setObsText("")
-    setObsDialogOpen(true)
-  }, [])
-
-  const handleSubmitObservation = useCallback(() => {
-    if (!obsText.trim()) {
-      toast.error("Ingrese una observación")
-      return
+  async function saveObservation() {
+    if (!obsItem || disabled || !canObserve) return
+    if (await transition(obsItem.id, "observed", obsText)) {
+      setObsItemId(null)
+      setObsText("")
+      toast.success("Observación guardada")
     }
-    // Mark as incomplete and record the observation
-    updateDocumentationChecklist(surgery.id, obsItemType, false)
-    toast.success(`Observación registrada para "${obsItemType}"`)
-    setObsDialogOpen(false)
-    setObsText("")
-  }, [surgery.id, obsItemType, obsText, updateDocumentationChecklist])
+  }
 
-  const handleOpenRequest = useCallback((itemType: string) => {
-    setRequestItemType(itemType)
-    setRequestNote("")
-    setRequestDialogOpen(true)
-  }, [])
-
-  const handleSubmitRequest = useCallback(() => {
-    toast.success(`Solicitud de documentación enviada para "${requestItemType}"`)
-    setRequestDialogOpen(false)
-    setRequestNote("")
-  }, [requestItemType])
-
-  const docStatusColorClass =
-    DOC_STATUS_COLORS[docStatus] || "bg-gray-400 text-white"
-
-  // ═══════════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════════
-
-  return (
-    <section className="overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-slate-800 dark:bg-slate-900/90">
-      {/* ── Header ── */}
-      <div className="flex flex-col gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-1">
+  return <Panel>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      {documentation?.checklist && <Badge variant="outline">{summary[documentation.status]}</Badge>}
+      <Button size="sm" variant="outline" disabled={loading || mutating} onClick={() => void refresh()}>Actualizar checklist</Button>
+    </div>
+    {loading && <p role="status">Cargando documentación…</p>}
+    {mutating && <p role="status">Guardando documentación…</p>}
+    {error && <p role="alert">{error}</p>}
+    {!canMutate && <p>Solo lectura: su rol no permite modificar documentación.</p>}
+    {documentation && !documentation.checklist && <div className="space-y-2">
+      <p>Sin checklist de documentación. No se inicializa automáticamente.</p>
+      {canMutate && <Button size="sm" disabled={disabled} onClick={async () => {
+        if (await initialize()) toast.success("Checklist inicializado")
+      }}>Inicializar checklist</Button>}
+    </div>}
+    {documentation?.checklist && <>
+      <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/60">
+        <p>{documentation.progress.approved}/{documentation.progress.total} documentos requeridos aprobados</p>
+        <Progress aria-label="Progreso de documentos requeridos" aria-valuenow={progress} value={progress} className="h-1.5" />
+        <p className="text-muted-foreground">Estado documental informativo; no autoriza ni bloquea facturación.</p>
+      </div>
+      {documentation.items.length === 0 && <p>Checklist persistido sin ítems.</p>}
+      {documentation.items.map((item) => {
+        const state = item.state as DocumentationState
+        const style = states[state]
+        return <div key={item.id} className="space-y-2 rounded-md border border-slate-200 px-3 py-2 dark:border-slate-800">
           <div className="flex flex-wrap items-center gap-2">
-            <BookOpen className="size-4 text-slate-700 dark:text-slate-300" />
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-900 dark:text-slate-100">
-              Checklist documental
-            </h2>
-            <span
-              className={cn(
-                "inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold leading-none",
-                docStatusColorClass
-              )}
-            >
-              {docStatus}
-            </span>
+            <h3 className="text-[13px] font-semibold">{item.label}</h3>
+            <Badge variant="outline" className={style?.color}>{style?.label ?? "Estado desconocido"}</Badge>
+            <span className="text-muted-foreground">{item.required ? "Requerido" : "Opcional"}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            Seguimiento compacto del estado de la documentación asociada.
-          </p>
+          {item.observation && <p className="whitespace-pre-wrap break-words text-red-700 dark:text-red-300">Obs: {item.observation}</p>}
+          {canMutate && style && <div className="flex flex-wrap gap-1">
+            {DOCUMENTATION_STATES.filter((target) => isDocumentationTransitionAllowed(state, target)).map((target) => <Button
+              key={target} variant="outline" size="sm" disabled={disabled} aria-label={`${states[target].label}: ${item.label}`}
+              onClick={async () => {
+                if (target === "observed") { setObsItemId(item.id); setObsText(item.observation ?? ""); return }
+                if (await transition(item.id, target)) toast.success("Estado documental guardado")
+              }}>{target === "observed" ? "Observar" : states[target].label}</Button>)}
+          </div>}
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Badge variant="outline" className="text-[10px]">
-            {completedCount}/{items.length} completados
-          </Badge>
-        </div>
-      </div>
-
-      <div className="space-y-3 px-3 py-3">
-        {/* ── Progress section ── */}
-        <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/60">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="font-medium text-slate-600 dark:text-slate-300">Progreso de documentación</span>
-            <span className="font-semibold text-slate-900 dark:text-slate-100">{progress}%</span>
-          </div>
-          <Progress
-            value={progress}
-            className={cn("h-1.5", getProgressColor(progress))}
-          />
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="inline-block size-2 rounded-full bg-emerald-500" />
-              {completedCount} completado{completedCount !== 1 ? "s" : ""}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block size-2 rounded-full bg-amber-400" />
-              {pendingCount} pendiente{pendingCount !== 1 ? "s" : ""}
-            </span>
-            {observedCount > 0 && (
-              <span className="flex items-center gap-1">
-                <span className="inline-block size-2 rounded-full bg-red-500" />
-                {observedCount} observado{observedCount !== 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* ── Checklist ── */}
-        {items.length > 0 ? (
-          <div className="space-y-1.5">
-            {items.map((item) => {
-              const status = getItemStatus(item)
-              const StatusIcon = STATUS_ICON_MAP[status]
-              const statusColor = STATUS_COLOR_MAP[status]
-              const statusBg = STATUS_BG_MAP[status]
-              const statusLabel = STATUS_LABEL_MAP[status]
-              const statusBadge = STATUS_BADGE_MAP[status]
-
-              return (
-                <div
-                  key={item.type}
-                  className={cn(
-                    "rounded-md border px-3 py-2 transition-colors",
-                    statusBg
-                  )}
-                >
-                  {/* ── Item row ── */}
-                  <div className="flex items-start justify-between gap-3">
-                    {/* Left: icon + info */}
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div
-                        className={cn(
-                          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
-                           status === "completado" && "bg-emerald-100 dark:bg-emerald-500/15",
-                           status === "pendiente" && "bg-amber-100 dark:bg-amber-500/15",
-                           status === "observado" && "bg-red-100 dark:bg-red-500/15"
-                        )}
-                      >
-                        <StatusIcon
-                          className={cn("size-3.5", statusColor)}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[13px] font-semibold leading-tight text-slate-900 dark:text-slate-100">
-                            {item.type}
-                          </p>
-                          <span
-                            className={cn(
-                              "inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border leading-none",
-                              statusBadge
-                            )}
-                          >
-                            {statusLabel}
-                          </span>
-                        </div>
-
-                        {/* Meta info */}
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
-                          {item.uploadedAt && (
-                            <span>
-                              Subido: {formatDate(item.uploadedAt)}
-                            </span>
-                          )}
-                          {item.uploadedBy && (
-                            <span>Por: {item.uploadedBy}</span>
-                          )}
-                        </div>
-
-                        {/* Observation text */}
-                        {item.observations && (
-                          <div className="mt-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1 dark:border-red-500/30 dark:bg-red-500/10">
-                            <p className="text-[10px] font-medium text-red-700 dark:text-red-300">
-                              Obs: {item.observations}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Right: actions */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {/* Quick toggle complete */}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "h-7 w-7 rounded-md p-0",
-                              status === "completado"
-                                ? "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
-                                : "text-muted-foreground hover:text-foreground"
-                            )}
-                            onClick={() =>
-                              handleToggleComplete(item.type, item.completed)
-                            }
-                          >
-                            <Check className="size-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          {status === "completado"
-                            ? "Desmarcar como completo"
-                            : "Marcar como completo"}
-                        </TooltipContent>
-                      </Tooltip>
-
-                      {/* More actions dropdown */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 rounded-md p-0 text-muted-foreground hover:text-foreground"
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toast.info(
-                                `Adjuntar archivo para "${item.type}" — funcionalidad de carga en próxima etapa`
-                              )
-                            }
-                          >
-                            <Upload className="size-4 mr-2" />
-                            Adjuntar archivo
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={!item.completed || !item.uploadedAt}
-                            onClick={() =>
-                              toast.info(
-                                `Ver archivo de "${item.type}" — visor en próxima etapa`
-                              )
-                            }
-                          >
-                            <Eye className="size-4 mr-2" />
-                            Ver archivo
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() =>
-                              handleToggleComplete(item.type, item.completed)
-                            }
-                          >
-                            <Check className="size-4 mr-2" />
-                            {item.completed
-                              ? "Desmarcar completo"
-                              : "Marcar como completo"}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleOpenObserve(item.type)}
-                          >
-                            <AlertTriangle className="size-4 mr-2" />
-                            Observar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleOpenRequest(item.type)}
-                          >
-                            <Send className="size-4 mr-2" />
-                            Solicitar documentación
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <BookOpen className="size-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">
-              Sin checklist de documentación
-            </p>
-            <p className="text-xs text-muted-foreground">
-              No hay ítems de documentación configurados para esta cirugía
-            </p>
-          </div>
-        )}
-
-        {/* ── Observation dialog ── */}
-        <Dialog open={obsDialogOpen} onOpenChange={setObsDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="size-5 text-red-500" />
-                Observar documentación
-              </DialogTitle>
-              <DialogDescription>
-                Registre una observación para &quot;{obsItemType}&quot;
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3 py-2">
-              <div>
-                <Label className="text-xs">Tipo de documento</Label>
-                <p className="mt-0.5 text-sm font-medium">{obsItemType}</p>
-              </div>
-              <div>
-                <Label htmlFor="obs-text" className="text-xs">
-                  Observación
-                </Label>
-                <Textarea
-                  id="obs-text"
-                  value={obsText}
-                  onChange={(e) => setObsText(e.target.value)}
-                  placeholder="Describa la observación o el motivo del rechazo..."
-                  rows={3}
-                  className="mt-1 text-sm"
-                />
-              </div>
-            </div>
-            <DialogFooter className="gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setObsDialogOpen(false)}
-              >
-                <X className="size-4 mr-1.5" />
-                Cancelar
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={handleSubmitObservation}
-                disabled={!obsText.trim()}
-              >
-                <AlertTriangle className="size-4 mr-1.5" />
-                Registrar observación
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* ── Request documentation dialog ── */}
-        <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Send className="size-5 text-sky-500" />
-                Solicitar documentación
-              </DialogTitle>
-              <DialogDescription>
-                Enviar solicitud de &quot;{requestItemType}&quot; para la cirugía{" "}
-                {surgery.id}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3 py-2">
-              <div>
-                <Label className="text-xs">Documento solicitado</Label>
-                <p className="mt-0.5 text-sm font-medium">{requestItemType}</p>
-              </div>
-              <div>
-                <Label className="text-xs">Cirugía / Paciente</Label>
-                <p className="mt-0.5 text-sm">
-                  {surgery.id} — {surgery.patient}
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="request-note" className="text-xs">
-                  Nota adicional (opcional)
-                </Label>
-                <Textarea
-                  id="request-note"
-                  value={requestNote}
-                  onChange={(e) => setRequestNote(e.target.value)}
-                  placeholder="Información adicional para la solicitud..."
-                  rows={2}
-                  className="mt-1 text-sm"
-                />
-              </div>
-            </div>
-            <DialogFooter className="gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setRequestDialogOpen(false)}
-              >
-                <X className="size-4 mr-1.5" />
-                Cancelar
-              </Button>
-              <Button size="sm" onClick={handleSubmitRequest}>
-                <Send className="size-4 mr-1.5" />
-                Enviar solicitud
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </section>
-  )
+      })}
+    </>}
+    <p className="text-muted-foreground">Solicitud, carga y visualización de archivos no disponibles en este checklist.</p>
+    <Dialog open={obsItemId !== null} onOpenChange={(open) => { if (!open && !mutating) setObsItemId(null) }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Observar documentación</DialogTitle>
+          <DialogDescription>Registre una observación para {obsItem?.label ?? "el documento"}.</DialogDescription>
+        </DialogHeader>
+        <Label htmlFor="documentation-observation">Observación</Label>
+        <Textarea id="documentation-observation" value={obsText} onChange={(event) => setObsText(event.target.value)} disabled={mutating} rows={3} />
+        {error && <p role="alert">{error}</p>}
+        {conflict && <Button variant="outline" disabled={loading || mutating} onClick={() => void refresh()}>Actualizar checklist</Button>}
+        {!canObserve && <p>El estado actual no permite observar. Cierre y revise el documento.</p>}
+        <DialogFooter>
+          <Button variant="outline" disabled={mutating} onClick={() => setObsItemId(null)}>Cancelar</Button>
+          <Button disabled={disabled || !canObserve || !obsText.trim()} onClick={() => void saveObservation()}>Registrar observación</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </Panel>
 }
