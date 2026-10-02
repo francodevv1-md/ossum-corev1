@@ -1,0 +1,22 @@
+# Exclusive bounded ownership
+- task: PRESUPUESTOS-FINAL-VALIDATION-DEV-001
+- agent role: bounded correction and final validation
+- selected model: openai/gpt-6.1-sol
+- status: released
+- user paused other sessions; preserve their changes and locks, no broad takeover of schema/services/shared folders.
+- owned edits: src/__tests__/unit/presupuesto-service.test.ts (one assertion); src/__tests__/unit/presupuesto-concurrency.test.ts (lock-order regression); src/__tests__/integration/presupuesto-revision-postgres.test.ts (new); knowledge/specs/PRESUPUESTOS-FINAL-VALIDATION-DEV-001/*.
+- Starting SHA256:
+  - presupuesto-service.test.ts: 9C0962EDAE0D78CD613DD1F82B82029A509DA79DA6444628D710AA595F7481C9
+  - presupuesto-concurrency.test.ts: F6C6A9569BC19DFD322ED82CDB987C6C1CF0E806BF3305A32636C14C6A77A6ED
+  - presupuesto.service.ts (read-only): D4566BDEA63E306B2CF9F862B0C3F8A82884969F0A0B1FB6A1DE36B38712CAE2
+  - new integration test/task folder absent at reservation.
+- Knowledge lock scan: no explicit Presupuestos test/service claim found. Other lock entries preserved; independent explorer checking remaining registries before further sensitive work.
+- Shared .next NOT reserved: active server port5000 PID19652; no build against that output without coordination.
+- Independent registry exploration completed: no recorded Presupuestos overlap; no other lock entry changed.
+- Final SHA256, matching reviewer and final owner recheck:
+  - presupuesto-service.test.ts: 8E479FD4AF3DD982222868844B21B513CA1A1964E7B037F01584F567D00FF7B9
+  - presupuesto-concurrency.test.ts: DB5EF3B056563B1E266D7F746AE548492CD61C5F19FB584AA2167313DB9FAD77
+  - presupuesto-revision-postgres.test.ts: DB14783ED910DC340F3831CCC2F6AD6AAE90DB08D6267EE49FE206D52C86DA24
+  - presupuesto.service.ts: unchanged from baseline.
+- Exact-owned runtime record: presupuesto cmuqqsez70000nshuaexh7tyx, qaRun b9ba4e61-e135-46a3-87ff-71a2cbda0ec9; existing synthetic company/surgery reused, no permissions modified. Retained as evidence; no other user's record edited.
+- Released after test review/real PostgreSQL/browser evidence, with source corrections outside test-only scope and exclusive build deferred as detailed in HANDOFF/FINDINGS. No active browser/resource reservation left.

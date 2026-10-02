@@ -48,6 +48,16 @@ export const PRESUPUESTO_READ_ROLES = [
   "instrumentador",
 ] as const;
 
+export type PresupuestoAction =
+  | "edit"
+  | "delete"
+  | "emit"
+  | "approve"
+  | "reject"
+  | "expire"
+  | "annul"
+  | "revise";
+
 const PRESUPUESTO_EMIT_MAX_RETRIES = 3;
 const DEFAULT_LIST_TAKE = 50;
 
@@ -169,6 +179,167 @@ const presupuestoReadSelect = {
   },
 } satisfies Prisma.PresupuestoSelect;
 
+export type PresupuestoDatabaseRow = Prisma.PresupuestoGetPayload<{ select: typeof presupuestoReadSelect }>;
+
+export function derivePresupuestoSlot(state: string): "DRAFT" | "CURRENT" | "HISTORY" {
+  if (state === "Borrador") return "DRAFT";
+  if (state === "Reemplazado") return "HISTORY";
+  return "CURRENT";
+}
+
+export function derivePresupuestoActions(state: string): PresupuestoAction[] {
+  switch (state) {
+    case "Borrador":
+      return ["edit", "delete", "emit", "annul"];
+    case "Emitido":
+      return ["approve", "reject", "expire", "annul", "revise"];
+    case "Aprobado":
+      return ["annul", "revise"];
+    case "Rechazado":
+    case "Vencido":
+      return ["revise"];
+    default:
+      return [];
+  }
+}
+
+export function getPresupuestoWriteRevision(metadata: unknown, fallbackVersion = 1): number {
+  if (metadata && typeof metadata === "object") {
+    const meta = metadata as Record<string, unknown>;
+    if (typeof meta.writeRevision === "number" && Number.isFinite(meta.writeRevision)) {
+      return meta.writeRevision;
+    }
+  }
+  return fallbackVersion;
+}
+
+async function lockPresupuestoRow(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  presupuestoId: string
+) {
+  if (typeof (tx as any).$queryRaw === "function") {
+    await tx.$queryRaw`SELECT "id" FROM "presupuesto" WHERE "id" = ${presupuestoId} AND "companyId" = ${companyId} FOR UPDATE`;
+  }
+}
+
+function assertExpectedRevision(
+  currentWriteRevision: number,
+  expectedRevision: number | string | undefined | null
+) {
+  if (expectedRevision === undefined || expectedRevision === null) {
+    throw new PresupuestoError(
+      "presupuesto_revision_required",
+      "expectedRevision is required for this protected mutation",
+      400
+    );
+  }
+  const expectedNum = typeof expectedRevision === "string" ? Number(expectedRevision) : expectedRevision;
+  if (!Number.isFinite(expectedNum) || expectedNum <= 0) {
+    throw new PresupuestoError(
+      "invalid_expected_revision",
+      `Invalid expectedRevision value: ${String(expectedRevision)}`,
+      400
+    );
+  }
+  if (expectedNum !== currentWriteRevision) {
+    throw new PresupuestoError(
+      "presupuesto_revision_conflict",
+      `Presupuesto concurrency conflict: expected revision ${expectedRevision}, found ${currentWriteRevision}`,
+      409
+    );
+  }
+}
+
+export function serializePresupuestoRow(row: PresupuestoDatabaseRow) {
+  const meta = (row.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, unknown>;
+  const slot = derivePresupuestoSlot(row.state);
+  const actions = derivePresupuestoActions(row.state);
+  const familyId = row.parentPresupuestoId ?? row.id;
+  const writeRevision = getPresupuestoWriteRevision(row.metadata, row.versionNumber);
+
+  const items = (row.items ?? []).map((item, idx) => {
+    const itemQty = toDecimal(item.quantity);
+    const itemPrice = toDecimal(item.unitPrice);
+    const itemDisc = toDecimal(item.discount);
+    const itemTax = toDecimal(item.tax);
+    const itemTotal = toDecimal(item.total);
+    const lineBruto = itemQty.mul(itemPrice);
+    const discountRate = lineBruto.gt(0)
+      ? quantizeMoney(itemDisc.mul(100).div(lineBruto)).toString()
+      : "0";
+
+    return {
+      id: item.id,
+      position: idx + 1,
+      sku: item.sku ?? null,
+      description: item.description,
+      quantity: itemQty.toString(),
+      unit: item.unit ?? null,
+      unitPrice: itemPrice.toString(),
+      discountRate,
+      discount: itemDisc.toString(),
+      taxRate: toDecimal(item.vatRate).toString(),
+      tax: itemTax.toString(),
+      total: itemTotal.toString(),
+      vatTreatment: item.vatTreatment,
+      vatRate: toDecimal(item.vatRate).toString(),
+      metadata: item.metadata ?? null,
+    };
+  });
+
+  return {
+    id: row.id,
+    visibleNumber: row.visibleNumber ?? null,
+    companyId: row.companyId,
+    familyId,
+    surgeryId: row.surgeryId ?? null,
+    branchId: (typeof meta.branchId === "string" ? meta.branchId : null),
+    clientContactId: (typeof meta.clientContactId === "string" ? meta.clientContactId : null),
+    payerContactId: (typeof meta.payerContactId === "string" ? meta.payerContactId : null),
+    parentPresupuestoId: row.parentPresupuestoId ?? null,
+    sourcePresupuestoId: row.parentPresupuestoId ?? null,
+    versionNumber: row.versionNumber,
+    slot,
+    revision: writeRevision,
+    state: row.state as PresupuestoState,
+    title: row.title ?? null,
+    currency: row.currency,
+    documentDate: typeof meta.documentDate === "string"
+      ? meta.documentDate
+      : serializeDate(row.issuedAt ?? row.createdAt),
+    paymentTerms: (typeof meta.paymentTerms === "string" ? meta.paymentTerms : null),
+    priceListCode: (typeof meta.priceListCode === "string" ? meta.priceListCode : null),
+    legend: (typeof meta.legend === "string" ? meta.legend : null),
+    notes: (typeof meta.notes === "string" ? meta.notes : null),
+    generalDiscountRate: (typeof meta.generalDiscountRate === "number" || typeof meta.generalDiscountRate === "string"
+      ? String(meta.generalDiscountRate)
+      : "0"),
+    commercialSnapshot: meta.commercialSnapshot ?? meta.commercial ?? null,
+    commercial: meta.commercial ?? null,
+    client: typeof meta.client === "string" ? meta.client : null,
+    financiador: typeof meta.financiador === "string" ? meta.financiador : null,
+    patient: typeof meta.patient === "string" ? meta.patient : null,
+    institution: typeof meta.institution === "string" ? meta.institution : null,
+    vendedor: typeof meta.vendedor === "string" ? meta.vendedor : null,
+    subtotal: toDecimal(row.subtotal).toString(),
+    discountTotal: toDecimal(row.discountTotal).toString(),
+    taxTotal: toDecimal(row.taxTotal).toString(),
+    total: toDecimal(row.total).toString(),
+    validUntil: serializeDate(row.validUntil),
+    issuedAt: serializeDate(row.issuedAt),
+    approvedAt: serializeDate(row.approvedAt),
+    rejectedAt: serializeDate(row.rejectedAt),
+    createdById: row.createdById ?? null,
+    updatedById: row.updatedById ?? null,
+    metadata: row.metadata ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    items,
+    actions,
+  };
+}
+
 function requireCompanyMatch(
   presupuesto: { companyId: string } | null,
   companyId: string,
@@ -210,16 +381,19 @@ async function getNextVisibleNumber(
 }
 
 export interface PresupuestoItemInput {
-  sku?: string;
+  sku?: string | null;
   description: string;
   quantity: number | string | Prisma.Decimal;
-  unit?: string;
-  unitPrice?: number | string | Prisma.Decimal;
-  discount?: number | string | Prisma.Decimal;
-  tax?: number | string | Prisma.Decimal;
+  unit?: string | null;
+  unitPrice?: number | string | Prisma.Decimal | null;
+  discount?: number | string | Prisma.Decimal | null;
+  discountRate?: number | string | Prisma.Decimal | null;
+  discountPercent?: number | string | Prisma.Decimal | null;
+  tax?: number | string | Prisma.Decimal | null;
+  taxRate?: number | string | Prisma.Decimal | null;
   vatTreatment?: string | VatTreatment;
-  vatRate?: number | string | Prisma.Decimal;
-  metadata?: Record<string, unknown>;
+  vatRate?: number | string | Prisma.Decimal | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface NormalizedPresupuestoItem extends Required<Pick<PresupuestoItemInput, "description">> {
@@ -237,12 +411,45 @@ export interface NormalizedPresupuestoItem extends Required<Pick<PresupuestoItem
 
 export interface CreatePresupuestoInput {
   companyId: string;
-  surgeryId?: string;
-  title?: string;
+  surgeryId?: string | null;
+  branchId?: string | null;
+  clientContactId?: string | null;
+  payerContactId?: string | null;
+  title?: string | null;
   currency?: string;
-  validUntil?: Date;
+  documentDate?: string | Date | null;
+  paymentTerms?: string | null;
+  priceListCode?: string | null;
+  legend?: string | null;
+  notes?: string | null;
+  validUntil?: Date | null;
+  generalDiscountRate?: number | string | Prisma.Decimal | null;
+  commercial?: Record<string, unknown> | null;
   items: PresupuestoItemInput[];
   createdById?: string;
+  metadata?: Record<string, unknown> | null;
+  prisma: PrismaClient;
+}
+
+export interface UpdatePresupuestoDraftInput {
+  companyId: string;
+  presupuestoId: string;
+  branchId?: string | null;
+  clientContactId?: string | null;
+  payerContactId?: string | null;
+  title?: string | null;
+  currency?: string;
+  documentDate?: string | Date | null;
+  paymentTerms?: string | null;
+  priceListCode?: string | null;
+  legend?: string | null;
+  notes?: string | null;
+  validUntil?: Date | null;
+  generalDiscountRate?: number | string | Prisma.Decimal | null;
+  commercial?: Record<string, unknown> | null;
+  expectedRevision: number;
+  items: PresupuestoItemInput[];
+  updatedById?: string;
   metadata?: Record<string, unknown> | null;
   prisma: PrismaClient;
 }
@@ -265,23 +472,31 @@ export interface GetPresupuestoInput {
 }
 
 export interface EmitPresupuestoInput extends GetPresupuestoInput {
+  expectedRevision: number;
   updatedById?: string;
 }
 
 export interface UpdatePresupuestoStateInput extends GetPresupuestoInput {
-  newState: string;
+  newState?: string;
+  command?: "approve" | "reject" | "expire" | "annul";
+  expectedRevision: number;
+  metadata?: Record<string, unknown> | null;
   updatedById?: string;
 }
 
 export interface CreatePresupuestoVersionInput {
   companyId: string;
   sourcePresupuestoId: string;
+  expectedRevision: number;
   items?: PresupuestoItemInput[];
+  metadata?: Record<string, unknown> | null;
   updatedById?: string;
   prisma: PrismaClient;
 }
 
-export interface DeletePresupuestoInput extends GetPresupuestoInput {}
+export interface DeletePresupuestoInput extends GetPresupuestoInput {
+  expectedRevision: number;
+}
 
 export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
   if (!Array.isArray(items) || items.length === 0) {
@@ -291,7 +506,22 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
   const normalizedItems = items.map((item, index): NormalizedPresupuestoItem => {
     const quantity = quantizeMoney(toDecimal(item.quantity));
     const unitPrice = quantizeMoney(toDecimal(item.unitPrice ?? 0));
-    const discount = quantizeMoney(toDecimal(item.discount ?? 0));
+
+    // Calculate discount amount from explicit discount or discount percentage
+    let discount: Prisma.Decimal;
+    if (item.discount !== undefined && item.discount !== null) {
+      discount = quantizeMoney(toDecimal(item.discount));
+    } else if (item.discountRate !== undefined && item.discountRate !== null) {
+      const rate = quantizeMoney(toDecimal(item.discountRate));
+      const lineBruto = quantizeMoney(quantity.mul(unitPrice));
+      discount = quantizeMoney(lineBruto.mul(rate).div(100));
+    } else if (item.discountPercent !== undefined && item.discountPercent !== null) {
+      const rate = quantizeMoney(toDecimal(item.discountPercent));
+      const lineBruto = quantizeMoney(quantity.mul(unitPrice));
+      discount = quantizeMoney(lineBruto.mul(rate).div(100));
+    } else {
+      discount = new Prisma.Decimal(0);
+    }
 
     if (quantity.lte(0)) {
       throw badRequest(
@@ -312,12 +542,13 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
       );
     }
 
+    const effectiveVatRate = item.vatRate ?? item.taxRate;
     const lineCalc = calculateLineCommercial({
       quantity,
       unitPrice,
       discount,
       vatTreatment: item.vatTreatment,
-      vatRate: item.vatRate,
+      vatRate: effectiveVatRate ?? undefined,
     });
 
     const tax = item.tax !== undefined && item.tax !== null
@@ -357,7 +588,7 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
   };
 }
 
-async function assertSurgeryBelongsToCompany(prisma: PrismaClient, companyId: string, surgeryId?: string) {
+async function assertSurgeryBelongsToCompany(prisma: PrismaClient, companyId: string, surgeryId?: string | null) {
   if (!surgeryId) return;
   const surgery = await prisma.surgery.findFirst({
     where: { id: surgeryId, companyId },
@@ -376,6 +607,21 @@ export async function createPresupuesto(input: CreatePresupuestoInput) {
   const totals = recalculatePresupuestoTotals(input.items);
   const createdById = optionalUserId(input.createdById);
 
+  const mergedMetadata: Record<string, unknown> = {
+    ...(input.metadata ?? {}),
+    ...(input.branchId ? { branchId: input.branchId } : {}),
+    ...(input.clientContactId ? { clientContactId: input.clientContactId } : {}),
+    ...(input.payerContactId ? { payerContactId: input.payerContactId } : {}),
+    ...(input.documentDate ? { documentDate: typeof input.documentDate === "string" ? input.documentDate : input.documentDate.toISOString() } : {}),
+    ...(input.paymentTerms ? { paymentTerms: input.paymentTerms } : {}),
+    ...(input.priceListCode ? { priceListCode: input.priceListCode } : {}),
+    ...(input.legend ? { legend: input.legend } : {}),
+    ...(input.notes ? { notes: input.notes } : {}),
+    ...(input.generalDiscountRate !== undefined && input.generalDiscountRate !== null ? { generalDiscountRate: input.generalDiscountRate } : {}),
+    ...(input.commercial ? { commercial: input.commercial } : {}),
+    writeRevision: 1,
+  };
+
   return prisma.$transaction(async (tx) => {
     const created = await tx.presupuesto.create({
       data: {
@@ -391,7 +637,7 @@ export async function createPresupuesto(input: CreatePresupuestoInput) {
         total: totals.total,
         validUntil: input.validUntil ?? null,
         createdById,
-        metadata: (input.metadata ?? null) as Prisma.InputJsonValue | undefined,
+        metadata: mergedMetadata as Prisma.InputJsonValue,
         items: { create: totals.items },
       },
       select: presupuestoReadSelect,
@@ -411,7 +657,98 @@ export async function createPresupuesto(input: CreatePresupuestoInput) {
       });
     }
 
-    return created;
+    return serializePresupuestoRow(created);
+  });
+}
+
+export async function updatePresupuestoDraft(input: UpdatePresupuestoDraftInput) {
+  const companyId = requireCompanyId(input.companyId);
+  const prisma = input.prisma;
+  const updatedById = optionalUserId(input.updatedById);
+
+  return prisma.$transaction(async (tx) => {
+    await lockPresupuestoRow(tx, companyId, input.presupuestoId);
+    const current = await tx.presupuesto.findFirst({
+      where: { id: input.presupuestoId, companyId },
+      select: {
+        id: true,
+        companyId: true,
+        state: true,
+        versionNumber: true,
+        surgeryId: true,
+        metadata: true,
+      },
+    });
+    requireCompanyMatch(current, companyId, input.presupuestoId);
+
+    if (current.state !== "Borrador") {
+      throw new PresupuestoError(
+        "presupuesto_not_editable",
+        `Cannot edit presupuesto in state ${current.state} (only Borrador)`,
+        409
+      );
+    }
+
+    const currentWriteRevision = getPresupuestoWriteRevision(current.metadata, current.versionNumber);
+    assertExpectedRevision(currentWriteRevision, input.expectedRevision);
+
+    const totals = recalculatePresupuestoTotals(input.items);
+    const nextWriteRevision = currentWriteRevision + 1;
+
+    const existingMeta = (current.metadata && typeof current.metadata === "object" ? current.metadata : {}) as Record<string, unknown>;
+    const updatedMetadata: Record<string, unknown> = {
+      ...existingMeta,
+      ...(input.metadata ?? {}),
+      ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
+      ...(input.clientContactId !== undefined ? { clientContactId: input.clientContactId } : {}),
+      ...(input.payerContactId !== undefined ? { payerContactId: input.payerContactId } : {}),
+      ...(input.documentDate !== undefined ? { documentDate: typeof input.documentDate === "string" ? input.documentDate : input.documentDate?.toISOString() ?? null } : {}),
+      ...(input.paymentTerms !== undefined ? { paymentTerms: input.paymentTerms } : {}),
+      ...(input.priceListCode !== undefined ? { priceListCode: input.priceListCode } : {}),
+      ...(input.legend !== undefined ? { legend: input.legend } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      ...(input.generalDiscountRate !== undefined ? { generalDiscountRate: input.generalDiscountRate } : {}),
+      ...(input.commercial !== undefined ? { commercial: input.commercial } : {}),
+      writeRevision: nextWriteRevision,
+    };
+
+    // Delete existing items and recreate
+    await tx.presupuestoItem.deleteMany({
+      where: { presupuestoId: input.presupuestoId },
+    });
+
+    const updated = await tx.presupuesto.update({
+      where: { id: input.presupuestoId },
+      data: {
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.currency !== undefined ? { currency: input.currency } : {}),
+        ...(input.validUntil !== undefined ? { validUntil: input.validUntil } : {}),
+        subtotal: totals.subtotal,
+        discountTotal: totals.discountTotal,
+        taxTotal: totals.taxTotal,
+        total: totals.total,
+        updatedById,
+        metadata: updatedMetadata as Prisma.InputJsonValue,
+        items: { create: totals.items },
+      },
+      select: presupuestoReadSelect,
+    });
+
+    if (updatedById) {
+      await createAuditEvent({
+        prisma: tx as unknown as PrismaClient,
+        companyId,
+        userId: updatedById,
+        entityType: "Presupuesto",
+        entityId: updated.id,
+        action: "presupuesto_draft_updated",
+        module: "presupuesto",
+        oldValue: { id: current.id, state: current.state },
+        newValue: serializePresupuestoForAudit(updated),
+      });
+    }
+
+    return serializePresupuestoRow(updated);
   });
 }
 
@@ -434,13 +771,15 @@ export async function listPresupuestos(input: ListPresupuestosInput) {
     };
   }
 
-  return input.prisma.presupuesto.findMany({
+  const rows = await input.prisma.presupuesto.findMany({
     select: presupuestoReadSelect,
     where,
     orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
     take: input.take ?? DEFAULT_LIST_TAKE,
     skip: input.skip ?? 0,
   });
+
+  return rows.map(serializePresupuestoRow);
 }
 
 export async function getPresupuesto(input: GetPresupuestoInput) {
@@ -455,7 +794,7 @@ export async function getPresupuesto(input: GetPresupuestoInput) {
       "presupuesto_not_found"
     );
   }
-  return presupuesto;
+  return serializePresupuestoRow(presupuesto);
 }
 
 export async function emitPresupuesto(input: EmitPresupuestoInput) {
@@ -466,6 +805,7 @@ export async function emitPresupuesto(input: EmitPresupuestoInput) {
     try {
       return await input.prisma.$transaction(
         async (tx) => {
+          await lockPresupuestoRow(tx, companyId, input.presupuestoId);
           const current = await tx.presupuesto.findFirst({
             where: { id: input.presupuestoId, companyId },
             select: {
@@ -488,6 +828,7 @@ export async function emitPresupuesto(input: EmitPresupuestoInput) {
               rejectedAt: true,
               createdById: true,
               updatedById: true,
+              metadata: true,
               createdAt: true,
               updatedAt: true,
             },
@@ -501,10 +842,22 @@ export async function emitPresupuesto(input: EmitPresupuestoInput) {
             );
           }
 
+          const currentWriteRevision = getPresupuestoWriteRevision(current.metadata, current.versionNumber);
+          assertExpectedRevision(currentWriteRevision, input.expectedRevision);
+
           const visibleNumber = await getNextVisibleNumber(tx, companyId);
+          const currentMeta = (current.metadata && typeof current.metadata === "object" ? current.metadata : {}) as Record<string, unknown>;
+          const updatedMeta = { ...currentMeta, writeRevision: currentWriteRevision + 1 };
+
           const result = await tx.presupuesto.update({
             where: { id: input.presupuestoId },
-            data: { visibleNumber, state: "Emitido", issuedAt: new Date(), updatedById },
+            data: {
+              visibleNumber,
+              state: "Emitido",
+              issuedAt: new Date(),
+              updatedById,
+              metadata: updatedMeta as Prisma.InputJsonValue,
+            },
             select: presupuestoReadSelect,
           });
 
@@ -521,7 +874,7 @@ export async function emitPresupuesto(input: EmitPresupuestoInput) {
               newValue: { state: result.state, visibleNumber: result.visibleNumber },
             });
           }
-          return result;
+          return serializePresupuestoRow(result);
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
@@ -545,44 +898,72 @@ export async function emitPresupuesto(input: EmitPresupuestoInput) {
 
 export const emitirPresupuesto = emitPresupuesto;
 
+const COMMAND_STATE_MAP: Record<string, PresupuestoState> = {
+  approve: "Aprobado",
+  reject: "Rechazado",
+  expire: "Vencido",
+  annul: "Anulado",
+};
+
 export async function updatePresupuestoState(input: UpdatePresupuestoStateInput) {
   const companyId = requireCompanyId(input.companyId);
   const updatedById = optionalUserId(input.updatedById);
 
-  if (!isPresupuestoState(input.newState)) {
+  let targetState: string | undefined = input.newState;
+  if (!targetState && input.command) {
+    targetState = COMMAND_STATE_MAP[input.command];
+  }
+
+  if (!targetState || !isPresupuestoState(targetState)) {
     throw badRequest(
-      `newState must be one of: ${(PRESUPUESTO_STATES as readonly string[]).join(", ")}`,
+      `Invalid newState/command. State must be one of: ${(PRESUPUESTO_STATES as readonly string[]).join(", ")}`,
       "invalid_presupuesto_state"
     );
   }
 
-  const current = await input.prisma.presupuesto.findFirst({
-    where: { id: input.presupuestoId, companyId },
-    select: { id: true, state: true, companyId: true },
-  });
-  requireCompanyMatch(current, companyId, input.presupuestoId);
-
-  const currentState = current.state as PresupuestoState;
-  const newState = input.newState as PresupuestoState;
-  if (currentState === newState) {
-    throw new PresupuestoError("presupuesto_state_unchanged", `Presupuesto state is already ${newState}`, 409);
-  }
-  if (!((PRESUPUESTO_TRANSITIONS[currentState] ?? []) as readonly string[]).includes(newState)) {
-    throw new PresupuestoError(
-      "invalid_presupuesto_transition",
-      `Invalid presupuesto state transition: ${currentState} -> ${newState}`,
-      409
-    );
-  }
-
+  const newState = targetState as PresupuestoState;
   const dateFields: { approvedAt?: Date; rejectedAt?: Date } = {};
   if (newState === "Aprobado") dateFields.approvedAt = new Date();
   if (newState === "Rechazado") dateFields.rejectedAt = new Date();
 
   return input.prisma.$transaction(async (tx) => {
+    await lockPresupuestoRow(tx, companyId, input.presupuestoId);
+    const current = await tx.presupuesto.findFirst({
+      where: { id: input.presupuestoId, companyId },
+      select: { id: true, state: true, companyId: true, versionNumber: true, metadata: true },
+    });
+    requireCompanyMatch(current, companyId, input.presupuestoId);
+
+    const currentWriteRevision = getPresupuestoWriteRevision(current.metadata, current.versionNumber);
+    assertExpectedRevision(currentWriteRevision, input.expectedRevision);
+
+    const currentState = current.state as PresupuestoState;
+    if (currentState === newState) {
+      throw new PresupuestoError("presupuesto_state_unchanged", `Presupuesto state is already ${newState}`, 409);
+    }
+    if (!((PRESUPUESTO_TRANSITIONS[currentState] ?? []) as readonly string[]).includes(newState)) {
+      throw new PresupuestoError(
+        "invalid_presupuesto_transition",
+        `Invalid presupuesto state transition: ${currentState} -> ${newState}`,
+        409
+      );
+    }
+
+    const existingMeta = (current.metadata && typeof current.metadata === "object" ? current.metadata : {}) as Record<string, unknown>;
+    const updatedMeta: Record<string, unknown> = {
+      ...existingMeta,
+      ...(input.metadata ?? {}),
+      writeRevision: currentWriteRevision + 1,
+    };
+
     const result = await tx.presupuesto.update({
       where: { id: input.presupuestoId },
-      data: { state: newState, updatedById, ...dateFields },
+      data: {
+        state: newState,
+        updatedById,
+        metadata: updatedMeta as Prisma.InputJsonObject,
+        ...dateFields,
+      },
       select: presupuestoReadSelect,
     });
     if (updatedById) {
@@ -598,7 +979,7 @@ export async function updatePresupuestoState(input: UpdatePresupuestoStateInput)
         newValue: { state: newState },
       });
     }
-    return result;
+    return serializePresupuestoRow(result);
   });
 }
 
@@ -607,6 +988,7 @@ export async function createPresupuestoVersion(input: CreatePresupuestoVersionIn
   const updatedById = optionalUserId(input.updatedById);
 
   return input.prisma.$transaction(async (tx) => {
+    await lockPresupuestoRow(tx, companyId, input.sourcePresupuestoId);
     const source = await tx.presupuesto.findFirst({
       where: { id: input.sourcePresupuestoId, companyId },
       include: { items: true },
@@ -619,6 +1001,9 @@ export async function createPresupuestoVersion(input: CreatePresupuestoVersionIn
         409
       );
     }
+
+    const sourceWriteRevision = getPresupuestoWriteRevision(source.metadata, source.versionNumber);
+    assertExpectedRevision(sourceWriteRevision, input.expectedRevision);
 
     const rootId = source.parentPresupuestoId ?? source.id;
     const maxVersion = await tx.presupuesto.aggregate({
@@ -640,10 +1025,21 @@ export async function createPresupuestoVersion(input: CreatePresupuestoVersionIn
     }));
     const totals = recalculatePresupuestoTotals(input.items ?? sourceItems);
 
+    const sourceMeta = (source.metadata && typeof source.metadata === "object" ? source.metadata : {}) as Record<string, unknown>;
     await tx.presupuesto.update({
       where: { id: source.id },
-      data: { state: "Reemplazado", updatedById },
+      data: {
+        state: "Reemplazado",
+        updatedById,
+        metadata: { ...sourceMeta, writeRevision: sourceWriteRevision + 1 } as Prisma.InputJsonValue,
+      },
     });
+
+    const mergedMeta: Record<string, unknown> = {
+      ...sourceMeta,
+      ...(input.metadata ?? {}),
+      writeRevision: 1,
+    };
 
     const created = await tx.presupuesto.create({
       data: {
@@ -660,7 +1056,7 @@ export async function createPresupuestoVersion(input: CreatePresupuestoVersionIn
         total: totals.total,
         validUntil: source.validUntil,
         createdById: updatedById,
-        metadata: (source.metadata ?? null) as Prisma.InputJsonValue | undefined,
+        metadata: mergedMeta as Prisma.InputJsonValue,
         items: { create: totals.items },
       },
       select: presupuestoReadSelect,
@@ -680,26 +1076,31 @@ export async function createPresupuestoVersion(input: CreatePresupuestoVersionIn
       });
     }
 
-    return created;
+    return serializePresupuestoRow(created);
   });
 }
 
 export async function deletePresupuesto(input: DeletePresupuestoInput) {
   const companyId = requireCompanyId(input.companyId);
-  const current = await input.prisma.presupuesto.findFirst({
-    where: { id: input.presupuestoId, companyId },
-    select: { id: true, state: true, companyId: true, createdById: true },
-  });
-  requireCompanyMatch(current, companyId, input.presupuestoId);
-  if (current.state !== "Borrador") {
-    throw new PresupuestoError(
-      "presupuesto_not_deletable",
-      `Cannot delete presupuesto in state ${current.state} (only Borrador)`,
-      409
-    );
-  }
 
   return input.prisma.$transaction(async (tx) => {
+    await lockPresupuestoRow(tx, companyId, input.presupuestoId);
+    const current = await tx.presupuesto.findFirst({
+      where: { id: input.presupuestoId, companyId },
+      select: { id: true, state: true, companyId: true, createdById: true, versionNumber: true, metadata: true },
+    });
+    requireCompanyMatch(current, companyId, input.presupuestoId);
+    if (current.state !== "Borrador") {
+      throw new PresupuestoError(
+        "presupuesto_not_deletable",
+        `Cannot delete presupuesto in state ${current.state} (only Borrador)`,
+        409
+      );
+    }
+
+    const currentWriteRevision = getPresupuestoWriteRevision(current.metadata, current.versionNumber);
+    assertExpectedRevision(currentWriteRevision, input.expectedRevision);
+
     await tx.presupuesto.delete({ where: { id: input.presupuestoId } });
     if (current.createdById) {
       await createAuditEvent({

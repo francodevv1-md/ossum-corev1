@@ -1,20 +1,32 @@
 "use client"
 
-import React, { useEffect, useCallback } from "react"
+import React, { useEffect, useLayoutEffect, useCallback, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { useOrtoTrackStore } from "@/lib/store"
 import { usePresupuestoForm } from "@/hooks/usePresupuestoForm"
 import { DatosComercialesSection } from "./DatosComercialesSection"
 import { CondicionesSection } from "./CondicionesSection"
 import { PresupuestoItemsTable } from "./PresupuestoItemsTable"
 import { TotalesSection } from "./TotalesSection"
-import type { Presupuesto, Surgery, PresupuestoItem } from "@/types"
-import { Receipt } from "lucide-react"
+import {
+  buildEstimativePresupuestoPayload,
+  buildPresupuestoEditPayload,
+  fetchPresupuesto,
+  toPresupuestoEditFormData,
+  createPresupuesto,
+  replacePresupuestoDraft,
+  toLegacyPresupuestoProjection,
+  type PresupuestoApiRow,
+} from "@/lib/api/presupuestos"
+import { ApiClientError } from "@/lib/api/client"
+import type { Presupuesto, Surgery } from "@/types"
+import { Receipt, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
 // ─── Types ───
 
@@ -25,39 +37,11 @@ export interface PresupuestoFormDialogProps {
   mode: PresupuestoFormMode
   context: PresupuestoFormContext
   surgeryId?: string           // Required if context="surgery"
-  presupuestoId?: string       // For editing (future, not V1)
+  presupuestoId?: string       // For editing
   open?: boolean               // Dialog mode
   onOpenChange?: (open: boolean) => void
   onSubmit?: (presupuesto: Presupuesto) => void
   onCancel?: () => void
-}
-
-// ─── Helper: convert form items to PresupuestoItem[] ───
-
-function formItemsToPresupuestoItems(items: ReturnType<typeof usePresupuestoForm>["items"]): PresupuestoItem[] {
-  return items.map((item) => {
-    const subtotalBruto = item.quantity * item.unitPrice
-    const clampedDiscount = Math.min(Math.max(item.discountPercent, 0), 100)
-    const descuentoLinea = subtotalBruto * (clampedDiscount / 100)
-    const subtotalNeto = subtotalBruto - descuentoLinea
-    // CHATZAI-017L: stockItemId comes from catalogItemId if linked, or generated for libre items
-    const isLibre = item.isArticuloLibre
-    return {
-      stockItemId: item.catalogItemId || `Z-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name: isLibre && item.descripcionLibre ? item.descripcionLibre : item.name,
-      code: item.code || (isLibre ? "Z-LIBRE" : "SIN-COD"),
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      discountPercent: clampedDiscount > 0 ? clampedDiscount : undefined,
-      subtotal: subtotalNeto,
-      catalogItemId: item.catalogItemId || undefined,
-      // Backward compat: isArticuloZ derived from isArticuloLibre
-      isArticuloZ: isLibre || undefined,
-      descripcionLibre: isLibre ? item.descripcionLibre : undefined,
-      // CHATZAI-025: IVA per item
-      ivaKey: item.ivaKey,
-    }
-  })
 }
 
 // ─── Form Content (shared between dialog and inline) ───
@@ -65,19 +49,28 @@ function formItemsToPresupuestoItems(items: ReturnType<typeof usePresupuestoForm
 interface FormContentProps {
   context: PresupuestoFormContext
   surgeryId?: string
+  presupuestoId?: string
   onSubmit: (presupuesto: Presupuesto) => void
   onCancel?: () => void
 }
 
-function PresupuestoFormContent({ context, surgeryId, onSubmit, onCancel }: FormContentProps) {
+function PresupuestoFormContent({ context, surgeryId, presupuestoId, onSubmit, onCancel }: FormContentProps) {
+  const { activeCompany } = useAuth()
   const store = useOrtoTrackStore()
   const surgery = surgeryId ? store.getSurgeryById(surgeryId) : undefined
   const availableSurgeries = store.surgeries.filter(
     (s) => !s.presupuestoId && s.state !== "Cancelada" && s.state !== "Suspendida"
   )
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [persistedDraft, setPersistedDraft] = useState<PresupuestoApiRow | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [conflict, setConflict] = useState(false)
+  const alive = useRef(true)
+  const submitting = useRef(false)
 
   const {
     formData,
+    setFormData,
     updateField,
     items,
     addItem,
@@ -98,72 +91,100 @@ function PresupuestoFormContent({ context, surgeryId, onSubmit, onCancel }: Form
     populateFromSurgery,
   } = usePresupuestoForm()
 
+  useLayoutEffect(() => {
+    alive.current = true
+    return () => { alive.current = false }
+  }, [])
+
+  useEffect(() => {
+    if (!presupuestoId || !activeCompany?.id) return
+    let active = true
+    void fetchPresupuesto(activeCompany.id, presupuestoId).then((row) => {
+      if (!active) return
+      if (row.state !== "Borrador") { setFormError("Este presupuesto ya no es un borrador editable."); return }
+      setFormData((previous) => ({ ...previous, ...toPresupuestoEditFormData(row) }))
+      setPersistedDraft(row)
+    }).catch((cause: unknown) => {
+      if (active) setFormError(cause instanceof Error ? cause.message : "No se pudo cargar el borrador")
+    })
+    return () => { active = false }
+  }, [activeCompany?.id, presupuestoId, setFormData])
+
   // Auto-populate from surgery when context is surgery
   useEffect(() => {
-    if (context === "surgery" && surgery) {
+    if (!presupuestoId && context === "surgery" && surgery) {
       populateFromSurgery(surgery)
     }
-  }, [context, surgery, populateFromSurgery])
+  }, [context, surgery, populateFromSurgery, presupuestoId])
 
   const handleSurgerySelect = useCallback((selectedSurgery: Surgery) => {
     populateFromSurgery(selectedSurgery)
   }, [populateFromSurgery])
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = async () => {
+    if (submitting.current || conflict || (presupuestoId && !persistedDraft)) return
     if (!validate()) return
-
-    const presupuestoItems = formItemsToPresupuestoItems(items)
-
-    const presupuestoData = {
-      surgeryId: context === "surgery" ? surgeryId : formData.surgeryId,
-      client: formData.client,
-      obraSocial: formData.obraSocial || undefined,
-      financiador: formData.financiador || undefined,
-      vendedor: formData.vendedor,
-      patient: formData.patient || undefined,
-      institution: formData.institution || undefined,
-      concepto: formData.concepto || undefined,
-      fechaEmision: formData.fechaEmision,
-      vigencia: formData.vigencia,
-      listaPrecios: formData.listaPrecios,
-      condicionPago: formData.condicionPago || undefined,
-      descuento: formData.descuento > 0 ? formData.descuento : undefined,
-      items: presupuestoItems,
-      subtotal,
-      total,
-      state: "Borrador" as const,
-      observaciones: formData.observaciones || undefined,
-      bloqueado: false,
-      version: 1,
-      versionStatus: "vigente" as const,
+    if (!activeCompany?.id) {
+      toast.error("No hay una empresa activa seleccionada")
+      return
     }
 
-    let presupuesto: Presupuesto
+    submitting.current = true
+    setIsSubmitting(true)
+    setFormError(null)
+    try {
+      const payload = buildEstimativePresupuestoPayload(formData, items)
 
-    if (context === "surgery" && surgeryId) {
-      presupuesto = store.createBudgetForSurgery(surgeryId, presupuestoData)
-    } else if (formData.surgeryId) {
-      // Independent context but linked to a surgery
-      presupuesto = store.createBudgetForSurgery(formData.surgeryId, presupuestoData)
-    } else {
-      presupuesto = store.createBudgetIndependent(presupuestoData)
+      let resultRow
+      if (presupuestoId) {
+        resultRow = await replacePresupuestoDraft(activeCompany.id, presupuestoId, buildPresupuestoEditPayload(persistedDraft!, formData, items))
+      } else {
+        const selectedId = context === "surgery" ? surgeryId : formData.surgeryId
+        const selected = selectedId ? store.surgeries.find((entry) => entry.id === selectedId || entry.backendId === selectedId) : undefined
+        const targetSurgeryId = selected?.backendId?.trim()
+        if (selectedId && !targetSurgeryId) throw new Error("La cirugía seleccionada no tiene identidad backend. Seleccione una cirugía persistida.")
+        resultRow = await createPresupuesto(activeCompany.id, {
+          ...payload,
+          surgeryId: targetSurgeryId,
+        })
+      }
+
+      if (!alive.current) return
+      toast.success(presupuestoId ? "Borrador de presupuesto actualizado" : "Presupuesto guardado exitosamente en el servidor")
+      const legacy = toLegacyPresupuestoProjection(resultRow)
+      resetForm()
+      onSubmit(legacy)
+    } catch (cause) {
+      if (!alive.current) return
+      const changed = cause instanceof ApiClientError && cause.status === 409
+      setConflict(changed)
+      const msg = cause instanceof Error ? cause.message : "Error al guardar el presupuesto"
+      setFormError(changed ? "El presupuesto cambió en el servidor. Conservamos sus cambios; cierre y vuelva a abrir la edición para revisar la versión actual." : msg)
+      toast.error(msg)
+    } finally {
+      submitting.current = false
+      if (alive.current) setIsSubmitting(false)
     }
+  }
 
-    resetForm()
-    onSubmit(presupuesto)
-  }, [validate, items, context, surgeryId, formData, subtotal, total, store, resetForm, onSubmit])
+  if (presupuestoId && !persistedDraft) return <div className="space-y-3">
+    <p role={formError ? "alert" : "status"}>{formError ?? "Cargando borrador persistido…"}</p>
+    <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+  </div>
 
   return (
     <div className="space-y-6">
+      {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
+      <fieldset disabled={isSubmitting} className="space-y-6">
       {/* Section 1: Datos Comerciales */}
       <DatosComercialesSection
         formData={formData}
         updateField={updateField}
         errors={errors}
-        context={context}
+        context={presupuestoId ? "surgery" : context}
         surgery={surgery}
-        surgeries={context === "independent" ? availableSurgeries : undefined}
-        onSurgerySelect={context === "independent" ? handleSurgerySelect : undefined}
+        surgeries={!presupuestoId && context === "independent" ? availableSurgeries : undefined}
+        onSurgerySelect={!presupuestoId && context === "independent" ? handleSurgerySelect : undefined}
       />
 
       <Separator />
@@ -217,15 +238,21 @@ function PresupuestoFormContent({ context, surgeryId, onSubmit, onCancel }: Form
         />
       </div>
 
+      </fieldset>
+
       {/* Actions bar */}
       <div className="flex items-center justify-end gap-2 pt-2">
         {onCancel && (
-          <Button variant="outline" size="sm" onClick={onCancel}>
+          <Button variant="outline" size="sm" onClick={onCancel} disabled={isSubmitting}>
             Cancelar
           </Button>
         )}
-        <Button size="sm" onClick={handleSubmit}>
-          <Receipt className="size-3.5 mr-1.5" />
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || conflict}>
+          {isSubmitting ? (
+            <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Receipt className="size-3.5 mr-1.5" />
+          )}
           Guardar presupuesto
         </Button>
       </div>
@@ -245,6 +272,8 @@ export function PresupuestoFormDialog({
   onSubmit,
   onCancel,
 }: PresupuestoFormDialogProps) {
+  const { activeCompany } = useAuth()
+  const formKey = JSON.stringify([activeCompany?.id, context, surgeryId, presupuestoId])
   const handleSubmit = useCallback((presupuesto: Presupuesto) => {
     onSubmit?.(presupuesto)
     if (mode === "dialog") {
@@ -276,8 +305,10 @@ export function PresupuestoFormDialog({
             </DialogDescription>
           </DialogHeader>
           <PresupuestoFormContent
+            key={formKey}
             context={context}
             surgeryId={surgeryId}
+            presupuestoId={presupuestoId}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
           />
@@ -289,8 +320,10 @@ export function PresupuestoFormDialog({
   // Inline mode (for wizard step, etc.)
   return (
     <PresupuestoFormContent
+      key={formKey}
       context={context}
       surgeryId={surgeryId}
+      presupuestoId={presupuestoId}
       onSubmit={handleSubmit}
       onCancel={handleCancel}
     />

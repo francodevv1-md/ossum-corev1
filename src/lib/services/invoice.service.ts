@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import type { PrismaClient, Invoice as PrismaInvoice } from "@prisma/client";
 
 import { createAuditEvent } from "../audit";
-import { badRequest, notFound } from "../api/errors";
+import { badRequest, conflict, notFound } from "../api/errors";
 import { requireCompanyId } from "../tenant";
 import { assertFiscalCancellationAllowed } from "./fiscal.service";
 import {
@@ -353,7 +353,7 @@ async function lockAndAssertSourcesNotInvoiced(
 ) {
   const sourceKeys = [presupuestoId ? `presupuesto:${presupuestoId}` : "", consumoId ? `consumo:${consumoId}` : ""].filter(Boolean).sort();
   for (const sourceKey of sourceKeys) {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${companyId}:${sourceKey}`}, 0))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${companyId}:${sourceKey}`}, 0))`;
   }
   if (!sourceKeys.length) return;
   const active = await tx.invoice.findFirst({
@@ -367,7 +367,7 @@ async function lockAndAssertSourcesNotInvoiced(
     },
     select: { id: true },
   });
-  if (active) throw new InvoiceError("invoice_source_already_invoiced", `Source already referenced by active invoice ${active.id}`, 409);
+  if (active) throw conflict(`Source already referenced by active invoice ${active.id}`, "invoice_source_already_invoiced");
 }
 
 async function transitionLinkedConsumoForInvoice(input: {

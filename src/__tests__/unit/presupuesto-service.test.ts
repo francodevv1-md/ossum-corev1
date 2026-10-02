@@ -43,7 +43,7 @@ function buildPresupuesto(over: Record<string, any> = {}) {
     rejectedAt: null,
     createdById: "user-1",
     updatedById: null,
-    metadata: null,
+    metadata: { writeRevision: 1 },
     createdAt: new Date("2026-07-07T10:00:00.000Z"),
     updatedAt: new Date("2026-07-07T10:00:00.000Z"),
     items: [
@@ -57,6 +57,8 @@ function buildPresupuesto(over: Record<string, any> = {}) {
         discount: new Prisma.Decimal(10),
         tax: new Prisma.Decimal(39.9),
         total: new Prisma.Decimal(229.9),
+        vatTreatment: "GRAVADO",
+        vatRate: new Prisma.Decimal(21),
         metadata: null,
       },
     ],
@@ -155,11 +157,12 @@ describe("emitirPresupuesto", () => {
     const result = await emitirPresupuesto({
       companyId: "company-1",
       presupuestoId: "presupuesto-1",
+      expectedRevision: 1,
       updatedById: "user-1",
       prisma: prismaMock,
     });
 
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
     expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(tx.presupuesto.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -174,9 +177,14 @@ describe("emitirPresupuesto", () => {
 
 describe("updatePresupuestoState", () => {
   it("rejects invalid transitions", async () => {
+    const tx = {
+      presupuesto: {
+        findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Rechazado" })),
+        update: vi.fn(),
+      },
+    };
     const prismaMock = {
-      presupuesto: { findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Rechazado" })) },
-      $transaction: vi.fn(),
+      $transaction: vi.fn(async (cb: any) => cb(tx)),
     } as any;
 
     await expect(
@@ -184,11 +192,12 @@ describe("updatePresupuestoState", () => {
         companyId: "company-1",
         presupuestoId: "presupuesto-1",
         newState: "Aprobado",
+        expectedRevision: 1,
         updatedById: "user-1",
         prisma: prismaMock,
       })
     ).rejects.toMatchObject({ code: "invalid_presupuesto_transition", status: 409 });
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(tx.presupuesto.update).not.toHaveBeenCalled();
   });
 });
 
@@ -207,6 +216,8 @@ describe("createPresupuestoVersion", () => {
           discount: new Prisma.Decimal(0),
           tax: new Prisma.Decimal(21),
           total: new Prisma.Decimal(221),
+          vatTreatment: "GRAVADO",
+          vatRate: new Prisma.Decimal(21),
           metadata: null,
         },
       ],
@@ -232,13 +243,18 @@ describe("createPresupuestoVersion", () => {
     const result = await createPresupuestoVersion({
       companyId: "company-1",
       sourcePresupuestoId: "presupuesto-1",
+      expectedRevision: 1,
       updatedById: "user-1",
       prisma: prismaMock,
     });
 
     expect(tx.presupuesto.update).toHaveBeenCalledWith({
       where: { id: "presupuesto-1" },
-      data: { state: "Reemplazado", updatedById: "user-1" },
+      data: {
+        state: "Reemplazado",
+        updatedById: "user-1",
+        metadata: { writeRevision: 2 },
+      },
     });
     expect(result.id).toBe("presupuesto-2");
     expect(result.parentPresupuestoId).toBe("presupuesto-1");
@@ -249,27 +265,36 @@ describe("createPresupuestoVersion", () => {
 
 describe("deletePresupuesto", () => {
   it("deletes only Borrador", async () => {
-    const tx = { presupuesto: { delete: vi.fn().mockResolvedValue({ id: "presupuesto-1" }) } };
+    const tx = {
+      presupuesto: {
+        findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Borrador" })),
+        delete: vi.fn().mockResolvedValue({ id: "presupuesto-1" }),
+      },
+    };
     const prismaMock = {
-      presupuesto: { findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Borrador" })) },
       $transaction: vi.fn(async (cb: any) => cb(tx)),
     } as any;
 
     const result = await deletePresupuesto({
       companyId: "company-1",
       presupuestoId: "presupuesto-1",
+      expectedRevision: 1,
       prisma: prismaMock,
     });
     expect(result).toEqual({ id: "presupuesto-1", deleted: true });
   });
 
   it("refuses delete when state !== Borrador", async () => {
+    const tx = {
+      presupuesto: {
+        findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Emitido" })),
+      },
+    };
     const prismaMock = {
-      presupuesto: { findFirst: vi.fn().mockResolvedValue(buildPresupuesto({ state: "Emitido" })) },
-      $transaction: vi.fn(),
+      $transaction: vi.fn(async (cb: any) => cb(tx)),
     } as any;
     await expect(
-      deletePresupuesto({ companyId: "company-1", presupuestoId: "presupuesto-1", prisma: prismaMock })
+      deletePresupuesto({ companyId: "company-1", presupuestoId: "presupuesto-1", expectedRevision: 1, prisma: prismaMock })
     ).rejects.toMatchObject({ code: "presupuesto_not_deletable", status: 409 });
   });
 

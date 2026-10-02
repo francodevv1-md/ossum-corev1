@@ -1,0 +1,30 @@
+# Ownership
+- task: PRESUPUESTOS-CONNECTED-JOURNEY-FIXES-DEV-001
+- role: implementation owner
+- model: openai/gpt-6.1-sol
+- status: released
+- exact paths: see TASK_BRIEF.md; no shared folder wildcard ownership.
+- Branch ux/antigravity-redesign / HEAD8d8626a95bbe7524dab74fe50b801039750c3799.
+- Starting SHA256:
+  - PresupuestoFormDialog.tsx: 9AB7A089D8A11260D5EF93DC2DDEC41F304D403956875AA3CB79494470A4CDC0
+  - ventas/presupuestos/page.tsx: 87BC160DC205B1ED78154BC05650AE4798CF698F3141722872ED86BF2871000B
+  - api/presupuestos.ts: 10AFA9FFE45DE5C87BADDED663082B6907A7B66E47E11EACBA007B00F40FC257
+  - invoice.service.ts: 360EAC52CEF28855ABFDD0C1EA3DFD66345C64028A78B73E16415E27EC879ECD
+  - invoice-service.test.ts: 913C3D17B432F6107A7A376DAE76893CC0C9B08562A4F56EDB1275DE9871BC5E
+  - presupuesto-revision-postgres.test.ts: DB14783ED910DC340F3831CCC2F6AD6AAE90DB08D6267EE49FE206D52C86DA24
+  - usePresupuestoForm.ts (read-only): 4BF3A986F1E81C414C8930D1D9F6484BB3D8C263F39AC1D89E9C6517CFD33D2A
+  - new component test/task folder absent.
+- .next not reserved; server5000 PID19652 remains untouched.
+- Additional exact-owned compatibility edit: src/__tests__/unit/liquidation-billing-gate.test.ts, only add executeRaw to its invoice-caller transaction mock. Starting SHA256325E4D453BB8C08E194F4CA1FB6BA0E703DF4F8A7AC11382A158AB467E3FCEEC; no billing-gate logic changed.
+- Final SHA256 matches focused review/recheck and owner final capture:
+  - Form: F7F0A997F717BB4A9BC82614EAE464EA40E7FC82E521F5005217A71FCC3A657E
+  - Page: 212CD43C872C40CD652B4E16FDEF08B2D4C9BA266E64BF80B0E4C09CD2051909
+  - API adapter: 308F11630AB2AFE57BB544CA1737BACFEC2593657FCF41F0C0935F9A09F3DD0A
+  - Invoice service: 4ED0CC3F9D58CA152D426BBA420FCEEF13AB7C4B7657F3E75AB545ED1D3F99C3
+  - Invoice test: 3A7395FB831E47A94BB9CB501174E4080359BD09D0F8156FCB7A5FC5E21F4735
+  - Liquidation mock: 4372DAB11470217AF74BF6E0AB2D2F4E70144933F61DD1D51F0F07F66311C439
+  - PG test: 5B840767F66B42CEAE9DCF3ADCC019C2F757E03039C7C4D76924BBA639BB7274
+  - Form test: C6B6D2D4C47EE419B15DAFA6C76A43AE64614B97DE4D1294D626E3849B57837F
+- Browser closed; source ownership released. Shared build output never reserved or disturbed.
+- Build-only follow-up: Franco explicitly authorized temporary DEV5000 pause, exclusive npm run build, then restoring5000. Source hashes unchanged at preflight. Reserve only .next build output after verified server pause and this task's build evidence/handoff edits; source code remains released/read-only. Window status: reserved awaiting pause.
+- Build window released: port/workspace Next processes already absent at execution, build exit0 under exclusive output, eight source/test hashes unchanged. Restored DEV5000 listener19908/HTTP200. No active source/output reservation remains.

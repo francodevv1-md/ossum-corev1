@@ -17,7 +17,7 @@ async function parseJsonBody(request: Request): Promise<unknown> {
   try {
     return await request.json();
   } catch {
-    throw badRequest("Invalid JSON body", "invalid_json_body");
+    return null;
   }
 }
 
@@ -30,7 +30,8 @@ export async function POST(request: Request, { params }: RouteContext) {
     const ctx = await getApiAuthContext(request, companyId);
     requireCompanyMutationAccess(ctx, PRESUPUESTO_MUTATION_ROLES);
 
-    const parsed = presupuestoCreateVersionSchema.safeParse(await parseJsonBody(request));
+    const rawBody = await parseJsonBody(request);
+    const parsed = presupuestoCreateVersionSchema.safeParse(rawBody ?? {});
     if (!parsed.success) {
       throw badRequest(
         parsed.error.issues[0]?.message ?? "Invalid presupuesto version body",
@@ -42,6 +43,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       companyId: ctx.companyId,
       sourcePresupuestoId: presupuestoId,
       items: parsed.data.items,
+      expectedRevision: parsed.data.expectedRevision,
+      metadata: parsed.data.metadata ?? null,
       updatedById: ctx.actorUserId,
       prisma,
     });

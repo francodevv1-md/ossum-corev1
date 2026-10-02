@@ -1,20 +1,17 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
-import { useOrtoTrackStore } from "@/lib/store"
+import React, { useState, useMemo, useCallback } from "react"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { usePresupuestos } from "@/hooks/usePresupuestos"
 import { formatCurrency, formatDate } from "@/lib/formatters"
-import { getBadgeVariant, CLIENT_OPTIONS, INSTITUTION_OPTIONS, comprobanteTypeLabels } from "@/lib/statusHelpers"
+import { CLIENT_OPTIONS, INSTITUTION_OPTIONS } from "@/lib/statusHelpers"
 import {
   StatsCard, StateBadge, SearchInput, FilterSelect,
-  ConfirmDialog, SurgeryDrawer,
+  ConfirmDialog,
 } from "@/components/shared"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import {
   Dialog,
@@ -24,13 +21,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,24 +32,30 @@ import {
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useExpedienteDrawer } from "@/components/layout/app-shell"
 import { toast } from "sonner"
 import {
-  FileText, Send, CheckCircle2, XCircle, Lock, Unlock,
-  ShoppingCart, Eye, MoreHorizontal, Plus, DollarSign,
-  ClipboardList, Clock, TrendingUp, FolderOpen, Trash2,
+  FileText, Send, CheckCircle2, XCircle, Lock,
+  Eye, MoreHorizontal, Plus, DollarSign,
+  ClipboardList, Clock, FolderOpen, Trash2, RefreshCw, AlertTriangle,
+  FileCheck, Pencil,
 } from "lucide-react"
-import type { Presupuesto, PresupuestoItem, PresupuestoState } from "@/types"
+import { PresupuestoFormDialog } from "@/components/presupuestos/PresupuestoFormDialog"
+import type { PresupuestoApiRow, PresupuestoState } from "@/lib/api/presupuestos"
 
 // ── Filter options ──
 const STATE_OPTIONS = [
   { value: "", label: "Todos los estados" },
   { value: "Borrador", label: "Borrador" },
-  { value: "Enviado", label: "Enviado" },
+  { value: "Emitido", label: "Emitido" },
   { value: "Aprobado", label: "Aprobado" },
   { value: "Rechazado", label: "Rechazado" },
+  { value: "Vencido", label: "Vencido" },
+  { value: "Reemplazado", label: "Reemplazado" },
+  { value: "Anulado", label: "Anulado" },
 ]
 
 const LISTA_PRECIOS_OPTIONS = [
@@ -72,208 +68,139 @@ const LISTA_PRECIOS_OPTIONS = [
 ]
 
 export default function PresupuestosPage() {
-  const store = useOrtoTrackStore()
+  const { activeCompany } = useAuth()
   const { openExpediente } = useExpedienteDrawer()
 
   // ── Filters ──
   const [search, setSearch] = useState("")
-  const [stateFilter, setStateFilter] = useState("")
+  const [stateFilter, setStateFilter] = useState<string>("")
   const [clientFilter, setClientFilter] = useState("")
   const [institutionFilter, setInstitutionFilter] = useState("")
   const [listaFilter, setListaFilter] = useState("")
 
+  // ── Hook ──
+  const {
+    presupuestos,
+    loading,
+    error,
+    mutatingId,
+    refresh,
+    emit,
+    transition,
+    deleteDraft,
+    revise,
+  } = usePresupuestos()
+
   // ── Dialogs ──
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editPresupuestoId, setEditPresupuestoId] = useState<string | null>(null)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
-  const [createMode, setCreateMode] = useState<"surgery" | "manual">("surgery")
-  const [selectedPresupuesto, setSelectedPresupuesto] = useState<Presupuesto | null>(null)
+  const [selectedPresupuesto, setSelectedPresupuesto] = useState<PresupuestoApiRow | null>(null)
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
-  const [blockDialogOpen, setBlockDialogOpen] = useState(false)
+  const [annulDialogOpen, setAnnulDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
-  // ── Create form ──
-  const [formSurgeryId, setFormSurgeryId] = useState("")
-  const [formClient, setFormClient] = useState("")
-  const [formInstitution, setFormInstitution] = useState("")
-  const [formPatient, setFormPatient] = useState("")
-  const [formVigencia, setFormVigencia] = useState("30 días")
-  const [formListaPrecios, setFormListaPrecios] = useState("")
-  const [formObservaciones, setFormObservaciones] = useState("")
-  const [formItems, setFormItems] = useState<PresupuestoItem[]>([])
-  const [formNewItem, setFormNewItem] = useState({ name: "", code: "", quantity: 1, unitPrice: 0, isArticuloZ: false, descripcionLibre: "" })
-
-  // ── Computed ──
-  const presupuestos = store.presupuestos
-
+  // ── Filtered data ──
   const filtered = useMemo(() => {
     let data = presupuestos.slice()
     if (search) {
       const q = search.toLowerCase()
-      data = data.filter(
-        (p) =>
-          p.id.toLowerCase().includes(q) ||
-          (p.patient?.toLowerCase().includes(q) ?? false) ||
-          (p.institution?.toLowerCase().includes(q) ?? false) ||
-          p.client.toLowerCase().includes(q)
-      )
+      data = data.filter((p) => {
+        const idMatch = p.id.toLowerCase().includes(q)
+        const numMatch = p.visibleNumber ? String(p.visibleNumber).includes(q) : false
+        const patientMatch = (p.patient?.toLowerCase().includes(q) ?? false)
+        const instMatch = (p.institution?.toLowerCase().includes(q) ?? false)
+        const clientMatch = (p.client?.toLowerCase().includes(q) ?? false)
+        const titleMatch = (p.title?.toLowerCase().includes(q) ?? false)
+        return idMatch || numMatch || patientMatch || instMatch || clientMatch || titleMatch
+      })
     }
     if (stateFilter) data = data.filter((p) => p.state === stateFilter)
     if (clientFilter) data = data.filter((p) => p.client === clientFilter)
     if (institutionFilter) data = data.filter((p) => p.institution === institutionFilter)
-    if (listaFilter) data = data.filter((p) => p.listaPrecios === listaFilter)
+    if (listaFilter) data = data.filter((p) => p.priceListCode === listaFilter)
     return data
   }, [presupuestos, search, stateFilter, clientFilter, institutionFilter, listaFilter])
 
+  // ── Stats ──
   const stats = useMemo(() => {
     const total = filtered.length
     const aprobados = filtered.filter((p) => p.state === "Aprobado").length
-    const pendientes = filtered.filter((p) => p.state === "Borrador" || p.state === "Enviado").length
-    const monto = filtered.reduce((sum, p) => sum + p.total, 0)
+    const pendientes = filtered.filter((p) => p.state === "Borrador" || p.state === "Emitido").length
+    const monto = filtered.reduce((sum, p) => sum + (Number(p.total) || 0), 0)
     return { total, aprobados, pendientes, monto }
   }, [filtered])
 
-  // ── Available surgeries for presupuesto ──
-  const availableSurgeries = store.surgeries.filter(
-    (s) => !s.presupuestoId && s.state !== "Cancelada" && s.state !== "Suspendida"
-  )
-
-  // ── Handlers ──
-  const handleCreateFromSurgery = () => {
-    const surgery = store.getSurgeryById(formSurgeryId)
-    if (!surgery) return
-    setFormPatient(surgery.patient)
-    setFormInstitution(surgery.institution)
-    setFormClient(surgery.client)
-    // Pre-fill items from box/consumo if available
-    const consumo = store.getConsumoBySurgeryId(surgery.id)
-    if (consumo) {
-      const items: PresupuestoItem[] = consumo.items.map((ci) => ({
-        stockItemId: ci.stockItemId,
-        name: ci.name,
-        code: ci.code,
-        quantity: ci.consumed,
-        unitPrice: 0,
-        subtotal: 0,
-      }))
-      setFormItems(items)
-    } else {
-      setFormItems([])
-    }
-  }
-
-  const handleAddItem = () => {
-    if (!formNewItem.name) return
-    const subtotal = formNewItem.quantity * formNewItem.unitPrice
-    const item: PresupuestoItem = {
-      stockItemId: formNewItem.isArticuloZ ? `Z-${Date.now()}` : `STK-${Date.now()}`,
-      name: formNewItem.isArticuloZ ? "Artículo Z" : formNewItem.name,
-      code: formNewItem.code || "Z-LIBRE",
-      quantity: formNewItem.quantity,
-      unitPrice: formNewItem.unitPrice,
-      subtotal,
-      isArticuloZ: formNewItem.isArticuloZ,
-      descripcionLibre: formNewItem.isArticuloZ ? formNewItem.descripcionLibre : undefined,
-    }
-    setFormItems([...formItems, item])
-    setFormNewItem({ name: "", code: "", quantity: 1, unitPrice: 0, isArticuloZ: false, descripcionLibre: "" })
-  }
-
-  const handleRemoveItem = (idx: number) => {
-    setFormItems(formItems.filter((_, i) => i !== idx))
-  }
-
-  const formTotal = formItems.reduce((sum, i) => sum + i.subtotal, 0)
-
-  const handleCreatePresupuesto = () => {
-    if (!formPatient || !formClient) {
-      toast.error("Complete los campos obligatorios")
-      return
-    }
-    const surgeryId = createMode === "surgery" ? formSurgeryId : `MANUAL-${Date.now()}`
-    store.createBudgetForSurgery(surgeryId, {
-      patient: formPatient,
-      institution: formInstitution || undefined,
-      client: formClient,
-      vendedor: "Sistema",
-      items: formItems,
-      subtotal: formTotal,
-      total: formTotal,
-      state: "Borrador",
-      vigencia: formVigencia,
-      listaPrecios: formListaPrecios || "LP-DEFAULT",
-      observaciones: formObservaciones || undefined,
-      bloqueado: false,
-      fechaEmision: new Date().toISOString().split("T")[0],
-      version: 1,
-      versionStatus: "vigente",
-    })
-    toast.success("Presupuesto creado exitosamente")
-    setCreateDialogOpen(false)
-    resetForm()
-  }
-
-  const resetForm = () => {
-    setFormSurgeryId("")
-    setFormClient("")
-    setFormInstitution("")
-    setFormPatient("")
-    setFormVigencia("30 días")
-    setFormListaPrecios("")
-    setFormObservaciones("")
-    setFormItems([])
-    setFormNewItem({ name: "", code: "", quantity: 1, unitPrice: 0, isArticuloZ: false, descripcionLibre: "" })
-  }
-
-  const handleEnviar = (p: Presupuesto) => {
-    store.enviarPresupuesto(p.id)
-    toast.success(`Presupuesto ${p.id} enviado`)
-  }
-
-  const handleAprobar = (p: Presupuesto) => {
-    store.authorizeBudget(p.id)
-    toast.success(`Presupuesto ${p.id} aprobado`)
-  }
-
-  const handleRechazar = () => {
-    if (!selectedPresupuesto) return
-    store.rechazarPresupuesto(selectedPresupuesto.id)
-    toast.success(`Presupuesto ${selectedPresupuesto.id} rechazado`)
-    setRejectDialogOpen(false)
-    setSelectedPresupuesto(null)
-  }
-
-  const handleBloquear = () => {
-    if (!selectedPresupuesto) return
-    store.bloquearPresupuesto(selectedPresupuesto.id)
-    toast.success(`Presupuesto ${selectedPresupuesto.id} bloqueado`)
-    setBlockDialogOpen(false)
-    setSelectedPresupuesto(null)
-  }
-
-  const handleDesbloquear = (p: Presupuesto) => {
-    store.bloquearPresupuesto(p.id) // toggle via store
-    toast.success(`Presupuesto ${p.id} desbloqueado`)
-  }
-
-  const handleCrearPedido = (p: Presupuesto) => {
-    if (p.state !== "Aprobado") {
-      toast.error("Solo presupuestos aprobados pueden generar pedidos")
-      return
-    }
+  // ── Action handlers ──
+  const handleEmit = useCallback(async (p: PresupuestoApiRow) => {
     try {
-      store.generateOrderFromBudget(p.id)
-      toast.success("Pedido generado exitosamente")
-    } catch {
-      toast.error("Error al generar pedido")
+      await emit(p.id, p.revision)
+      toast.success(`Presupuesto ${p.id} emitido con éxito`)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Error al emitir presupuesto")
     }
-  }
+  }, [emit])
+
+  const handleApprove = useCallback(async (p: PresupuestoApiRow) => {
+    try {
+      await transition(p.id, "approve", p.revision)
+      toast.success(`Presupuesto ${p.id} aprobado con éxito`)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Error al aprobar presupuesto")
+    }
+  }, [transition])
+
+  const handleConfirmReject = useCallback(async () => {
+    if (!selectedPresupuesto) return
+    try {
+      await transition(selectedPresupuesto.id, "reject", selectedPresupuesto.revision)
+      toast.success(`Presupuesto ${selectedPresupuesto.id} rechazado`)
+      setRejectDialogOpen(false)
+      setSelectedPresupuesto(null)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Error al rechazar presupuesto")
+    }
+  }, [selectedPresupuesto, transition])
+
+  const handleConfirmAnnul = useCallback(async () => {
+    if (!selectedPresupuesto) return
+    try {
+      await transition(selectedPresupuesto.id, "annul", selectedPresupuesto.revision)
+      toast.success(`Presupuesto ${selectedPresupuesto.id} anulado`)
+      setAnnulDialogOpen(false)
+      setSelectedPresupuesto(null)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Error al anular presupuesto")
+    }
+  }, [selectedPresupuesto, transition])
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!selectedPresupuesto) return
+    try {
+      await deleteDraft(selectedPresupuesto.id, selectedPresupuesto.revision)
+      toast.success(`Borrador ${selectedPresupuesto.id} eliminado`)
+      setDeleteDialogOpen(false)
+      setSelectedPresupuesto(null)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Error al eliminar borrador")
+    }
+  }, [deleteDraft, selectedPresupuesto])
+
+  const handleRevise = useCallback(async (p: PresupuestoApiRow) => {
+    try {
+      const newVersion = await revise(p.id, p.revision)
+      toast.success(`Nueva versión v${newVersion.versionNumber} creada en Borrador`)
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Error al crear nueva versión")
+    }
+  }, [revise])
 
   const handleAbrirExpediente = (surgeryId: string) => {
+    if (!surgeryId) {
+      toast.info("Este presupuesto no está vinculado a una cirugía")
+      return
+    }
     openExpediente(surgeryId)
-  }
-
-  // ── Get comprobantes vinculados ──
-  const getLinkedComprobantes = (surgeryId: string) => {
-    return store.comprobantes.filter((c) => c.surgeryId === surgeryId)
   }
 
   return (
@@ -282,11 +209,29 @@ export default function PresupuestosPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold">Presupuestos</h1>
-          <p className="text-sm text-muted-foreground">Gestión de presupuestos de ventas</p>
+          <p className="text-sm text-muted-foreground">
+            Gestión comercial y versionado de presupuestos de ventas
+          </p>
         </div>
-        <Button size="sm" className="gap-1.5 shrink-0" onClick={() => { setCreateMode("surgery"); resetForm(); setCreateDialogOpen(true) }}>
-          <Plus className="size-4" /> Nuevo Presupuesto
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0"
+            onClick={() => refresh()}
+            disabled={loading}
+          >
+            <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+            Actualizar
+          </Button>
+          <Button
+            size="sm"
+            className="gap-1.5 shrink-0"
+            onClick={() => setCreateDialogOpen(true)}
+          >
+            <Plus className="size-4" /> Nuevo Presupuesto
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -301,13 +246,45 @@ export default function PresupuestosPage() {
       <Card>
         <CardContent className="pt-4 pb-4">
           <div className="flex flex-wrap gap-2">
-            <SearchInput value={search} onChange={setSearch} placeholder="ID, paciente, institución, cliente..." className="w-full sm:w-72" />
-            <FilterSelect value={stateFilter} onChange={setStateFilter} options={STATE_OPTIONS} />
-            <FilterSelect value={clientFilter} onChange={setClientFilter} options={CLIENT_OPTIONS} />
-            <FilterSelect value={institutionFilter} onChange={setInstitutionFilter} options={INSTITUTION_OPTIONS} />
-            <FilterSelect value={listaFilter} onChange={setListaFilter} options={LISTA_PRECIOS_OPTIONS} />
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="N°, ID, paciente, institución, cliente..."
+              className="w-full sm:w-72"
+            />
+            <FilterSelect
+              value={stateFilter}
+              onChange={setStateFilter}
+              options={STATE_OPTIONS}
+            />
+            <FilterSelect
+              value={clientFilter}
+              onChange={setClientFilter}
+              options={CLIENT_OPTIONS}
+            />
+            <FilterSelect
+              value={institutionFilter}
+              onChange={setInstitutionFilter}
+              options={INSTITUTION_OPTIONS}
+            />
+            <FilterSelect
+              value={listaFilter}
+              onChange={setListaFilter}
+              options={LISTA_PRECIOS_OPTIONS}
+            />
             {(stateFilter || clientFilter || institutionFilter || listaFilter || search) && (
-              <Button variant="ghost" size="sm" className="text-xs h-9" onClick={() => { setSearch(""); setStateFilter(""); setClientFilter(""); setInstitutionFilter(""); setListaFilter("") }}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-9"
+                onClick={() => {
+                  setSearch("")
+                  setStateFilter("")
+                  setClientFilter("")
+                  setInstitutionFilter("")
+                  setListaFilter("")
+                }}
+              >
                 Limpiar
               </Button>
             )}
@@ -315,17 +292,28 @@ export default function PresupuestosPage() {
         </CardContent>
       </Card>
 
+      {/* Error alert */}
+      {error && (
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
+          <AlertTriangle className="size-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardContent className="p-0">
           <div className="flex items-center justify-between px-4 py-3 border-b">
-            <span className="text-sm text-muted-foreground">{filtered.length} presupuesto{filtered.length !== 1 ? "s" : ""}</span>
+            <span className="text-sm text-muted-foreground">
+              {filtered.length} presupuesto{filtered.length !== 1 ? "s" : ""}
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">ID</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">N° / ID</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Versión</th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Paciente</th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Institución</th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap">Cliente</th>
@@ -339,85 +327,144 @@ export default function PresupuestosPage() {
               </thead>
               <tbody>
                 {filtered.map((p) => {
-                  const isBlocked = p.bloqueado
+                  const isMutating = mutatingId === p.id
                   return (
                     <tr
                       key={p.id}
-                      className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${isBlocked ? "opacity-60 bg-muted/20" : ""}`}
+                      className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${
+                        p.slot === "HISTORY" ? "opacity-60 bg-muted/20" : ""
+                      }`}
                     >
                       <td className="px-3 py-2.5">
-                        <span className="font-medium text-primary">{p.id}</span>
-                        {isBlocked && (
-                          <Lock className="inline size-3 ml-1 text-amber-500" />
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-primary font-mono text-xs">
+                            {p.visibleNumber ? `PR-${String(p.visibleNumber).padStart(5, "0")}` : p.id.slice(0, 8)}
+                          </span>
+                          {p.slot === "DRAFT" && (
+                            <Badge variant="secondary" className="text-[9px] px-1 py-0">Borrador</Badge>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-3 py-2.5">{p.patient}</td>
-                      <td className="px-3 py-2.5">{p.institution}</td>
-                      <td className="px-3 py-2.5">{p.client}</td>
-                      <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(p.total)}</td>
+                      <td className="px-3 py-2.5">
+                        <Badge variant="outline" className="text-[10px] font-mono">v{p.versionNumber}</Badge>
+                      </td>
+                      <td className="px-3 py-2.5">{p.patient || "—"}</td>
+                      <td className="px-3 py-2.5">{p.institution || "—"}</td>
+                      <td className="px-3 py-2.5">{p.client || "—"}</td>
+                      <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(Number(p.total) || 0)}</td>
                       <td className="px-3 py-2.5">
                         <StateBadge status={p.state} />
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">{formatDate(p.createdAt)}</td>
-                      <td className="px-3 py-2.5">{p.vigencia || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs">{p.listaPrecios || "—"}</td>
+                      <td className="px-3 py-2.5">{p.validUntil ? formatDate(p.validUntil) : "—"}</td>
+                      <td className="px-3 py-2.5 text-xs font-mono">{p.priceListCode || "—"}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center justify-end gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setSelectedPresupuesto(p); setDetailDialogOpen(true) }}>
-                                <Eye className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Ver detalle</TooltipContent>
-                          </Tooltip>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0"
+                                  onClick={() => {
+                                    setSelectedPresupuesto(p)
+                                    setDetailDialogOpen(true)
+                                  }}
+                                >
+                                  <Eye className="size-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Ver detalle</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
 
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={isMutating}>
                                 <MoreHorizontal className="size-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56">
                               <DropdownMenuLabel className="text-xs">Acciones</DropdownMenuLabel>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => { setSelectedPresupuesto(p); setDetailDialogOpen(true) }}>
-                                <Eye className="size-4" /> Ver detalle
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedPresupuesto(p)
+                                  setDetailDialogOpen(true)
+                                }}
+                              >
+                                <Eye className="size-4 mr-2" /> Ver detalle
                               </DropdownMenuItem>
-                              {p.state === "Borrador" && !isBlocked && (
-                                <DropdownMenuItem onClick={() => handleEnviar(p)}>
-                                  <Send className="size-4" /> Enviar
+
+                              {p.state === "Borrador" && p.actions.includes("edit") && (
+                                <DropdownMenuItem onClick={() => setEditPresupuestoId(p.id)}>
+                                  <Pencil className="size-4 mr-2" /> Editar borrador
                                 </DropdownMenuItem>
                               )}
-                              {p.state === "Enviado" && !isBlocked && (
-                                <DropdownMenuItem onClick={() => handleAprobar(p)}>
-                                  <CheckCircle2 className="size-4" /> Aprobar
+
+                              {p.actions.includes("emit") && (
+                                <DropdownMenuItem onClick={() => handleEmit(p)}>
+                                  <Send className="size-4 mr-2" /> Emitir presupuesto
                                 </DropdownMenuItem>
                               )}
-                              {p.state === "Enviado" && !isBlocked && (
-                                <DropdownMenuItem variant="destructive" onClick={() => { setSelectedPresupuesto(p); setRejectDialogOpen(true) }}>
-                                  <XCircle className="size-4" /> Rechazar
+
+                              {p.actions.includes("approve") && (
+                                <DropdownMenuItem onClick={() => handleApprove(p)}>
+                                  <CheckCircle2 className="size-4 mr-2 text-emerald-600" /> Aprobar
                                 </DropdownMenuItem>
                               )}
-                              {!isBlocked && (
-                                <DropdownMenuItem onClick={() => { setSelectedPresupuesto(p); setBlockDialogOpen(true) }}>
-                                  <Lock className="size-4" /> Bloquear
+
+                              {p.actions.includes("reject") && (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setSelectedPresupuesto(p)
+                                    setRejectDialogOpen(true)
+                                  }}
+                                >
+                                  <XCircle className="size-4 mr-2" /> Rechazar
                                 </DropdownMenuItem>
                               )}
-                              {isBlocked && (
-                                <DropdownMenuItem onClick={() => handleDesbloquear(p)}>
-                                  <Unlock className="size-4" /> Desbloquear
+
+                              {p.actions.includes("revise") && (
+                                <DropdownMenuItem onClick={() => handleRevise(p)}>
+                                  <FileCheck className="size-4 mr-2" /> Crear nueva versión
                                 </DropdownMenuItem>
                               )}
-                              {p.state === "Aprobado" && !isBlocked && (
-                                <DropdownMenuItem onClick={() => handleCrearPedido(p)}>
-                                  <ShoppingCart className="size-4" /> Crear pedido
+
+                              {p.actions.includes("annul") && (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setSelectedPresupuesto(p)
+                                    setAnnulDialogOpen(true)
+                                  }}
+                                >
+                                  <AlertTriangle className="size-4 mr-2" /> Anular
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleAbrirExpediente(p.surgeryId || "")}>
-                                <FolderOpen className="size-4" /> Abrir expediente
-                              </DropdownMenuItem>
+
+                              {p.actions.includes("delete") && (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setSelectedPresupuesto(p)
+                                    setDeleteDialogOpen(true)
+                                  }}
+                                >
+                                  <Trash2 className="size-4 mr-2" /> Eliminar borrador
+                                </DropdownMenuItem>
+                              )}
+
+                              {p.surgeryId && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => handleAbrirExpediente(p.surgeryId!)}>
+                                    <FolderOpen className="size-4 mr-2" /> Abrir expediente
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -427,8 +474,8 @@ export default function PresupuestosPage() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
-                      No se encontraron presupuestos
+                    <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">
+                      {loading ? "Cargando presupuestos..." : "No se encontraron presupuestos"}
                     </td>
                   </tr>
                 )}
@@ -442,9 +489,11 @@ export default function PresupuestosPage() {
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Presupuesto {selectedPresupuesto?.id}</DialogTitle>
+            <DialogTitle>
+              Presupuesto {selectedPresupuesto?.visibleNumber ? `PR-${String(selectedPresupuesto.visibleNumber).padStart(5, "0")}` : selectedPresupuesto?.id} (v{selectedPresupuesto?.versionNumber})
+            </DialogTitle>
             <DialogDescription>
-              {selectedPresupuesto?.patient} — {selectedPresupuesto?.institution}
+              {selectedPresupuesto?.patient || "Sin paciente asignado"} — {selectedPresupuesto?.institution || "Sin institución"}
             </DialogDescription>
           </DialogHeader>
           {selectedPresupuesto && (
@@ -453,7 +502,7 @@ export default function PresupuestosPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
                   <span className="text-xs text-muted-foreground">Cliente</span>
-                  <p className="text-sm font-medium">{selectedPresupuesto.client}</p>
+                  <p className="text-sm font-medium">{selectedPresupuesto.client || "—"}</p>
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Estado</span>
@@ -461,7 +510,7 @@ export default function PresupuestosPage() {
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Total</span>
-                  <p className="text-sm font-bold">{formatCurrency(selectedPresupuesto.total)}</p>
+                  <p className="text-sm font-bold">{formatCurrency(Number(selectedPresupuesto.total) || 0)}</p>
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Fecha creación</span>
@@ -469,11 +518,15 @@ export default function PresupuestosPage() {
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Vigencia</span>
-                  <p className="text-sm">{selectedPresupuesto.vigencia || "—"}</p>
+                  <p className="text-sm">{selectedPresupuesto.validUntil ? formatDate(selectedPresupuesto.validUntil) : "—"}</p>
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Lista de precios</span>
-                  <p className="text-sm">{selectedPresupuesto.listaPrecios || "—"}</p>
+                  <p className="text-sm font-mono text-xs">{selectedPresupuesto.priceListCode || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Condición de pago</span>
+                  <p className="text-sm">{selectedPresupuesto.paymentTerms || "—"}</p>
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Vendedor</span>
@@ -485,334 +538,130 @@ export default function PresupuestosPage() {
                     <p className="text-sm">{formatDate(selectedPresupuesto.approvedAt)}</p>
                   </div>
                 )}
-                <div>
-                  <span className="text-xs text-muted-foreground">Bloqueado</span>
-                  <p className="text-sm">{selectedPresupuesto.bloqueado ? "Sí" : "No"}</p>
-                </div>
               </div>
 
               <Separator />
 
               {/* Items table */}
               <div>
-                <h4 className="text-sm font-semibold mb-2">Items del presupuesto</h4>
+                <h4 className="text-sm font-semibold mb-2">Artículos del presupuesto</h4>
                 <div className="rounded-md border overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/50">
                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Código</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Nombre</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Descripción</th>
                         <th className="px-3 py-2 text-right font-medium text-muted-foreground">Cant.</th>
                         <th className="px-3 py-2 text-right font-medium text-muted-foreground">P. Unit.</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted-foreground">Desc.</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted-foreground">IVA</th>
                         <th className="px-3 py-2 text-right font-medium text-muted-foreground">Subtotal</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedPresupuesto.items.map((item, idx) => (
                         <tr key={idx} className="border-b last:border-0">
-                          <td className="px-3 py-2 font-mono text-xs">{item.code}</td>
-                          <td className="px-3 py-2">
-                            {item.isArticuloZ ? (
-                              <div className="flex items-center gap-1">
-                                <Badge variant="warning" className="text-[10px]">Z</Badge>
-                                <span>{item.descripcionLibre || "Artículo Z"}</span>
-                              </div>
-                            ) : (
-                              item.name
-                            )}
-                          </td>
+                          <td className="px-3 py-2 font-mono text-xs">{item.sku || "—"}</td>
+                          <td className="px-3 py-2">{item.description}</td>
                           <td className="px-3 py-2 text-right">{item.quantity}</td>
-                          <td className="px-3 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(Number(item.unitPrice) || 0)}</td>
+                          <td className="px-3 py-2 text-right">{Number(item.discount) > 0 ? formatCurrency(Number(item.discount)) : "—"}</td>
+                          <td className="px-3 py-2 text-right text-xs">{item.vatRate || item.taxRate || "0"}%</td>
+                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(Number(item.total) || 0)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="bg-muted/30">
-                        <td colSpan={4} className="px-3 py-2 text-right font-semibold">Total</td>
-                        <td className="px-3 py-2 text-right font-bold">{formatCurrency(selectedPresupuesto.total)}</td>
+                        <td colSpan={6} className="px-3 py-2 text-right font-semibold">Total</td>
+                        <td className="px-3 py-2 text-right font-bold">{formatCurrency(Number(selectedPresupuesto.total) || 0)}</td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </div>
 
-              {/* Observaciones */}
-              {selectedPresupuesto.observaciones && (
+              {/* Legend & Notes */}
+              {selectedPresupuesto.legend && (
                 <div>
-                  <h4 className="text-sm font-semibold mb-1">Observaciones</h4>
-                  <p className="text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
-                    {selectedPresupuesto.observaciones}
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-1">Leyenda</h4>
+                  <p className="text-xs text-muted-foreground bg-muted/40 rounded-md p-2.5 italic">
+                    {selectedPresupuesto.legend}
                   </p>
                 </div>
               )}
 
-              {/* Comprobantes vinculados */}
-              {(() => {
-                const linked = getLinkedComprobantes(selectedPresupuesto.surgeryId || "")
-                if (linked.length === 0) return null
-                return (
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2">Comprobantes vinculados</h4>
-                    <div className="space-y-1">
-                      {linked.map((c) => (
-                        <div key={c.id} className="flex items-center justify-between rounded-md border p-2 text-xs">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={getBadgeVariant(c.type)} className="text-[10px]">{c.type}</Badge>
-                            <span className="font-mono">{c.number}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span>{formatCurrency(c.amount)}</span>
-                            <StateBadge status={c.state} className="text-[10px]" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Create Presupuesto Dialog ── */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Nuevo Presupuesto</DialogTitle>
-            <DialogDescription>Crear presupuesto desde cirugía o manual</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Mode selector */}
-            <div className="flex gap-2">
-              <Button
-                variant={createMode === "surgery" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setCreateMode("surgery")}
-              >
-                Desde Cirugía
-              </Button>
-              <Button
-                variant={createMode === "manual" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setCreateMode("manual")}
-              >
-                Manual
-              </Button>
-            </div>
-
-            {createMode === "surgery" ? (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label>Cirugía *</Label>
-                  <Select value={formSurgeryId} onValueChange={(v) => { setFormSurgeryId(v); handleCreateFromSurgery() }}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar cirugía" /></SelectTrigger>
-                    <SelectContent>
-                      {availableSurgeries.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.id} — {s.patient} ({s.institution})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Paciente *</Label>
-                  <Input value={formPatient} onChange={(e) => setFormPatient(e.target.value)} placeholder="Nombre del paciente" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Cliente *</Label>
-                  <Select value={formClient} onValueChange={setFormClient}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar cliente" /></SelectTrigger>
-                    <SelectContent>
-                      {CLIENT_OPTIONS.filter((o) => o.value).map((o) => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Institución</Label>
-                  <Select value={formInstitution} onValueChange={setFormInstitution}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar institución" /></SelectTrigger>
-                    <SelectContent>
-                      {INSTITUTION_OPTIONS.filter((o) => o.value).map((o) => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Lista de precios</Label>
-                  <Input value={formListaPrecios} onChange={(e) => setFormListaPrecios(e.target.value)} placeholder="LP-XXXX" />
-                </div>
-              </div>
-            )}
-
-            {/* Common fields */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Vigencia</Label>
-                <Select value={formVigencia} onValueChange={setFormVigencia}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="15 días">15 días</SelectItem>
-                    <SelectItem value="30 días">30 días</SelectItem>
-                    <SelectItem value="60 días">60 días</SelectItem>
-                    <SelectItem value="90 días">90 días</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Items */}
-            <Separator />
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Items</h4>
-
-              {/* Add item row */}
-              <div className="flex flex-wrap gap-2 mb-3 p-3 rounded-md border bg-muted/30">
-                <label className="flex items-center gap-1.5 shrink-0">
-                  <Checkbox
-                    checked={formNewItem.isArticuloZ}
-                    onCheckedChange={(checked) => setFormNewItem({ ...formNewItem, isArticuloZ: !!checked })}
-                  />
-                  <span className="text-xs">Art. Z</span>
-                </label>
-                {formNewItem.isArticuloZ ? (
-                  <Input
-                    className="flex-1 min-w-[150px] h-8 text-xs"
-                    placeholder="Descripción libre"
-                    value={formNewItem.descripcionLibre}
-                    onChange={(e) => setFormNewItem({ ...formNewItem, descripcionLibre: e.target.value })}
-                  />
-                ) : (
-                  <Input
-                    className="flex-1 min-w-[150px] h-8 text-xs"
-                    placeholder="Nombre artículo"
-                    value={formNewItem.name}
-                    onChange={(e) => setFormNewItem({ ...formNewItem, name: e.target.value })}
-                  />
-                )}
-                <Input
-                  className="w-20 h-8 text-xs"
-                  placeholder="Código"
-                  value={formNewItem.code}
-                  onChange={(e) => setFormNewItem({ ...formNewItem, code: e.target.value })}
-                />
-                <Input
-                  type="number"
-                  className="w-16 h-8 text-xs"
-                  placeholder="Cant."
-                  value={formNewItem.quantity}
-                  onChange={(e) => setFormNewItem({ ...formNewItem, quantity: Number(e.target.value) || 1 })}
-                />
-                <Input
-                  type="number"
-                  className="w-28 h-8 text-xs"
-                  placeholder="P. Unitario"
-                  value={formNewItem.unitPrice || ""}
-                  onChange={(e) => setFormNewItem({ ...formNewItem, unitPrice: Number(e.target.value) || 0 })}
-                />
-                <Button variant="outline" size="sm" className="h-8 gap-1" onClick={handleAddItem} disabled={!formNewItem.name && !formNewItem.isArticuloZ}>
-                  <Plus className="size-3" /> Agregar
-                </Button>
-              </div>
-
-              {/* Items list */}
-              {formItems.length > 0 && (
-                <div className="rounded-md border overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="px-2 py-1.5 text-left">Código</th>
-                        <th className="px-2 py-1.5 text-left">Nombre</th>
-                        <th className="px-2 py-1.5 text-right">Cant.</th>
-                        <th className="px-2 py-1.5 text-right">P. Unit.</th>
-                        <th className="px-2 py-1.5 text-right">Subtotal</th>
-                        <th className="px-2 py-1.5 text-right w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {formItems.map((item, idx) => (
-                        <tr key={idx} className="border-b last:border-0">
-                          <td className="px-2 py-1.5 font-mono">{item.code}</td>
-                          <td className="px-2 py-1.5">
-                            {item.isArticuloZ ? (
-                              <div className="flex items-center gap-1">
-                                <Badge variant="warning" className="text-[9px] px-1">Z</Badge>
-                                {item.descripcionLibre || "Artículo Z"}
-                              </div>
-                            ) : item.name}
-                          </td>
-                          <td className="px-2 py-1.5 text-right">{item.quantity}</td>
-                          <td className="px-2 py-1.5 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="px-2 py-1.5 text-right font-medium">{formatCurrency(item.subtotal)}</td>
-                          <td className="px-2 py-1.5 text-right">
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => handleRemoveItem(idx)}>
-                              <Trash2 className="size-3 text-red-500" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-muted/30">
-                        <td colSpan={4} className="px-2 py-1.5 text-right font-semibold">Total</td>
-                        <td className="px-2 py-1.5 text-right font-bold">{formatCurrency(formTotal)}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
+              {selectedPresupuesto.notes && (
+                <div>
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-1">Observaciones</h4>
+                  <p className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2.5">
+                    {selectedPresupuesto.notes}
+                  </p>
                 </div>
               )}
             </div>
-
-            {/* Observaciones */}
-            <div className="space-y-2">
-              <Label>Observaciones</Label>
-              <Textarea value={formObservaciones} onChange={(e) => setFormObservaciones(e.target.value)} placeholder="Notas adicionales..." rows={2} />
-            </div>
-          </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreatePresupuesto} disabled={!formPatient || !formClient}>
-              Crear Presupuesto
+            <Button variant="outline" size="sm" onClick={() => setDetailDialogOpen(false)}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* ── Create Dialog ── */}
+      <PresupuestoFormDialog
+        mode="dialog"
+        context="independent"
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onSubmit={() => {
+          refresh()
+          setCreateDialogOpen(false)
+        }}
+      />
+
       {/* ── Reject Dialog ── */}
+      <PresupuestoFormDialog
+        mode="dialog"
+        context="independent"
+        presupuestoId={editPresupuestoId ?? undefined}
+        open={editPresupuestoId !== null}
+        onOpenChange={(open) => { if (!open) setEditPresupuestoId(null) }}
+        onSubmit={() => { void refresh(); setEditPresupuestoId(null) }}
+      />
+
       <ConfirmDialog
         open={rejectDialogOpen}
         onOpenChange={setRejectDialogOpen}
         title="Rechazar Presupuesto"
-        description={`¿Rechazar presupuesto ${selectedPresupuesto?.id}? Esta acción no se puede deshacer.`}
+        description={`¿Rechazar el presupuesto ${selectedPresupuesto?.id}? Esta acción registrará el rechazo en el historial.`}
         confirmLabel="Rechazar"
-        onConfirm={handleRechazar}
         destructive
+        onConfirm={handleConfirmReject}
       />
 
-      {/* ── Block Dialog ── */}
+      {/* ── Annul Dialog ── */}
       <ConfirmDialog
-        open={blockDialogOpen}
-        onOpenChange={setBlockDialogOpen}
-        title="Bloquear Presupuesto"
-        description={`¿Bloquear presupuesto ${selectedPresupuesto?.id}? No se podrán realizar acciones hasta desbloquear.`}
-        confirmLabel="Bloquear"
-        onConfirm={handleBloquear}
+        open={annulDialogOpen}
+        onOpenChange={setAnnulDialogOpen}
+        title="Anular Presupuesto"
+        description={`¿Anular el presupuesto ${selectedPresupuesto?.id}? No podrá emitirse ni vincularse a facturación.`}
+        confirmLabel="Anular"
+        destructive
+        onConfirm={handleConfirmAnnul}
       />
 
-      {/* ── Expediente Drawer ── */}
-      <SurgeryDrawer />
+      {/* ── Delete Draft Dialog ── */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Eliminar Borrador"
+        description={`¿Eliminar definitivamente el borrador ${selectedPresupuesto?.id}?`}
+        confirmLabel="Eliminar"
+        destructive
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   )
 }

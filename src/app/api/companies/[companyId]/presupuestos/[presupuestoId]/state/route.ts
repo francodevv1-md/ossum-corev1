@@ -42,6 +42,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       companyId: ctx.companyId,
       presupuestoId,
       newState: parsed.data.newState,
+      command: parsed.data.command,
+      expectedRevision: parsed.data.expectedRevision,
+      metadata: parsed.data.metadata,
       updatedById: ctx.actorUserId,
       prisma,
     });

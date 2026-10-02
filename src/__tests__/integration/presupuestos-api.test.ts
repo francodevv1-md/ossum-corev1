@@ -130,7 +130,7 @@ describe("Presupuesto API integration (Supabase DEV DB)", () => {
       }),
       routeParams({ companyId: COMPANY_ID })
     )
-    const created = await bodyAsJson<{ id: string; state: string; total: string; items: unknown[] }>(createResponse)
+    const created = await bodyAsJson<{ id: string; state: string; revision: number; total: string; items: unknown[] }>(createResponse)
     expect(createResponse.status).toBe(201)
     expect(created.data?.state).toBe("Borrador")
     expect(created.data?.items).toHaveLength(1)
@@ -153,10 +153,14 @@ describe("Presupuesto API integration (Supabase DEV DB)", () => {
     expect(getResponse.status).toBe(200)
 
     const emitResponse = await emitirPresupuesto(
-      new Request(`http://localhost/api/companies/${COMPANY_ID}/presupuestos/${presupuestoId}/emitir`, { method: "POST" }),
+      new Request(`http://localhost/api/companies/${COMPANY_ID}/presupuestos/${presupuestoId}/emitir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: created.data!.revision }),
+      }),
       routeParams({ companyId: COMPANY_ID, presupuestoId })
     )
-    const emitted = await bodyAsJson<{ state: string; visibleNumber: number | null }>(emitResponse)
+    const emitted = await bodyAsJson<{ state: string; revision: number; visibleNumber: number | null }>(emitResponse)
     expect(emitResponse.status).toBe(200)
     expect(emitted.data?.state).toBe("Emitido")
     expect(emitted.data?.visibleNumber).toBeTypeOf("number")
@@ -166,6 +170,7 @@ describe("Presupuesto API integration (Supabase DEV DB)", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          expectedRevision: emitted.data!.revision,
           items: [
             {
               sku: "SKU-PR-2",

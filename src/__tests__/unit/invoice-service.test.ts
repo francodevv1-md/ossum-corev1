@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Prisma } from "@prisma/client";
+import { errorResponse } from "@/lib/api/responses";
 
 const { createAuditEvent } = vi.hoisted(() => ({
   createAuditEvent: vi.fn(),
@@ -84,14 +85,14 @@ describe("createInvoice", () => {
   });
 
   it("validates presupuesto id belongs to company", async () => {
-    const tx = { $queryRaw: vi.fn().mockResolvedValue([]), invoice: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn(async ({ data }) => buildInvoice({ ...data, presupuestoId: "presupuesto-1" })) } };
+    const tx = { $queryRaw: vi.fn().mockResolvedValue([]), $executeRaw: vi.fn().mockResolvedValue(1), invoice: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn(async ({ data }) => buildInvoice({ ...data, presupuestoId: "presupuesto-1" })) } };
     const prismaMock = { surgery: { findFirst: vi.fn() }, presupuesto: { findFirst: vi.fn().mockResolvedValue({ id: "presupuesto-1" }) }, consumo: { findFirst: vi.fn() }, $transaction: vi.fn((cb: any) => cb(tx)) } as any;
     await createInvoice({ companyId: "company-1", base: "presupuesto", presupuestoId: "presupuesto-1", items: [{ description: "Item", quantity: "1" }], prisma: prismaMock });
     expect(prismaMock.presupuesto.findFirst).toHaveBeenCalledWith({ where: { id: "presupuesto-1", companyId: "company-1" }, select: { id: true, surgeryId: true } });
   });
 
   it("keeps consumo Validado while a consumption-linked invoice is Borrador", async () => {
-    const tx = { $queryRaw: vi.fn().mockResolvedValue([]), consumo: { updateMany: vi.fn() }, invoice: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn(async ({ data }) => buildInvoice({ ...data, base: "consumo", consumoId: "consumo-1" })) } };
+    const tx = { $queryRaw: vi.fn().mockResolvedValue([]), $executeRaw: vi.fn().mockResolvedValue(1), consumo: { updateMany: vi.fn() }, invoice: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn(async ({ data }) => buildInvoice({ ...data, base: "consumo", consumoId: "consumo-1" })) } };
     const prismaMock = { surgery: { findFirst: vi.fn() }, presupuesto: { findFirst: vi.fn() }, consumo: { findFirst: vi.fn().mockResolvedValue({ id: "consumo-1" }) }, $transaction: vi.fn((cb: any) => cb(tx)) } as any;
     await createInvoice({ companyId: "company-1", base: "consumo", consumoId: "consumo-1", items: [{ description: "Item", quantity: "1" }], createdById: "user-1", prisma: prismaMock });
     expect(tx.consumo.updateMany).not.toHaveBeenCalled();
@@ -123,7 +124,7 @@ describe("createInvoiceFromSource", () => {
 
   function sourcePrisma(sourceBudget: ReturnType<typeof budget>, consumo?: Record<string, any>) {
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([]),
+      $queryRaw: vi.fn().mockResolvedValue([]), $executeRaw: vi.fn().mockResolvedValue(1),
       presupuesto: { findFirst: vi.fn().mockResolvedValue(sourceBudget) },
       consumo: { findFirst: vi.fn().mockResolvedValue(consumo) },
       invoice: {
@@ -153,7 +154,22 @@ describe("createInvoiceFromSource", () => {
       currency: "ARS",
       items: { create: [expect.objectContaining({ sourceType: "presupuesto", sourceItemId: "budget-item-real" })] },
     }) }));
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    const [sql, ...params] = tx.$executeRaw.mock.calls[0];
+    expect(Array.from(sql).join("?")).toBe("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))");
+    expect(params).toEqual(["company-1:presupuesto:budget-real"]);
+    expect(tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.invoice.findFirst.mock.invocationCallOrder[0]);
+  });
+
+  it("exposes duplicate source rejection as API 409 rather than a generic 500", async () => {
+    const { prisma, tx } = sourcePrisma(budget());
+    tx.invoice.findFirst.mockResolvedValue({ id: "existing-exact-source" });
+    const caught = await createInvoiceFromSource({ companyId: "company-1", presupuestoId: "budget-real", prisma }).catch(error => error);
+    const response = errorResponse(caught);
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "invoice_source_already_invoiced" } });
+    expect(tx.invoice.create).not.toHaveBeenCalled();
   });
 
   it("reconciles persisted discounts including nonzero general discount to the exact approved total", async () => {
@@ -242,7 +258,12 @@ describe("createInvoiceFromSource", () => {
 
     expect(result).toMatchObject({ surgeryId: "surgery-real", presupuestoId: "budget-real", consumoId: "consumo-real", base: "mixto" });
     expect(result.total.toString()).toBe("11119387479976.5301");
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(4);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(tx.$executeRaw.mock.calls.map((call) => call.slice(1))).toEqual([
+      ["company-1:consumo:consumo-real"], ["company-1:presupuesto:budget-real"],
+    ]);
+    expect(tx.$executeRaw.mock.invocationCallOrder[1]).toBeLessThan(tx.invoice.findFirst.mock.invocationCallOrder[0]);
     expect(tx.invoice.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
       items: { create: [expect.objectContaining({
         sourceType: "consumo",
