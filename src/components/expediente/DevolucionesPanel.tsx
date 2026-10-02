@@ -14,6 +14,7 @@ import { getConsumoVisibleNumber, type ConsumoApiRow } from "@/lib/api/consumos"
 import { getRemitoVisibleNumber, type RemitoApiRow } from "@/lib/api/remitos"
 import { formatDate } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
+import { buildCajasAccountingPayload, findCajasDispatchForRemito } from "@/lib/cajas-intent"
 
 interface DevolucionesPanelProps {
   surgeryId: string
@@ -221,7 +222,7 @@ function DevolucionCard({ devolucion, mutating, onConfirm, onSubmitDraft, onRemo
 
 export function DevolucionesPanel({ surgeryId, selectedRemito, selectedConsumo, onConfirmed }: DevolucionesPanelProps) {
   const filters = useMemo(() => ({ surgeryId: surgeryId || "__missing_surgery__", take: 50 }), [surgeryId])
-  const { devoluciones, loading, ready, error, blocked, mutatingId, refresh, transition, confirm, createDraft, removeDraft } = useDevoluciones(filters)
+  const { companyId, devoluciones, loading, ready, error, blocked, mutatingId, refresh, transition, confirm, createDraft, removeDraft } = useDevoluciones(filters)
   const [selectedItemId, setSelectedItemId] = useState<string>("")
   const [returnedQuantity, setReturnedQuantity] = useState("1")
   const [reason, setReason] = useState("")
@@ -281,7 +282,23 @@ export function DevolucionesPanel({ surgeryId, selectedRemito, selectedConsumo, 
 
   const handleConfirm = async (devolucion: DevolucionApiRow) => {
     try {
-      await confirm(devolucion.id)
+      let cajasAccounting: unknown = undefined
+      if (companyId && surgeryId && devolucion.remitoId) {
+        const cajasInfo = await findCajasDispatchForRemito(
+          companyId,
+          surgeryId,
+          devolucion.remitoId,
+        )
+        if (cajasInfo) {
+          const payload = buildCajasAccountingPayload(
+            cajasInfo.dispatch,
+            devolucion,
+            "return",
+          )
+          if (payload) cajasAccounting = payload
+        }
+      }
+      await confirm(devolucion.id, cajasAccounting ? { cajasAccounting } : undefined)
       onConfirmed?.()
       toast.success(`Devolución ${getDevolucionVisibleNumber(devolucion)} confirmada`)
     } catch (error) {

@@ -16,6 +16,7 @@ import { useRemitos } from "@/hooks/useRemitos"
 import { getRemitoDestinatarioName, getRemitoVisibleNumber, type RemitoApiItem, type RemitoApiRow } from "@/lib/api/remitos"
 import { useTrazabilidad } from "@/hooks/useTrazabilidad"
 import type { TraceItemRow } from "@/lib/api/trazabilidad"
+import { buildCajasDispatchPayload, findActiveCajasAssignmentForSurgery, type CajasDispatchIntentPayload } from "@/lib/cajas-intent"
 
 type TransitPanelSource = "remitos" | "fallback"
 
@@ -108,6 +109,7 @@ function LogisticaTabContentBackend({
   const [materialOpen, setMaterialOpen] = useState(true)
   const remitoFilters = useMemo(() => ({ surgeryId: surgeryBackendId, take: 100 }), [surgeryBackendId])
   const {
+    companyId,
     remitos: backendRemitos,
     loading: remitosLoading,
     ready: remitosReady,
@@ -252,7 +254,20 @@ function LogisticaTabContentBackend({
                 remitos={panelRemitos}
                 box={box}
                 mutatingId={remitoMutatingId}
-                onEmit={(remito) => emitRemito(remito.apiId)}
+                onEmit={async (remito) => {
+                  let cajasDispatch: CajasDispatchIntentPayload | undefined = undefined
+                  if (companyId && surgeryBackendId) {
+                    const assignment = await findActiveCajasAssignmentForSurgery(companyId, surgeryBackendId)
+                    if (assignment) {
+                      const rawRemito = backendRemitos.find((r) => r.id === remito.apiId)
+                      if (rawRemito) {
+                        const payload = buildCajasDispatchPayload(assignment, rawRemito)
+                        if (payload) cajasDispatch = payload
+                      }
+                    }
+                  }
+                  return emitRemito(remito.apiId, cajasDispatch ? { cajasDispatch } : undefined)
+                }}
                 onTransition={(remito, state) => transitionRemito(remito.apiId, state)}
               />
             </div>

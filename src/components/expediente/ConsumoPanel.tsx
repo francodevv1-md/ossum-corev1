@@ -39,6 +39,7 @@ import { getRemitoVisibleNumber, type RemitoApiRow } from "@/lib/api/remitos"
 import type { TraceItemRow } from "@/lib/api/trazabilidad"
 import { DevolucionesPanel } from "@/components/expediente/DevolucionesPanel"
 import { ComparativaOperativaV0 } from "@/components/comparativa/ComparativaOperativaV0"
+import { buildCajasAccountingPayload, findCajasDispatchForRemito } from "@/lib/cajas-intent"
 
 interface ConsumoPanelProps {
   surgery: Surgery
@@ -782,6 +783,7 @@ function ConsumoPanelBackend({
   const consumoFilters = useMemo(() => ({ surgeryId: surgeryBackendId, take: 50 }), [surgeryBackendId])
   const remitoFilters = useMemo(() => ({ surgeryId: surgeryBackendId, take: 100 }), [surgeryBackendId])
   const {
+    companyId,
     consumos: backendConsumos,
     loading: consumosLoading,
     ready: consumosReady,
@@ -919,7 +921,26 @@ function ConsumoPanelBackend({
   const handleValidate = async () => {
     if (!panelConsumo.apiId) return
     try {
-      await validate(panelConsumo.apiId)
+      let cajasAccounting: unknown = undefined
+      if (companyId && surgeryBackendId && selectedRemito?.id) {
+        const cajasInfo = await findCajasDispatchForRemito(
+          companyId,
+          surgeryBackendId,
+          selectedRemito.id,
+        )
+        if (cajasInfo) {
+          const rawConsumo = backendConsumos.find((c) => c.id === panelConsumo.apiId)
+          if (rawConsumo) {
+            const payload = buildCajasAccountingPayload(
+              cajasInfo.dispatch,
+              rawConsumo,
+              "consumption",
+            )
+            if (payload) cajasAccounting = payload
+          }
+        }
+      }
+      await validate(panelConsumo.apiId, cajasAccounting ? { cajasAccounting } : undefined)
       toast.success(`Consumo ${panelConsumo.id} validado`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo validar el consumo")

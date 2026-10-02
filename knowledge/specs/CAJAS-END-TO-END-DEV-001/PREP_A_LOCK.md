@@ -1,0 +1,16 @@
+# PREPARATION-A ownership
+- Task: CAJAS-END-TO-END-DEV-001 / PREPARATION-A; approved bounded T3 correctness.
+- Owner: prep-a-gpt61; Backend correctness; openai/gpt-6.1-sol; implementation/testing/docs.
+- Status: released
+- Scope: immutable formula control, additional allocations, resolution freshness, closed-assignment control replay.
+- Owned existing files (SHA256 reservation):
+  - src/lib/services/cajas-component-selection.service.ts: 9C2FE09C2FA7249309697C4639FD53C1CAF86C0B9214F7DDC1B98F6627DD3D21
+  - src/lib/services/cajas-control.service.ts: BBF11B946435AEAE0174BA7F19B2778BDCFCD38BE8278E3CDFC22347A12AEFE8
+  - src/lib/services/cajas-difference.service.ts: 28D44DBA65AD8F2A86259C2774BD9A5AEC91556F0C15929CBA96A5B69F441F03
+  - src/lib/validators/cajas-assignment.ts: 78BDB14D8DD461961C059DFAE9A80607BCBD01C387E9929BE0AD2D467303E832
+- Owned new files: src/__tests__/unit/cajas-prep-correctness.test.ts; PREP_A_LOCK.md; PREP_A_HANDOFF.md.
+- Forbidden: every other write, especially original assignment test, parent LOCK/HANDOFF, schema/generated client, DB/Git/security/core UI, command/reservation/assignment/dispatch/remito/accounting.
+- Commands: focused new/preparation-recovery/formula Vitest; SHA256; explicit no-emit typecheck if time permits. No unfiltered tests/build/generate/DB/Git.
+- Validation: reproduce before fixes; service-path doubles only, not DB proof; Caveman handoff with hashes.
+- Stop: ownership overlap, excluded scope, 15-minute deadline; target 8–10 minutes. Previous parent/dispatch owners verified released.
+- Release: 2026-10-01 after final focused 28/28 PASS; existing recovery 9/14 with five outdated fixtures, typecheck timed out. Final changed hashes and exact evidence in PREP_A_HANDOFF.md. No foreign ownership or completion status changed.

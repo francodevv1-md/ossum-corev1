@@ -1,0 +1,16 @@
+# Nested-write / real dispatch ownership
+- Task: CAJAS-END-TO-END-DEV-001 NESTED; bounded eight-minute Diagnose.
+- Owner: Backend QA; openai/gpt-6.1-sol; implementation/testing/docs.
+- Status: released
+- Approved: user explicitly confirmed disposable DEV; synthetic owned tenants only.
+- Fresh SHA256 reservations:
+  - src/lib/services/cajas-component-selection.service.ts: 68DD0E549E84EA88E639797E3162C9E9F07C0A672183EDA692C432572A917CC6
+  - src/lib/services/cajas-control.service.ts: 633179A80FED5F6B66076BA3B7C3BEE5096CD188566F8EB3D15A62FC796C010D
+  - src/lib/services/cajas-dispatch.service.ts: 7D77A2AD1D5B12711B284FAEC370C07822361DBCEB95EBF207491E729AB01875 (conditional consumer fix only)
+  - src/__tests__/integration/cajas-preparation-postgres.test.ts: 7D5FD244C86C239D990FC42A267741B906CDFD7F03A9350880F25BA44113CA91
+- New owned: src/__tests__/unit/cajas-nested-trace.test.ts; NESTED_LOCK.md; NESTED_HANDOFF.md.
+- Previous PREP_A, DISPATCH, POSTGRES_PREP owners verified released.
+- Commands: focused Vitest, read-only hashes; environment restored finally; reject production/staging before overwrite.
+- Forbidden: schema/generate/global Prisma/Auth/security/core UI/Git/dependencies/foreign tests.
+- Stop: overlapping ownership, scope expansion, two cycles same blocker, eight-minute deadline.
+- Release: bounded deadline reached; final hashes and incomplete actual DB evidence in NESTED_HANDOFF.md. Selection and dispatch services unchanged.

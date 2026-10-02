@@ -1,0 +1,12 @@
+# POSTGRES-PREPARATION ownership
+- Task: CAJAS-END-TO-END-DEV-001 / POSTGRES-PREPARATION
+- Owner: QA author; openai/gpt-6.1-sol; implementation/testing/docs.
+- Status: released
+- Owned: src/__tests__/integration/cajas-preparation-postgres.test.ts; this file; POSTGRES_PREP_HANDOFF.md in this package.
+- Scope: four real PostgreSQL preparation proofs; unset-opt-in parser/skip validation only during authoring.
+- Forbidden: all other writes, DB execution/mutations, schema/config/shared helpers, original assignment test, Git publication.
+- Source dependency: PREPARATION-A owner still writing; schema RELEASED b3b0fcf8472078aed254b3ffe4423643653f8a28 (orchestrator supplied).
+- Commands: focused Vitest with OSSUM_RUN_CAJAS_DEV_INTEGRATION unset; parser only. No enabled DB run.
+- Validation: gated lazy imports, synthetic owned fixtures, child-first cleanup, actual transaction rollback.
+- Stop: ownership overlap, immutable cleanup obstruction, scope expansion, eight-minute budget.
+- Handoff: Done / Changed / Files / Validations / Risks / Next.
