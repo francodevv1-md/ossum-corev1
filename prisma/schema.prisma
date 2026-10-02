@@ -106,6 +106,8 @@ model Company {
   receiptLines                     ReceiptLine[]                            @relation("CompanyReceiptLines")
   receiptScans                     ReceiptScan[]                            @relation("CompanyReceiptScans")
   stockMovements                   StockMovement[]                          @relation("CompanyStockMovements")
+  stockPhysicalUnits               StockPhysicalUnit[]                      @relation("CompanyStockPhysicalUnits")
+  stockReservations                StockReservation[]                       @relation("CompanyStockReservations")
   necesidadesCompra                NecesidadCompra[]                        @relation("CompanyNecesidadesCompra")
   ordenesPago                      OrdenPago[]                              @relation("CompanyOrdenesPago")
   ordenPagoImputaciones            OrdenPagoImputacion[]                    @relation("CompanyOrdenPagoImputaciones")
@@ -2007,6 +2009,7 @@ model CajasPreparationLine {
   priorChangeLines        CajasCompositionChangeLine[]  @relation("CajasChangePriorPreparationLine")
   resultingChangeLines    CajasCompositionChangeLine[]  @relation("CajasChangeResultPreparationLine")
   dispatchLines           CajasDispatchLine[]           @relation("CajasDispatchLinePreparation")
+  stockReservations       StockReservation[]
 
   @@unique([companyId, id], map: "uq_cpl_company_id")
   @@unique([preparationId, lineKey], map: "uq_cpl_preparation_key")
@@ -2805,6 +2808,8 @@ model Article {
   receiptLines       ReceiptLine[]               @relation("ArticleReceiptLines")
   receiptScans       ReceiptScan[]               @relation("ArticleReceiptScans")
   stockMovements     StockMovement[]             @relation("ArticleStockMovements")
+  stockPhysicalUnits StockPhysicalUnit[]               @relation("ArticleStockPhysicalUnits")
+  stockReservations  StockReservation[]                @relation("ArticleStockReservations")
   necesidadesCompra  NecesidadCompra[]           @relation("ArticleNecesidadesCompra")
 
   @@unique([organizationId, sku], map: "uq_article_org_sku")
@@ -3099,6 +3104,79 @@ enum StockMovementType {
   ADJUSTMENT
   RETURN_IN
   TRANSFER
+}
+
+
+enum StockPhysicalUnitStatus {
+  ACTIVE
+  RETIRED
+}
+
+enum StockReservationStatus {
+  ACTIVE
+  RELEASED
+}
+
+model StockReservation {
+  id                    String                 @id @default(cuid())
+  companyId             String                 @map("company_id")
+  articleId             String                 @map("article_id")
+  physicalUnitId        String?                @map("physical_unit_id")
+  assignmentId          String                 @map("assignment_id")
+  preparationLineId     String?                @map("preparation_line_id")
+  stockScopeReferenceId String?                @map("stock_scope_reference_id")
+  quantity              Decimal                @default(1) @map("quantity") @db.Decimal(18, 4)
+  remainingQuantity     Decimal                @default(1) @map("remaining_quantity") @db.Decimal(18, 4)
+  dispatchedQuantity    Decimal                @default(0) @map("dispatched_quantity") @db.Decimal(18, 4)
+  activeSlot            Int?                   @default(1) @map("active_slot")
+  status                StockReservationStatus @default(ACTIVE)
+  semanticKey           String                 @map("semantic_key")
+  createdById           String                 @map("created_by_id")
+  releasedAt            DateTime?              @map("released_at") @db.Timestamptz(6)
+  releasedById          String?                @map("released_by_id")
+  releaseCause          String?                @map("release_cause") @db.Text
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company             Company                   @relation("CompanyStockReservations", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  article             Article                   @relation("ArticleStockReservations", fields: [articleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  physicalUnit        StockPhysicalUnit?        @relation(fields: [companyId, physicalUnitId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sr_company_unit")
+  assignment          CajasAssignment           @relation(fields: [companyId, assignmentId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sr_assignment")
+  preparationLine     CajasPreparationLine?     @relation(fields: [companyId, preparationLineId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sr_preparation_line")
+  stockScopeReference CajasStockScopeReference? @relation(fields: [companyId, stockScopeReferenceId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_sr_stock_scope")
+  createdBy           User                      @relation("StockReservationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  releasedBy          User?                     @relation("StockReservationReleasedBy", fields: [releasedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([companyId, semanticKey], map: "uq_stock_reservation_company_semantic")
+  @@unique([companyId, physicalUnitId, activeSlot], map: "uq_stock_reservation_active_unit")
+  @@index([companyId, assignmentId, status], map: "ix_stock_reservation_assignment_status")
+  @@index([companyId, stockScopeReferenceId, status], map: "ix_sr_scope_status")
+  @@map("stock_reservation")
+}
+
+model StockPhysicalUnit {
+  id           String                  @id @default(cuid())
+  companyId    String                  @map("company_id")
+  articleId    String                  @map("article_id")
+  unitCode     String                  @map("unit_code")
+  serialNumber String?                 @map("serial_number")
+  location     String?                 @map("location")
+  status       StockPhysicalUnitStatus @default(ACTIVE)
+  createdById  String?                 @map("created_by_id")
+  retiredAt    DateTime?               @map("retired_at") @db.Timestamptz(6)
+  createdAt    DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company      Company            @relation("CompanyStockPhysicalUnits", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  article      Article            @relation("ArticleStockPhysicalUnits", fields: [articleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy    User?              @relation("StockPhysicalUnitCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reservations StockReservation[]
+
+  @@unique([companyId, id], map: "uq_stock_physical_unit_company_id")
+  @@unique([companyId, unitCode], map: "uq_stock_physical_unit_company_code")
+  @@unique([companyId, serialNumber], map: "uq_stock_physical_unit_company_serial")
+  @@index([companyId, articleId, status], map: "ix_stock_physical_unit_company_article_status")
+  @@index([companyId, location], map: "ix_stock_physical_unit_company_location")
+  @@map("stock_physical_unit")
 }
 
 model StockMovement {
