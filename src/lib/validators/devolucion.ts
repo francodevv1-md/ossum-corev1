@@ -83,4 +83,9 @@ export const devolucionListQuerySchema = z
   })
   .partial();
 
-export type DevolucionListQueryInput = z.infer<typeof devolucionListQuerySchema>;
+// ─── Confirm Devolución (with optional Cajas accounting) ─────────────────
+export const devolucionConfirmSchema = z.object({
+  cajasAccounting: z.record(z.string(), z.unknown()).optional(),
+}).optional();
+
+export type DevolucionConfirmInput = z.infer<typeof devolucionConfirmSchema>;

@@ -203,9 +203,10 @@ export function updateRemitoDraft(companyId: string, remitoId: string, payload: 
   })
 }
 
-export function emitirRemito(companyId: string, remitoId: string) {
+export function emitirRemito(companyId: string, remitoId: string, intent?: import("../validators/remito").RemitoEmitInput) {
   return apiFetch<RemitoApiRow>(`${remitoPath(companyId, remitoId)}/emitir`, {
     method: "POST",
+    ...(intent ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(intent) } : {}),
   })
 }
 

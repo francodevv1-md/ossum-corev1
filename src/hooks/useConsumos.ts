@@ -110,9 +110,9 @@ export function useConsumos(filters?: ListConsumosParams) {
     return runMutation(consumoId, () => updateConsumoState(companyId, consumoId, newState))
   }, [companyId, runMutation])
 
-  const validate = useCallback((consumoId: string) => {
+  const validate = useCallback((consumoId: string, payload?: { cajasAccounting?: unknown }) => {
     if (!companyId) throw new Error("No hay empresa activa")
-    return runMutation(consumoId, () => validateConsumo(companyId, consumoId))
+    return runMutation(consumoId, () => validateConsumo(companyId, consumoId, payload))
   }, [companyId, runMutation])
 
   const emit = useCallback((consumoId: string) => {

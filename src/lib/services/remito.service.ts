@@ -11,6 +11,9 @@ import { createAuditEvent, type AuditPrismaClient } from "../audit";
 import { requireCompanyId } from "../tenant";
 import { ApiError, badRequest, notFound } from "../api/errors";
 import { emitCrossDomainNotification } from "./internal-notifications.service";
+import { acceptCajasDispatch } from "./cajas-dispatch.service";
+import { cajasDispatchSchema } from "../validators/cajas-assignment";
+import type { z } from "zod";
 import {
   confirmDevolucion,
   createDevolucion,
@@ -345,6 +348,7 @@ export interface EmitirRemitoInput {
   companyId: string;
   remitoId: string;
   updatedById?: string;
+  cajasDispatch?: z.input<typeof cajasDispatchSchema>;
   prisma: PrismaClient;
 }
 
@@ -826,6 +830,8 @@ export async function emitirRemito(input: EmitirRemitoInput) {
   const companyId = requireCompanyId(input.companyId);
   const prisma = input.prisma;
   const updatedById = requireCreatedById(input.updatedById);
+  const dispatchIntent = input.cajasDispatch === undefined ? undefined : cajasDispatchSchema.parse(input.cajasDispatch);
+  if (dispatchIntent && !updatedById) throw badRequest("Dispatch actor is required", "cajas_dispatch_actor_required");
 
   for (let attempt = 0; attempt < REMITO_EMIT_MAX_RETRIES; attempt += 1) {
     try {
@@ -838,7 +844,16 @@ export async function emitirRemito(input: EmitirRemitoInput) {
 
           requireCompanyMatch(current, companyId, input.remitoId);
 
+          const linkage = (current.metadata as { cajas?: { assignmentId?: string } } | null)?.cajas;
+          if (linkage && (!dispatchIntent || linkage.assignmentId !== dispatchIntent.assignmentId)) {
+            throw badRequest("Cajas-linked Remito requires matching dispatch intent", "cajas_dispatch_intent_required");
+          }
+
           if (current.state !== "Borrador") {
+            if (dispatchIntent && await tx.cajasDispatch.findFirst({ where: { companyId, remitoId: current.id, assignmentId: dispatchIntent.assignmentId } })) {
+              const cajasDispatch = await acceptCajasDispatch(tx, companyId, current.id, dispatchIntent, updatedById!);
+              return { ...current, cajasDispatch };
+            }
             throw new RemitoError(
               "remito_not_borrador",
               `Cannot emit remito in state ${current.state}`,
@@ -862,9 +877,14 @@ export async function emitirRemito(input: EmitirRemitoInput) {
               state: "Emitido",
               issuedAt: new Date(),
               updatedById,
+              ...(dispatchIntent ? { metadata: { ...(current.metadata as object ?? {}), cajas: { assignmentId: dispatchIntent.assignmentId } } } : {}),
             },
             select: remitoReadSelect,
           });
+
+          const cajasDispatch = dispatchIntent
+            ? await acceptCajasDispatch(tx, companyId, result.id, dispatchIntent, updatedById!)
+            : undefined;
 
           if (updatedById) {
             await createAuditEvent({
@@ -896,7 +916,7 @@ export async function emitirRemito(input: EmitirRemitoInput) {
             });
           }
 
-          return result;
+          return cajasDispatch ? { ...result, cajasDispatch } : result;
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

@@ -127,9 +127,10 @@ export function updateConsumoState(companyId: string, consumoId: string, newStat
   })
 }
 
-export function validateConsumo(companyId: string, consumoId: string) {
+export function validateConsumo(companyId: string, consumoId: string, payload?: { cajasAccounting?: unknown }) {
   return apiFetch<ConsumoApiRow>(`${consumoPath(companyId, consumoId)}/validate`, {
     method: "POST",
+    ...(payload ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) } : {}),
   })
 }
 

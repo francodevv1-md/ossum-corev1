@@ -14,6 +14,7 @@ import { createAuditEvent } from "../audit";
 import { requireCompanyId } from "../tenant";
 import { badRequest, notFound } from "../api/errors";
 import { emitCrossDomainNotification } from "./internal-notifications.service";
+import { acceptCajasAccounting } from "./cajas-accounting.service";
 
 // ─── Catálogos (single source of truth; validator re-exporta estos) ─────────
 export const DEVOLUCION_STATES = [
@@ -339,6 +340,7 @@ export interface ConfirmDevolucionInput {
   companyId: string;
   devolucionId: string;
   updatedById?: string;
+  cajasAccounting?: unknown;
   prisma: PrismaClient;
 }
 
@@ -687,7 +689,23 @@ export async function confirmDevolucion(input: ConfirmDevolucionInput) {
       console.error("[devolucion.service] emitCrossDomainNotification failed:", err);
     }
 
-    return result;
+    const linkedDispatch = await tx.cajasDispatch?.findFirst?.({
+      where: { remitoId: result.remitoId, companyId },
+      select: { id: true },
+    });
+
+    if (linkedDispatch && !input.cajasAccounting) {
+      throw badRequest(
+        "El remito asociado contiene un despacho de Cajas que requiere imputación de devolución",
+        "cajas_accounting_required",
+      );
+    }
+
+    const cajasAccounting = input.cajasAccounting
+      ? await acceptCajasAccounting(tx, companyId, result.id, "return", input.cajasAccounting, updatedById!)
+      : undefined;
+
+    return { ...result, cajasAccounting };
   });
 }
 

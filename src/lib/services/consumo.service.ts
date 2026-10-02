@@ -13,6 +13,7 @@ import { createAuditEvent } from "../audit";
 import { requireCompanyId } from "../tenant";
 import { badRequest, conflict, notFound } from "../api/errors";
 import { emitCrossDomainNotification } from "./internal-notifications.service";
+import { acceptCajasAccounting } from "./cajas-accounting.service";
 
 // ─── Catálogos (single source of truth; validator re-exporta estos) ─────────
 export const CONSUMO_STATES = [
@@ -291,6 +292,7 @@ export interface ValidateConsumptionInput {
   companyId: string;
   consumoId: string;
   updatedById?: string;
+  cajasAccounting?: unknown;
   prisma: PrismaClient;
 }
 
@@ -813,7 +815,23 @@ export async function validateConsumption(input: ValidateConsumptionInput) {
       console.error("[consumo.service] emitCrossDomainNotification failed:", err);
     }
 
-    return result;
+    const linkedDispatch = await tx.cajasDispatch?.findFirst?.({
+      where: { remitoId: result.remitoId, companyId },
+      select: { id: true },
+    });
+
+    if (linkedDispatch && !input.cajasAccounting) {
+      throw badRequest(
+        "El remito asociado contiene un despacho de Cajas que requiere imputación de consumo",
+        "cajas_accounting_required",
+      );
+    }
+
+    const cajasAccounting = input.cajasAccounting
+      ? await acceptCajasAccounting(tx, companyId, result.id, "consumption", input.cajasAccounting, updatedById!)
+      : undefined;
+
+    return { ...result, cajasAccounting };
   });
 }
 

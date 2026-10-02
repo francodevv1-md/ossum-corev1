@@ -109,9 +109,9 @@ export function useRemitos(filters?: ListRemitosParams) {
     }
   }, [refresh])
 
-  const emit = useCallback((remitoId: string) => {
+  const emit = useCallback((remitoId: string, intent?: import("@/lib/validators/remito").RemitoEmitInput) => {
     if (!companyId) throw new Error("No hay empresa activa")
-    return runMutation(remitoId, () => emitirRemito(companyId, remitoId))
+    return runMutation(remitoId, () => emitirRemito(companyId, remitoId, intent))
   }, [companyId, runMutation])
 
   const transition = useCallback((remitoId: string, state: RemitoState | string) => {

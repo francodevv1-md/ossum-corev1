@@ -3,6 +3,8 @@ import { requireCompanyMutationAccess } from "../../../../../../../lib/api/guard
 import { notFound } from "../../../../../../../lib/api/errors";
 import { errorResponse, ok } from "../../../../../../../lib/api/responses";
 import prisma from "../../../../../../../lib/prisma";
+import { remitoEmitSchema } from "../../../../../../../lib/validators/remito";
+import { CAJAS_DISPATCH_ACTION_ROLES } from "../../../../../../../lib/permissions/stock-operations-policy";
 import {
   REMITO_MUTATION_ROLES,
   emitirRemito,
@@ -20,12 +22,16 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     const ctx = await getApiAuthContext(request, companyId);
     requireCompanyMutationAccess(ctx, REMITO_MUTATION_ROLES);
+    const body = await request.text();
+    const intent = remitoEmitSchema.parse(body.trim() ? JSON.parse(body) : {});
+    if (intent.cajasDispatch) requireCompanyMutationAccess(ctx, CAJAS_DISPATCH_ACTION_ROLES);
 
     const result = await emitirRemito({
       companyId: ctx.companyId,
       remitoId,
       updatedById: ctx.actorUserId,
       prisma,
+      ...intent,
     });
 
     return ok(result);

@@ -109,9 +109,9 @@ export function useDevoluciones(filters?: ListDevolucionesParams) {
     return runMutation(devolucionId, () => updateDevolucionState(companyId, devolucionId, newState))
   }, [companyId, runMutation])
 
-  const confirm = useCallback((devolucionId: string) => {
+  const confirm = useCallback((devolucionId: string, payload?: { cajasAccounting?: unknown }) => {
     if (!companyId) throw new Error("No hay empresa activa")
-    return runMutation(devolucionId, () => confirmDevolucion(companyId, devolucionId))
+    return runMutation(devolucionId, () => confirmDevolucion(companyId, devolucionId, payload))
   }, [companyId, runMutation])
 
   const createDraft = useCallback(async (payload: CreateDevolucionPayload) => {

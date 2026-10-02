@@ -4,6 +4,7 @@
 // src/lib/services/remito.service.ts to keep a single source of truth.
 
 import { z } from "zod";
+import { cajasDispatchSchema } from "./cajas-assignment";
 import { REMITO_ORIGINS, REMITO_SALIDA_REASONS, REMITO_STATES, REMITO_TRANSITIONS } from "../services/remito.service";
 
 export { REMITO_ORIGINS, REMITO_SALIDA_REASONS, REMITO_STATES, REMITO_TRANSITIONS };
@@ -11,6 +12,9 @@ export { REMITO_ORIGINS, REMITO_SALIDA_REASONS, REMITO_STATES, REMITO_TRANSITION
 export type RemitoOrigin = (typeof REMITO_ORIGINS)[number];
 export type RemitoSalidaReason = (typeof REMITO_SALIDA_REASONS)[number];
 export type RemitoState = (typeof REMITO_STATES)[number];
+
+export const remitoEmitSchema = z.object({ cajasDispatch: cajasDispatchSchema.optional() }).strict();
+export type RemitoEmitInput = z.input<typeof remitoEmitSchema>;
 
 // ─── Decimal-friendly item quantity schema ────────────────────────────────
 // quantity reaches the service as number/string; we coerce to string for

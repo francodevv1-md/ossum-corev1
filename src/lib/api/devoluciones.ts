@@ -132,9 +132,10 @@ export function updateDevolucionState(companyId: string, devolucionId: string, n
   })
 }
 
-export function confirmDevolucion(companyId: string, devolucionId: string) {
+export function confirmDevolucion(companyId: string, devolucionId: string, payload?: { cajasAccounting?: unknown }) {
   return apiFetch<DevolucionApiRow>(`${devolucionPath(companyId, devolucionId)}/confirm`, {
     method: "POST",
+    ...(payload ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) } : {}),
   })
 }
 

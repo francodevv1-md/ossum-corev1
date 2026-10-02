@@ -21,10 +21,20 @@ export async function POST(request: Request, { params }: RouteContext) {
     const ctx = await getApiAuthContext(request, companyId);
     requireCompanyMutationAccess(ctx, CONSUMO_MUTATION_ROLES);
 
+    let body: any = {};
+    try {
+      if (request.headers.get("content-type")?.includes("application/json")) {
+        body = await request.json();
+      }
+    } catch {
+      // Body is optional
+    }
+
     const result = await validateConsumption({
       companyId: ctx.companyId,
       consumoId,
       updatedById: ctx.actorUserId,
+      cajasAccounting: body?.cajasAccounting,
       prisma,
     });
 

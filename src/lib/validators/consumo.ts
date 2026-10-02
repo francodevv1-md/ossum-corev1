@@ -80,4 +80,9 @@ export const consumoListQuerySchema = z
   })
   .partial();
 
-export type ConsumoListQueryInput = z.infer<typeof consumoListQuerySchema>;
+// ─── Validate Consumo (with optional Cajas accounting) ────────────────────
+export const consumoValidateSchema = z.object({
+  cajasAccounting: z.record(z.string(), z.unknown()).optional(),
+}).optional();
+
+export type ConsumoValidateInput = z.infer<typeof consumoValidateSchema>;
