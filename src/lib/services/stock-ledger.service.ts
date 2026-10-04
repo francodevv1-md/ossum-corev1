@@ -57,6 +57,10 @@ export interface StockMovementLedgerItem {
   ref: string | null;
   user: string;
   notes: string | null;
+  receiptId?: string | null;
+  receiptLineId?: string | null;
+  idempotencyKey?: string | null;
+  createdById?: string | null;
 }
 
 export interface ArticleStockAvailability {
@@ -615,6 +619,10 @@ export async function getArticleStockDetail(db: Db, companyId: string, articleId
       ref: refLabel,
       user: userName,
       notes: m.notes,
+      receiptId: m.receiptId,
+      receiptLineId: m.receiptLineId,
+      idempotencyKey: m.idempotencyKey,
+      createdById: m.createdById,
     };
   });
 

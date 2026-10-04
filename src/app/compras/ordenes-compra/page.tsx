@@ -4,9 +4,10 @@ import React, { useEffect, useMemo, useState } from "react"
 import { useOrdenesCompra } from "@/hooks/useOrdenesCompra"
 import { useProveedores } from "@/hooks/useProveedores"
 import { CreateOrdenCompraDialog } from "@/components/compras/CreateOrdenCompraDialog"
-import { ReceiveOrdenCompraDialog } from "@/components/compras/ReceiveOrdenCompraDialog"
+import { ReceiveOrdenCompraDialog, readReceiptTracePolicy, type ReceiptTracePolicy } from "@/components/compras/ReceiveOrdenCompraDialog"
 import { useAuth } from "@/components/auth/AuthProvider"
-import { searchArticlesApi } from "@/lib/api/articles"
+import { canPerformStockOperations } from "@/lib/permissions/stock-operations-policy"
+import { searchArticlesApi, getArticleApi } from "@/lib/api/articles"
 import type { OrdenCompraApiRow } from "@/lib/api/ordenes-compra"
 import { formatCurrency, formatDate } from "@/lib/formatters"
 import {
@@ -50,8 +51,9 @@ const STATE_OPTIONS = [
 ]
 
 export default function OrdenesCompraPage() {
-  const { activeCompany } = useAuth()
-  const { ordenes: backendOrdenes, error: backendError, create, enviar, recibir } = useOrdenesCompra()
+  const { activeCompany, currentAccess } = useAuth()
+  const canReceive = !!activeCompany?.id && canPerformStockOperations(currentAccess?.role)
+  const { ordenes: backendOrdenes, error: backendError, create, emitir, enviar, recibir } = useOrdenesCompra()
   const { proveedores: backendProveedores } = useProveedores()
 
   const [search, setSearch] = useState("")
@@ -63,7 +65,9 @@ export default function OrdenesCompraPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
-  const [catalog, setCatalog] = useState<Array<{ id: string; code: string; name: string }>>([])
+  const [catalog, setCatalog] = useState<Array<{ id: string; code: string; name: string; policy?: ReceiptTracePolicy }>>([])
+  const [catalogCompanyId, setCatalogCompanyId] = useState<string | null>(null)
+  const [receiptPolicies, setReceiptPolicies] = useState<{ companyId: string; orderId: string; values: Record<string, ReceiptTracePolicy | undefined> } | null>(null)
 
   // Detail
   const [detailOC, setDetailOC] = useState<OrdenCompraApiRow | null>(null)
@@ -74,17 +78,42 @@ export default function OrdenesCompraPage() {
 
   useEffect(() => {
     let cancelled = false
+    setCatalog([])
+    setCatalogCompanyId(null)
     if (!activeCompany?.id) {
       setCatalog([])
       return
     }
     void searchArticlesApi(activeCompany.id, "", 100).then(rows => {
-      if (!cancelled) setCatalog(rows.map(row => ({ id: row.id, code: row.sku, name: row.description })))
+      if (!cancelled) {
+        setCatalog(rows.map(row => ({ id: row.id, code: row.sku, name: row.description, policy: readReceiptTracePolicy(row) })))
+        setCatalogCompanyId(activeCompany.id)
+      }
     }).catch(() => {
       if (!cancelled) setCatalog([])
     })
     return () => { cancelled = true }
   }, [activeCompany?.id])
+
+  useEffect(() => {
+    if (!receiveDialogOpen || !receiveOC || !activeCompany?.id) return
+    let cancelled = false
+    const companyId = activeCompany.id, orderId = receiveOC.id
+    const values: Record<string, ReceiptTracePolicy | undefined> = {}
+    const scopedCatalog = catalogCompanyId === companyId ? catalog : []
+    for (const item of receiveOC.items) values[item.id] = scopedCatalog.find(article => article.id === item.stockItemId)?.policy
+    setReceiptPolicies({ companyId, orderId, values })
+    const missingIds = [...new Set(receiveOC.items.filter(item => !values[item.id]).map(item => item.stockItemId))]
+    void Promise.all(missingIds.map(async articleId => {
+      try { return [articleId, readReceiptTracePolicy(await getArticleApi(companyId, articleId))] as const }
+      catch { return [articleId, undefined] as const }
+    })).then(rows => {
+      if (cancelled) return
+      const resolved = new Map(rows)
+      setReceiptPolicies({ companyId, orderId, values: Object.fromEntries(receiveOC.items.map(item => [item.id, values[item.id] ?? resolved.get(item.stockItemId)])) })
+    })
+    return () => { cancelled = true }
+  }, [receiveDialogOpen, receiveOC, activeCompany?.id, catalog, catalogCompanyId])
 
   const provFilterOptions = useMemo(() => [
     { value: "", label: "Todos los proveedores" },
@@ -126,9 +155,11 @@ export default function OrdenesCompraPage() {
   }
 
 
+  const handleEmitir = async (id: string) => { try { await emitir(id); toast.success("OC emitida") } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo emitir la OC") } }
   const handleMarcarEnviada = async (id: string) => { try { await enviar(id); toast.success("OC marcada como enviada") } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo enviar la OC") } }
 
   const handleRegistrarRecepcion = (ordenCompra: OrdenCompraApiRow) => {
+    if (!canReceive) return
     setReceiveOC(ordenCompra)
     setReceiveDialogOpen(true)
   }
@@ -223,12 +254,17 @@ export default function OrdenesCompraPage() {
                                 <DropdownMenuItem onClick={() => { setDetailOC(oc); setDetailDialogOpen(true) }}>
                                   <Eye className="size-4" /> Ver detalle
                                 </DropdownMenuItem>
+                                {oc.state === "Borrador" && (
+                                  <DropdownMenuItem onClick={() => handleEmitir(oc.id)}>
+                                    <FileText className="size-4" /> Emitir
+                                  </DropdownMenuItem>
+                                )}
                                 {oc.state === "Emitida" && (
                                   <DropdownMenuItem onClick={() => handleMarcarEnviada(oc.id)}>
                                     <Truck className="size-4" /> Marcar enviada
                                   </DropdownMenuItem>
                                 )}
-                                {(oc.state === "Enviada" || oc.state === "Parcialmente_recibida") && (
+                                {canReceive && (oc.state === "Enviada" || oc.state === "Parcialmente_recibida") && (
                                   <DropdownMenuItem onClick={() => handleRegistrarRecepcion(oc)}>
                                     <Package className="size-4" /> Registrar recepción
                                   </DropdownMenuItem>
@@ -363,7 +399,7 @@ export default function OrdenesCompraPage() {
       </Dialog>
 
       <CreateOrdenCompraDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} proveedores={proveedores} catalog={catalog} onSubmit={async payload => { await create(payload); toast.success("Orden de compra creada") }} />
-      <ReceiveOrdenCompraDialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen} ordenCompra={receiveOC} onSubmit={async payload => { if (!receiveOC) return; await recibir(receiveOC.id, payload); toast.success("Recepción registrada") }} />
+      <ReceiveOrdenCompraDialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen} ordenCompra={receiveOC} tracePolicies={receiptPolicies?.companyId === activeCompany?.id && receiptPolicies?.orderId === receiveOC?.id ? receiptPolicies?.values : undefined} onSubmit={async payload => { if (!receiveOC || !canReceive) throw new Error("Recepción no autorizada para esta empresa"); const result = await recibir(receiveOC.id, payload); toast.success("Recepción registrada"); if (result.receiptWarnings?.some(warning => warning.code === "EXPIRED_RECEIPT_ACCEPTED")) toast.warning("Material vencido: la recepción se registró y generó un aviso") }} />
       <SurgeryDrawer />
     </div>
   )

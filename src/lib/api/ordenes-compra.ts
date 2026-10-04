@@ -1,7 +1,8 @@
 import { apiFetch } from "./client"
-import type { OrdenCompraState } from "../services/orden-compra.service"
+import type { OrdenCompraState, OrdenCompraReceiptAllocation, OrdenCompraReceiptWarning } from "../services/orden-compra.service"
 
 export type { OrdenCompraState }
+export type { OrdenCompraReceiptAllocation, OrdenCompraReceiptWarning }
 
 export type OrdenCompraItemApiRow = {
   id: string
@@ -31,6 +32,8 @@ export type OrdenCompraApiRow = {
   necesidadCompraIds: string[]
   createdAt: string
   items: OrdenCompraItemApiRow[]
+  /** Only present for accepted expired ingress; persisted evidence is returned unchanged on replay. */
+  receiptWarnings?: OrdenCompraReceiptWarning[]
 }
 
 export type CreateOrdenCompraPayload = {
@@ -40,7 +43,9 @@ export type CreateOrdenCompraPayload = {
 }
 
 export type ReceiveOrdenCompraPayload = {
-  receivedByItem: Array<{ itemId: string; received: string | number }>
+  location: string
+  operationKey: string
+  receivedByItem: Array<{ itemId: string; received: string | number; allocations?: OrdenCompraReceiptAllocation[] }>
 }
 
 const base = (companyId: string) => `/api/companies/${encodeURIComponent(companyId)}/ordenes-compra`

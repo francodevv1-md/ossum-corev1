@@ -3,6 +3,7 @@ import { badRequest, notFound } from "../api/errors";
 import { createAuditEvent } from "../audit";
 import { parseBarcode, type ParsedBarcode, type ReceiptCreateInput } from "../validators/receipt";
 import { normalizeArticleIdentifier } from "../validators/article";
+import { recordStockMovement } from "./stock-ledger.service";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -290,6 +291,7 @@ export async function createReceiptDraft(
       supplierId: input.supplierId?.trim() || null,
       idempotencyKey: input.idempotencyKey?.trim() || null,
       notes: input.notes?.trim() || null,
+      metadata: input.metadata as Prisma.InputJsonValue | undefined,
       status: "PREPARED",
       lines: {
         create: linesToCreate,
@@ -791,14 +793,16 @@ export async function resolvePendingScan(
   };
 }
 
-export async function confirmReceipt(
-  db: Db,
+export async function confirmReceiptInTransaction(
+  tx: Prisma.TransactionClient,
   companyId: string,
   receiptId: string,
   notes?: string,
-  actorUserId?: string
-): Promise<FormattedReceipt> {
-  const receipt = await db.receipt.findFirst({
+  actorUserId?: string,
+  origin?: { location: string; metadata: Prisma.InputJsonObject; itemsByLine: Record<string, string>; lineMetadata?: Record<string, Prisma.InputJsonObject> }
+): Promise<{ receipt: FormattedReceipt; confirmedNow: boolean }> {
+  await tx.$queryRaw`SELECT "id" FROM "receipt" WHERE "id" = ${receiptId} AND "company_id" = ${companyId} FOR UPDATE`;
+  const receipt = await tx.receipt.findFirst({
     where: { id: receiptId, companyId },
     include: {
       lines: {
@@ -815,7 +819,7 @@ export async function confirmReceipt(
 
   // Idempotency: if already confirmed, return current state without creating movements again
   if (receipt.status === "CONFIRMED") {
-    return formatReceipt(receipt);
+    return { receipt: formatReceipt(receipt), confirmedNow: false };
   }
 
   if (receipt.status === "CANCELLED") {
@@ -852,8 +856,6 @@ export async function confirmReceipt(
     );
   }
 
-  // Execute confirmation and stock movements in an interactive transaction
-  return db.$transaction(async (tx) => {
     const updated = await tx.receipt.update({
       where: { id: receipt.id },
       data: {
@@ -879,14 +881,7 @@ export async function confirmReceipt(
           if (!scan.articleId) continue;
           const idempotencyKey = `receipt:${receipt.id}:scan:${scan.id}`;
 
-          await tx.stockMovement.upsert({
-            where: {
-              companyId_idempotencyKey: {
-                companyId,
-                idempotencyKey,
-              },
-            },
-            create: {
+          await recordStockMovement(tx, {
               companyId,
               articleId: scan.articleId,
               movementType: "RECEIPT_IN",
@@ -899,21 +894,14 @@ export async function confirmReceipt(
               idempotencyKey,
               notes: `Ingreso por recepción ${receipt.documentReference || receipt.id}`,
               createdById: actorUserId || null,
-            },
-            update: {},
+              location: origin?.location,
+               metadata: origin ? { ...origin.metadata, ...origin.lineMetadata?.[line.id], ordenCompraItemId: origin.itemsByLine[line.id] } : undefined,
           });
         }
       } else {
         // Line received without individual unit scans
         const idempotencyKey = `receipt:${receipt.id}:line:${line.id}`;
-        await tx.stockMovement.upsert({
-          where: {
-            companyId_idempotencyKey: {
-              companyId,
-              idempotencyKey,
-            },
-          },
-          create: {
+        await recordStockMovement(tx, {
             companyId,
             articleId: line.articleId,
             movementType: "RECEIPT_IN",
@@ -926,8 +914,8 @@ export async function confirmReceipt(
             idempotencyKey,
             notes: `Ingreso por recepción ${receipt.documentReference || receipt.id}`,
             createdById: actorUserId || null,
-          },
-          update: {},
+            location: origin?.location,
+             metadata: origin ? { ...origin.metadata, ...origin.lineMetadata?.[line.id], ordenCompraItemId: origin.itemsByLine[line.id] } : undefined,
         });
       }
     }
@@ -947,24 +935,50 @@ export async function confirmReceipt(
       },
     });
 
+    return { receipt: formatReceipt(updated), confirmedNow: true };
+}
+
+export async function notifyReceiptConfirmed(db: PrismaClient, receipt: FormattedReceipt, actorUserId?: string, warnings?: readonly {
+  readonly code: "EXPIRED_RECEIPT_ACCEPTED"; readonly itemId: string; readonly articleId: string;
+  readonly expirationDate: string; readonly receivedOn: string; readonly lotCode?: string; readonly serialNumber?: string;
+}[]) {
     try {
+      const receiptWarnings = (warnings ?? []).slice(0, 1000).map(warning => ({
+        code: warning.code, itemId: warning.itemId.slice(0, 128), articleId: warning.articleId.slice(0, 128),
+        expirationDate: warning.expirationDate.slice(0, 10), receivedOn: warning.receivedOn.slice(0, 10),
+        ...(warning.lotCode !== undefined ? { lotCode: warning.lotCode.slice(0, 120) } : {}),
+        ...(warning.serialNumber !== undefined ? { serialNumber: warning.serialNumber.slice(0, 120) } : {}),
+      }));
       const { emitCrossDomainNotification } = await import("./internal-notifications.service");
-      await emitCrossDomainNotification(tx, {
-        companyId,
+      await emitCrossDomainNotification(db, {
+        companyId: receipt.companyId,
         actorUserId: actorUserId || "system",
         type: "stock_receipt_confirmed" as any,
         domain: "STOCK",
-        severity: "SUCCESS",
+        severity: receiptWarnings.length ? "WARNING" : "SUCCESS",
         title: `Recepción confirmada: ${receipt.documentReference || receipt.id}`,
-        body: `Ingreso de mercadería registrado con éxito (${updated.lines.length} líneas).`,
+        body: receiptWarnings.length
+          ? `Ingreso de mercadería registrado (${receipt.lines.length} líneas). Aviso: se aceptó material vencido (${receiptWarnings.length} advertencias).`
+          : `Ingreso de mercadería registrado con éxito (${receipt.lines.length} líneas).`,
         sourceEntityId: receipt.id,
         linkHref: `/stock`,
-        metadata: { receiptId: receipt.id, documentReference: receipt.documentReference },
+        metadata: { receiptId: receipt.id, documentReference: receipt.documentReference,
+          ...(receiptWarnings.length ? { expiredReceiptAccepted: true, receiptWarnings } : {}) },
       });
     } catch (e) {
       console.warn("[notification] Failed to emit receipt notification", e);
     }
 
-    return formatReceipt(updated);
-  });
+}
+
+export async function confirmReceipt(
+  db: PrismaClient,
+  companyId: string,
+  receiptId: string,
+  notes?: string,
+  actorUserId?: string
+): Promise<FormattedReceipt> {
+  const { receipt, confirmedNow } = await db.$transaction(tx => confirmReceiptInTransaction(tx, companyId, receiptId, notes, actorUserId));
+  if (confirmedNow) await notifyReceiptConfirmed(db, receipt, actorUserId);
+  return receipt;
 }
