@@ -225,6 +225,9 @@ model User {
   cajasProjectionReconciliations        CajasProjectionReconciliation[]          @relation("CajasReconciliationComparedBy")
   confirmedReceipts                     Receipt[]                                @relation("ReceiptConfirmedBy")
   createdStockMovements                 StockMovement[]                          @relation("StockMovementCreatedBy")
+  createdStockPhysicalUnits             StockPhysicalUnit[]                      @relation("StockPhysicalUnitCreatedBy")
+  createdStockReservations              StockReservation[]                       @relation("StockReservationCreatedBy")
+  releasedStockReservations             StockReservation[]                       @relation("StockReservationReleasedBy")
   createdNecesidadesCompra              NecesidadCompra[]                        @relation("NecesidadCompraCreatedBy")
   createdOrdenesPago                    OrdenPago[]                              @relation("OrdenPagoCreatedBy")
   updatedOrdenesPago                    OrdenPago[]                              @relation("OrdenPagoUpdatedBy")
@@ -1780,6 +1783,7 @@ model CajasStockScopeReference {
   receivedReplacementPairs CajasReplacementPair[]        @relation("CajasReplacementReceivedScope")
   consumptionLines         CajasConsumptionLine[]        @relation("CajasConsumptionLineStockScope")
   conditionProjection      CajasConditionProjection?     @relation("CajasStockScopeCondition")
+  stockReservations        StockReservation[]
 
   @@unique([companyId, id], map: "uq_cssr_company_id")
   @@unique([companyId, sourceStockScopeId], map: "uq_cssr_company_source")
@@ -1937,6 +1941,7 @@ model CajasAssignment {
   differences                 CajasDifference[]             @relation("CajasAssignmentDifferences")
   dispatches                  CajasDispatch[]               @relation("CajasAssignmentDispatches")
   conditionProjection         CajasConditionProjection?     @relation("CajasAssignmentCondition")
+  stockReservations           StockReservation[]
 
   @@unique([companyId, id], map: "uq_ca_company_id")
   @@unique([companyId, boxStockScopeReferenceId, activeSlot], map: "uq_ca_active_box")
