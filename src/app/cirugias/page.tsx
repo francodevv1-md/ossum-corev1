@@ -17,6 +17,7 @@ import { useBackendActiveSurgeries } from "@/hooks/useBackendActiveSurgeries"
 import { useIsMobile } from "@/hooks/useIsMobile"
 
 // Utils
+import type { Surgery } from "@/types"
 import { computeKpis, getFacturacionStatus, resolveKpiFilter } from "@/lib/cirugias.utils"
 import { CIRUGIAS_COLUMNS } from "@/lib/cirugias.constants"
 import { getCircuitProgress } from "@/lib/circuit-progress"
@@ -127,7 +128,7 @@ export default function CirugiasPage() {
   const primaryActionFor = useCallback(
     (s: Surgery): MobileCardPrimaryAction | null => {
       const docStatus = store.getDocStatus(s.id)
-      const consumoState = store.getConsumoBySurgeryId(s.id)?.state ?? null
+      const consumoState = store.getConsumoBySurgeryId(s.id)?.state
       if (canAutorizarFV(s, docStatus, consumoState).allowed) {
         return {
           id: "facturar",
