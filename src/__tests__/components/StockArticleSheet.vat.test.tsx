@@ -20,7 +20,7 @@ vi.mock("@/lib/api/articles", () => ({
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { StockArticleSheet } from "@/components/stock/StockArticleSheet"
-import type { StockItem } from "@/data/stock-mock"
+import type { StockItem } from "@/lib/stock/stock-ui-model"
 
 const baseCanonicalItem: StockItem = {
   id: "stock-001",
@@ -211,7 +211,7 @@ describe("StockArticleSheet — Canonical VAT Persistence & Guardrails", () => {
     )
 
     // Should show badge/warning
-    expect(screen.getByText(/Sin artículo canónico vinculado/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/Sin artículo canónico vinculado/i)[0]).toBeInTheDocument()
 
     // Select should be disabled
     const select = screen.getByRole("combobox", { name: /Alícuota de IVA/i })

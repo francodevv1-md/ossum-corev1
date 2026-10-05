@@ -31,3 +31,16 @@
 
 ## Next
 - Independent exact backend diff review, local backend commit, then isolated reviewed UI candidate checks and local checkpoint. Preserve physical-flow hold and report unexecuted operational gates explicitly.
+
+## Final continuation evidence
+- Backend checkpoint committed as `512d95c`, 23 files, after exact cached independent review `controlled-violet-wildebeest` PASS. Index empty afterward; no hooks bypassed.
+- Frozen UI subset independently reviewed (`endless-teal-yak`); physical-units source remains HEAD in the isolated candidate. Its dirty source/API/intents/routes remain outside all checkpoints.
+- Isolated UI replay: 11 suites/45 mocked tests PASS. Focused UI source/direct dependencies/eleven test suites TypeScript PASS after including the existing test setup in the temporary check configuration (matcher types were missing only from the initial scoped QA config). No production config/test assertions disabled.
+- Full isolated repository TypeScript retry completed with eight FAIL diagnostics outside this package: three in scripts/dev/districorr-two-institution-map-20261002.ts (uncommitted geographic schema dependency), five in src/app/cirugias/page.tsx (four missing Surgery type references, one nullable ConsumoState). No foreign schema or Surgery edits made to hide these failures.
+- Full build NOT RUN: repository-wide type gate fails and HEAD Next config already ignores build type errors; a green build would not certify typing. Head layout also fetches Google fonts. No shared runtime/browser/DB execution.
+- Isolated generated client and local TypeScript aliases are validation harness only. Installed dependencies reused from the worktree; no fresh dependency installation or matching-lockfile install is claimed.
+- Replay commands: explicit three Agenda suites (17 tests), four Stock backend suites (48 tests), and eleven Stock UI suites (45 tests) listed in the approved Agenda handoff/CANDIDATE/UI_HANDOFF. Never run unrestricted test discovery against an uncontrolled DB environment.
+- Local snapshots validated/reviewed; operational PostgreSQL, migration application, authenticated browser and whole-app release acceptance remain pending.
+- Final exact staged UI review `wide-brown-hippopotamus` PASS: 26 files = seven UI sources, eleven suites, five legacy deletions, three task documents; contracts supplied by committed backend. No dangling legacy imports or included Cajas physical-flow changes.
+- Final combined isolated replay of all eighteen explicit suites: 110/110 PASS (Agenda 17, Stock backend 48, Stock UI 45), 4.48 seconds. These are mocked/unit/component checks, not PostgreSQL/browser acceptance.
+- Own source ownership is released, no active delegated writers remain; Git index ownership releases immediately after the authorized UI checkpoint. Original schema/calendar/backend-surgeries/package blobs retain their preflight hashes; foreign geography/core/Cajas/runtime/config work remains untouched.

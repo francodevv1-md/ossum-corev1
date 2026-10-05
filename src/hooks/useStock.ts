@@ -12,6 +12,7 @@ import {
 import type {
   ArticleStockAvailability,
   StockSummaryKPIs,
+  StockFacets,
 } from "@/lib/services/stock-ledger.service";
 import type {
   StockAdjustmentCreateInput,
@@ -30,6 +31,11 @@ export function useStock(query?: Partial<StockAvailabilityQuery>) {
     totalAvailable: 0,
     totalReserved: 0,
     expiringCount: 0,
+  });
+  const [facets, setFacets] = useState<StockFacets>({
+    families: [],
+    brands: [],
+    articleTypes: [],
   });
   const [pagination, setPagination] = useState({
     page: 1,
@@ -64,9 +70,11 @@ export function useStock(query?: Partial<StockAvailabilityQuery>) {
     setError(null);
 
     try {
-      const res = await fetchStockAvailabilityApi(companyId, query);
+      const parsedQuery: Partial<StockAvailabilityQuery> = JSON.parse(queryKey);
+      const res = await fetchStockAvailabilityApi(companyId, parsedQuery);
       setItems(res.data);
       setSummary(res.summary);
+      setFacets(res.facets ?? { families: [], brands: [], articleTypes: [] });
       setPagination(res.pagination);
       setReady(true);
     } catch (err) {
@@ -75,15 +83,16 @@ export function useStock(query?: Partial<StockAvailabilityQuery>) {
     } finally {
       setLoading(false);
     }
-  }, [companyId, currentUserLoading, isAuthenticated, isLoading, query]);
+  }, [companyId, currentUserLoading, isAuthenticated, isLoading, queryKey]);
 
   useEffect(() => {
     void refresh();
-  }, [refresh, queryKey]);
+  }, [refresh]);
 
   return {
     items,
     summary,
+    facets,
     pagination,
     loading,
     ready,

@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { fmtDate, fmtQty, type StockItem } from "@/data/stock-mock"
+import { fmtDate, fmtQty, type StockItem } from "@/lib/stock/stock-ui-model"
 import type { LotAvailability, StockMovementLedgerItem } from "@/lib/services/stock-ledger.service"
 
 /** Existencias físicas por lote/serie — reusada por la ficha (Inventario/Trazabilidad). */

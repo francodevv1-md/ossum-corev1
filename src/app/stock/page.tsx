@@ -1,12 +1,12 @@
 "use client"
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  ChevronDown,
-  ImagePlus,
+  ChevronLeft,
+  ChevronRight,
   MoreHorizontal,
   Package,
   Plus,
@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   Dialog,
   DialogContent,
@@ -33,24 +34,13 @@ import {
   ARTICLE_TYPE_LABEL,
   BRANDS,
   CATEGORIES,
-  DEPOSITS,
-  FABRICANTES,
   FAMILIES,
   FAMILY_STYLE,
-  LINEAS,
-  PROVEEDORES,
-  RUBROS,
-  SECCIONES,
-  STOCK_CONTROL_OPTIONS,
-  STOCK_ITEMS,
-  STOCK_STATE_OPTIONS,
-  STOCK_STATE_ORDER,
   TRACE_METHODS,
-  TYPES,
   type Family,
   type StockItem,
   type TraceMethod,
-} from "@/data/stock-mock"
+} from "@/lib/stock/stock-ui-model"
 import {
   ColumnsPanel,
   DEFAULT_VIEW_KEY,
@@ -99,11 +89,13 @@ function SortHeader({ label, sortKey, current, dir, onChange, align = "left" }: 
 }) {
   const active = current === sortKey
   const Icon = active ? (dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown
+  const nextDir = active && dir === "asc" ? "descendente" : "ascendente"
   return (
     <button
       type="button"
       onClick={() => onChange(sortKey)}
-      className={`inline-flex items-center gap-1 text-xs font-medium text-white transition-colors hover:text-white ${align === "right" ? "flex-row-reverse" : ""} ${active ? "opacity-100" : "opacity-80"}`}
+      aria-label={`Ordenar por ${label}, cambiar a orden ${nextDir}`}
+      className={`inline-flex items-center gap-1 rounded-sm text-xs font-medium text-white transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--ossum-navy)] ${align === "right" ? "flex-row-reverse" : ""} ${active ? "opacity-100" : "opacity-80"}`}
     >
       {label}
       <Icon className={`size-3 ${active ? "opacity-100" : "opacity-40"}`} aria-hidden="true" />
@@ -126,13 +118,6 @@ function FilterSelect({ ariaLabel, value, onChange, options }: {
   )
 }
 
-function TextFilter({ ariaLabel, value, onChange, placeholder }: {
-  ariaLabel: string; value: string; onChange: (v: string) => void; placeholder: string
-}) {
-  return (
-    <Input value={value} onChange={(e) => onChange(e.target.value)} aria-label={ariaLabel} placeholder={placeholder} className="h-8 w-40 text-xs" />
-  )
-}
 
 // ─── Quick filters (compact tokens, not KPIs) ─────────────
 
@@ -148,19 +133,23 @@ function QuickFilterRow({ total, bajo, sinstock, transito, active, onSelect }: {
     { key: "transito", label: "En tránsito", value: transito },
   ]
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-b border-[var(--ossum-line)] bg-white px-4 py-1 text-xs">
+    <div
+      role="region"
+      aria-label="Filtros rápidos de stock"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--ossum-line)] bg-white px-4 py-1.5 text-xs"
+    >
       {chips.map(({ key, label, value }, idx) => {
         const isActive = active === key
         return (
           <span key={key || "total"} className="inline-flex items-center gap-3">
-            {idx > 0 && <span className="text-gray-300">·</span>}
+            {idx > 0 && <span className="text-gray-300" aria-hidden="true">·</span>}
             <button
               type="button"
               onClick={() => onSelect(isActive ? "" : key)}
               aria-pressed={isActive}
-              className={`inline-flex items-baseline gap-1 ${isActive ? "font-semibold text-[var(--ossum-action)]" : "text-gray-500 hover:text-gray-700"}`}
+              className={`inline-flex min-h-[1.75rem] items-baseline gap-1 rounded px-1 py-0.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ossum-action)] ${isActive ? "font-semibold text-[var(--ossum-action)]" : "text-gray-500 hover:text-gray-700"}`}
             >
-              {label}
+              <span>{label}</span>
               <span className="tabular-nums font-medium">{value}</span>
             </button>
           </span>
@@ -182,13 +171,12 @@ function FormField({ label, children, className = "" }: { label: string; childre
 }
 
 function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }: { open: boolean; onOpenChange: (v: boolean) => void; companyId?: string; onCreated?: () => void; prefill?: ArticlePrefill }) {
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [image, setImage] = useState<string | null>(null)
-  const [useFamilyImage, setUseFamilyImage] = useState(false)
   const [family, setFamily] = useState("")
+  const [category, setCategory] = useState("")
+  const [pmAnmat, setPmAnmat] = useState("")
+  const [isSterile, setIsSterile] = useState(false)
   const [method, setMethod] = useState<TraceMethod>(() => prefill?.trace === "serial" || prefill?.trace === "serial-expiry" ? "serie" : prefill?.trace === "lot" || prefill?.trace === "lot-expiry" ? "lote" : "cantidad")
   const [expiry, setExpiry] = useState(() => prefill?.trace === "serial-expiry" || prefill?.trace === "lot-expiry")
-  const [sterile, setSterile] = useState(true)
   const [sku, setSku] = useState(() => `ITM-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`)
   const [description, setDescription] = useState("")
   const [articleType, setArticleType] = useState("")
@@ -196,30 +184,52 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
   const [manufacturer, setManufacturer] = useState("")
   const [gtin, setGtin] = useState(() => prefill?.gtin ?? "")
   const [identifiers, setIdentifiers] = useState<Array<{ type: "MANUFACTURER_REF" | "GTIN_EAN" | "GS1_AI_22" | "SUPPLIER_CODE" | "ALTERNATIVE_CODE"; value: string; sourcePayload?: string; manufacturerContext?: string; supplierId?: string }>>(() => prefill?.ai22 ? [{ type: "GS1_AI_22", value: prefill.ai22, sourcePayload: prefill.rawValue }] : [])
+  const [referenceCost, setReferenceCost] = useState("")
+  const [referenceSalePrice, setReferenceSalePrice] = useState("")
+  const [priceListCode, setPriceListCode] = useState("")
+  const [leadTimeDays, setLeadTimeDays] = useState("")
   const [saving, setSaving] = useState(false)
 
   const familyStyle = family ? FAMILY_STYLE[family as Family] : null
   const FamilyIcon = familyStyle?.icon
-
-  const pickImage = () => fileRef.current?.click()
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setImage(URL.createObjectURL(file))
-      setUseFamilyImage(false)
-    }
-  }
-  const useFamily = () => {
-    setImage(null)
-    setUseFamilyImage(true)
-  }
 
   const save = async () => {
     if (!companyId) return toast.error("No hay una empresa activa")
     if (!description.trim()) return toast.error("La descripción es obligatoria")
     setSaving(true)
     try {
-      await apiFetch(`/api/companies/${encodeURIComponent(companyId)}/articles`, { method: "POST", body: JSON.stringify({ description, sku: sku.trim() || undefined, articleType: articleType || undefined, brand: brand || undefined, manufacturer: manufacturer || undefined, family: family || undefined, unit: "u", traceabilityPolicy: method === "cantidad" ? "NONE" : method === "lote" ? (expiry ? "LOT_EXPIRY" : "LOT") : method === "serie" ? (expiry ? "SERIAL_EXPIRY" : "SERIAL") : "LOT_SERIAL_EXPIRY", identifiers: [...(gtin.trim() ? [{ type: "GTIN_EAN" as const, value: gtin }] : []), ...identifiers].filter((item) => item.value.trim()), supplierMappings: identifiers.filter((item) => item.type === "SUPPLIER_CODE" && item.supplierId && item.value.trim()).map((item) => ({ supplierId: item.supplierId, supplierCode: item.value })) }) })
+      const hasCommercial = Boolean(
+        referenceCost !== "" || referenceSalePrice !== "" || priceListCode.trim() || leadTimeDays !== ""
+      )
+      const commercialProfile = hasCommercial
+        ? {
+            referenceCost: referenceCost !== "" ? Math.max(0, Number(referenceCost) || 0) : 0,
+            referenceSalePrice: referenceSalePrice !== "" ? Math.max(0, Number(referenceSalePrice) || 0) : 0,
+            currency: "ARS" as const,
+            priceListCode: priceListCode.trim() || undefined,
+            leadTimeDays: leadTimeDays !== "" ? Math.max(0, parseInt(leadTimeDays, 10) || 0) : undefined,
+          }
+        : undefined
+
+      await apiFetch(`/api/companies/${encodeURIComponent(companyId)}/articles`, {
+        method: "POST",
+        body: JSON.stringify({
+          description,
+          sku: sku.trim() || undefined,
+          articleType: articleType || undefined,
+          category: category.trim() || undefined,
+          pmAnmat: pmAnmat.trim() || undefined,
+          isSterile,
+          brand: brand || undefined,
+          manufacturer: manufacturer || undefined,
+          family: family || undefined,
+          unit: "u",
+          traceabilityPolicy: method === "cantidad" ? "NONE" : method === "lote" ? (expiry ? "LOT_EXPIRY" : "LOT") : method === "serie" ? (expiry ? "SERIAL_EXPIRY" : "SERIAL") : "LOT_SERIAL_EXPIRY",
+          identifiers: [...(gtin.trim() ? [{ type: "GTIN_EAN" as const, value: gtin }] : []), ...identifiers].filter((item) => item.value.trim()),
+          supplierMappings: identifiers.filter((item) => item.type === "SUPPLIER_CODE" && item.supplierId && item.value.trim()).map((item) => ({ supplierId: item.supplierId, supplierCode: item.value })),
+          commercialProfile,
+        }),
+      })
       onOpenChange(false)
       onCreated?.()
       toast.success("Artículo creado")
@@ -245,53 +255,33 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
             <div className="flex gap-4">
               <div className="flex shrink-0 flex-col items-center gap-1.5">
                 <div className="flex size-20 items-center justify-center overflow-hidden rounded-md border border-[var(--ossum-line)] bg-white">
-                  {image ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob)
-                    <img src={image} alt="Imagen del artículo" className="size-full object-cover" />
-                  ) : useFamilyImage && familyStyle && FamilyIcon ? (
+                  {familyStyle && FamilyIcon ? (
                     <span className={`flex size-full items-center justify-center ${familyStyle.thumb}`}>
                       <FamilyIcon className="size-8" />
                     </span>
                   ) : (
-                    <ImagePlus className="size-6 text-gray-300" />
+                    <Package className="size-6 text-gray-300" />
                   )}
-                </div>
-                <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
-                <div className="flex flex-wrap items-center justify-center gap-1 text-[10px]">
-                  <button type="button" onClick={pickImage} className="text-[var(--ossum-action)] hover:underline">Cambiar imagen</button>
-                  <span className="text-gray-300">·</span>
-                  <button type="button" onClick={useFamily} className="text-[var(--ossum-action)] hover:underline">Usar imagen de familia</button>
                 </div>
               </div>
 
               <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                 <FormField label="Código / SKU"><Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="TORN-3.5-COR" className="h-8 font-mono text-xs" /></FormField>
                 <FormField label="Descripción" className="sm:col-span-2"><Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tornillo cortical 3.5 mm x 24 mm" className="h-8 text-xs" /></FormField>
-                <FormField label="Categoría">
-                  <select className={selectClass} defaultValue="">
-                    <option value="" disabled>Seleccionar</option>
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Marca">
-                  <select className={selectClass} value={brand} onChange={(e) => setBrand(e.target.value)}>
-                    <option value="" disabled>Seleccionar</option>
-                    {BRANDS.map((b) => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                </FormField>
                 <FormField label="Tipo de artículo">
-                  <select className={selectClass} value={articleType} onChange={(e) => setArticleType(e.target.value)}>
-                    <option value="" disabled>Seleccionar</option>
+                  <select aria-label="Tipo de artículo" className={selectClass} value={articleType} onChange={(e) => setArticleType(e.target.value)}>
+                    <option value="">Seleccionar tipo</option>
                     {ARTICLE_TYPES.map((t) => <option key={t} value={t}>{ARTICLE_TYPE_LABEL[t]}</option>)}
                   </select>
                 </FormField>
-                <FormField label="Unidad">
-                  <select className={selectClass} defaultValue="u">
-                    <option value="u">Unidad (u)</option>
-                    <option value="par">Par</option>
-                    <option value="caja">Caja</option>
-                    <option value="set">Set</option>
+                <FormField label="Marca">
+                  <select aria-label="Marca" className={selectClass} value={brand} onChange={(e) => setBrand(e.target.value)}>
+                    <option value="">Seleccionar marca</option>
+                    {BRANDS.map((b) => <option key={b} value={b}>{b}</option>)}
                   </select>
+                </FormField>
+                <FormField label="Unidad base">
+                  <Input value="u (Unidad)" readOnly className="h-8 text-xs bg-gray-50 text-gray-700" />
                 </FormField>
               </div>
             </div>
@@ -303,18 +293,27 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
           <section>
             <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--ossum-navy)]">Clasificación y registro</h3>
             <div className="grid gap-3 sm:grid-cols-3">
+              <FormField label="Categoría">
+                <select aria-label="Categoría" className={selectClass} value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value="">Sin categoría</option>
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </FormField>
               <FormField label="Familia / Patología">
-                <select className={selectClass} value={family} onChange={(e) => setFamily(e.target.value)}>
+                <select aria-label="Familia / Patología" className={selectClass} value={family} onChange={(e) => setFamily(e.target.value)}>
                   <option value="">Sin familia</option>
                   {FAMILIES.map((f) => <option key={f} value={f}>{f}</option>)}
                 </select>
               </FormField>
-                <FormField label="Fabricante"><Input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} placeholder="DePuy Synthes" className="h-8 text-xs" /></FormField>
-                <FormField label="GTIN / EAN"><Input value={gtin} onChange={(e) => setGtin(e.target.value)} placeholder="00888867011234" className="h-8 font-mono text-xs" /></FormField>
-              <FormField label="PM / Registro"><Input placeholder="PM-1182-1" className="h-8 font-mono text-xs" /></FormField>
-              <div className="flex items-end justify-between gap-3 pb-1">
-                <Label className="text-[11px] text-gray-500">Estéril</Label>
-                <Switch checked={sterile} onCheckedChange={setSterile} />
+              <FormField label="PM / Registro ANMAT"><Input aria-label="PM / Registro ANMAT" value={pmAnmat} onChange={(e) => setPmAnmat(e.target.value)} placeholder="PM-1182-1" className="h-8 font-mono text-xs" /></FormField>
+              <FormField label="Fabricante"><Input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} placeholder="DePuy Synthes" className="h-8 text-xs" /></FormField>
+              <FormField label="GTIN / EAN"><Input value={gtin} onChange={(e) => setGtin(e.target.value)} placeholder="00888867011234" className="h-8 font-mono text-xs" /></FormField>
+              <div className="flex items-center justify-between rounded-md border border-[var(--ossum-line)] bg-white px-3 py-2">
+                <div>
+                  <p className="text-xs font-medium text-gray-800">Producto estéril</p>
+                  <p className="text-[10px] text-gray-400">Entrega estéril</p>
+                </div>
+                <Switch aria-label="Producto estéril" checked={isSterile} onCheckedChange={setIsSterile} />
               </div>
             </div>
           </section>
@@ -338,6 +337,59 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
                 </div>
               ))}
               {identifiers.length === 0 && <p className="text-[11px] text-gray-400">Sin códigos alternativos cargados.</p>}
+            </div>
+          </section>
+
+          <hr className="border-[var(--ossum-line)]" />
+
+          {/* Perfil comercial y de compras */}
+          <section>
+            <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--ossum-navy)]">Perfil comercial y de compras (por empresa)</h3>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <FormField label="Costo de referencia (ARS)">
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  aria-label="Costo de referencia"
+                  value={referenceCost}
+                  onChange={(e) => setReferenceCost(e.target.value)}
+                  placeholder="0.00"
+                  className="h-8 font-mono text-xs"
+                />
+              </FormField>
+              <FormField label="Precio de venta de referencia (ARS)">
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  aria-label="Precio de venta de referencia"
+                  value={referenceSalePrice}
+                  onChange={(e) => setReferenceSalePrice(e.target.value)}
+                  placeholder="0.00"
+                  className="h-8 font-mono text-xs"
+                />
+              </FormField>
+              <FormField label="Lista / Código de precio">
+                <Input
+                  aria-label="Lista de precio"
+                  value={priceListCode}
+                  onChange={(e) => setPriceListCode(e.target.value)}
+                  placeholder="LISTA-A"
+                  className="h-8 text-xs"
+                />
+              </FormField>
+              <FormField label="Plazo de entrega (días)">
+                <Input
+                  type="number"
+                  min="0"
+                  aria-label="Plazo de entrega"
+                  value={leadTimeDays}
+                  onChange={(e) => setLeadTimeDays(e.target.value)}
+                  placeholder="15"
+                  className="h-8 font-mono text-xs"
+                />
+              </FormField>
             </div>
           </section>
 
@@ -392,23 +444,20 @@ function NewArticleDialog({ open, onOpenChange, companyId, onCreated, prefill }:
 export default function StockPage() {
   const { activeCompany } = useAuth()
   const [search, setSearch] = useState("")
-  const [depositFilter, setDepositFilter] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("")
-  const [brandFilter, setBrandFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState("")
-  const [typeFilter, setTypeFilter] = useState("")
-  const [rubroFilter, setRubroFilter] = useState("")
-  const [seccionFilter, setSeccionFilter] = useState("")
-  const [lineaFilter, setLineaFilter] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [familyFilter, setFamilyFilter] = useState("")
-  const [fabricanteFilter, setFabricanteFilter] = useState("")
-  const [proveedorFilter, setProveedorFilter] = useState("")
-  const [controlFilter, setControlFilter] = useState("")
-  const [sterileFilter, setSterileFilter] = useState("")
-  const [gtinFilter, setGtinFilter] = useState("")
-  const [pmFilter, setPmFilter] = useState("")
+  const [brandFilter, setBrandFilter] = useState("")
+  const [typeFilter, setTypeFilter] = useState("")
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("")
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(50)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [search])
 
   const [viewKey, setViewKey] = useState<string>(DEFAULT_VIEW_KEY)
   const [customColumns, setCustomColumns] = useState<StockColumnKey[]>(STOCK_VIEWS.find((v) => v.key === "operativo")!.columns)
@@ -422,22 +471,28 @@ export default function StockPage() {
   const [articlePrefill, setArticlePrefill] = useState<ArticlePrefill | undefined>(scannedArticlePrefill)
   const [newOpen, setNewOpen] = useState(() => Boolean(scannedArticlePrefill()))
 
-  const {
-    items: stockItems,
-    summary,
-    loading: stockLoading,
-    ready: stockReady,
-    error: stockError,
-    refresh: refreshStock,
-  } = useStock({
-    search: search || undefined,
+  const stockQuery = useMemo(() => ({
+    search: debouncedSearch || undefined,
     family: familyFilter || undefined,
     brand: brandFilter || undefined,
     articleType: typeFilter || undefined,
     quickFilter,
     sortKey,
     sortDir,
-  })
+    page,
+    limit,
+  }), [debouncedSearch, familyFilter, brandFilter, typeFilter, quickFilter, sortKey, sortDir, page, limit])
+
+  const {
+    items: stockItems,
+    summary,
+    facets,
+    pagination,
+    loading: stockLoading,
+    ready: stockReady,
+    error: stockError,
+    refresh: refreshStock,
+  } = useStock(stockQuery)
 
   const allStockItems = useMemo<StockItem[]>(() => {
     return stockItems.map((article) => ({
@@ -456,11 +511,13 @@ export default function StockPage() {
       unitBuy: article.unit || "u",
       manufacturer: article.manufacturer || "",
       gtin: article.gtin || "",
-      pm: "",
-      sterile: false,
-      preferredSupplier: "",
-      cost: 0,
-      price: 0,
+      pm: article.pmAnmat || "",
+      sterile: article.isSterile ?? false,
+      preferredSupplier: article.preferredSupplier || "",
+      cost: article.cost ?? 0,
+      price: article.price ?? 0,
+      priceList: article.priceListCode || "",
+      leadTime: article.leadTimeDays != null ? `${article.leadTimeDays} días` : "",
       available: article.available,
       reserved: article.reserved,
       inTransit: article.inTransit,
@@ -484,44 +541,27 @@ export default function StockPage() {
   const visibleKeys = useMemo(() => new Set(visibleColumns.map((c) => c.key)), [visibleColumns])
   const stickyLeft = useMemo(() => pinnedOffsets(visibleColumns), [visibleColumns])
 
-  const filtered = useMemo(() => {
-    return allStockItems.filter((i) => {
-      if (categoryFilter && i.category !== categoryFilter) return false
-      if (brandFilter && i.brand !== brandFilter) return false
-      if (statusFilter && i.state !== statusFilter) return false
-      if (typeFilter && i.type !== typeFilter) return false
-      if (rubroFilter && i.rubro !== rubroFilter) return false
-      if (seccionFilter && i.seccion !== seccionFilter) return false
-      if (lineaFilter && i.linea !== lineaFilter) return false
-      if (familyFilter && i.family !== familyFilter) return false
-      if (fabricanteFilter && i.manufacturer !== fabricanteFilter) return false
-      if (proveedorFilter && i.preferredSupplier !== proveedorFilter) return false
-      if (controlFilter && i.control !== controlFilter) return false
-      if (sterileFilter === "si" && !i.sterile) return false
-      if (sterileFilter === "no" && i.sterile) return false
-      if (gtinFilter && !i.gtin.toLowerCase().includes(gtinFilter.trim().toLowerCase())) return false
-      if (pmFilter && !i.pm.toLowerCase().includes(pmFilter.trim().toLowerCase())) return false
-      return true
-    })
-  }, [allStockItems, categoryFilter, brandFilter, statusFilter, typeFilter, rubroFilter, seccionFilter, lineaFilter, familyFilter, fabricanteFilter, proveedorFilter, controlFilter, sterileFilter, gtinFilter, pmFilter])
-
   const onSortChange = (key: SortKey) => {
     if (key === sortKey) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"))
-      return
+    } else {
+      setSortKey(key)
+      setSortDir(key === "articulo" || key === "codigo" ? "asc" : "desc")
     }
-    setSortKey(key)
-    setSortDir(key === "articulo" || key === "codigo" ? "asc" : "desc")
+    setPage(1)
   }
 
   const clearFilters = () => {
-    setSearch(""); setDepositFilter(""); setCategoryFilter(""); setBrandFilter("")
-    setStatusFilter(""); setTypeFilter(""); setRubroFilter(""); setSeccionFilter(""); setLineaFilter("")
-    setFamilyFilter(""); setFabricanteFilter(""); setProveedorFilter(""); setControlFilter(""); setSterileFilter("")
-    setGtinFilter(""); setPmFilter(""); setQuickFilter("")
+    setSearch("")
+    setDebouncedSearch("")
+    setFamilyFilter("")
+    setBrandFilter("")
+    setTypeFilter("")
+    setQuickFilter("")
+    setPage(1)
   }
 
-  const hasFilters = Boolean(search || depositFilter || categoryFilter || brandFilter || statusFilter || typeFilter || rubroFilter || seccionFilter || lineaFilter || familyFilter || fabricanteFilter || proveedorFilter || controlFilter || sterileFilter || gtinFilter || pmFilter || quickFilter)
+  const hasFilters = Boolean(search || familyFilter || brandFilter || typeFilter || quickFilter)
 
   const selectItem = (item: StockItem) => setSelectedId(item.id)
   const openSheet = (item: StockItem, tab: FichaTab = "general") => setSheet({ item, tab })
@@ -540,67 +580,123 @@ export default function StockPage() {
     }
   }
 
+  const startRecord = pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1
+  const endRecord = Math.min(pagination.page * pagination.limit, pagination.total)
+
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--ossum-surface)]">
+    <TooltipProvider>
+      <div className="flex h-full min-h-0 flex-col bg-[var(--ossum-surface)]">
       {/* ── HEADER ── */}
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--ossum-line)] bg-white px-4 py-2">
         <div>
           <h1 className="text-base font-semibold text-[var(--ossum-navy)]">Stock</h1>
-          <p className="text-[11px] text-gray-400">{filtered.length} artículo{filtered.length !== 1 ? "s" : ""}{hasFilters ? " · filtrado" : ""}</p>
+          <p className="text-[11px] text-gray-400">
+            {pagination.total} artículo{pagination.total !== 1 ? "s" : ""}
+            {hasFilters ? " · filtrado" : ""}
+          </p>
         </div>
-        <Button size="sm" className="h-8 bg-[var(--ossum-action)] text-xs text-white hover:bg-[#1830a8]" onClick={() => setNewOpen(true)}><Plus className="size-3.5" /> Nuevo artículo</Button>
+        <Button
+          size="sm"
+          className="h-8 bg-[var(--ossum-action)] text-xs text-white hover:bg-[#1830a8]"
+          onClick={() => setNewOpen(true)}
+        >
+          <Plus className="size-3.5" /> Nuevo artículo
+        </Button>
       </header>
 
       {/* ── TOOLBAR ── */}
       <div className="shrink-0 border-b border-[var(--ossum-line)] bg-white px-4 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-60">
+          <div className="relative w-full sm:w-60 md:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
             <Input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
               placeholder="Buscar artículo, SKU, lote o serie…"
               aria-label="Buscar artículo"
               className="h-8 pl-8 text-xs"
             />
             {search && (
-              <button onClick={() => setSearch("")} aria-label="Limpiar búsqueda" className="absolute right-2 top-1/2 -translate-y-1/2 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("")
+                  setDebouncedSearch("")
+                  setPage(1)
+                }}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ossum-action)]"
+              >
                 <X className="size-3" />
               </button>
             )}
           </div>
-          <FilterSelect ariaLabel="Filtrar por depósito" value={depositFilter} onChange={setDepositFilter} options={[{ value: "", label: "Todos los depósitos" }, ...DEPOSITS.map((d) => ({ value: d, label: d }))]} />
-          <FilterSelect ariaLabel="Filtrar por categoría" value={categoryFilter} onChange={setCategoryFilter} options={[{ value: "", label: "Todas las categorías" }, ...CATEGORIES.map((c) => ({ value: c, label: c }))]} />
-          <FilterSelect ariaLabel="Filtrar por marca" value={brandFilter} onChange={setBrandFilter} options={[{ value: "", label: "Todas las marcas" }, ...BRANDS.map((b) => ({ value: b, label: b }))]} />
-          <FilterSelect ariaLabel="Filtrar por estado" value={statusFilter} onChange={setStatusFilter} options={STOCK_STATE_OPTIONS} />
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setMoreFiltersOpen((v) => !v)}>Más filtros <ChevronDown className={`size-3 transition-transform ${moreFiltersOpen ? "rotate-180" : ""}`} /></Button>
-          {hasFilters && <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-600">Limpiar filtros</button>}
+          <FilterSelect
+            ariaLabel="Filtrar por familia"
+            value={familyFilter}
+            onChange={(value) => {
+              setFamilyFilter(value)
+              setPage(1)
+            }}
+            options={[
+              { value: "", label: "Todas las familias" },
+              ...facets.families.map((f) => ({ value: f, label: f })),
+            ]}
+          />
+          <FilterSelect
+            ariaLabel="Filtrar por marca"
+            value={brandFilter}
+            onChange={(value) => {
+              setBrandFilter(value)
+              setPage(1)
+            }}
+            options={[
+              { value: "", label: "Todas las marcas" },
+              ...facets.brands.map((b) => ({ value: b, label: b })),
+            ]}
+          />
+          <FilterSelect
+            ariaLabel="Filtrar por tipo"
+            value={typeFilter}
+            onChange={(value) => {
+              setTypeFilter(value)
+              setPage(1)
+            }}
+            options={[
+              { value: "", label: "Todos los tipos" },
+              ...facets.articleTypes.map((t) => ({ value: t, label: t })),
+            ]}
+          />
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded px-1.5 py-1 text-xs text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ossum-action)]"
+            >
+              Limpiar filtros
+            </button>
+          )}
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex w-full items-center justify-between gap-2 pt-1 sm:ml-auto sm:w-auto sm:justify-end sm:pt-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-500">Vista:</span>
-              <select value={viewKey} onChange={(e) => onViewChange(e.target.value)} aria-label="Seleccionar vista" className="h-8 rounded-md border border-[var(--ossum-line)] bg-white px-2.5 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-[var(--ossum-action)]">
-                {STOCK_VIEWS.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
+              <select
+                value={viewKey}
+                onChange={(e) => onViewChange(e.target.value)}
+                aria-label="Seleccionar vista"
+                className="h-8 rounded-md border border-[var(--ossum-line)] bg-white px-2.5 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-[var(--ossum-action)]"
+              >
+                {STOCK_VIEWS.map((v) => (
+                  <option key={v.key} value={v.key}>{v.label}</option>
+                ))}
               </select>
             </div>
             <ColumnsPanel visibleKeys={visibleKeys} onToggle={toggleColumn} />
           </div>
         </div>
-        {moreFiltersOpen && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-[var(--ossum-line)] pt-1.5">
-            <FilterSelect ariaLabel="Filtrar por tipo" value={typeFilter} onChange={setTypeFilter} options={[{ value: "", label: "Tipo" }, ...TYPES.map((t) => ({ value: t, label: t }))]} />
-            <FilterSelect ariaLabel="Filtrar por rubro" value={rubroFilter} onChange={setRubroFilter} options={[{ value: "", label: "Rubro" }, ...RUBROS.map((r) => ({ value: r, label: r }))]} />
-            <FilterSelect ariaLabel="Filtrar por sección" value={seccionFilter} onChange={setSeccionFilter} options={[{ value: "", label: "Sección" }, ...SECCIONES.map((s) => ({ value: s, label: s }))]} />
-            <FilterSelect ariaLabel="Filtrar por línea" value={lineaFilter} onChange={setLineaFilter} options={[{ value: "", label: "Línea" }, ...LINEAS.map((l) => ({ value: l, label: l }))]} />
-            <FilterSelect ariaLabel="Filtrar por familia" value={familyFilter} onChange={setFamilyFilter} options={[{ value: "", label: "Familia" }, ...FAMILIES.map((f) => ({ value: f, label: f }))]} />
-            <FilterSelect ariaLabel="Filtrar por fabricante" value={fabricanteFilter} onChange={setFabricanteFilter} options={[{ value: "", label: "Fabricante" }, ...FABRICANTES.map((f) => ({ value: f, label: f }))]} />
-            <FilterSelect ariaLabel="Filtrar por proveedor" value={proveedorFilter} onChange={setProveedorFilter} options={[{ value: "", label: "Proveedor" }, ...PROVEEDORES.map((p) => ({ value: p, label: p }))]} />
-            <FilterSelect ariaLabel="Filtrar por control" value={controlFilter} onChange={setControlFilter} options={[{ value: "", label: "Control" }, ...STOCK_CONTROL_OPTIONS.map((c) => ({ value: c.value, label: c.label }))]} />
-            <FilterSelect ariaLabel="Filtrar por esterilización" value={sterileFilter} onChange={setSterileFilter} options={[{ value: "", label: "Estéril" }, { value: "si", label: "Solo estériles" }, { value: "no", label: "Solo no estériles" }]} />
-             <TextFilter ariaLabel="Filtrar por GTIN/EAN" value={gtinFilter} onChange={setGtinFilter} placeholder="GTIN / EAN" />
-            <TextFilter ariaLabel="Filtrar por PM" value={pmFilter} onChange={setPmFilter} placeholder="PM / registro" />
-          </div>
-        )}
       </div>
 
       {/* ── QUICK FILTERS ── */}
@@ -610,25 +706,34 @@ export default function StockPage() {
         sinstock={summary.sinstock}
         transito={summary.transito}
         active={quickFilter}
-        onSelect={setQuickFilter}
+        onSelect={(f) => {
+          setQuickFilter(f)
+          setPage(1)
+        }}
       />
 
       {/* ── CONTENT ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {filtered.length === 0 ? (
+          {allStockItems.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 py-10 text-center">
               <Package className="size-5 text-muted-foreground" />
               <div>
                 <p className="font-medium">No se encontraron artículos</p>
-                <p className="mt-1 max-w-sm text-sm text-muted-foreground">Probá con otro texto o quitá los filtros activos.</p>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  Probá con otro texto o quitá los filtros activos.
+                </p>
               </div>
-              <Button type="button" size="sm" variant="outline" onClick={clearFilters}>Limpiar filtros</Button>
+              {hasFilters && (
+                <Button type="button" size="sm" variant="outline" onClick={clearFilters}>
+                  Limpiar filtros
+                </Button>
+              )}
             </div>
           ) : (
-            <div className="mx-3 my-2 flex-1 overflow-hidden border border-[var(--ossum-line)] bg-white">
-              <div className="h-full overflow-auto">
-                <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-xs">
+            <div className="mx-1 my-1 flex-1 overflow-hidden border border-[var(--ossum-line)] bg-white sm:mx-3 sm:my-2">
+              <div className="h-full overflow-auto" tabIndex={0} aria-label="Tabla de artículos de stock con desplazamiento">
+                <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-xs" aria-label="Catálogo de stock">
                   <thead>
                     <tr>
                       {visibleColumns.map((col) => {
@@ -639,18 +744,41 @@ export default function StockPage() {
                           <th
                             key={col.key}
                             style={pinned ? { left: stickyLeft[col.key] } : undefined}
-                            aria-sort={sort ? (sortKey === sort ? (sortDir === "asc" ? "ascending" : "descending") : "none") : undefined}
+                            aria-sort={
+                              sort
+                                ? sortKey === sort
+                                  ? sortDir === "asc"
+                                    ? "ascending"
+                                    : "descending"
+                                  : "none"
+                                : undefined
+                            }
                             className={`sticky top-0 whitespace-nowrap bg-[var(--ossum-navy)] px-3 py-2 font-medium text-white ${align} ${pinned ? "z-20" : "z-10"}`}
                           >
-                            {col.key === "thumb" ? <span className="sr-only">Miniatura</span> : sort ? <SortHeader label={col.label} sortKey={sort} current={sortKey} dir={sortDir} onChange={onSortChange} align={col.align === "right" ? "right" : "left"} /> : col.label}
+                            {col.key === "thumb" ? (
+                              <span className="sr-only">Miniatura</span>
+                            ) : sort ? (
+                              <SortHeader
+                                label={col.label}
+                                sortKey={sort}
+                                current={sortKey}
+                                dir={sortDir}
+                                onChange={onSortChange}
+                                align={col.align === "right" ? "right" : "left"}
+                              />
+                            ) : (
+                              col.label
+                            )}
                           </th>
                         )
                       })}
-                      <th className="sticky top-0 z-10 w-11 bg-[var(--ossum-navy)] px-2 py-2 text-right"><span className="sr-only">Acciones</span></th>
+                      <th className="sticky top-0 z-10 w-11 bg-[var(--ossum-navy)] px-2 py-2 text-right">
+                        <span className="sr-only">Acciones</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((item) => {
+                    {allStockItems.map((item) => {
                       const selected = selectedId === item.id
                       return (
                         <tr
@@ -659,20 +787,36 @@ export default function StockPage() {
                           onDoubleClick={() => openSheet(item, "general")}
                           tabIndex={0}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectItem(item) }
-                            if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); openSheet(item, "general") }
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              openSheet(item, "general")
+                            } else if (e.key === " ") {
+                              e.preventDefault()
+                              selectItem(item)
+                            }
                           }}
-                          className={`group cursor-pointer outline-none transition-colors hover:bg-[var(--ossum-surface-2)] ${selected ? "bg-[#eef0ff]" : ""}`}
+                          className={`group cursor-pointer outline-none transition-colors hover:bg-[var(--ossum-surface-2)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ossum-action)] ${selected ? "bg-[#eef0ff]" : ""}`}
                           aria-selected={selected}
-                          title="Doble clic para abrir la ficha"
+                          title="Doble clic o Enter para abrir la ficha"
                         >
                           {visibleColumns.map((col) => {
                             const pinned = col.pinned
                             const align = col.align === "right" ? "text-right" : "text-left"
-                            const pinBg = pinned ? (selected ? "bg-[#eef0ff]" : "bg-white group-hover:bg-[var(--ossum-surface-2)]") : ""
-                            const accent = pinned && col.key === "thumb" && selected ? "shadow-[inset_3px_0_0_var(--ossum-action)]" : ""
+                            const pinBg = pinned
+                              ? selected
+                                ? "bg-[#eef0ff]"
+                                : "bg-white group-hover:bg-[var(--ossum-surface-2)]"
+                              : ""
+                            const accent =
+                              pinned && col.key === "thumb" && selected
+                                ? "shadow-[inset_3px_0_0_var(--ossum-action)]"
+                                : ""
                             return (
-                              <td key={col.key} style={pinned ? { left: stickyLeft[col.key] } : undefined} className={`border-b border-[var(--ossum-line)] px-3 py-1.5 ${align} ${pinned ? `sticky z-10 ${pinBg} ${accent}` : ""}`}>
+                              <td
+                                key={col.key}
+                                style={pinned ? { left: stickyLeft[col.key] } : undefined}
+                                className={`border-b border-[var(--ossum-line)] px-3 py-1.5 ${align} ${pinned ? `sticky z-10 ${pinBg} ${accent}` : ""}`}
+                              >
                                 {col.render(item)}
                               </td>
                             )
@@ -680,16 +824,23 @@ export default function StockPage() {
                           <td className="border-b border-[var(--ossum-line)] px-2 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="size-7 text-gray-400 hover:text-gray-700" aria-label={`Acciones de ${item.code}`} title="Más acciones"><MoreHorizontal className="size-4" /></Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7 text-gray-400 hover:text-gray-700"
+                                  aria-label={`Acciones de ${item.code}`}
+                                  title="Más acciones"
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-52">
                                 <DropdownMenuItem onSelect={() => openSheet(item, "general")}>Ver ficha</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => openSheet(item, "general")}>Editar</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => openSheet(item, "stock")}>Existencias</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => openSheet(item, "trazabilidad")}>Movimientos</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => openSheet(item, "historial")}>Movimientos</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => openSheet(item, "trazabilidad")}>Trazabilidad</DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onSelect={() => setCodesItem(item)}>Generar códigos</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => setCodesItem(item)}>Ver códigos</DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
@@ -702,11 +853,86 @@ export default function StockPage() {
             </div>
           )}
         </div>
+
+        {/* ── PAGINATION FOOTER ── */}
+        <footer
+          aria-label="Paginación de stock"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[var(--ossum-line)] bg-white px-4 py-2 text-xs text-gray-600"
+        >
+          <div className="flex items-center gap-1 font-medium">
+            {pagination.total === 0 ? (
+              <span>Sin artículos para mostrar</span>
+            ) : (
+              <span>
+                Mostrando{" "}
+                <strong className="font-semibold text-gray-900">
+                  {startRecord}–{endRecord}
+                </strong>{" "}
+                de{" "}
+                <strong className="font-semibold text-gray-900">
+                  {pagination.total.toLocaleString("es-AR")}
+                </strong>{" "}
+                artículo{pagination.total !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-gray-500">Por página:</span>
+              <select
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value))
+                  setPage(1)
+                }}
+                aria-label="Artículos por página"
+                disabled={stockLoading}
+                className="h-7 rounded border border-[var(--ossum-line)] bg-white px-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-[var(--ossum-action)] disabled:opacity-50"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-7"
+                disabled={pagination.page <= 1 || stockLoading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+
+              <span className="min-w-[5rem] text-center text-xs font-medium text-gray-700">
+                Pág. <strong className="text-gray-900">{pagination.page}</strong> de {pagination.totalPages}
+              </span>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-7"
+                disabled={pagination.page >= pagination.totalPages || stockLoading}
+                onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                aria-label="Página siguiente"
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </footer>
       </div>
 
       {newOpen && <NewArticleDialog key={articlePrefill?.rawValue ?? "new"} open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open && articlePrefill) { setArticlePrefill(undefined); window.history.replaceState(null, "", "/stock") } }} companyId={activeCompany?.id} prefill={articlePrefill} onCreated={() => { setArticlePrefill(undefined); void refreshStock() }} />}
       <StockArticleSheet item={sheet?.item ?? null} initialTab={sheet?.tab} open={Boolean(sheet)} onOpenChange={(v) => { if (!v) setSheet(null) }} />
       <ArticleCodesDialog item={codesItem} open={Boolean(codesItem)} onOpenChange={(v) => { if (!v) setCodesItem(null) }} />
-    </div>
+      </div>
+    </TooltipProvider>
   )
 }

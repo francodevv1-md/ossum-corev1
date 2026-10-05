@@ -17,7 +17,7 @@ import {
   STOCK_STATE_CELL_COLORS,
   type StockItem,
   type StockOperationalState,
-} from "@/data/stock-mock"
+} from "@/lib/stock/stock-ui-model"
 
 export type StockColumnKey =
   | "thumb" | "code" | "name" | "descExtra"
@@ -37,7 +37,7 @@ export interface StockColumn {
 }
 
 export function FamilyThumb({ item }: { item: StockItem }) {
-  const family = FAMILY_STYLE[item.family]
+  const family = FAMILY_STYLE[item.family] ?? FAMILY_STYLE.Insumos
   const Icon = family.icon
   return (
     <span className={`flex size-7 shrink-0 items-center justify-center rounded-md ring-1 ${family.thumb}`} title={family.label}>
@@ -76,7 +76,7 @@ export const STOCK_COLUMNS: StockColumn[] = [
   { key: "gtin", label: "GTIN / EAN", render: (i) => <span className="font-mono text-[11px] text-gray-500">{i.gtin || "—"}</span> },
   { key: "pm", label: "PM / Registro", render: (i) => <span className="font-mono text-[11px] text-gray-500">{i.pm || "—"}</span> },
   { key: "type", label: "Tipo", render: (i) => <span className="text-gray-500">{i.type}</span> },
-  { key: "family", label: "Familia / Patología", render: (i) => <span className="text-gray-500">{FAMILY_STYLE[i.family].label}</span> },
+  { key: "family", label: "Familia / Patología", render: (i) => <span className="text-gray-500">{FAMILY_STYLE[i.family]?.label ?? i.family ?? "—"}</span> },
   { key: "unit", label: "Unidad de venta", render: (i) => <span className="text-gray-500">{i.unit}</span> },
   { key: "unitBuy", label: "Unidad de compra", render: (i) => <span className="text-gray-500">{i.unitBuy}</span> },
   { key: "supplier", label: "Proveedor preferido", render: (i) => <span className="block max-w-[180px] truncate text-gray-600" title={i.preferredSupplier}>{i.preferredSupplier || "—"}</span> },
@@ -141,11 +141,19 @@ export function ColumnsPanel({ visibleKeys, onToggle }: {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 text-xs"><Columns3 className="size-3.5" /> Columnas</Button>
+        <Button variant="outline" size="sm" className="h-8 text-xs" aria-label="Gestionar columnas visibles">
+          <Columns3 className="size-3.5" /> Columnas
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
         <div className="border-b border-[var(--ossum-line)] p-2">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar columna…" className="h-8 text-xs" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar columna…"
+            aria-label="Buscar columna"
+            className="h-8 text-xs"
+          />
         </div>
         <div className="max-h-72 overflow-y-auto p-1">
           {filtered.map((col) => (
