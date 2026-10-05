@@ -12,6 +12,26 @@ export const articleIdentifierSchema = z.object({
   supplierId: z.string().trim().optional(),
 });
 
+export const articleCommercialProfileSchema = z.object({
+  referenceCost: z.coerce.number().min(0, "El costo de referencia no puede ser negativo").default(0),
+  referenceSalePrice: z.coerce.number().min(0, "El precio de venta de referencia no puede ser negativo").default(0),
+  currency: z.literal("ARS").default("ARS"),
+  priceListCode: z.string().trim().nullable().optional(),
+  preferredSupplierId: z.string().trim().nullable().optional(),
+  leadTimeDays: z.coerce.number().int().min(0, "El plazo de entrega debe ser un número entero no negativo").nullable().optional(),
+  minStock: z.coerce.number().min(0, "El stock mínimo no puede ser negativo").default(0),
+});
+
+export const articleCommercialProfileUpdateSchema = z.object({
+  referenceCost: z.coerce.number().min(0, "El costo de referencia no puede ser negativo").optional(),
+  referenceSalePrice: z.coerce.number().min(0, "El precio de venta de referencia no puede ser negativo").optional(),
+  currency: z.literal("ARS").optional(),
+  priceListCode: z.string().trim().nullable().optional(),
+  preferredSupplierId: z.string().trim().nullable().optional(),
+  leadTimeDays: z.coerce.number().int().min(0, "El plazo de entrega debe ser un número entero no negativo").nullable().optional(),
+  minStock: z.coerce.number().min(0, "El stock mínimo no puede ser negativo").optional(),
+});
+
 export const articleCreateSchema = z.object({
   description: z.string().trim().min(1),
   sku: z.string().trim().optional(),
@@ -22,6 +42,9 @@ export const articleCreateSchema = z.object({
   modelVariant: z.string().trim().optional(),
   measure: z.string().trim().optional(),
   unit: z.string().trim().min(1).default("u"),
+  category: z.string().trim().optional(),
+  pmAnmat: z.string().trim().optional(),
+  isSterile: z.boolean().default(false),
   vatTreatment: z.enum(SUPPORTED_VAT_TREATMENTS).default("GRAVADO"),
   vatRate: z.coerce.number().refine(
     (val) => (SUPPORTED_VAT_RATES as readonly number[]).includes(val),
@@ -30,6 +53,7 @@ export const articleCreateSchema = z.object({
   traceabilityPolicy: z.enum(ARTICLE_TRACEABILITY_POLICIES).default("NONE"),
   identifiers: z.array(articleIdentifierSchema).default([]),
   supplierMappings: z.array(z.object({ supplierId: z.string().trim().min(1), supplierCode: z.string().trim().min(1) })).default([]),
+  commercialProfile: articleCommercialProfileSchema.optional(),
 }).superRefine((data, ctx) => {
   if ((data.vatTreatment === "EXENTO" || data.vatTreatment === "NO_GRAVADO") && data.vatRate !== 0) {
     ctx.addIssue({
@@ -50,6 +74,9 @@ export const articleUpdateSchema = z.object({
   modelVariant: z.string().trim().optional(),
   measure: z.string().trim().optional(),
   unit: z.string().trim().min(1).optional(),
+  category: z.string().trim().optional(),
+  pmAnmat: z.string().trim().optional(),
+  isSterile: z.boolean().optional(),
   vatTreatment: z.enum(SUPPORTED_VAT_TREATMENTS).optional(),
   vatRate: z.coerce.number().refine(
     (val) => (SUPPORTED_VAT_RATES as readonly number[]).includes(val),
@@ -58,6 +85,7 @@ export const articleUpdateSchema = z.object({
   traceabilityPolicy: z.enum(ARTICLE_TRACEABILITY_POLICIES).optional(),
   identifiers: z.array(articleIdentifierSchema).optional(),
   supplierMappings: z.array(z.object({ supplierId: z.string().trim().min(1), supplierCode: z.string().trim().min(1) })).optional(),
+  commercialProfile: articleCommercialProfileUpdateSchema.optional(),
   isActive: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   if (data.vatTreatment && (data.vatTreatment === "EXENTO" || data.vatTreatment === "NO_GRAVADO") && data.vatRate !== undefined && data.vatRate !== 0) {
@@ -79,6 +107,8 @@ export const articleLookupQuerySchema = z.object({
   take: z.coerce.number().int().min(1).max(100).default(25),
 });
 
+export type ArticleCommercialProfileInput = z.infer<typeof articleCommercialProfileSchema>;
+export type ArticleCommercialProfileUpdateInput = z.infer<typeof articleCommercialProfileUpdateSchema>;
 export type ArticleCreateInput = z.infer<typeof articleCreateSchema>;
 export type ArticleUpdateInput = z.infer<typeof articleUpdateSchema>;
 export type ArticleLookupQuery = z.infer<typeof articleLookupQuerySchema>;

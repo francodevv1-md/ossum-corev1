@@ -63,17 +63,31 @@ export interface StockMovementLedgerItem {
   createdById?: string | null;
 }
 
+export interface StockFacets {
+  families: string[];
+  brands: string[];
+  articleTypes: string[];
+}
+
 export interface ArticleStockAvailability {
   id: string;
   code: string;
   name: string;
   family: string;
-  category: string;
+  category: string | null;
+  pmAnmat: string | null;
+  isSterile: boolean;
   brand: string;
   articleType: string;
   unit: string;
   manufacturer: string;
   gtin: string;
+  cost: number;
+  price: number;
+  priceListCode?: string | null;
+  preferredSupplier?: string | null;
+  preferredSupplierId?: string | null;
+  leadTimeDays?: number | null;
   physical: number;
   reserved: number;
   inTransit: number;
@@ -121,6 +135,19 @@ function parseDateOnly(value?: Date | string | null): Date | null {
   if (!trimmed) return null;
   const parsed = new Date(trimmed);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getContactDisplayName(contact?: {
+  legalName?: string | null;
+  tradeName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+} | null): string | null {
+  if (!contact) return null;
+  if (contact.tradeName?.trim()) return contact.tradeName.trim();
+  if (contact.legalName?.trim()) return contact.legalName.trim();
+  const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim();
+  return fullName || null;
 }
 
 export function calculateMovementDelta(type: StockMovementType, quantity: Prisma.Decimal): number {
@@ -220,20 +247,78 @@ export async function getStockAvailability(
 ) {
   const organizationId = await getCompanyOrganization(db, companyId);
 
-  // 1. Fetch catalog articles for organization
-  const articles = await db.article.findMany({
+  // 1. Fetch catalog articles for organization filtered by company eligibility
+  const eligibleArticles = await db.article.findMany({
     where: {
       organizationId,
       isActive: true,
-      ...(query.family ? { family: { equals: query.family, mode: "insensitive" } } : {}),
-      ...(query.brand ? { brand: { equals: query.brand, mode: "insensitive" } } : {}),
-      ...(query.articleType ? { articleType: { equals: query.articleType, mode: "insensitive" } } : {}),
+      stockEligibilities: {
+        some: { companyId },
+      },
     },
     include: {
       identifiers: { where: { isActive: true } },
       tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 },
+      commercialProfiles: {
+        where: { companyId },
+        take: 1,
+        include: {
+          preferredSupplier: {
+            select: {
+              contactId: true,
+              contact: {
+                select: { legalName: true, tradeName: true, firstName: true, lastName: true },
+              },
+            },
+          },
+        },
+      },
     },
     orderBy: { description: "asc" },
+  });
+
+  // Derive dynamic company facets from all active eligible articles
+  const families = Array.from(
+    new Set(
+      eligibleArticles
+        .map((a) => a.family?.trim())
+        .filter((v): v is string => Boolean(v)),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+
+  const brands = Array.from(
+    new Set(
+      eligibleArticles
+        .map((a) => a.brand?.trim())
+        .filter((v): v is string => Boolean(v)),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+
+  const articleTypes = Array.from(
+    new Set(
+      eligibleArticles
+        .map((a) => a.articleType?.trim())
+        .filter((v): v is string => Boolean(v)),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+
+  const facets: StockFacets = {
+    families,
+    brands,
+    articleTypes,
+  };
+
+  const articles = eligibleArticles.filter((article) => {
+    if (query.family && article.family?.trim().toLowerCase() !== query.family.trim().toLowerCase()) {
+      return false;
+    }
+    if (query.brand && article.brand?.trim().toLowerCase() !== query.brand.trim().toLowerCase()) {
+      return false;
+    }
+    if (query.articleType && article.articleType?.trim().toLowerCase() !== query.articleType.trim().toLowerCase()) {
+      return false;
+    }
+    return true;
   });
 
   // 2. Fetch all movements for this company
@@ -349,7 +434,10 @@ export async function getStockAvailability(
     const inTransit = inTransitMap.get(article.id) || inTransitMap.get(article.sku) || 0;
     const reserved = reservedMap.get(article.id) || reservedMap.get(article.sku) || 0;
     const available = Math.max(0, physical - inTransit - reserved);
-    const minStock = 5; // Standard minimum threshold
+    const commProfile = article.commercialProfiles?.[0];
+    const cost = commProfile ? commProfile.referenceCost.toNumber() : 0;
+    const price = commProfile ? commProfile.referenceSalePrice.toNumber() : 0;
+    const minStock = commProfile?.minStock ? commProfile.minStock.toNumber() : 0;
 
     let state: ArticleStockAvailability["state"] = "Disponible";
     if (physical === 0) {
@@ -368,18 +456,30 @@ export async function getStockAvailability(
     const gtin = article.identifiers.find((i) => i.type === "GTIN_EAN")?.value || "";
     const lotSet = articleLotsMap.get(article.id);
     const lastMovementAt = articleLastMovementMap.get(article.id)?.toISOString() || null;
+    const priceListCode = commProfile?.priceListCode ?? null;
+    const preferredSupplier = getContactDisplayName(commProfile?.preferredSupplier?.contact);
+    const preferredSupplierId = commProfile?.preferredSupplierId ?? null;
+    const leadTimeDays = commProfile?.leadTimeDays ?? null;
 
     return {
       id: article.id,
       code: article.sku,
       name: article.description,
       family: article.family || "Insumos",
-      category: article.family || "General",
+      category: article.category,
+      pmAnmat: article.pmAnmat || null,
+      isSterile: article.isSterile ?? false,
       brand: article.brand || "—",
       articleType: article.articleType || "Insumo",
       unit: article.unit || "u",
       manufacturer: article.manufacturer || "—",
       gtin,
+      cost,
+      price,
+      priceListCode,
+      preferredSupplier,
+      preferredSupplierId,
+      leadTimeDays,
       physical,
       reserved,
       inTransit,
@@ -474,6 +574,7 @@ export async function getStockAvailability(
   return {
     data: paginated,
     summary,
+    facets,
     pagination: {
       page,
       limit,
@@ -493,11 +594,28 @@ export async function getArticleStockDetail(db: Db, companyId: string, articleId
     where: {
       id: articleId,
       organizationId,
+      stockEligibilities: {
+        some: { companyId },
+      },
     },
     include: {
       identifiers: { where: { isActive: true } },
       tracePolicies: { orderBy: { effectiveAt: "desc" }, take: 1 },
       supplierMappings: true,
+      commercialProfiles: {
+        where: { companyId },
+        take: 1,
+        include: {
+          preferredSupplier: {
+            select: {
+              contactId: true,
+              contact: {
+                select: { legalName: true, tradeName: true, firstName: true, lastName: true },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -626,32 +744,58 @@ export async function getArticleStockDetail(db: Db, companyId: string, articleId
     };
   });
 
-  const available = Math.max(0, totalPhysical);
-  let state = "Disponible";
-  if (totalPhysical === 0) state = "Sin stock";
-  else if (available <= 5) state = "Bajo stock";
+   const available = Math.max(0, totalPhysical);
+   const commProfile = article.commercialProfiles?.[0];
+   const minStock = commProfile?.minStock ? commProfile.minStock.toNumber() : 0;
+   let state = "Disponible";
+   if (totalPhysical === 0) state = "Sin stock";
+   else if (available <= minStock) state = "Bajo stock";
 
-  return {
-    article: {
-      id: article.id,
-      code: article.sku,
-      name: article.description,
-      family: article.family,
-      brand: article.brand,
-      articleType: article.articleType,
-      unit: article.unit,
-      manufacturer: article.manufacturer,
-      vatTreatment: article.vatTreatment,
-      vatRate: article.vatRate.toNumber(),
-      identifiers: article.identifiers,
-      suppliers: article.supplierMappings,
-    },
+    return {
+      article: {
+        id: article.id,
+        code: article.sku,
+        name: article.description,
+        family: article.family,
+        category: article.category,
+        pmAnmat: article.pmAnmat,
+        isSterile: article.isSterile,
+        brand: article.brand,
+        articleType: article.articleType,
+        unit: article.unit,
+        manufacturer: article.manufacturer,
+        vatTreatment: article.vatTreatment,
+        vatRate: article.vatRate.toNumber(),
+        identifiers: article.identifiers,
+        suppliers: article.supplierMappings,
+        cost: commProfile ? commProfile.referenceCost.toNumber() : 0,
+        price: commProfile ? commProfile.referenceSalePrice.toNumber() : 0,
+        priceListCode: commProfile?.priceListCode ?? null,
+        preferredSupplier: getContactDisplayName(commProfile?.preferredSupplier?.contact),
+        preferredSupplierId: commProfile?.preferredSupplierId ?? null,
+        leadTimeDays: commProfile?.leadTimeDays ?? null,
+        commercialProfile: commProfile
+          ? {
+              id: commProfile.id,
+              companyId: commProfile.companyId,
+              articleId: commProfile.articleId,
+              referenceCost: commProfile.referenceCost.toNumber(),
+              referenceSalePrice: commProfile.referenceSalePrice.toNumber(),
+              currency: commProfile.currency,
+              priceListCode: commProfile.priceListCode,
+              preferredSupplierId: commProfile.preferredSupplierId,
+              preferredSupplierName: getContactDisplayName(commProfile.preferredSupplier?.contact),
+              leadTimeDays: commProfile.leadTimeDays,
+              minStock: commProfile.minStock ? commProfile.minStock.toNumber() : 0,
+            }
+          : null,
+      },
     summary: {
       physical: totalPhysical,
       reserved: 0,
       inTransit: 0,
       available,
-      minStock: 5,
+      minStock,
       state,
     },
     lots,

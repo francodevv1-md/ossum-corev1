@@ -65,6 +65,9 @@ model Company {
   availabilityCapabilityGrants     AvailabilityCapabilityGrant[]            @relation("AvailabilityCapabilityCompany")
   viewPreferences                  UserModuleViewPreference[]
   stockArticleEligibilities        StockArticleEligibility[]                @relation("CompanyStockArticleEligibilities")
+  articleCommercialProfiles        ArticleCompanyCommercialProfile[]        @relation("CompanyArticleCommercialProfiles")
+  priceLists                       PriceList[]                              @relation("CompanyPriceLists")
+  articlePriceVersions             ArticleCompanyPriceVersion[]             @relation("CompanyArticlePriceVersions")
   cajasArticleReferences           CajasArticleReference[]                  @relation("CajasCompanyArticleReferences")
   cajasStockScopeReferences        CajasStockScopeReference[]               @relation("CajasCompanyStockScopeReferences")
   cajasStockRecordReferences       CajasStockRecordReference[]              @relation("CajasCompanyStockRecordReferences")
@@ -232,6 +235,7 @@ model User {
   createdNecesidadesCompra              NecesidadCompra[]                        @relation("NecesidadCompraCreatedBy")
   createdOrdenesPago                    OrdenPago[]                              @relation("OrdenPagoCreatedBy")
   updatedOrdenesPago                    OrdenPago[]                              @relation("OrdenPagoUpdatedBy")
+  createdPriceVersions                  ArticleCompanyPriceVersion[]             @relation("ArticlePriceVersionCreatedBy")
   personalCalendarEvents                PersonalCalendarEvent[]                  @relation("UserPersonalCalendarEvents")
 }
 
@@ -330,12 +334,13 @@ model ContactCompanyLink {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  contact                        Contact                  @relation(fields: [contactId], references: [id])
-  company                        Company                  @relation(fields: [companyId], references: [id])
-  articleIdentifierSupplierLinks ArticleIdentifier[]      @relation("ArticleIdentifierSupplierLink")
-  articleSupplierMappingLinks    ArticleSupplierMapping[] @relation("ArticleSupplierMappingSupplierLink")
-  facturasCompra                 FacturaCompra[]          @relation("ContactCompanyFacturaCompra")
-  ordenesPago                    OrdenPago[]              @relation("ContactCompanyOrdenPago")
+  contact                        Contact                           @relation(fields: [contactId], references: [id])
+  company                        Company                           @relation(fields: [companyId], references: [id])
+  articleIdentifierSupplierLinks ArticleIdentifier[]               @relation("ArticleIdentifierSupplierLink")
+  articleSupplierMappingLinks    ArticleSupplierMapping[]          @relation("ArticleSupplierMappingSupplierLink")
+  articleCommercialProfiles      ArticleCompanyCommercialProfile[] @relation("ArticleCommercialProfilePreferredSupplier")
+  facturasCompra                 FacturaCompra[]                   @relation("ContactCompanyFacturaCompra")
+  ordenesPago                    OrdenPago[]                       @relation("ContactCompanyOrdenPago")
 
   @@unique([contactId, companyId])
   @@unique([companyId, code], map: "uq_contact_company_code")
@@ -2801,23 +2806,28 @@ model Article {
   modelVariant   String?
   measure        String?
   unit           String   @default("u")
+  category       String?
+  pmAnmat        String?
+  isSterile      Boolean  @default(false)
   vatTreatment   String   @default("GRAVADO")
   vatRate        Decimal  @default(21.0000) @db.Decimal(18, 4)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @db.Timestamptz(6)
 
-  organization       Organization                @relation("OrganizationArticles", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_organization")
-  stockEligibilities StockArticleEligibility[]   @relation("StockEligibilityArticle")
-  identifiers        ArticleIdentifier[]         @relation("ArticleIdentifiers")
-  supplierMappings   ArticleSupplierMapping[]    @relation("ArticleSupplierMappings")
-  tracePolicies      ArticleTraceabilityPolicy[] @relation("ArticleTracePolicies")
-  receiptLines       ReceiptLine[]               @relation("ArticleReceiptLines")
-  receiptScans       ReceiptScan[]               @relation("ArticleReceiptScans")
-  stockMovements     StockMovement[]             @relation("ArticleStockMovements")
+  organization       Organization                      @relation("OrganizationArticles", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_article_organization")
+  stockEligibilities StockArticleEligibility[]         @relation("StockEligibilityArticle")
+  commercialProfiles ArticleCompanyCommercialProfile[] @relation("ArticleCompanyCommercialProfiles")
+  priceVersions      ArticleCompanyPriceVersion[]      @relation("ArticlePriceVersions")
+  identifiers        ArticleIdentifier[]               @relation("ArticleIdentifiers")
+  supplierMappings   ArticleSupplierMapping[]          @relation("ArticleSupplierMappings")
+  tracePolicies      ArticleTraceabilityPolicy[]       @relation("ArticleTracePolicies")
+  receiptLines       ReceiptLine[]                     @relation("ArticleReceiptLines")
+  receiptScans       ReceiptScan[]                     @relation("ArticleReceiptScans")
+  stockMovements     StockMovement[]                   @relation("ArticleStockMovements")
   stockPhysicalUnits StockPhysicalUnit[]               @relation("ArticleStockPhysicalUnits")
   stockReservations  StockReservation[]                @relation("ArticleStockReservations")
-  necesidadesCompra  NecesidadCompra[]           @relation("ArticleNecesidadesCompra")
+  necesidadesCompra  NecesidadCompra[]                 @relation("ArticleNecesidadesCompra")
 
   @@unique([organizationId, sku], map: "uq_article_org_sku")
   @@unique([organizationId, id], map: "uq_article_org_id")
@@ -2902,6 +2912,74 @@ model StockArticleEligibility {
   @@unique([companyId, articleId], map: "uq_stock_article_eligibility")
   @@index([companyId, version], map: "ix_stock_article_eligibility_company_version")
   @@map("stock_article_eligibility")
+}
+
+model ArticleCompanyCommercialProfile {
+  id                  String   @id @default(cuid())
+  companyId           String
+  organizationId      String
+  articleId           String
+  referenceCost       Decimal  @default(0) @db.Decimal(18, 4)
+  referenceSalePrice  Decimal  @default(0) @db.Decimal(18, 4)
+  currency            String   @default("ARS")
+  priceListCode       String?
+  preferredSupplierId String?
+  leadTimeDays        Int?
+  minStock            Decimal  @default(0) @db.Decimal(18, 4)
+  createdAt           DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(6)
+
+  company           Company             @relation("CompanyArticleCommercialProfiles", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_accp_company")
+  article           Article             @relation("ArticleCompanyCommercialProfiles", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_accp_article")
+  preferredSupplier ContactCompanyLink? @relation("ArticleCommercialProfilePreferredSupplier", fields: [preferredSupplierId, companyId], references: [contactId, companyId], onDelete: Restrict, onUpdate: Restrict, map: "fk_accp_preferred_supplier")
+
+  @@unique([companyId, articleId], map: "uq_article_company_commercial_profile")
+  @@index([organizationId, companyId], map: "ix_accp_org_company")
+  @@map("article_company_commercial_profile")
+}
+
+model PriceList {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  code        String   @map("code")
+  name        String   @map("name")
+  description String?  @db.Text
+  currency    String   @default("ARS")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company       Company                      @relation("CompanyPriceLists", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_price_list_company")
+  priceVersions ArticleCompanyPriceVersion[] @relation("PriceListPriceVersions")
+
+  @@unique([companyId, code], map: "uq_price_list_company_code")
+  @@unique([companyId, id], map: "uq_price_list_company_id")
+  @@index([companyId, isActive], map: "ix_price_list_company_active")
+  @@map("price_list")
+}
+
+model ArticleCompanyPriceVersion {
+  id             String   @id @default(cuid())
+  companyId      String   @map("company_id")
+  organizationId String   @map("organization_id")
+  articleId      String   @map("article_id")
+  priceListId    String   @map("price_list_id")
+  price          Decimal  @db.Decimal(18, 4)
+  currency       String   @default("ARS")
+  effectiveAt    DateTime @default(now()) @map("effective_at") @db.Timestamptz(6)
+  notes          String?  @db.Text
+  createdById    String?  @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company   Company   @relation("CompanyArticlePriceVersions", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_acpv_company")
+  article   Article   @relation("ArticlePriceVersions", fields: [organizationId, articleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_acpv_article")
+  priceList PriceList @relation("PriceListPriceVersions", fields: [companyId, priceListId], references: [companyId, id], onDelete: Restrict, onUpdate: Cascade, map: "fk_acpv_price_list")
+  createdBy User?     @relation("ArticlePriceVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade, map: "fk_acpv_created_by")
+
+  @@index([companyId, articleId, priceListId, effectiveAt(sort: Desc)], map: "ix_acpv_lookup")
+  @@index([companyId, priceListId], map: "ix_acpv_price_list")
+  @@index([companyId, articleId], map: "ix_acpv_article")
+  @@map("article_company_price_version")
 }
 
 enum OrdenCompraState {

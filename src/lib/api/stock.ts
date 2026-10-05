@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api/client";
 import type {
   ArticleStockAvailability,
   StockSummaryKPIs,
+  StockFacets,
   LotAvailability,
   StockMovementLedgerItem,
 } from "@/lib/services/stock-ledger.service";
@@ -10,9 +11,12 @@ import type {
   StockAvailabilityQuery,
 } from "@/lib/validators/stock";
 
+export type { StockFacets };
+
 export interface StockAvailabilityResponse {
   data: ArticleStockAvailability[];
   summary: StockSummaryKPIs;
+  facets: StockFacets;
   pagination: {
     page: number;
     limit: number;
@@ -27,6 +31,9 @@ export interface ArticleStockDetailResponse {
     code: string;
     name: string;
     family: string | null;
+    category?: string | null;
+    pmAnmat?: string | null;
+    isSterile?: boolean;
     brand: string | null;
     articleType: string | null;
     unit: string;
@@ -35,6 +42,26 @@ export interface ArticleStockDetailResponse {
     vatRate: number;
     identifiers: Array<{ id: string; type: string; value: string }>;
     suppliers: Array<{ id: string; supplierId: string }>;
+    cost?: number;
+    price?: number;
+    priceListCode?: string | null;
+    preferredSupplier?: string | null;
+    preferredSupplierId?: string | null;
+    leadTimeDays?: number | null;
+    minStock?: number | null;
+    commercialProfile?: {
+      id: string;
+      companyId: string;
+      articleId: string;
+      referenceCost: number;
+      referenceSalePrice: number;
+      currency: string;
+      priceListCode: string | null;
+      preferredSupplierId: string | null;
+      preferredSupplierName: string | null;
+      leadTimeDays: number | null;
+      minStock?: number | null;
+    } | null;
   };
   summary: {
     physical: number;
