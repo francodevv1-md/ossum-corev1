@@ -111,6 +111,7 @@ model Company {
   necesidadesCompra                NecesidadCompra[]                        @relation("CompanyNecesidadesCompra")
   ordenesPago                      OrdenPago[]                              @relation("CompanyOrdenesPago")
   ordenPagoImputaciones            OrdenPagoImputacion[]                    @relation("CompanyOrdenPagoImputaciones")
+  personalCalendarEvents           PersonalCalendarEvent[]                  @relation("CompanyPersonalCalendarEvents")
 }
 
 model Vehicle {
@@ -231,6 +232,7 @@ model User {
   createdNecesidadesCompra              NecesidadCompra[]                        @relation("NecesidadCompraCreatedBy")
   createdOrdenesPago                    OrdenPago[]                              @relation("OrdenPagoCreatedBy")
   updatedOrdenesPago                    OrdenPago[]                              @relation("OrdenPagoUpdatedBy")
+  personalCalendarEvents                PersonalCalendarEvent[]                  @relation("UserPersonalCalendarEvents")
 }
 
 // ─── Preferencias de Vista por Módulo ───────────────────────────────
@@ -3325,4 +3327,28 @@ model OrdenPagoImputacion {
   @@index([companyId, ordenPagoId], map: "ix_orden_pago_imputacion_op")
   @@index([companyId, facturaCompraId], map: "ix_orden_pago_imputacion_fc")
   @@map("orden_pago_imputacion")
+}
+
+// ─── Calendario Personal V1 ──────────────────────────────────────────
+
+model PersonalCalendarEvent {
+  id          String    @id @default(cuid())
+  companyId   String    @map("company_id")
+  userId      String    @map("user_id")
+  title       String    @db.VarChar(200)
+  description String?   @db.Text
+  startDate   DateTime  @map("start_date") @db.Timestamptz(6)
+  endDate     DateTime  @map("end_date") @db.Timestamptz(6)
+  isCancelled Boolean   @default(false) @map("is_cancelled")
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation("CompanyPersonalCalendarEvents", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  user    User    @relation("UserPersonalCalendarEvents", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([companyId, id], map: "uq_personal_calendar_event_company_id")
+  @@index([companyId, userId, isCancelled], map: "ix_personal_event_company_user_cancelled")
+  @@index([companyId, userId, startDate(sort: Asc)], map: "ix_personal_event_company_user_start")
+  @@map("personal_calendar_event")
 }
