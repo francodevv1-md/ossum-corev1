@@ -382,24 +382,75 @@ model ContactGroupMembership {
 
 // ─── Dirección de Contacto ───────────────────────────────────────────
 
+enum GeographicEntityType {
+  PROVINCE
+  DEPARTMENT
+  MUNICIPALITY
+  LOCALITY
+  ADDRESS
+}
+
+enum GeographicCoordinateType {
+  CENTROID
+  ADDRESS
+  GPS
+  SURVEY
+  MANUAL
+  UNKNOWN
+}
+
+enum GeographicCrs {
+  EPSG_4326 @map("EPSG:4326")
+}
+
+enum GeographicValidationStatus {
+  VERIFIED        @map("verified")
+  CANDIDATE       @map("candidate")
+  CONFLICT        @map("conflict")
+  MISSING         @map("missing")
+  MANUAL_VERIFIED @map("manual_verified")
+  DEPRECATED      @map("deprecated")
+}
+
 model ContactAddress {
-  id          String   @id @default(cuid())
-  contactId   String
-  street      String?
-  number      String?
-  city        String?
-  state       String?
-  zipCode     String?
-  country     String   @default("AR")
-  isMain      Boolean  @default(false)
-  addressType String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String                      @id @default(cuid())
+  contactId            String
+  street               String?
+  number               String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  country              String                      @default("AR")
+  isMain               Boolean                     @default(false)
+  addressType          String?
+  georefId             String?
+  entityType           GeographicEntityType?
+  provinceGeorefId     String?
+  provinceName         String?
+  departmentGeorefId   String?
+  departmentName       String?
+  municipalityGeorefId String?
+  municipalityName     String?
+  latitude             Decimal?                    @db.Decimal(10, 7)
+  longitude            Decimal?                    @db.Decimal(10, 7)
+  coordinateType       GeographicCoordinateType?
+  crs                  GeographicCrs?
+  source               String?
+  sourceVersion        String?
+  sourceRetrievedAt    DateTime?                   @db.Timestamptz(6)
+  validationStatus     GeographicValidationStatus?
+  validationNotes      String?                     @db.Text
+  geometry             Json?
+  geometrySource       String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
 
   contact Contact @relation(fields: [contactId], references: [id])
 
   @@unique([contactId], map: "uq_contact_address_one_main", where: raw("\"isMain\" = true"))
   @@index([contactId, isMain], map: "ix_contact_address_main")
+  @@index([georefId], map: "ix_contact_address_georef_id")
+  @@index([validationStatus], map: "ix_contact_address_geo_validation")
 }
 
 // ─── Cirugía (Fase 1 — core expandido) ─────────────────────────────
