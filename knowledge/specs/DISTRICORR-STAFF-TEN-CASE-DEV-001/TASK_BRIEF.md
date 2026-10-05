@@ -1,0 +1,19 @@
+# DEV staff access and ten-case import
+
+- Task: DISTRICORR-STAFF-TEN-CASE-DEV-001; risk T3, explicitly approved bounded DEV Auth/role assignment and supplied manifest persistence.
+- Orchestrator: openai/gpt-6.1-sol; implementation writer delegated separately, exact paths below.
+- Approval: Franco approved DEV test accounts with actual login, demo emails and existing roles; Admin DEV remains admin. After identity clarification, explicitly instructed to upload supplied patient names/references unchanged. No permission to process other real records or publish data.
+- Target: existing confirmed disposable DEV company codevdistricorr1000000000, organization ossum-dev, company Districorr DEV; verify actual active identity before writes. No provider/schema/migration changes.
+- Input: docs/OSSUM_COR_MOCK_10_CIRUGIAS.md, read-only. Do not copy patient/source identifiers into fixtures, terminal output, prompts, memory or reports.
+- Staff: Cristian Vera and Nelson Gonzalez coordinator; Hernan, Bruno, Romina, Leticia, Maira, Maxi logistics; Cesar billing. Job descriptions retained as training context, not new security roles. Existing Admin DEV identity/access must be checked and unchanged.
+- Deliver coordination first: real Supabase Auth identity + User + active company access + exact matching coordinator Contact/email + SurgeryContactAssignment. Default allocation: first eight manifest cases to Nelson, remaining two to Cristian. No overwrite of unrelated users or assignments.
+- All ten source cases, contacts, source material and monetary information persist in DEV. Preserve nulls. Missing item prices/VAT cannot become invented commercial prices, approved budgets or invoices: retain exact source budget/material snapshots in attributed import Seguimiento evidence/notes until a valid priced contract exists. No fiscal/stock effects.
+- State import: use existing canonical mappings only; retain original source label in provenance. No invented Remito/Cajas dispatch to manufacture En tránsito. No authorization document or exception fabricated from an authorization number alone.
+- Training interactions: clearly label newly generated comments as training, author with the approved test identities, preserve source facts and missing-data limitations.
+- Allowed source files: scripts/dev/districorr-staff-ten-case-20261002.ts; scripts/dev/districorr-staff-ten-case-20261002.manifest.ts; src/__tests__/unit/districorr-staff-ten-case-import.test.ts; this task folder only. Runtime credentials/reports outside Git under approved Temp/opencode with restricted local ACL.
+- Forbidden: all existing application/Auth/login/logo/permissions files, schema/seed/migrations, other-owner docs, Cajas/stock/remito/consumo/ledger mutations, cleanup/reset/delete, production/staging/deploy, Git mutation/publication, new dependencies, secrets in output. Antigravity owns login/logo aesthetic changes.
+- Writer may author source/tests only. Orchestrator exclusively executes focused tests, read-only preflight, bounded Auth provisioning/import and live acceptance after review. No concurrent database writers.
+- Validation: exact offline unit test; non-mutating preflight and projected counts; independent read-only review; bounded apply and idempotent verify; coordinator login/API acceptance and headed browser under20minutes if needed. No repeated unrelated QA/build.
+- Hard stops: target mismatch, conflicting owner, existing identity collision/unsafe overwrite, missing trusted Auth admin configuration, unsupported source fields or irreversible action, same blocker after two minimal Diagnose cycles.
+- Handoff: Done / Changed / Files / Validations / Risks / Next; redacted counts/source IDs only. Credentials delivered via protected local file, never report contents.
+- Milestone worklog: knowledge/worklog/STAFF_TRAINING_BOOTSTRAP_2026-10-02.md, new isolated orchestration artifact; no shared worklog edits.
