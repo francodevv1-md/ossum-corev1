@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Textarea } from "@/components/ui/textarea"
 import { ImportEvidenceFromMailModal } from "@/components/expediente/correo/ImportEvidenceFromMailModal"
 import { MailTextViewer } from "@/components/expediente/correo/MailTextViewer"
+import { SendEmailModal } from "@/components/mail/SendEmailModal"
 import { MentionComposer } from "@/components/shared/mentions/MentionComposer"
 import { ImageViewerDialog } from "@/components/shared/image/ImageViewerDialog"
 import { useIsMobile } from "@/hooks/useIsMobile"
@@ -378,6 +379,7 @@ function TimelineCard({
   editingEntryId,
   canModify,
   isMobile = false,
+  onOpenAuthEmail,
 }: {
   entry: SeguimientoEntryView;
   companyId?: string;
@@ -385,6 +387,7 @@ function TimelineCard({
   isDeepLinked?: boolean;
   onEditEntry?: (entryId: string, edits: SeguimientoEventEditInput) => Promise<void>;
   onDownloadDocument?: (entryId: string, fileName: string) => Promise<void>;
+  onOpenAuthEmail?: (entry: SeguimientoEntryView) => void;
   editingEntryId?: string | null;
   canModify: boolean;
   isMobile?: boolean;
@@ -1054,6 +1057,26 @@ function TimelineCard({
             )}
           </div>
         )}
+
+        {/* Authorization Email Action */}
+        {Boolean(onOpenAuthEmail) && (entry.entryType === "authorization_evidence" || (entry.entryType === "document_evidence" && (entry.documentMeta?.fileName.toLowerCase().includes("autoriz") || entry.summary?.toLowerCase().includes("autoriz")))) && (
+          <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+              <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Evidencia de Autorización</span>
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 text-[10px] sm:text-[11px] font-bold gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800 transition-transform active:scale-95 cursor-pointer shadow-2xs"
+              onClick={() => onOpenAuthEmail?.(entry)}
+            >
+              <Mail className="size-3 text-emerald-600 dark:text-emerald-400" />
+              <span>Emitir correo formal (Resend)</span>
+            </Button>
+          </div>
+        )}
       </div>
     </motion.article>
   )
@@ -1363,6 +1386,54 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   const [mediaHighlighted, setMediaHighlighted] = useState(false)
   const mediaTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [focusedEntryId, setFocusedEntryId] = useState<string | null>(null)
+  const [authEmailModalOpen, setAuthEmailModalOpen] = useState(false)
+  const [authEmailAttachments, setAuthEmailAttachments] = useState<
+    Array<{
+      filename: string
+      content: string
+      contentType?: string
+      isImage?: boolean
+      isPdf?: boolean
+    }>
+  >([])
+  const [authEmailInitialNotes, setAuthEmailInitialNotes] = useState("")
+
+  const handleOpenAuthEmailModal = (entry?: SeguimientoEntryView) => {
+    const atts: Array<{
+      filename: string
+      content: string
+      contentType?: string
+      isImage?: boolean
+      isPdf?: boolean
+    }> = []
+
+    const photoFiles = entry?.photoMeta?.files ?? entry?.imageEvidenceMeta?.files ?? []
+    photoFiles.forEach((file, i) => {
+      if (file.previewDataUrl) {
+        atts.push({
+          filename: file.name || `evidencia-autorizacion-${i + 1}.png`,
+          content: file.previewDataUrl,
+          contentType: "image/png",
+          isImage: true,
+        })
+      }
+    })
+
+    if (entry?.documentMeta?.fileName) {
+      atts.push({
+        filename: entry.documentMeta.fileName,
+        content: "",
+        contentType: entry.documentMeta.mimeType || "application/pdf",
+        isPdf: (entry.documentMeta.mimeType || "").includes("pdf"),
+        isImage: (entry.documentMeta.mimeType || "").includes("image"),
+      })
+    }
+
+    setAuthEmailAttachments(atts)
+    setAuthEmailInitialNotes(entry?.content || "")
+    setAuthEmailModalOpen(true)
+  }
+
   const authorizationSources = useMemo(
     () => entries.filter((entry) => entry.entryType !== "authorization_evidence"),
     [entries]
@@ -1501,7 +1572,17 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           summary: content.slice(0, 80),
           ...(mediaFiles.length > 0 ? { imageEvidence: { files: mediaFiles } } : {}),
         })
-        toast.success("Autorización registrada")
+        // AUTH-EMAIL-REAL-SEND: post-Authorize feedback with optional action
+        // "Enviar correo de autorización". Reuses the existing
+        // handleOpenAuthEmailModal (no entry pre-attached: the user starts
+        // a fresh email from the just-registered authorization). The modal
+        // and the route are unchanged.
+        toast.success("Autorización registrada", {
+          action: {
+            label: "Enviar correo de autorización",
+            onClick: () => handleOpenAuthEmailModal(),
+          },
+        })
       } else if (documentFile) {
         await addDocumentEvidence({ file: documentFile, content })
         toast.success("Documento cargado y enviado a procesamiento")
@@ -2317,6 +2398,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
                       isDeepLinked={focusedEntryId === entry.id}
                       onEditEntry={editEntry}
                       onDownloadDocument={downloadDocumentEvidence}
+                      onOpenAuthEmail={handleOpenAuthEmailModal}
                       editingEntryId={editingEntryId}
                       canModify={canModifySeguimiento}
                       isMobile={isMobile}
@@ -2371,6 +2453,20 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           await refetch()
         }}
       />
+
+      {authEmailModalOpen && (
+        <SendEmailModal
+          open={authEmailModalOpen}
+          onClose={() => setAuthEmailModalOpen(false)}
+          mode="authorization"
+          surgery={surgery}
+          initialNotes={authEmailInitialNotes}
+          initialAttachments={authEmailAttachments}
+          onEmailSent={async () => {
+            await refetch()
+          }}
+        />
+      )}
     </div>
   )
 }

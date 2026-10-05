@@ -17,6 +17,7 @@ import { HistorialPanel } from "./HistorialPanel"
 import { ExpedienteCorreoTab } from "./correo/ExpedienteCorreoTab"
 import { EditFichaDrawer } from "./EditFichaDrawer"
 import { NovedadesTabContent } from "./NovedadesTabContent"
+import { SendEmailModal } from "@/components/mail/SendEmailModal"
 import { MobileExpedienteTabs, type ExpTabKey } from "./MobileExpedienteTabs"
 import { useIsMobile } from "@/hooks/useIsMobile"
 import { EXPEDIENTE_TABS, EXPEDIENTE_MORE_TABS } from "@/lib/cirugias.constants"
@@ -77,6 +78,7 @@ interface ExpedienteFullViewProps {
   onSetCancelDialogOpen: (open: boolean) => void
   onSetChangeStateDialogOpen: (open: boolean) => void
   onSetChangeDateDialogOpen: (open: boolean) => void
+  onChangeDate?: (s: Surgery) => void
   onSetNewState: (state: SurgeryState) => void
   onRecover: (s: Surgery) => void
   onAutorizar: (s: Surgery) => void
@@ -113,9 +115,10 @@ export function ExpedienteFullView({
   onSetCancelDialogOpen,
   onSetChangeStateDialogOpen,
   onSetChangeDateDialogOpen,
+  onChangeDate,
   onSetNewState,
   onRecover,
-  onAutorizar: _onAutorizar,
+  onAutorizar,
   onOpenPresupuestoDialog,
   editingConsumo,
   setEditingConsumo,
@@ -123,6 +126,12 @@ export function ExpedienteFullView({
   const { activeCompany } = useAuth()
   const isMobile = useIsMobile()
   const [isEditFichaOpen, setIsEditFichaOpen] = useState(false)
+  // AUTH-EMAIL-REAL-SEND: elevated from the Header's "Enviar correo con
+  // autorizado" menu item. Mounted OUTSIDE any TabsContent so the dialog
+  // stays alive when the user is on a tab other than "novedades". The
+  // per-entry "Emitir correo formal (Resend)" button inside
+  // NovedadesTabContent continues to use its own local modal (unchanged).
+  const [authEmailModalOpen, setAuthEmailModalOpen] = useState(false)
   const [operationalFreshnessKey, setOperationalFreshnessKey] = useState(0)
   const [serverBackedAvailabilityBySurgeryId, setServerBackedAvailabilityBySurgeryId] = useState<
     Record<string, ServerBackedAvailabilityState>
@@ -258,8 +267,17 @@ export function ExpedienteFullView({
             onSetCancelDialogOpen={onSetCancelDialogOpen}
             onSetChangeStateDialogOpen={onSetChangeStateDialogOpen}
             onSetChangeDateDialogOpen={onSetChangeDateDialogOpen}
+            onChangeDate={onChangeDate}
             onSetNewState={onSetNewState}
             onRecover={onRecover}
+            // AUTH-EMAIL-REAL-SEND: opens the elevated SendEmailModal
+            // directly with empty initial attachments and notes. The same
+            // SendEmailModal component is reused (no modal duplication);
+            // it lives at the root of ExpedienteFullView so it survives
+            // any tab change. The per-entry "Emitir correo formal
+            // (Resend)" button inside NovedadesTabContent continues to
+            // use its own local modal (unchanged).
+            onOpenAuthEmail={() => setAuthEmailModalOpen(true)}
           />
 
           {/* Sticky Tab Navigation Bar — desktop only; mobile uses bottom nav */}
@@ -426,6 +444,7 @@ export function ExpedienteFullView({
                 surgery={surgery}
                 presupuestos={presupuestos}
                 onOpenPresupuestoDialog={onOpenPresupuestoDialog}
+                onAutorizar={onAutorizar}
                 remitos={remitos}
                 box={box}
                 comprobantes={comprobantes}
@@ -520,6 +539,29 @@ export function ExpedienteFullView({
       ) : null}
 
       <EditFichaDrawer surgery={surgery} open={isEditFichaOpen} onOpenChange={setIsEditFichaOpen} />
+
+      {/* AUTH-EMAIL-REAL-SEND: elevated SendEmailModal mounted at the
+          Expediente root so it survives any TabsContent unmount. Opened
+          by the Header "Más → Enviar correo con autorizado" item. The
+          modal reuses the same SendEmailModal component (no
+          duplication); only the elevated open/close state is new. Uses
+          mode="authorization" so the same authorization email template
+          (with the surgery items table) is generated server-side as
+          when the user opens the modal from a Novedades authorization
+          entry. Initial notes and attachments are empty because the
+          Header has no specific authorization_evidence entry to
+          pre-load; the user fills them in. */}
+      <SendEmailModal
+        open={authEmailModalOpen}
+        onClose={() => setAuthEmailModalOpen(false)}
+        mode="authorization"
+        surgery={surgery}
+        initialNotes=""
+        initialAttachments={[]}
+        onEmailSent={async () => {
+          setAuthEmailModalOpen(false)
+        }}
+      />
     </div>
   )
 }

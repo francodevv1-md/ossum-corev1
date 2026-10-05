@@ -24,10 +24,11 @@ import {
   Printer,
   ChevronDown,
   ArrowLeft,
+  Mail,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { canAutorizarFV, canRemitirNR, canCargarConsumo } from "@/lib/businessRules"
-import { CX_STATE_VISUALS, DEFAULT_CX_STATE_VISUAL, PREP_STATE_CELL_COLORS } from "@/lib/cirugias.constants"
+import { getCxStateVisual, PREP_STATE_CELL_COLORS } from "@/lib/cirugias.constants"
 import type { CxOperationsDerivedDisplay } from "@/lib/cx-operations-derived"
 import type { Surgery, SurgeryState, ConsumoState } from "@/types"
 import type { ExpedienteHeaderModel } from "./expediente-header.model"
@@ -66,8 +67,20 @@ export interface ExpedienteHeaderProps {
   onSetCancelDialogOpen: (open: boolean) => void
   onSetChangeStateDialogOpen: (open: boolean) => void
   onSetChangeDateDialogOpen: (open: boolean) => void
+  onChangeDate?: (s: Surgery) => void
   onSetNewState: (state: SurgeryState) => void
   onRecover: (s: Surgery) => void
+  /**
+   * AUTH-EMAIL-REAL-SEND: switches the Expediente tab to "novedades" where
+   * the per-authorization-evidence entry exposes the resident SendEmailModal
+   * via the "Emitir correo formal (Resend)" button that already exists on
+   * each `TimelineCard`. The modal is the same `SendEmailModal` already
+   * mounted by `NovedadesTabContent`; no modal duplication. Enabled only
+   * when the surgery has a valid authorization/evidence (s.autorizado or
+   * s.state === "Autorizada"). The route, service, and lockfile scope
+   * are unchanged.
+   */
+  onOpenAuthEmail?: () => void
 }
 
 export function ExpedienteHeader({
@@ -84,6 +97,7 @@ export function ExpedienteHeader({
   onSetCancelDialogOpen,
   onSetChangeStateDialogOpen,
   onSetChangeDateDialogOpen,
+  onChangeDate,
   onSetNewState,
   onRecover,
   onEditFicha,
@@ -92,18 +106,27 @@ export function ExpedienteHeader({
   onViewDocumentacion,
   onViewRemitos,
   onViewConsumo,
+  onOpenAuthEmail,
 }: ExpedienteHeaderProps) {
   const canAuthFV = canAutorizarFV(s, docStatus, consumoState)
   const canRemitNR = canRemitirNR(s)
   const canLoadConsumo = canCargarConsumo(s)
   const hasPR = Boolean(presupuestoId)
+  // AUTH-EMAIL-REAL-SEND: the surgery has a valid authorization/evidence when
+  // either s.autorizado is true (the per-surgery flag set by the authorization
+  // action) or s.state is "Autorizada" (the state-level marker). We do not
+  // require a per-entry authorization_evidence query here because the Header
+  // has no access to the seguimiento feed; the surgery-level flags are the
+  // minimum sufficient signal in this component, and they are set in the
+  // same flow that creates the authorization_evidence entry.
+  const hasAuthorization = Boolean(s.autorizado) || s.state === "Autorizada"
   const classificationPillClass = model.identity.classification
     ? CLASSIFICATION_PILL_COLORS[model.identity.classification] ?? CLASSIFICATION_PILL_COLORS["Otro"]
     : undefined
   const primaryActionLabel = hasPR ? "Ver PR" : "Generar PR"
   const primaryAction = hasPR ? onViewPR : onGeneratePR
 
-  const cxVisual = CX_STATE_VISUALS[s.state] || DEFAULT_CX_STATE_VISUAL
+  const cxVisual = getCxStateVisual(s.state, s.date)
   const prepClass = PREP_STATE_CELL_COLORS[s.preparationState] || "bg-slate-100 text-slate-700 border border-slate-200"
 
   const openStateModal = () => {
@@ -161,6 +184,7 @@ export function ExpedienteHeader({
             aria-label="Estado CX"
             className={cn(
               "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-bold shadow-xs transition-opacity hover:opacity-90 active:scale-[0.98] sm:text-xs",
+              cxVisual.strong === "#FFFFFF" && "border border-slate-300 dark:border-slate-700",
               cxVisual.strongClass
             )}
             title="Estado CX (clic para cambiar)"
@@ -305,6 +329,18 @@ export function ExpedienteHeader({
                     <Activity className="mr-2 size-4" /> Cargar consumo
                   </DropdownMenuItem>
                 )}
+                {!s.autorizado && s.state !== "Autorizada" && s.state !== "Cancelada" && s.state !== "Suspendida" && (
+                  <DropdownMenuItem
+                    className="text-slate-700 focus:bg-slate-100 focus:text-slate-950 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:text-slate-50"
+                    onClick={() => {
+                      onSetDialogSurgery(s)
+                      onSetNewState("Autorizada")
+                      onSetChangeStateDialogOpen(true)
+                    }}
+                  >
+                    <ShieldCheck className="mr-2 size-4" /> Autorizar CX
+                  </DropdownMenuItem>
+                )}
                 {canAuthFV.allowed && (
                   <DropdownMenuItem
                     className="text-slate-700 focus:bg-slate-100 focus:text-slate-950 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:text-slate-50"
@@ -340,8 +376,12 @@ export function ExpedienteHeader({
                 <DropdownMenuItem
                   className="text-slate-700 focus:bg-slate-100 focus:text-slate-950 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:text-slate-50"
                   onClick={() => {
-                    onSetDialogSurgery(s)
-                    onSetChangeDateDialogOpen(true)
+                    if (onChangeDate) {
+                      onChangeDate(s)
+                    } else {
+                      onSetDialogSurgery(s)
+                      onSetChangeDateDialogOpen(true)
+                    }
                   }}
                 >
                   <Calendar className="mr-2 size-4" /> Cambiar fecha
@@ -374,6 +414,14 @@ export function ExpedienteHeader({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
+                {onOpenAuthEmail && hasAuthorization && (
+                  <DropdownMenuItem
+                    className="text-slate-700 focus:bg-slate-100 focus:text-slate-950 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:text-slate-50"
+                    onClick={() => onOpenAuthEmail()}
+                  >
+                    <Mail className="mr-2 size-4" /> Enviar correo con autorizado
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem className="text-slate-700 focus:bg-slate-100 focus:text-slate-950 dark:text-slate-200 dark:focus:bg-slate-800 dark:focus:text-slate-50">
                   <Printer className="mr-2 size-4" /> Imprimir / Exportar
                 </DropdownMenuItem>
