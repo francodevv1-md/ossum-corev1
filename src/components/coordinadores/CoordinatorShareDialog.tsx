@@ -14,7 +14,6 @@ import { useAuth } from "@/components/auth/AuthProvider"
 import { useSeguimientoFeed } from "@/hooks/useSeguimientoFeed"
 import { useOrtoTrackStore } from "@/lib/store"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { apiFetch } from "@/lib/api/client"
 import { getAccessToken } from "@/lib/auth/client"
 import {
   buildCoordinatorDoctorMessage,
@@ -208,7 +207,6 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
   const [emailTo, setEmailTo] = useState("")
   const [emailSubject, setEmailSubject] = useState("")
   const [copyMe, setCopyMe] = useState(false)
-  const [emailIdempotencyKey, setEmailIdempotencyKey] = useState("")
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([])
   const [runningAction, setRunningAction] = useState<ShareAction | null>(null)
 
@@ -405,7 +403,6 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
     setPreviewModalItem(null)
     setAttachmentCategory("todos")
     setUploadedEvidences([])
-    setEmailIdempotencyKey(typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
   }, [open, entry])
 
   useEffect(() => {
@@ -447,13 +444,13 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
     }
   }
 
-  const registerTrackingEvent = async (action: ShareAction, attachedEvidenceCount: number) => {
+  const registerTrackingEvent = async (action: ShareAction, attachedEvidenceCount: number, devMode = false) => {
     if (!entry) return true
 
     try {
       const actionLabel =
         action === "email-formal"
-          ? "Reporte formal por Correo"
+          ? devMode ? "Simulación de reporte por Correo (DEV; no entregado)" : "Reporte formal por Correo"
           : action === "ntfy-broadcast"
           ? `Alerta Push ntfy (${ntfyTopic})`
           : "Compartido por canal de sistema / WhatsApp"
@@ -692,19 +689,48 @@ export function CoordinatorShareDialog({ open, onOpenChange, entry }: Coordinato
 
     setRunningAction("email-formal")
     try {
-      await apiFetch(`/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(entry.surgery.id)}/reports/email`, {
+      const token = await getAccessToken()
+      const response = await fetch(`/api/companies/${encodeURIComponent(activeCompany.id)}/mail/send`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(currentUser?.id ? { "x-ossum-actor-user-id": currentUser.id } : {}),
+        },
         body: JSON.stringify({
-          to: emailTo,
+          surgeryId: entry.surgery.backendId || entry.surgery.id,
+          to: emailTo.split(/[,;]/).map((email) => email.trim()).filter(Boolean),
+          cc: copyMe && currentUser?.email ? [currentUser.email] : undefined,
           subject: emailSubject,
-          message: currentMessage,
-          copyMe,
-          idempotencyKey: emailIdempotencyKey,
+          templateType: "surgery_created",
+          formalSurgeryData: {
+            title: emailSubject,
+            patientName: entry.surgery.patient,
+            surgeonName: entry.surgery.surgeon,
+            institutionName: entry.surgery.institution,
+            surgeryDate: entry.surgery.date,
+            procedure: entry.surgery.procedure,
+            bodyText: currentMessage,
+          },
         }),
       })
-      toast.success("Reporte enviado correctamente")
-      await registerTrackingEvent("email-formal", selectedEvidence.length)
+      const body = await response.json()
+      const data = body.data ?? body
+      if (!response.ok) {
+        throw new Error(body.error?.message || (typeof body.error === "string" ? body.error : undefined) || "No se pudo enviar el reporte")
+      }
+      if (data.success !== true || typeof data.id !== "string" || !data.id.trim()) {
+        throw new Error("No se pudo confirmar el despacho del correo")
+      }
+      toast.success(data.devMode
+        ? "🧪 Correo simulado; no fue entregado."
+        : "📨 Proveedor aceptó el envío (la entrega depende del proveedor).")
+      if (data.warning) toast.warning(data.warning)
+      if (typeof data.auditRecorded !== "boolean") {
+        const recorded = await registerTrackingEvent("email-formal", selectedEvidence.length, data.devMode === true)
+        if (!recorded) toast.warning("El correo fue procesado, pero no se pudo registrar el seguimiento. No lo reenvíes.")
+      }
       onOpenChange(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo enviar el reporte")

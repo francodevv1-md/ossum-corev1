@@ -21,19 +21,19 @@ import {
   Plus,
   FileText,
   Image as ImageIcon,
-  CheckCircle2,
   Eye,
   Loader2,
   Trash2,
-  Building2,
-  User,
-  ShieldCheck,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/components/auth/AuthProvider"
 import type { Surgery } from "@/types"
 import type { EmailAttachment, SurgeryAuthorizationEmailData } from "@/lib/services/resend.service"
 import { generateAuthorizationEmailHtml, generateSurgeryFormalEmailHtml } from "@/lib/services/resend.service"
+import { getAccessToken } from "@/lib/auth/client"
+import { loadAuthorizationAttachments, loadAuthorizationFeed, readMailFile } from "@/lib/mail/authorization-evidence"
+import { mailAddressSchema, normalizeMailAttachments } from "@/lib/validators/mail.validator"
+import type { SeguimientoEntryView } from "@/lib/api/seguimiento-adapter"
 
 export interface SendEmailModalProps {
   open: boolean
@@ -52,7 +52,9 @@ export interface SendEmailModalProps {
     previewUrl?: string
   }>
   authorizationData?: Partial<SurgeryAuthorizationEmailData>
-  onEmailSent?: (res: { id: string; recipients: string[] }) => void
+  initialEvidence?: SeguimientoEntryView
+  evidenceEntries?: SeguimientoEntryView[]
+  onEmailSent?: (res: { id: string; recipients: string[] }) => void | Promise<void>
 }
 
 export function SendEmailModal({
@@ -65,11 +67,15 @@ export function SendEmailModal({
   initialNotes = "",
   initialAttachments = [],
   authorizationData,
+  initialEvidence,
+  evidenceEntries = [],
   onEmailSent,
 }: SendEmailModalProps) {
   const { activeCompany, currentUser } = useAuth()
-  const companyId = activeCompany?.id || "districorr"
-  const companyName = activeCompany?.name || "DISTRICORR SRL"
+  const companyId = activeCompany?.id
+  const companyName = activeCompany?.name || ""
+  const surgeryId = surgery.backendId || surgery.id
+  const contextKey = `${companyId || ""}:${surgeryId}:${currentUser?.id || ""}:${mode}`
 
   // Recipients
   const [toEmails, setToEmails] = useState<string[]>([])
@@ -83,88 +89,96 @@ export function SendEmailModal({
   const [notes, setNotes] = useState(initialNotes)
 
   // Attachments
-  const [attachments, setAttachments] = useState<
-    Array<{
-      filename: string
-      content: string
-      contentType?: string
-      isPdf?: boolean
-      isImage?: boolean
-      previewUrl?: string
-    }>
-  >([])
+  const [attachments, setAttachments] = useState<EmailAttachment[]>([])
 
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isSending, setIsSending] = useState(false)
 
-  // Initialize data on modal open. AUTH-EMAIL-REAL-SEND: this effect must
-  // only run ONCE per open transition, not on every parent re-render.
-  // When the modal is mounted at the root of ExpedienteFullView (which
-  // re-renders on any state change in the page tree), the previous
-  // implementation re-ran on every render, calling setState in a loop
-  // and tripping Radix Dialog's `Maximum update depth exceeded` guard.
-  // The fix: capture the initial props in refs at the moment the modal
-  // transitions to `open`, and key the effect to `open` only. The refs
-  // freeze the input values for the lifetime of the open session.
-  const initialToRef = useRef(initialTo)
-  const initialSubjectRef = useRef(initialSubject)
-  const initialNotesRef = useRef(initialNotes)
-  const initialAttachmentsRef = useRef(initialAttachments)
-  const initialSurgeryRef = useRef(surgery)
-  const wasOpenRef = useRef(false)
+  const [availableEvidence, setAvailableEvidence] = useState<SeguimientoEntryView[]>([])
+  const [selectedEvidence, setSelectedEvidence] = useState<SeguimientoEntryView | undefined>()
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const [evidenceError, setEvidenceError] = useState("")
+  const [feedHasMore, setFeedHasMore] = useState(false)
+  const sessionRef = useRef(0)
+  const evidenceOperationRef = useRef(0)
+  const sendingRef = useRef(false)
+  const currentContextRef = useRef({ open, contextKey })
+  currentContextRef.current = { open, contextKey }
+  const evidenceSnapshotRef = useRef({ entries: evidenceEntries, additional: initialAttachments })
+  const isCurrent = (session: number, key = contextKey) =>
+    sessionRef.current === session && currentContextRef.current.open && currentContextRef.current.contextKey === key
 
+  const loadEvidence = async (entry?: SeguimientoEntryView, session = sessionRef.current, key = contextKey) => {
+    const operation = ++evidenceOperationRef.current
+    const current = () => isCurrent(session, key) && evidenceOperationRef.current === operation
+    setEvidenceLoading(true)
+    setEvidenceError("")
+    setAttachments([])
+    try {
+      if (!companyId || !currentUser) throw new Error("Esperá la inicialización de usuario y empresa")
+      if (entry) {
+        const loaded = await loadAuthorizationAttachments(companyId, surgeryId, entry,
+          evidenceSnapshotRef.current.entries, evidenceSnapshotRef.current.additional)
+        if (current()) setAttachments(loaded)
+      } else {
+        const feed = await loadAuthorizationFeed(companyId, surgeryId)
+        if (current()) {
+          setAvailableEvidence(feed.entries)
+          setFeedHasMore(feed.meta.hasMore)
+        }
+      }
+    } catch (error) {
+      if (current()) setEvidenceError(error instanceof Error ? error.message : "No se pudo cargar la evidencia")
+    } finally {
+      if (current()) setEvidenceLoading(false)
+    }
+  }
+
+  // Sample current props only on an open/context transition; keep edits on rerenders.
   useEffect(() => {
-    if (!open) {
-      wasOpenRef.current = false
-      return
-    }
-    // Only initialize on the open transition (false -> true). Subsequent
-    // re-renders while the modal stays open are no-ops for this effect.
-    if (wasOpenRef.current) return
-    wasOpenRef.current = true
-
-    // Setup recipients
-    const defaultRecipients = initialToRef.current.length > 0
-      ? initialToRef.current
-      : [
-          "cirugia@districorr.com.ar",
-          "deposito@districorr.com.ar",
-          "ingresos@districorr.com.ar",
-        ]
-    setToEmails(defaultRecipients)
+    const session = ++sessionRef.current
+    ++evidenceOperationRef.current
+    sendingRef.current = false
+    setIsSending(false)
+    if (!open) return
+    evidenceSnapshotRef.current = { entries: [...evidenceEntries], additional: [...initialAttachments] }
+    setToEmails([...initialTo])
     setCcEmails([])
-
-    // Setup Subject according to format: <Cliente> - <PTE> - DR. <MEDICO>
-    // Per AUTH-EMAIL-REAL-SEND: Cliente = obraSocial || client || financiador || "Cliente"
-    if (initialSubjectRef.current) {
-      setSubject(initialSubjectRef.current)
-    } else {
-      const s = initialSurgeryRef.current
-      const cliente = s.obraSocial || s.client || s.financiador || "Cliente"
-      const pte = s.patient || "PTE"
-      const medico = s.surgeon ? `DR. ${s.surgeon.toUpperCase()}` : "MEDICO"
-      setSubject(`${cliente.toUpperCase()} - ${pte.toUpperCase()} - ${medico}`)
+    setNewToInput("")
+    setNewCcInput("")
+    setShowCc(false)
+    setSubject(initialSubject || [surgery.obraSocial || surgery.client || surgery.financiador, surgery.patient, surgery.surgeon].filter(Boolean).join(" - "))
+    setNotes(initialNotes)
+    setIsPreviewOpen(mode === "authorization")
+    setSelectedEvidence(initialEvidence)
+    setAvailableEvidence(evidenceEntries.filter((entry) => entry.entryType === "authorization_evidence"))
+    setFeedHasMore(false)
+    setEvidenceError("")
+    setEvidenceLoading(false)
+    setAttachments([])
+    try {
+      const normalized = normalizeMailAttachments(initialAttachments, mode === "authorization")
+      if (mode === "authorization" && initialEvidence && companyId && currentUser) {
+        void loadEvidence(initialEvidence, session)
+      } else {
+        setAttachments(normalized)
+        if (mode === "authorization" && !normalized.length && companyId && currentUser) void loadEvidence(undefined, session)
+      }
+    } catch (error) {
+      setEvidenceError(error instanceof Error ? error.message : "Adjuntos inválidos")
     }
-
-    setNotes(initialNotesRef.current)
-    setAttachments(initialAttachmentsRef.current)
-  }, [open])
-
-  // Email presets
-  const emailPresets = [
-    { label: "Cirugía", email: "cirugia@districorr.com.ar" },
-    { label: "Depósito", email: "deposito@districorr.com.ar" },
-    { label: "Ingresos", email: "ingresos@districorr.com.ar" },
-    { label: "Coordinación", email: "coordinacion@districorr.com.ar" },
-  ]
+    return () => { ++sessionRef.current; ++evidenceOperationRef.current }
+    // Input objects intentionally do not reset an existing draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, contextKey])
 
   const handleAddEmail = (type: "to" | "cc", emailToAdd?: string) => {
+    if (sendingRef.current) return
     const raw = emailToAdd || (type === "to" ? newToInput : newCcInput)
     const email = raw.trim().toLowerCase()
     if (!email) return
 
-    // Simple email regex validation
-    if (!email.includes("@") || !email.includes(".")) {
+    if (!mailAddressSchema.safeParse(email).success) {
       toast.error("Por favor ingresá una dirección de correo válida")
       return
     }
@@ -179,6 +193,7 @@ export function SendEmailModal({
   }
 
   const handleRemoveEmail = (type: "to" | "cc", emailToRemove: string) => {
+    if (sendingRef.current) return
     if (type === "to") {
       setToEmails((prev) => prev.filter((e) => e !== emailToRemove))
     } else {
@@ -187,79 +202,51 @@ export function SendEmailModal({
   }
 
   // Handle local file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (sendingRef.current || evidenceLoading) return
     const files = e.target.files
     if (!files || files.length === 0) return
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const result = reader.result as string
-        const isPdf = file.type === "application/pdf"
-        const isImage = file.type.startsWith("image/")
-
-        setAttachments((prev) => [
-          ...prev,
-          {
-            filename: file.name,
-            content: result,
-            contentType: file.type,
-            isPdf,
-            isImage,
-            previewUrl: isImage ? result : undefined,
-          },
-        ])
-        toast.success(`Archivo adjuntado: ${file.name}`)
-      }
-      reader.readAsDataURL(file)
-    })
-
+    const selectedFiles = Array.from(files)
+    const session = sessionRef.current
+    const operation = ++evidenceOperationRef.current
     e.target.value = ""
+    setEvidenceLoading(true)
+    try {
+      const loaded = await Promise.all(selectedFiles.map((file) => readMailFile(file, file.name)))
+      if (!isCurrent(session) || operation !== evidenceOperationRef.current || sendingRef.current) return
+      setAttachments(normalizeMailAttachments([...attachments, ...loaded], mode === "authorization"))
+    } catch (error) {
+      if (isCurrent(session) && operation === evidenceOperationRef.current) toast.error(error instanceof Error ? error.message : "No se pudo leer el archivo")
+    } finally {
+      if (isCurrent(session) && operation === evidenceOperationRef.current) setEvidenceLoading(false)
+    }
   }
 
   const handleRemoveAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index))
+    if (sendingRef.current || evidenceLoading) return
+    setAttachments((prev) => normalizeMailAttachments(prev.filter((_, i) => i !== index), mode === "authorization"))
   }
 
   // Build Authorization Email Data
   const fullAuthData: SurgeryAuthorizationEmailData = {
-    patientName: surgery.patient || "—",
-    patientDni: (surgery as any).patientDni || (surgery as any).dni || "—",
-    patientCuil: (surgery as any).patientCuil || (surgery as any).cuil || "—",
-    claimNumber: (surgery as any).claimNumber || (surgery as any).siniestro || (surgery as any).nroSiniestro || "—",
-    authorizationNumber: (surgery as any).authorizationNumber || (surgery as any).nroAutorizacion || surgery.id,
-    administrator: (surgery as any).administrator || "Cabrera Noemí",
-    clientOrArt: surgery.obraSocial || surgery.client || surgery.financiador || "PREVENCIÓN ART",
-    surgeonName: surgery.surgeon || "—",
-    institutionName: surgery.institution || "—",
-    surgeryDate: surgery.date || "—",
-    prestadorName: companyName,
-    prestadorEmail: "ventas@districorr.com.ar",
-    prestadorAddress: "—",
-    items: (surgery as any).materialesAutorizados || [
-      {
-        code: "SHAV",
-        description: "Shaver - Nacional",
-        observations: "PUNTA DE SHAVER DE 5,5 MM",
-        date: surgery.date || new Date().toLocaleDateString("es-AR"),
-        quantity: 1,
-      },
-      {
-        code: "SISTI",
-        description: "Sistema de Titanio Interferencial para plastia de LCA - Nacional",
-        observations: "DOS TORNILLOS DE INTERFERENCIA EN TITANIO ROSCA ROMA",
-        date: surgery.date || new Date().toLocaleDateString("es-AR"),
-        quantity: 1,
-      },
-    ],
-    notes,
+    patientName: surgery.patient || "",
+    clientOrArt: surgery.obraSocial || surgery.client || surgery.financiador,
+    surgeonName: surgery.surgeon,
+    institutionName: surgery.institution,
+    surgeryDate: surgery.date,
     ...authorizationData,
+    notes,
+    signature: {
+      name: [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ") || currentUser?.email || "",
+      email: currentUser?.email,
+      companyName,
+    },
   }
 
   // Compute HTML Preview
   const previewHtml =
     mode === "authorization"
-      ? generateAuthorizationEmailHtml(fullAuthData)
+      ? generateAuthorizationEmailHtml(fullAuthData, attachments, true)
       : generateSurgeryFormalEmailHtml({
           title: subject,
           patientName: surgery.patient || "—",
@@ -269,10 +256,12 @@ export function SendEmailModal({
           procedure: surgery.procedure,
           companyName,
           bodyText: notes,
+          signature: fullAuthData.signature,
         })
 
   // Dispatch Email
   const handleSendEmail = async () => {
+    if (sendingRef.current || evidenceLoading || evidenceError || !companyId || !currentUser || !open || (mode === "authorization" && !attachments.length)) return
     if (toEmails.length === 0) {
       toast.error("Agregá al menos un destinatario")
       return
@@ -283,13 +272,23 @@ export function SendEmailModal({
       return
     }
 
+    if (![...toEmails, ...ccEmails].every((email) => mailAddressSchema.safeParse(email).success)) {
+      toast.error("Revisá las direcciones de correo")
+      return
+    }
+    const session = sessionRef.current
+    sendingRef.current = true
     setIsSending(true)
     try {
-      const response = await fetch(`/api/companies/${companyId}/mail/send`, {
+      const normalized = normalizeMailAttachments(attachments, mode === "authorization")
+      const token = await getAccessToken()
+      if (!isCurrent(session)) return
+      const response = await fetch(`/api/companies/${encodeURIComponent(companyId)}/mail/send`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           // AUTH-EMAIL-REAL-SEND: the dev backend requires the actor user
           // header as a fallback when no Supabase auth cookie is resolved
           // (see src/lib/api/auth-context.ts DEV_ACTOR_HEADER). The dev
@@ -300,7 +299,7 @@ export function SendEmailModal({
             : {}),
         },
         body: JSON.stringify({
-          surgeryId: surgery.id,
+          surgeryId,
           to: toEmails,
           cc: ccEmails.length > 0 ? ccEmails : undefined,
           subject,
@@ -316,17 +315,18 @@ export function SendEmailModal({
             companyName,
             bodyText: notes,
           },
-          attachments: attachments.map((att) => ({
-            filename: att.filename,
-            content: att.content,
-            contentType: att.contentType,
-          })),
+          attachments: normalized,
         }),
       })
 
-      const data = await response.json()
+      const body = await response.json()
+      if (!isCurrent(session)) return
+      const data = body.data ?? body
       if (!response.ok) {
-        throw new Error(data.error || "No se pudo despachar el correo")
+        throw new Error(body.error?.message || (typeof body.error === "string" ? body.error : undefined) || "No se pudo despachar el correo")
+      }
+      if (data.success !== true || typeof data.id !== "string" || !data.id.trim()) {
+        throw new Error("No se pudo confirmar el despacho del correo")
       }
 
       toast.success(
@@ -335,19 +335,25 @@ export function SendEmailModal({
           : "📨 Proveedor aceptó el envío (la entrega depende del proveedor)."
       )
 
-      if (onEmailSent) {
-        onEmailSent({ id: data.id, recipients: toEmails })
+      if (data.warning) toast.warning(data.warning)
+      try {
+        await onEmailSent?.({ id: data.id, recipients: toEmails })
+      } catch {
+        if (isCurrent(session)) toast.warning("El correo fue procesado, pero no se pudo actualizar la vista. No lo reenvíes.")
       }
-      onClose()
+      if (isCurrent(session)) onClose()
     } catch (err: any) {
-      toast.error(err.message || "Error al enviar el correo")
+      if (isCurrent(session)) toast.error(err.message || "Error al enviar el correo")
     } finally {
-      setIsSending(false)
+      if (isCurrent(session)) {
+        sendingRef.current = false
+        setIsSending(false)
+      }
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
+    <Dialog open={open} onOpenChange={(val) => !val && !sendingRef.current && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-white dark:bg-slate-900 shadow-2xl border-slate-200 dark:border-slate-800">
         {/* Header */}
         <DialogHeader className="p-5 pb-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850 shrink-0">
@@ -359,7 +365,7 @@ export function SendEmailModal({
               <div>
                 <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
                   {mode === "authorization"
-                    ? "Emitir Correo de Autorización"
+                    ? "Compartir evidencia de autorización"
                     : "Envío de Correo Formal"}
                 </DialogTitle>
                 <p className="text-xs text-slate-500">
@@ -383,7 +389,43 @@ export function SendEmailModal({
         </DialogHeader>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+        <fieldset disabled={isSending} className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 text-xs">
+          {(!companyId || !currentUser) && (
+            <p role="alert">Esperá la inicialización de usuario y empresa antes de enviar.</p>
+          )}
+          {mode === "authorization" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="mail-authorization-evidence" className="text-xs font-bold">Evidencia de autorización</Label>
+              <select id="mail-authorization-evidence" value={selectedEvidence?.id || ""}
+                disabled={isSending || evidenceLoading || !companyId || !currentUser}
+                className="w-full rounded-md border border-slate-200 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                onChange={(event) => {
+                  if (sendingRef.current || evidenceLoading) return
+                  const entry = availableEvidence.find((item) => item.id === event.target.value)
+                  setSelectedEvidence(entry)
+                  if (entry) void loadEvidence(entry)
+                  else { ++evidenceOperationRef.current; setAttachments([]); setEvidenceError("") }
+                }}>
+                <option value="">Seleccioná una autorización o adjuntá el archivo real</option>
+                {selectedEvidence && !availableEvidence.some((item) => item.id === selectedEvidence.id) && (
+                  <option value={selectedEvidence.id}>{selectedEvidence.summary || selectedEvidence.content}</option>
+                )}
+                {availableEvidence.map((entry) => <option key={entry.id} value={entry.id}>{entry.summary || entry.content}</option>)}
+              </select>
+              {evidenceLoading && <p>Cargando evidencia...</p>}
+              {!evidenceLoading && !availableEvidence.length && !selectedEvidence && !evidenceError && <p>No hay autorizaciones disponibles. Adjuntá el archivo real.</p>}
+              {feedHasMore && <p>Se muestran las últimas 100 autorizaciones. Abrí las anteriores desde Novedades.</p>}
+            </div>
+          )}
+          {evidenceError && (
+            <div role="alert" className="space-y-2 text-red-700">
+              <p>{evidenceError}</p>
+              <Button type="button" variant="outline" size="sm" disabled={isSending || evidenceLoading}
+                onClick={() => { if (!sendingRef.current) void loadEvidence(selectedEvidence) }}>
+                Reintentar carga de evidencia
+              </Button>
+            </div>
+          )}
           {/* Live HTML Preview Pane */}
           {isPreviewOpen && (
             <div className="border border-blue-200 dark:border-blue-900/60 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-950 p-2 animate-in fade-in duration-200 shadow-inner">
@@ -405,7 +447,7 @@ export function SendEmailModal({
           {/* Para (To Recipients) */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              <Label htmlFor="mail-to" className="text-xs font-bold text-slate-700 dark:text-slate-300">
                 Destinatarios (Para)
               </Label>
               {!showCc && (
@@ -438,6 +480,7 @@ export function SendEmailModal({
 
               <div className="flex-1 flex items-center gap-1 min-w-[200px]">
                 <Input
+                  id="mail-to"
                   type="email"
                   placeholder="Escribí un correo y presioná Enter..."
                   value={newToInput}
@@ -462,29 +505,13 @@ export function SendEmailModal({
               </div>
             </div>
 
-            {/* Quick Presets */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase">
-                Sugeridos:
-              </span>
-              {emailPresets.map((preset) => (
-                <button
-                  key={preset.email}
-                  type="button"
-                  onClick={() => handleAddEmail("to", preset.email)}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950 dark:hover:text-blue-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-                >
-                  + {preset.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* CC Recipients */}
           {showCc && (
             <div className="space-y-1.5 animate-in fade-in duration-150">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                <Label htmlFor="mail-cc" className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   Copia (CC)
                 </Label>
                 <button
@@ -513,6 +540,7 @@ export function SendEmailModal({
                 ))}
                 <div className="flex-1 flex items-center gap-1 min-w-[200px]">
                   <Input
+                    id="mail-cc"
                     type="email"
                     placeholder="Correo en copia..."
                     value={newCcInput}
@@ -541,10 +569,11 @@ export function SendEmailModal({
 
           {/* Asunto */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            <Label htmlFor="mail-subject" className="text-xs font-bold text-slate-700 dark:text-slate-300">
               Asunto del Correo
             </Label>
             <Input
+              id="mail-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Asunto formal del caso..."
@@ -554,10 +583,11 @@ export function SendEmailModal({
 
           {/* Notas / Descripción */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            <Label htmlFor="mail-notes" className="text-xs font-bold text-slate-700 dark:text-slate-300">
               Descripción / Observaciones Adicionales
             </Label>
             <Textarea
+              id="mail-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Escribí aquí observaciones sobre la autorización, materiales o coordinación..."
@@ -578,6 +608,8 @@ export function SendEmailModal({
                 <span>Subir archivo / captura</span>
                 <input
                   type="file"
+                  aria-label="Subir archivo / captura"
+                  disabled={isSending || evidenceLoading}
                   multiple
                   accept="image/*,application/pdf"
                   onChange={handleFileUpload}
@@ -598,7 +630,7 @@ export function SendEmailModal({
                     className="flex items-center justify-between gap-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      {att.isImage ? (
+                      {att.contentType?.startsWith("image/") ? (
                         <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
                       ) : (
                         <FileText className="w-4 h-4 text-red-600 shrink-0" />
@@ -608,13 +640,14 @@ export function SendEmailModal({
                           {att.filename}
                         </p>
                         <span className="text-[10px] text-slate-400">
-                          {att.isPdf ? "Documento PDF" : "Captura de pantalla"}
+                          {att.contentType === "application/pdf" ? "Documento PDF" : "Captura de pantalla"}
                         </span>
                       </div>
                     </div>
 
                     <button
                       type="button"
+                      disabled={isSending || evidenceLoading}
                       onClick={() => handleRemoveAttachment(idx)}
                       className="p-1 text-slate-400 hover:text-red-600 transition-colors"
                       title="Quitar adjunto"
@@ -626,7 +659,7 @@ export function SendEmailModal({
               </div>
             )}
           </div>
-        </div>
+        </fieldset>
 
         {/* Footer */}
         <DialogFooter className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850 flex items-center justify-between shrink-0">
@@ -645,7 +678,7 @@ export function SendEmailModal({
             type="button"
             size="sm"
             onClick={handleSendEmail}
-            disabled={isSending || toEmails.length === 0}
+            disabled={isSending || evidenceLoading || Boolean(evidenceError) || !companyId || !currentUser || toEmails.length === 0 || (mode === "authorization" && attachments.length === 0)}
             className="h-9 px-4 text-xs font-bold gap-2 bg-[#1D2FC0] hover:bg-[#18269e] text-white shadow-md active:scale-95 transition-all cursor-pointer"
           >
             {isSending ? (

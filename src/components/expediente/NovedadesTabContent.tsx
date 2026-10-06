@@ -1397,40 +1397,32 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
     }>
   >([])
   const [authEmailInitialNotes, setAuthEmailInitialNotes] = useState("")
+  const [authEmailEvidence, setAuthEmailEvidence] = useState<SeguimientoEntryView | undefined>()
+  const [authEmailEntries, setAuthEmailEntries] = useState<SeguimientoEntryView[]>([])
+  const mailContextKey = `${companyId || ""}:${surgery.backendId || surgery.id}`
+  const mailContextRef = useRef(mailContextKey)
+  mailContextRef.current = mailContextKey
 
-  const handleOpenAuthEmailModal = (entry?: SeguimientoEntryView) => {
-    const atts: Array<{
-      filename: string
-      content: string
-      contentType?: string
-      isImage?: boolean
-      isPdf?: boolean
-    }> = []
+  useEffect(() => {
+    setAuthEmailModalOpen(false)
+    setAuthEmailEvidence(undefined)
+    setAuthEmailEntries([])
+    setAuthEmailAttachments([])
+    setAuthEmailInitialNotes("")
+  }, [mailContextKey])
 
-    const photoFiles = entry?.photoMeta?.files ?? entry?.imageEvidenceMeta?.files ?? []
-    photoFiles.forEach((file, i) => {
-      if (file.previewDataUrl) {
-        atts.push({
-          filename: file.name || `evidencia-autorizacion-${i + 1}.png`,
-          content: file.previewDataUrl,
-          contentType: "image/png",
-          isImage: true,
-        })
-      }
-    })
-
-    if (entry?.documentMeta?.fileName) {
-      atts.push({
-        filename: entry.documentMeta.fileName,
-        content: "",
-        contentType: entry.documentMeta.mimeType || "application/pdf",
-        isPdf: (entry.documentMeta.mimeType || "").includes("pdf"),
-        isImage: (entry.documentMeta.mimeType || "").includes("image"),
-      })
-    }
-
-    setAuthEmailAttachments(atts)
-    setAuthEmailInitialNotes(entry?.content || "")
+  const handleOpenAuthEmailModal = (
+    entry?: SeguimientoEntryView,
+    sourceEntries = [...entries],
+    additional: typeof authEmailAttachments = [],
+    initialNotes = entry?.content || "",
+    context = mailContextKey,
+  ) => {
+    if (mailContextRef.current !== context) return
+    setAuthEmailEvidence(entry)
+    setAuthEmailEntries([...sourceEntries])
+    setAuthEmailAttachments(additional)
+    setAuthEmailInitialNotes(initialNotes)
     setAuthEmailModalOpen(true)
   }
 
@@ -1567,20 +1559,25 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           toast.error("Seleccioná la novedad que respalda la autorización")
           return
         }
+        const mailSource = entries.find((entry) => entry.id === authorizationSourceEntryId)
+        const mailEntries = [...entries]
+        const mailContext = mailContextKey
+        const mailImages = mediaFiles.map((file, index) => ({
+          filename: file.name || `evidencia-autorizacion-${index + 1}.${getMimeTypeFromDataUrl(file.previewDataUrl).split("/")[1]}`,
+          content: file.previewDataUrl,
+          contentType: getMimeTypeFromDataUrl(file.previewDataUrl),
+          isImage: true,
+        }))
         await createAuthorizationEvidence(authorizationSourceEntryId, {
           content,
           summary: content.slice(0, 80),
           ...(mediaFiles.length > 0 ? { imageEvidence: { files: mediaFiles } } : {}),
         })
-        // AUTH-EMAIL-REAL-SEND: post-Authorize feedback with optional action
-        // "Enviar correo de autorización". Reuses the existing
-        // handleOpenAuthEmailModal (no entry pre-attached: the user starts
-        // a fresh email from the just-registered authorization). The modal
-        // and the route are unchanged.
+        // The hook returns void: retain the exact source and added media before awaiting.
         toast.success("Autorización registrada", {
           action: {
             label: "Enviar correo de autorización",
-            onClick: () => handleOpenAuthEmailModal(),
+            onClick: () => handleOpenAuthEmailModal(mailSource, mailEntries, mailImages, content, mailContext),
           },
         })
       } else if (documentFile) {
@@ -2462,6 +2459,8 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
           surgery={surgery}
           initialNotes={authEmailInitialNotes}
           initialAttachments={authEmailAttachments}
+          initialEvidence={authEmailEvidence}
+          evidenceEntries={authEmailEntries}
           onEmailSent={async () => {
             await refetch()
           }}
