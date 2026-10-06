@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { updateBackendSurgeryManagement } from "@/lib/api/backend-surgeries";
+import { buildReschedulingPatch } from "@/lib/surgery/rescheduling";
+import { apiFetch } from "@/lib/api/client";
+vi.mock("@/lib/api/client", () => ({ apiFetch: vi.fn() }));
 
 const { getApiAuthContext, requireCompanyMutationAccess, updateSurgery } = vi.hoisted(() => ({
   getApiAuthContext: vi.fn(),
@@ -27,6 +31,20 @@ function request(body: unknown) {
 }
 
 describe("PATCH /surgeries/:surgeryId", () => {
+  it("accepts the real shipping builder and backend client through the actual PATCH parser", async () => {
+    vi.mocked(apiFetch).mockImplementation(async (_path, init) => {
+      const response = await PATCH(new Request("http://localhost", init), params);
+      expect(response.status).toBe(200);
+      return response.json();
+    });
+    await updateBackendSurgeryManagement(companyId, "surgery-1", buildReschedulingPatch({ date: "2026-10-06", time: "", urgente: false }, { fechaEnvioMaterial: "2026-10-07" }));
+    expect(updateSurgery).toHaveBeenCalledWith(expect.anything(), expect.anything(), "surgery-1", { materialShippingDate: new Date("2026-10-07T00:00:00Z") });
+  });
+  it.each([true, false, null])("accepts explicit precision %s", async (surgeryTimeSpecified) => {
+    const response = await PATCH(request({ surgeryDate: "2026-10-07T03:00:00Z", surgeryTimeSpecified }), params);
+    expect(response.status).toBe(200);
+    expect(updateSurgery).toHaveBeenCalledWith(expect.anything(), expect.anything(), "surgery-1", { surgeryDate: new Date("2026-10-07T03:00:00Z"), surgeryTimeSpecified });
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     getApiAuthContext.mockResolvedValue({ companyId, actorUserId: "user-1", role: "admin" });
@@ -48,7 +66,7 @@ describe("PATCH /surgeries/:surgeryId", () => {
       { __mockPrisma: true },
       { companyId, actorUserId: "user-1", source: "coordination-management", module: "surgery" },
       "surgery-1",
-      { surgeryDate: new Date("2026-08-20T13:30:00.000Z"), priority: "urgent" }
+      { surgeryDate: new Date("2026-08-20T13:30:00.000Z"), surgeryTimeSpecified: null, priority: "urgent" }
     );
   });
 

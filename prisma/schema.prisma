@@ -472,6 +472,7 @@ model Surgery {
   probableDate             DateTime?
   scheduledDate            DateTime?
   surgeryDate              DateTime?
+  surgeryTimeSpecified     Boolean?
   performedDate            DateTime?
   cancelledDate            DateTime?
   source                   String?

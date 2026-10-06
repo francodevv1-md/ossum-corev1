@@ -87,6 +87,7 @@ describe("mapApiSurgeryListToSurgeries", () => {
         cxStatus: "Autorizada",
         prepStatus: "frozen",
         surgeryDate: "2026-07-01T10:00:00.000Z",
+        surgeryTimeSpecified: true,
         expedienteNumber: "EXP-900",
         authorizationNumber: "AUT-900",
       },
@@ -102,6 +103,7 @@ describe("mapApiSurgeryListToSurgeries", () => {
     expect(surgeries[0].state).toBe("Autorizada")
     expect(surgeries[0].preparationState).toBe("Congelado")
     expect(surgeries[0].time).toBe(new Date("2026-07-01T10:00:00.000Z").toLocaleTimeString("en-GB", {
+      timeZone: "America/Argentina/Buenos_Aires",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -177,6 +179,7 @@ describe("mapApiSurgeryListToSurgeries", () => {
     const [surgery] = mapApiSurgeryListToSurgeries([{
       id: "db-surgery-late",
       surgeryDate: "2026-08-21T02:30:00.000Z",
+      surgeryTimeSpecified: true,
     }])
 
     expect(surgery.date).toBe("2026-08-20")

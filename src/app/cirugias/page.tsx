@@ -329,6 +329,7 @@ export default function CirugiasPage() {
     onSetNewState: actions.setNewState,
     onSetChangeStateDialogOpen: actions.setChangeStateDialogOpen,
     onSetChangeDateDialogOpen: actions.setChangeDateDialogOpen,
+    onChangeDate: actions.openChangeDateDialog,
     onSetSuspendDialogOpen: actions.setSuspendDialogOpen,
     onSetCancelDialogOpen: actions.setCancelDialogOpen,
     onAddNoteToSeguimiento: openSeguimientoComposer,
@@ -352,6 +353,7 @@ export default function CirugiasPage() {
     actions.setNewState,
     actions.setChangeStateDialogOpen,
     actions.setChangeDateDialogOpen,
+    actions.openChangeDateDialog,
     actions.setSuspendDialogOpen,
     actions.setCancelDialogOpen,
     openSeguimientoComposer,
@@ -439,6 +441,7 @@ export default function CirugiasPage() {
                 onSetCancelDialogOpen={actions.setCancelDialogOpen}
                 onSetChangeStateDialogOpen={actions.setChangeStateDialogOpen}
                 onSetChangeDateDialogOpen={actions.setChangeDateDialogOpen}
+                onChangeDate={actions.openChangeDateDialog}
                 onSetNewState={actions.setNewState}
                 onRecover={actions.handleRecover}
                 onAutorizar={actions.handleAutorizar}
@@ -488,8 +491,7 @@ export default function CirugiasPage() {
                 actions.setChangeStateDialogOpen(true)
               }}
               onChangeDate={(s) => {
-                actions.setDialogSurgery(s)
-                actions.setChangeDateDialogOpen(true)
+                actions.openChangeDateDialog(s)
               }}
               onAddNoteToSeguimiento={(s) => {
                 setMobileActionSheetOpen(false)
@@ -724,10 +726,12 @@ export default function CirugiasPage() {
         onConfirm={actions.handleChangeState}
       />
       <ChangeDateDialog
-        open={actions.changeDateDialogOpen} onOpenChange={actions.setChangeDateDialogOpen}
+        open={actions.changeDateDialogOpen} onOpenChange={(open) => { if (!open) actions.closeChangeDateDialog(); else actions.setChangeDateDialogOpen(true) }}
         dialogSurgery={actions.dialogSurgery}
         newDate={actions.newDate} setNewDate={actions.setNewDate}
         newTime={actions.newTime} setNewTime={actions.setNewTime}
+        dateType={actions.dateType} setDateType={actions.setDateType}
+        isSubmitting={actions.isSubmittingDate} error={actions.dateChangeError}
         onConfirm={actions.handleChangeDate}
       />
       <SuspendDialog

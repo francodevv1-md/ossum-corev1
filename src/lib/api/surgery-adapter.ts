@@ -51,9 +51,10 @@ export type SurgeryApiRow = {
   prepStatus: string | null
   status: string | null
   surgeryDate: string | null
+  surgeryTimeSpecified?: boolean | null
   materialAvailabilityDate: string | null
-  materialShippingDate: string | null
-  materialTransport: string | null
+  materialShippingDate?: string | null
+  materialTransport?: string | null
   probableDate: string | null
   priority: string | null
   authorizationNumber: string | null
@@ -334,9 +335,10 @@ export function mapApiSurgeryToRow(apiSurgery: RawSurgeryApiRecord): SurgeryApiR
     prepStatus: pickString(apiSurgery, ["prepStatus"]),
     status: pickString(apiSurgery, ["cxStatus", "status", "estado"]),
     surgeryDate: pickString(apiSurgery, ["surgeryDate", "fechaCirugia", "date"]),
+    surgeryTimeSpecified: apiSurgery.surgeryTimeSpecified === true || apiSurgery.surgeryTimeSpecified === false ? apiSurgery.surgeryTimeSpecified : ["surgeryDate", "fechaCirugia", "date"].some((key) => Object.prototype.hasOwnProperty.call(apiSurgery, key)) || apiSurgery.surgeryTimeSpecified === null ? null : undefined,
     materialAvailabilityDate: pickString(apiSurgery, ["materialAvailabilityDate"]),
-    materialShippingDate: pickString(apiSurgery, ["materialShippingDate"]),
-    materialTransport: pickString(apiSurgery, ["materialTransport"]),
+    materialShippingDate: Object.prototype.hasOwnProperty.call(apiSurgery, "materialShippingDate") ? pickString(apiSurgery, ["materialShippingDate"]) : undefined,
+    materialTransport: Object.prototype.hasOwnProperty.call(apiSurgery, "materialTransport") ? pickString(apiSurgery, ["materialTransport"]) : undefined,
     probableDate: pickString(apiSurgery, ["probableDate"]),
     priority: pickString(apiSurgery, ["priority"]),
     authorizationNumber: pickAdministrativeReference(apiSurgery, [
@@ -373,17 +375,14 @@ function normalizeLocalDate(value: string | null, fallback = ""): string {
   if (!value?.includes("T")) return value || fallback
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return fallback
-  const year = parsed.getFullYear()
-  const month = String(parsed.getMonth() + 1).padStart(2, "0")
-  const day = String(parsed.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(parsed)
 }
 
 function normalizeTime(value: string | null, fallback = ""): string {
   if (!value?.includes("T")) return fallback
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return fallback
-  return parsed.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })
+  return parsed.toLocaleTimeString("en-GB", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit", hour12: false })
 }
 
 function normalizeSurgeryState(status: string | null): SurgeryState {
@@ -495,9 +494,10 @@ export function mapApiSurgeryRowToSurgery(
     institutionContactId: row.institutionId ?? undefined,
     institutionCity: existing?.institutionCity ?? "",
     procedure: row.description ?? existing?.procedure ?? "",
-    date: normalizeLocalDate(row.surgeryDate, existing?.date ?? ""),
+    date: row.surgeryDate === null && row.surgeryTimeSpecified === undefined ? existing?.date ?? "" : normalizeLocalDate(row.surgeryDate),
     probableDate: normalizeDate(row.probableDate, existing?.probableDate ?? "") || undefined,
-    time: normalizeTime(row.surgeryDate, existing?.time ?? ""),
+    surgeryTimeSpecified: row.surgeryTimeSpecified !== undefined ? row.surgeryTimeSpecified : existing?.surgeryTimeSpecified ?? null,
+    time: row.surgeryTimeSpecified === true ? normalizeTime(row.surgeryDate, existing?.time ?? "") : row.surgeryTimeSpecified === undefined && row.surgeryDate === null ? existing?.time ?? "" : "",
     state: normalizedState,
     client: row.clientName ?? row.payerName ?? existing?.client ?? "—",
     clientContactId: row.payerContactId ?? undefined,
@@ -509,8 +509,8 @@ export function mapApiSurgeryRowToSurgery(
     urgente: row.priority === "urgent",
     leyendaDestacada: existing?.leyendaDestacada ?? false,
     materialAvailabilityDate: normalizeDate(row.materialAvailabilityDate) || undefined,
-    fechaEnvioMaterial: normalizeDate(row.materialShippingDate) || undefined,
-    materialTransport: row.materialTransport || undefined,
+    fechaEnvioMaterial: row.materialShippingDate === undefined ? existing?.fechaEnvioMaterial : normalizeDate(row.materialShippingDate) || undefined,
+    materialTransport: row.materialTransport === undefined ? existing?.materialTransport : row.materialTransport || undefined,
     referenciasAdministrativas: buildAdministrativeReferences(row, existing),
     coordinadorContactId: resolvedCoordinator?.contactId,
     coordinadorCx: resolvedCoordinator?.label || undefined,

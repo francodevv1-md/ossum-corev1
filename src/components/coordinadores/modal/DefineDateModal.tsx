@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import type { Surgery } from "@/types"
+import type { ReschedulingSaveResult } from "@/lib/surgery/rescheduling"
 import { useAuth } from "@/components/auth/AuthProvider"
 import {
   Dialog,
@@ -69,7 +70,7 @@ interface DefineDateModalProps {
     surgeryId: string,
     updates: Partial<Surgery>,
     notePayload?: DefineDateNotePayload
-  ) => void
+  ) => Promise<void | ReschedulingSaveResult>
 }
 
 const NOTE_TYPES: Array<{ value: DefineDateNoteType; label: string }> = [
@@ -119,6 +120,13 @@ export function DefineDateModal({
 
   // Date and Logistics Fields
   const [date, setDate] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const saving = useRef(false), session = useRef(0)
+  useEffect(() => {
+    session.current += 1; saving.current = false; setIsSaving(false); setSaveError(null)
+    return () => { session.current += 1 }
+  }, [surgery?.id, isOpen, companyId])
   const [time, setTime] = useState("")
   const [fechaEnvioMaterial, setFechaEnvioMaterial] = useState("")
   const [horaEnvio, setHoraEnvio] = useState("")
@@ -289,9 +297,11 @@ export function DefineDateModal({
     recognition.start()
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!surgery) return
+    if (!surgery || saving.current) return
+    const generation = session.current
+    saving.current = true; setIsSaving(true); setSaveError(null)
 
     const trimmedContent = noteDraft.content.trim()
     const hasAttachments = attachedFiles.length > 0
@@ -307,7 +317,8 @@ export function DefineDateModal({
           }
         : undefined
 
-    onSave(
+    try {
+    const result = await onSave(
       surgery.id,
       {
         date,
@@ -321,10 +332,15 @@ export function DefineDateModal({
       notePayload
     )
 
-    toast.success(
-      `Fecha y seguimiento programados para CX ${surgery.visibleNumber || surgery.id}`
-    )
-    onClose()
+    if (generation === session.current) {
+      if (result?.partialError) { setSaveError(result.partialError); if (result.noteSaved) setNoteDraft({ content: "", mentions: [] }) }
+      else { toast.success("Fecha y seguimiento guardados"); onClose() }
+    }
+    } catch (error) {
+      if (generation === session.current) setSaveError(error instanceof Error ? error.message : "No se pudo guardar")
+    } finally {
+      if (generation === session.current) { saving.current = false; setIsSaving(false) }
+    }
   }
 
   const inputClass =
@@ -391,7 +407,8 @@ export function DefineDateModal({
           </div>
 
           {/* Form Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <fieldset disabled={isSaving} className="flex-1 overflow-y-auto p-5 space-y-4">
+            {saveError && <p role="alert">{saveError}</p>}
             {/* Section 1: Fechas y Horarios */}
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-4 space-y-3.5">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -710,7 +727,7 @@ export function DefineDateModal({
                 </div>
               </div>
             </div>
-          </div>
+          </fieldset>
 
           {/* Dialog Footer */}
           <div className="flex items-center justify-end gap-2.5 border-t border-slate-200 dark:border-slate-800 px-5 py-3.5 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm">
@@ -725,6 +742,7 @@ export function DefineDateModal({
             </Button>
             <Button
               type="submit"
+              disabled={isSaving}
               size="sm"
               className="text-xs h-9 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold shadow-sm"
             >

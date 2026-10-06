@@ -37,6 +37,7 @@ export interface CirugiasColumnContext {
   onSetNewState: (s: SurgeryState) => void
   onSetChangeStateDialogOpen: (open: boolean) => void
   onSetChangeDateDialogOpen: (open: boolean) => void
+  onChangeDate?: (s: Surgery) => void
   onSetSuspendDialogOpen: (open: boolean) => void
   onSetCancelDialogOpen: (open: boolean) => void
   onSetNoteDialogOpen: (open: boolean) => void
@@ -315,6 +316,7 @@ export function createCirugiasColumns(ctx: CirugiasColumnContext): ColumnDef<Sur
             onSetNewState={ctx.onSetNewState}
             onSetChangeStateDialogOpen={ctx.onSetChangeStateDialogOpen}
             onSetChangeDateDialogOpen={ctx.onSetChangeDateDialogOpen}
+            onChangeDate={ctx.onChangeDate}
             onSetSuspendDialogOpen={ctx.onSetSuspendDialogOpen}
             onSetCancelDialogOpen={ctx.onSetCancelDialogOpen}
             onSetNoteDialogOpen={ctx.onSetNoteDialogOpen}

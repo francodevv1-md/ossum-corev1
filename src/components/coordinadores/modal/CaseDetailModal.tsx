@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import type { ReschedulingSaveResult } from "@/lib/surgery/rescheduling"
 import type { Surgery, HistoryEntry } from "@/types"
 import type { CoordinadorModalTab, SurgeryGestionFormData } from "@/types/coordinadores.types"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
@@ -17,7 +18,7 @@ interface CaseDetailModalProps {
   surgery: Surgery | null
   isOpen: boolean
   onClose: () => void
-  onSaveGestion: (surgeryId: string, updates: SurgeryGestionFormData) => void
+  onSaveGestion: (surgeryId: string, updates: SurgeryGestionFormData) => Promise<void | ReschedulingSaveResult>
   onAddNote: (surgeryId: string, note: string) => void
   onShare?: (surgery: Surgery) => void
   history: HistoryEntry[]
@@ -35,6 +36,13 @@ export function CaseDetailModal({
   coordinators,
 }: CaseDetailModalProps) {
   const [activeTab, setActiveTab] = useState<CoordinadorModalTab>("gestion")
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const saving = useRef(false), session = useRef(0)
+  useEffect(() => {
+    session.current += 1; saving.current = false; setIsSaving(false); setSaveError(null)
+    return () => { session.current += 1 }
+  }, [surgery?.id, isOpen])
   const [formData, setFormData] = useState<SurgeryGestionFormData>({
     date: "",
     time: "",
@@ -77,17 +85,27 @@ export function CaseDetailModal({
       })
       setActiveTab("gestion")
     }
-  }, [surgery])
+  }, [surgery, isOpen])
 
   const handleFormUpdate = (updates: Partial<SurgeryGestionFormData>) => {
     setFormData((prev) => ({ ...prev, ...updates }))
   }
 
-  const handleSave = () => {
-    if (!surgery) return
-    onSaveGestion(surgery.id, formData)
-    toast.success(`Cambios guardados para CX ${surgery.visibleNumber || surgery.id}`)
-    onClose()
+  const handleSave = async () => {
+    if (!surgery || saving.current) return
+    const generation = session.current
+    saving.current = true; setIsSaving(true); setSaveError(null)
+    try {
+      const result = await onSaveGestion(surgery.id, formData)
+      if (generation === session.current) {
+        if (result?.partialError) { setSaveError(result.partialError); if (result.noteSaved) setFormData((previous) => ({ ...previous, notes: "" })) }
+        else { toast.success("Cambios guardados"); onClose() }
+      }
+    } catch (error) {
+      if (generation === session.current) setSaveError(error instanceof Error ? error.message : "No se pudo guardar")
+    } finally {
+      if (generation === session.current) { saving.current = false; setIsSaving(false) }
+    }
   }
 
   return (
@@ -115,11 +133,13 @@ export function CaseDetailModal({
               onTabChange={setActiveTab}
               onClose={onClose}
               onSave={handleSave}
+              isSaving={isSaving}
               onShare={onShare}
             />
 
             {/* Scrollable Body */}
-            <div className="p-4 sm:p-5 md:p-6 overflow-y-auto flex-1 min-h-0 scrollbar-thin bg-slate-50/40 dark:bg-slate-900/40">
+            <fieldset disabled={isSaving} className="p-4 sm:p-5 md:p-6 overflow-y-auto flex-1 min-h-0 scrollbar-thin bg-slate-50/40 dark:bg-slate-900/40">
+              {saveError && <p role="alert">{saveError}</p>}
               {activeTab === "gestion" && (
                 <TabPaneGestion
                   formData={formData}
@@ -141,7 +161,7 @@ export function CaseDetailModal({
               {activeTab === "comprobantes" && <TabPaneComprobantes surgery={surgery} />}
 
               {activeTab === "reportes" && <TabPaneReportes surgery={surgery} />}
-            </div>
+            </fieldset>
 
             {/* Footer Actions */}
             <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
@@ -164,6 +184,7 @@ export function CaseDetailModal({
                   <button
                     type="button"
                     onClick={handleSave}
+                    disabled={isSaving}
                     className="flex-1 sm:flex-none justify-center inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold bg-[#1D2FC0] hover:bg-[#18269e] text-white shadow-xs hover:shadow active:scale-95 transition-all cursor-pointer rounded-lg"
                   >
                     <Check className="w-4 h-4" />

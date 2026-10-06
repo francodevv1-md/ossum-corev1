@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 import { updateSurgery } from "@/lib/services/surgery.service";
 
@@ -34,6 +34,8 @@ const current = {
 };
 
 describe("surgery management persistence", () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-08-20T15:00:00Z")); });
+  afterEach(() => vi.useRealTimers());
   it("writes shipping and transport in the audited surgery transaction", async () => {
     const updated = {
       ...current,
@@ -43,9 +45,12 @@ describe("surgery management persistence", () => {
     const tx = {
       surgery: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-        findFirst: vi.fn().mockResolvedValue(updated),
+        findFirst: vi.fn().mockResolvedValueOnce(current).mockResolvedValueOnce(updated),
       },
       auditEvent: { create: vi.fn().mockResolvedValue({ id: "audit-1" }) },
+      userCompanyAccess: { findMany: vi.fn().mockResolvedValue([]) },
+      user: { findUniqueOrThrow: vi.fn().mockResolvedValue({ firstName: "Test", lastName: "Actor", email: "actor@example.test" }) },
+      internalNotification: { createMany: vi.fn() },
     };
     const prisma = {
       userCompanyAccess: { findFirst: vi.fn().mockResolvedValue({ id: "access-1" }) },

@@ -36,6 +36,7 @@ export type UpdateSurgeryInput = {
   probableDate?: Date | null;
   scheduledDate?: Date | null;
   surgeryDate?: Date | null;
+  surgeryTimeSpecified?: boolean | null;
   materialShippingDate?: Date | null;
   materialTransport?: string | null;
   performedDate?: Date | null;
@@ -345,6 +346,15 @@ export function validateUpdateSurgeryInput(
   validateOptionalNullableDate(data.probableDate, "probableDate");
   validateOptionalNullableDate(data.scheduledDate, "scheduledDate");
   validateOptionalNullableDate(data.surgeryDate, "surgeryDate");
+  if (data.surgeryTimeSpecified !== undefined && data.surgeryTimeSpecified !== null && typeof data.surgeryTimeSpecified !== "boolean") {
+    throw badRequest("surgeryTimeSpecified must be boolean or null", "invalid_surgery_time_specified");
+  }
+  if (data.surgeryDate === null && data.surgeryTimeSpecified != null) {
+    throw badRequest("A cleared date cannot specify time precision", "incompatible_surgery_time_specified");
+  }
+  if (data.surgeryTimeSpecified === false && data.surgeryDate instanceof Date && !isArgentineMidnightAnchor(data.surgeryDate)) {
+    throw badRequest("Date-only surgery must use Argentine midnight", "incompatible_surgery_time_specified");
+  }
   validateOptionalNullableDate(data.materialShippingDate, "materialShippingDate");
   validateOptionalNullableDate(data.performedDate, "performedDate");
   validateOptionalNullableDate(data.cancelledDate, "cancelledDate");
@@ -365,4 +375,8 @@ export function validateUpdateSurgeryCxStatusInput(
   data: UpdateSurgeryCxStatusInput
 ): UpdateSurgeryCxStatusInput {
   return { cxStatus: validateCxStatus(data.cxStatus) };
+}
+
+export function isArgentineMidnightAnchor(date: Date): boolean {
+  return date.getUTCHours() === 3 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
 }

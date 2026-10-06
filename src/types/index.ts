@@ -118,6 +118,7 @@ export interface Surgery {
   procedure: string
   date: string
   time: string
+  surgeryTimeSpecified?: boolean | null
   probableDate?: string
   state: SurgeryState
   boxId?: string

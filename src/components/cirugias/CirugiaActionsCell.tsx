@@ -50,6 +50,7 @@ interface CirugiaActionsCellProps {
   onSetNewState: (s: SurgeryState) => void
   onSetChangeStateDialogOpen: (open: boolean) => void
   onSetChangeDateDialogOpen: (open: boolean) => void
+  onChangeDate?: (s: Surgery) => void
   onSetSuspendDialogOpen: (open: boolean) => void
   onSetCancelDialogOpen: (open: boolean) => void
   onSetNoteDialogOpen: (open: boolean) => void
@@ -184,7 +185,7 @@ export function CirugiaActionsCell({
   surgery, prId, docStatus, consumoState,
   onOpenExpediente, onOpenPresupuestoDialog,
   onSetExpTab, onSetDialogSurgery,
-  onSetNewState, onSetChangeStateDialogOpen, onSetChangeDateDialogOpen,
+  onSetNewState, onSetChangeStateDialogOpen, onSetChangeDateDialogOpen, onChangeDate,
   onSetSuspendDialogOpen, onSetCancelDialogOpen, onSetNoteDialogOpen,
   onSetFacturarDialogOpen, onRecover, canFacturar,
   tdClassName, tdStyle, asCell = true,
@@ -377,7 +378,7 @@ export function CirugiaActionsCell({
             <ActionMenuItem
               icon={CalendarDays}
               label="Cambiar fecha"
-              onClick={() => { onSetDialogSurgery(s); onSetChangeDateDialogOpen(true) }}
+              onClick={() => { if (onChangeDate) onChangeDate(s); else { onSetDialogSurgery(s); onSetChangeDateDialogOpen(true) } }}
             />
 
             <DropdownMenuSeparator />

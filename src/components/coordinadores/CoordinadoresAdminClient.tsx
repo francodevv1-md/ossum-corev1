@@ -1,6 +1,10 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { useAuth } from "@/components/auth/AuthProvider"
+import { buildReschedulingPatch, type ReschedulingSaveResult } from "@/lib/surgery/rescheduling"
+import { fetchBackendActiveSurgeries, updateBackendSurgeryManagement, updateBackendSurgeryState, addBackendSurgeryNote } from "@/lib/api/backend-surgeries"
+import { mapApiSurgeryListToSurgeries } from "@/lib/api/surgery-adapter"
 import { useOrtoTrackStore } from "@/lib/store"
 import type { Surgery } from "@/types"
 import type { SurgeryGestionFormData } from "@/types/coordinadores.types"
@@ -23,10 +27,24 @@ import { CaseDetailModal } from "./modal/CaseDetailModal"
 import { DefineDateModal } from "./modal/DefineDateModal"
 import { CoordinatorShareDialog } from "./CoordinatorShareDialog"
 import type { CoordinatorCase } from "./coordinator-queue.helpers"
-import { dispatchSurgeryUrgentAlert, dispatchCoordinatorAssignedAlert } from "@/lib/services/ntfy.service"
 
 export function CoordinadoresAdminClient() {
   const store = useOrtoTrackStore()
+  const { activeCompany } = useAuth()
+  const identity = useRef({ companyId: activeCompany?.id, date: 0, gestion: 0, load: 0 })
+  const confirmed = useRef<Partial<Record<"date" | "gestion", { generation: number; record: Surgery }>>>({})
+  if (identity.current.companyId !== activeCompany?.id) {
+    identity.current.companyId = activeCompany?.id
+    identity.current.date += 1; identity.current.gestion += 1
+  }
+  useEffect(() => () => { identity.current.date += 1; identity.current.gestion += 1 }, [])
+  useEffect(() => {
+    if (!activeCompany?.id) return
+    let active = true
+    const load = identity.current.load
+    fetchBackendActiveSurgeries(activeCompany.id, store.surgeries).then((surgeries) => { if (active && load === identity.current.load) store.hydrateBackendSurgeries(surgeries) }).catch(() => {})
+    return () => { active = false }
+  }, [activeCompany?.id])
   const [selectedSurgery, setSelectedSurgery] = useState<Surgery | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [defineDateSurgery, setDefineDateSurgery] = useState<Surgery | null>(null)
@@ -98,112 +116,60 @@ export function CoordinadoresAdminClient() {
 
   // Open & Close modal handlers
   const handleSelectSurgery = useCallback((surgery: Surgery) => {
+    identity.current.gestion += 1
     setSelectedSurgery(surgery)
     setIsModalOpen(true)
   }, [])
 
   const handleCloseModal = useCallback(() => {
+    identity.current.gestion += 1
     setIsModalOpen(false)
   }, [])
 
   const handleOpenDefineDate = useCallback((surgery: Surgery) => {
+    identity.current.date += 1
     setDefineDateSurgery(surgery)
     setIsDefineDateOpen(true)
   }, [])
 
   const handleCloseDefineDate = useCallback(() => {
+    identity.current.date += 1
     setIsDefineDateOpen(false)
   }, [])
 
-  const handleSaveDefineDate = useCallback(
-    (
-      surgeryId: string,
-      updates: Partial<Surgery>,
-      notePayload?: { content: string; noteType: any; priority: any; urgente: boolean; mentions?: any[] }
-    ) => {
-      const existing = store.surgeries.find((s) => s.id === surgeryId)
-      const isNewlyUrgent = (updates.urgente || notePayload?.urgente) && (!existing || !existing.urgente)
-
-      store.updateSurgery(surgeryId, {
-        date: updates.date,
-        time: updates.time,
-        fechaEnvioMaterial: updates.fechaEnvioMaterial,
-        horaEnvio: updates.horaEnvio,
-        materialAvailabilityDate: updates.materialAvailabilityDate,
-        notes: updates.notes,
-        urgente: updates.urgente || notePayload?.urgente,
-      })
-
-      // If a tracking note was provided, save it directly to the surgery tracking feed
-      if (notePayload && notePayload.content) {
-        store.addSurgeryNote(
-          surgeryId,
-          notePayload.content,
-          notePayload.noteType || "Coordinación",
-          notePayload.priority || "Media",
-          false
-        )
-      }
-
-      store.addAuditEvent(
-        surgeryId,
-        "Definición de fecha y cronograma",
-        `Fecha CX: ${updates.date || "Sin fecha"}, Envío: ${updates.fechaEnvioMaterial || "Sin fecha"}${notePayload?.content ? `, Nota: ${notePayload.content}` : ""}`
-      )
-
-      const updated = store.surgeries.find((s) => s.id === surgeryId)
-      if (updated && isNewlyUrgent) {
-        dispatchSurgeryUrgentAlert(updated).catch(() => {})
-      }
-    },
-    [store]
-  )
-
-  // Save changes from Modal Gestion Form
-  const handleSaveGestion = useCallback(
-    (surgeryId: string, updates: SurgeryGestionFormData) => {
-      const existing = store.surgeries.find((s) => s.id === surgeryId)
-      const isNewlyUrgent = updates.urgente && (!existing || !existing.urgente)
-      const coordinatorChanged = updates.coordinadorCx && updates.coordinadorCx !== existing?.coordinadorCx
-
-      store.updateSurgery(surgeryId, {
-        date: updates.date,
-        time: updates.time,
-        fechaEnvioMaterial: updates.fechaEnvioMaterial,
-        horaEnvio: updates.horaEnvio,
-        coordinadorCx: updates.coordinadorCx,
-        state: updates.state,
-        preparationState: updates.preparationState,
-        materialAvailabilityDate: updates.materialAvailabilityDate,
-        materialTransport: updates.materialTransport,
-        instrumentador: updates.instrumentador,
-        urgente: updates.urgente,
-        leyenda: updates.leyenda,
-        notes: updates.notes,
-        ...(updates.procedure !== undefined ? { procedure: updates.procedure } : {}),
-        ...(updates.boxId !== undefined ? { boxId: updates.boxId } : {}),
-        ...(updates.remitoId !== undefined ? { remitoId: updates.remitoId } : {}),
-      })
-
-      // Register audit event in store
-      store.addAuditEvent(
-        surgeryId,
-        "Modificación integral de gestión",
-        `Estado: ${updates.state}, Coord: ${updates.coordinadorCx}, Fecha CX: ${updates.date || "Sin fecha"}, Envío: ${updates.fechaEnvioMaterial || "Sin fecha"}`
-      )
-
-      const updated = store.surgeries.find((s) => s.id === surgeryId)
-      if (updated) {
-        if (isNewlyUrgent) {
-          dispatchSurgeryUrgentAlert(updated).catch(() => {})
-        }
-        if (coordinatorChanged && updates.coordinadorCx && updates.coordinadorCx !== "Sin asignar") {
-          dispatchCoordinatorAssignedAlert(updated, updates.coordinadorCx).catch(() => {})
-        }
-      }
-    },
-    [store]
-  )
+  const saveRescheduling = async (kind: "date" | "gestion", surgeryId: string, updates: Partial<Surgery>, note?: { content: string; noteType?: any; priority?: any }): Promise<void | ReschedulingSaveResult> => {
+    const generation = identity.current[kind], companyId = activeCompany?.id
+    const existing = confirmed.current[kind]?.generation === generation ? confirmed.current[kind]!.record : store.surgeries.find((s) => s.id === surgeryId || s.backendId === surgeryId)
+    if (!companyId || !existing?.backendId) throw new Error("Se requiere empresa activa e identificador de backend")
+    const isCurrent = () => identity.current.companyId === companyId && identity.current[kind] === generation
+    const patch = buildReschedulingPatch(existing, updates)
+    identity.current.load += 1
+    const saved = Object.keys(patch).length ? await updateBackendSurgeryManagement(companyId, existing.backendId, patch) : null
+    if (!isCurrent()) return
+    let record = saved ? mapApiSurgeryListToSurgeries([saved], [existing])[0] : existing
+    store.updateSurgery(existing.id, record)
+    confirmed.current[kind] = { generation, record }
+    let stateFailed = false, noteFailed = false
+    if (kind === "gestion" && updates.state && updates.state !== record.state) {
+      try {
+        await updateBackendSurgeryState(companyId, existing.backendId, updates.state)
+        if (!isCurrent()) return
+        record = { ...record, state: updates.state }
+        confirmed.current[kind] = { generation, record }
+        store.updateSurgery(existing.id, { state: updates.state })
+      } catch { stateFailed = true }
+    }
+    if (!isCurrent()) return
+    const content = note?.content ?? (kind === "gestion" ? updates.notes : undefined)
+    if (content?.trim()) {
+      try { await addBackendSurgeryNote(companyId, existing.backendId, { content, noteType: note?.noteType || "Coordinación", priority: note?.priority || "Media", isUrgent: Boolean(updates.urgente) }) }
+      catch { noteFailed = true }
+    }
+    if (!isCurrent()) return
+    if (stateFailed || noteFailed) return { partialError: `Guardado parcial. Pendiente: ${[stateFailed ? "estado" : "", noteFailed ? "nota sigue pendiente" : ""].filter(Boolean).join(" y ")}. La fecha ya está guardada.`, noteSaved: Boolean(content?.trim()) && !noteFailed }
+  }
+  const handleSaveDefineDate = (id: string, updates: Partial<Surgery>, note?: { content: string; noteType?: any; priority?: any }) => saveRescheduling("date", id, updates, note)
+  const handleSaveGestion = (id: string, updates: SurgeryGestionFormData) => saveRescheduling("gestion", id, updates)
 
   // Add tracking note from Modal
   const handleAddTrackingNote = useCallback(
@@ -457,6 +423,7 @@ export function CoordinadoresAdminClient() {
 
       {/* 5. Centered Detail & Management Drawer/Modal */}
       <CaseDetailModal
+        key={`${activeCompany?.id}-${identity.current.gestion}`}
         surgery={selectedSurgery}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
@@ -469,6 +436,7 @@ export function CoordinadoresAdminClient() {
 
       {/* 6. Quick Define Date & Scheduling Modal */}
       <DefineDateModal
+        key={`${activeCompany?.id}-${identity.current.date}`}
         surgery={defineDateSurgery}
         isOpen={isDefineDateOpen}
         onClose={handleCloseDefineDate}

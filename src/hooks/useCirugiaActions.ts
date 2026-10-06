@@ -20,6 +20,9 @@ import { usePresupuestoForm } from "@/hooks/usePresupuestoForm"
 import type { FacturarDialogData } from "@/components/facturacion/FacturarDialog"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { fetchBackendActiveSurgeries } from "@/lib/api/backend-surgeries"
+import { updateBackendSurgeryManagement } from "@/lib/api/backend-surgeries"
+import { buildReschedulingPatch } from "@/lib/surgery/rescheduling"
+import { mapApiSurgeryListToSurgeries } from "@/lib/api/surgery-adapter"
 import { apiFetch } from "@/lib/api/client"
 
 type CreateSurgeryApiResponse = {
@@ -93,6 +96,16 @@ export function useCirugiaActions() {
   const [newState, setNewState] = useState<SurgeryState>("Pendiente")
   const [newDate, setNewDate] = useState("")
   const [newTime, setNewTime] = useState("")
+  const [dateType, setDateType] = useState<"surgery" | "shipping">("surgery")
+  const [isSubmittingDate, setIsSubmittingDate] = useState(false)
+  const [dateChangeError, setDateChangeError] = useState<string | null>(null)
+  const isSubmittingDateRef = useRef(false)
+  const dateDialogSessionRef = useRef({ generation: 0, companyId: activeCompany?.id, backendId: "", surgeryId: "", isOpen: false })
+  const activeCompanyIdRef = useRef(activeCompany?.id)
+  if (activeCompanyIdRef.current !== activeCompany?.id) {
+    activeCompanyIdRef.current = activeCompany?.id
+    dateDialogSessionRef.current.generation += 1; dateDialogSessionRef.current.isOpen = false
+  }
   const [reason, setReason] = useState("")
   const [noteText, setNoteText] = useState("")
   const [noteType, setNoteType] = useState<NoteType>("General")
@@ -431,15 +444,29 @@ export function useCirugiaActions() {
     }
   }, [activeCompany?.id, dialogSurgery, newState, store])
 
-  const handleChangeDate = useCallback(() => {
+  const handleChangeDate = useCallback(async () => {
     if (!dialogSurgery || !newDate) return
-    store.changeSurgeryDate(dialogSurgery.id, newDate, newTime || undefined)
-    toast.success("Fecha actualizada")
-    setChangeDateDialogOpen(false)
-    setNewDate("")
-    setNewTime("")
-    setDialogSurgery(null)
-  }, [store, dialogSurgery, newDate, newTime])
+    if (isSubmittingDateRef.current) return
+    const existing = store.surgeries.find((s) => s.id === dialogSurgery.id || s.backendId === dialogSurgery.id)
+    const backendId = (dialogSurgery.backendId || existing?.backendId)?.trim(), companyId = activeCompany?.id
+    if (!companyId || !backendId) { const message = !companyId ? "Se requiere una empresa activa para reprogramar la fecha quirúrgica" : "Se requiere el identificador técnico de backend para reprogramar la cirugía"; setDateChangeError(message); toast.error(message); return }
+    if (!dateDialogSessionRef.current.isOpen) dateDialogSessionRef.current = { generation: dateDialogSessionRef.current.generation + 1, companyId, backendId, surgeryId: dialogSurgery.id, isOpen: true }
+    const session = { ...dateDialogSessionRef.current }
+    const isCurrent = () => dateDialogSessionRef.current.isOpen && dateDialogSessionRef.current.generation === session.generation && activeCompanyIdRef.current === companyId
+    isSubmittingDateRef.current = true; setIsSubmittingDate(true); setDateChangeError(null)
+    try {
+      const patch = buildReschedulingPatch({ ...dialogSurgery, time: dialogSurgery.surgeryTimeSpecified === true ? dialogSurgery.time : "" }, dateType === "shipping" ? { fechaEnvioMaterial: newDate } : { date: newDate, time: newTime })
+      const saved = Object.keys(patch).length ? await updateBackendSurgeryManagement(companyId, backendId, patch) : null
+      if (!isCurrent()) return
+      const mapped = saved ? mapApiSurgeryListToSurgeries([saved], existing ? [existing] : [dialogSurgery])[0] : null
+      if (mapped) store.updateSurgery(dialogSurgery.id, dateType === "shipping" ? { fechaEnvioMaterial: mapped.fechaEnvioMaterial } : { date: mapped.date, time: mapped.time, surgeryTimeSpecified: mapped.surgeryTimeSpecified })
+      toast.success("Fecha actualizada")
+      dateDialogSessionRef.current.isOpen = false; dateDialogSessionRef.current.generation += 1
+      setChangeDateDialogOpen(false); setNewDate(""); setNewTime(""); setDialogSurgery(null)
+    } catch (error) {
+      if (isCurrent()) { const message = error instanceof Error ? error.message : "Error al actualizar fecha"; setDateChangeError(message); toast.error(message) }
+    } finally { isSubmittingDateRef.current = false; setIsSubmittingDate(false) }
+  }, [store, dialogSurgery, newDate, newTime, dateType, activeCompany?.id])
 
   const handleSuspend = useCallback(() => {
     if (!dialogSurgery) return
@@ -503,12 +530,20 @@ export function useCirugiaActions() {
   }, [])
 
   const instrumentadores = store.instrumentadores.map((i) => i.name)
+  const openChangeDateDialog = useCallback((surgery: Surgery) => {
+    dateDialogSessionRef.current = { generation: dateDialogSessionRef.current.generation + 1, companyId: activeCompany?.id, backendId: surgery.backendId || "", surgeryId: surgery.id, isOpen: true }
+    setDialogSurgery(surgery); setDateType("surgery"); setNewDate(surgery.date || ""); setNewTime(surgery.surgeryTimeSpecified === true ? surgery.time || "" : ""); setDateChangeError(null); setChangeDateDialogOpen(true)
+  }, [activeCompany?.id])
+  const setDateDialogOpen = useCallback((open: boolean) => {
+    if (!open) { dateDialogSessionRef.current.generation += 1; dateDialogSessionRef.current.isOpen = false; setDialogSurgery(null); setNewDate(""); setNewTime(""); setDateChangeError(null) }
+    setChangeDateDialogOpen(open)
+  }, [])
 
   return {
     // Dialog states
     newDialogOpen, setNewDialogOpen: handleDialogClose,
     changeStateDialogOpen, setChangeStateDialogOpen,
-    changeDateDialogOpen, setChangeDateDialogOpen,
+    changeDateDialogOpen, setChangeDateDialogOpen: setDateDialogOpen,
     suspendDialogOpen, setSuspendDialogOpen,
     cancelDialogOpen, setCancelDialogOpen,
     noteDialogOpen, setNoteDialogOpen,
@@ -520,6 +555,9 @@ export function useCirugiaActions() {
     newState, setNewState,
     newDate, setNewDate,
     newTime, setNewTime,
+    dateType, setDateType: (value: "surgery" | "shipping") => { setDateType(value); setNewDate(value === "shipping" ? dialogSurgery?.fechaEnvioMaterial || "" : dialogSurgery?.date || ""); setDateChangeError(null) },
+    isSubmittingDate, dateChangeError, openChangeDateDialog,
+    closeChangeDateDialog: () => { if (!isSubmittingDateRef.current) setDateDialogOpen(false) },
     reason, setReason,
     noteText, setNoteText,
     noteType, setNoteType,

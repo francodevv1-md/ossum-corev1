@@ -24,12 +24,13 @@ async function parseManagementPatch(request: Request) {
   }
 
   const record = body as Record<string, unknown>;
-  const allowedFields = new Set(["surgeryDate", "priority", "materialShippingDate", "materialTransport"]);
+  const allowedFields = new Set(["surgeryDate", "surgeryTimeSpecified", "priority", "materialShippingDate", "materialTransport"]);
   if (Object.keys(record).some((key) => !allowedFields.has(key))) {
     throw badRequest("Unsupported surgery management field", "unsupported_surgery_management_field");
   }
   if (
     record.surgeryDate === undefined &&
+    record.surgeryTimeSpecified === undefined &&
     record.priority === undefined &&
     record.materialShippingDate === undefined &&
     record.materialTransport === undefined
@@ -66,6 +67,7 @@ async function parseManagementPatch(request: Request) {
 
   return validateUpdateSurgeryInput({
     ...(record.surgeryDate !== undefined ? { surgeryDate } : {}),
+    ...(record.surgeryTimeSpecified !== undefined ? { surgeryTimeSpecified: record.surgeryTimeSpecified as boolean | null } : record.surgeryDate !== undefined ? { surgeryTimeSpecified: null } : {}),
     ...(record.priority !== undefined ? { priority: record.priority as "normal" | "urgent" } : {}),
     ...(record.materialShippingDate !== undefined ? { materialShippingDate } : {}),
     ...(record.materialTransport !== undefined ? { materialTransport: record.materialTransport as string | null } : {}),

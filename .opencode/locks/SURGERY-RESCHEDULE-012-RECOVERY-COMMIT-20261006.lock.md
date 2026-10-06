@@ -1,0 +1,52 @@
+# 012 source recovery and isolated commit
+
+- task: SURGERY-RESCHEDULE-012-RECOVERY-COMMIT-20261006
+- owner/role/model: OpenCode GPT-6.1 Sol integration; one directed application/test recovery writer, then independent read-only reviewer; integration owner alone controls Git index/commit
+- status: released (recovered source independently reviewed PASS and final tests PASS; integration owner alone reserves Git index/HEAD for the explicitly requested scope-only commit)
+- workspace: E:/OSSUM_COR_ANTIGRAVITY/ux-ui
+- initial HEAD: ba37dcb7b46d64d7ee7f7891371673362b34301d
+- backup/execution HEAD: d81a4ac691e8523bf28bc4fa9bf93e8aac198cbc; intervening foreign commit changes only NewSurgeryDialog/AiLateralRail, neither is a recovery target
+- approvals: Franco requested commit only our package and task closure; explicitly authorized recovering own validated package after source loss; confirmed schema is free for ONLY restoring nullable surgeryTimeSpecified, excluding Compras and DB migration execution.
+- current baseline: tracked recovery targets clean against HEAD; foreign modifications only AGENTS.md, next-env.d.ts and NewSurgeryDialog.tsx, all excluded. Git index empty at verification. Retained untracked task helpers/tests/docs are not blanket permission to adopt other files.
+- owned source:
+  - prisma/schema.prisma (ONLY nullable surgeryTimeSpecified Boolean? on Surgery; no other model/field)
+  - prisma/migrations/20261005_surgery_time_specified/migration.sql (existing exact two-line additive artifact, no execution)
+  - src/types/index.ts (Surgery time precision marker only)
+  - src/lib/validators/surgery.validator.ts (date-marker contract/validation only)
+  - src/app/api/companies/[companyId]/surgeries/[surgeryId]/route.ts (management marker parsing only, existing permissions unchanged)
+  - src/lib/api/backend-surgeries.ts (management patch time marker only; preserve committed branch changes)
+  - src/lib/api/surgery-adapter.ts (surgery date/time marker projection only)
+  - src/lib/services/coordination-view.service.ts (time marker read projection only if needed for its response type)
+  - src/lib/services/surgery.service.ts (date fields/read/audit/transaction and real internal notification path only)
+  - src/lib/services/internal-notifications.service.ts (scoped admin/logistics emitter and valid Ficha link only)
+  - src/lib/surgery/rescheduling.ts
+  - src/hooks/useCirugiaActions.ts (date action/session only; intake/create excluded)
+  - src/app/cirugias/page.tsx (date dialog/caller wiring only)
+  - src/lib/cirugias/cirugias-columns.tsx (date callback forwarding only)
+  - src/components/cirugias/CirugiaActionsCell.tsx (date opener only)
+  - src/components/cirugias/dialogs/ChangeDateDialog.tsx
+  - src/components/expediente/ExpedienteHeader.tsx (date opener and minimal render dependency: use existing CX_STATE_VISUALS/default directly instead of missing getCxStateVisual export; no color-map change, preserve email work)
+  - src/components/expediente/ExpedienteFullView.tsx (date callback forwarding only)
+  - src/components/coordinadores/CoordinadoresAdminClient.tsx
+  - src/components/coordinadores/CoordinatorPersonalClient.tsx
+  - src/components/coordinadores/modal/DefineDateModal.tsx
+  - src/components/coordinadores/modal/CaseDetailModal.tsx
+  - src/components/coordinadores/modal/CaseDetailModalHeader.tsx
+- tests: exact existing rescheduling helper/service/management route+service/date hook+dialog/active Coordinadores/forms/notification emitter+consumer/caller/adapter offline suites; focused existing test changes needed only for this contract. Do not recover unrelated intake/coordinator-assignment/authorization feature changes to satisfy old foreign tests.
+- artifacts: own recovery lock, RECOVERY-COMMIT-20261006.md, own CORRECTION-20261006.md and INAPP-NOTIFICATIONS-20261006.md; do not commit foreign HANDOFF.md or old foreign CORE lock.
+- permitted: read/hash/Git status/diff, temporary backups under approved Temp/opencode/012-recovery-commit, offline allowlisted Vitest, direct tsc, static schema/client consistency validation. Integration owner permitted Git stage/isolate/local conventional commit only after review.
+- forbidden: reverting/discarding unknown work, full historical snapshot restore, foreign dirty hunks, Auth/permissions/Compras/new-surgery/palette/calendar/provider/secret/config changes, dependency installs, DB query/migration/reset/seed/integration execution, external sends, build/restart/shared output takeover, push/PR/deploy.
+- schema ownership: explicit current user confirmation permits this one field reservation, not other Compras schema resources. Never release or rewrite foreign locks.
+- resources: generation not planned; generated Prisma client already contains the nullable marker. If needed, coordinate shared generation before mutation; no DB calls.
+- immutable current preimages: C:/Users/franc/AppData/Local/Temp/opencode/012-recovery-commit/before/manifest.json and 41 explicitly allowlisted backed-up files; source copies, not permission to overwrite unrelated files
+- preservation/stop: back up current allowlist and foreign hashes before writes; stop on unexpected HEAD/index/source changes or conflicting new writer. Review finite current diff, not all prior lost features.
+- closure: actual new snapshot tests/review needed; historical PASS is evidence only. Real DB/browser acceptance remains NOT RUN/BLOCKED and must be recorded in committed artifacts.
+
+## Final recovery validation
+
+- Parent exact replay on recovered snapshot: 18 offline unit/component suites, 179/179 PASS, exit 0 at 14:42:54 local; includes actual Header/Ficha opener and emitted notification→Inbox navigation.
+- Final independent read-only SOURCE PASS; missing Header render dependency fixed by exactly two lines reusing existing map/default, without modifying colors/palette rules.
+- Direct TypeScript completed with increased process heap, exit 1; diagnostics remain in unrelated retained/lost-baseline areas, no changed-file diagnostics. Not a global typecheck PASS.
+- Prisma format PASS on isolated temporal copy, no shared generation or DB execution. Existing generated client statically exposes nullable marker; schema diff is one field only.
+- Current targeted snapshots backed up before recovery. Foreign AGENTS/next-env/new-wizard bytes remain preserved; unrelated commit d81a4ac is retained. No Auth/permissions/Compras/calendar/palette/config/external-send changes.
+- Commit only explicit recovered sources, direct marker artifact, task-specific tests/helper and three own evidence documents/two own locks. Exclude foreign HANDOFF/old CORE lock and all other untracked work.

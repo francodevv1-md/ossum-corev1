@@ -12,6 +12,9 @@ import { createAuditEvent } from "../audit";
 import { badRequest, conflict } from "../api/errors";
 import { requireCompanyId } from "../tenant";
 import { emitCrossDomainNotification } from "./internal-notifications.service";
+import { emitSurgeryReschedulingNotifications, type SurgeryReschedulingChange } from "./internal-notifications.service";
+import { argentinaDay } from "../surgery/rescheduling";
+import { isArgentineMidnightAnchor } from "../validators/surgery.validator";
 import {
   validateCreateSurgeryInput,
   validateCxStatusTransition,
@@ -113,6 +116,7 @@ function surgeryReadSelect(companyId: string) {
     probableDate: true,
     scheduledDate: true,
     surgeryDate: true,
+    surgeryTimeSpecified: true,
     materialAvailabilityDate: true,
     materialShippingDate: true,
     materialTransport: true,
@@ -221,6 +225,7 @@ type SurgeryAuditShape = Pick<
   | "probableDate"
   | "scheduledDate"
   | "surgeryDate"
+  | "surgeryTimeSpecified"
   | "materialShippingDate"
   | "materialTransport"
   | "performedDate"
@@ -316,6 +321,7 @@ function serializeSurgeryForAudit(surgery: SurgeryAuditShape | null) {
     probableDate: serializeDate(surgery.probableDate),
     scheduledDate: serializeDate(surgery.scheduledDate),
     surgeryDate: serializeDate(surgery.surgeryDate),
+    surgeryTimeSpecified: surgery.surgeryTimeSpecified,
     materialShippingDate: serializeDate(surgery.materialShippingDate),
     materialTransport: surgery.materialTransport,
     performedDate: serializeDate(surgery.performedDate),
@@ -830,18 +836,6 @@ export async function updateSurgery(
   const scopedCompanyId = requireCompanyId(scopedContext.companyId);
   const validatedData = validateUpdateSurgeryInput(data);
 
-  const currentSurgery = await prisma.surgery.findFirst({
-    where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null },
-  });
-
-  if (!currentSurgery) {
-    throw new Error(`Surgery ${surgeryId} not found in company ${scopedCompanyId}`);
-  }
-
-  if (validatedData.cxStatus !== undefined) {
-    validateCxStatusTransition(currentSurgery.cxStatus, validatedData.cxStatus);
-  }
-
   await assertSurgeryReferencesBelongToCompany(prisma, scopedCompanyId, {
     patientId: validatedData.patientId,
     doctorId: validatedData.doctorId,
@@ -851,8 +845,23 @@ export async function updateSurgery(
   });
 
   return prisma.$transaction(async (tx) => {
+    const currentSurgery = await tx.surgery.findFirst({ where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null } });
+    if (!currentSurgery) throw new Error(`Surgery ${surgeryId} not found in company ${scopedCompanyId}`);
+    if (validatedData.cxStatus !== undefined) validateCxStatusTransition(currentSurgery.cxStatus, validatedData.cxStatus);
+    const dateChanges: SurgeryReschedulingChange[] = (["surgeryDate", "materialShippingDate"] as const).flatMap((field) => {
+      const next = validatedData[field], previous = currentSurgery[field];
+      if (next === undefined || (next?.getTime() ?? null) === (previous?.getTime() ?? null)) return [];
+      if (next && (field === "surgeryDate" ? argentinaDay(next) : next.toISOString().slice(0, 10)) < argentinaDay()) throw badRequest("La nueva fecha debe ser hoy o posterior en Argentina", "past_rescheduling_date");
+      return [{ dateType: field === "surgeryDate" ? "surgery" : "shipping", previousDate: previous?.toISOString() ?? null, newDate: next?.toISOString() ?? null }];
+    });
+    let resolvedTimeSpecified = validatedData.surgeryTimeSpecified;
+    if (validatedData.surgeryDate === null) resolvedTimeSpecified = null;
+    else if (validatedData.surgeryDate instanceof Date && resolvedTimeSpecified === undefined) resolvedTimeSpecified = null;
+    const effectiveDate = validatedData.surgeryDate === undefined ? currentSurgery.surgeryDate : validatedData.surgeryDate;
+    if (resolvedTimeSpecified != null && !effectiveDate) throw badRequest("Time precision requires a surgery date", "incompatible_surgery_time_specified");
+    if (resolvedTimeSpecified === false && effectiveDate && !isArgentineMidnightAnchor(effectiveDate)) throw badRequest("Date-only surgery must use Argentine midnight", "incompatible_surgery_time_specified");
     const result = await tx.surgery.updateMany({
-      where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null },
+      where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null, updatedAt: currentSurgery.updatedAt },
       data: {
         branchId: validatedData.branchId,
         visibleNumber: validatedData.visibleNumber,
@@ -868,6 +877,7 @@ export async function updateSurgery(
         probableDate: validatedData.probableDate,
         scheduledDate: validatedData.scheduledDate,
         surgeryDate: validatedData.surgeryDate,
+        surgeryTimeSpecified: resolvedTimeSpecified,
         materialShippingDate: validatedData.materialShippingDate,
         materialTransport: validatedData.materialTransport,
         performedDate: validatedData.performedDate,
@@ -887,7 +897,7 @@ export async function updateSurgery(
       where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null },
     });
 
-    await createAuditEvent({
+    const auditEvent = await createAuditEvent({
       prisma: tx as unknown as PrismaClient,
       companyId: scopedCompanyId,
       userId: scopedContext.actorUserId,
@@ -897,9 +907,10 @@ export async function updateSurgery(
       module: scopedContext.module ?? "surgery",
       oldValue: serializeSurgeryForAudit(currentSurgery),
       newValue: serializeSurgeryForAudit(updatedSurgery),
-      metadata: auditMetadata(scopedContext),
+      metadata: { ...auditMetadata(scopedContext), ...(dateChanges.length ? { rescheduling: { mode: "in_app", recipientRoles: ["admin", "logistics"], changes: dateChanges } } : {}) },
     });
 
+    if (dateChanges.length) await emitSurgeryReschedulingNotifications(tx, { companyId: scopedCompanyId, surgeryId, surgeryVisibleNumber: updatedSurgery?.visibleNumber, sourceEntityId: auditEvent.id, actorUserId: scopedContext.actorUserId, changes: dateChanges, previousTimeSpecified: currentSurgery.surgeryTimeSpecified, newTimeSpecified: resolvedTimeSpecified === undefined ? currentSurgery.surgeryTimeSpecified : resolvedTimeSpecified });
     return updatedSurgery;
   });
 }

@@ -26,6 +26,7 @@ interface CaseDetailModalHeaderProps {
   onTabChange: (tab: CoordinadorModalTab) => void
   onClose: () => void
   onSave?: () => void
+  isSaving?: boolean
   onShare?: (surgery: Surgery) => void
 }
 
@@ -35,6 +36,7 @@ export function CaseDetailModalHeader({
   onTabChange,
   onClose,
   onSave,
+  isSaving = false,
   onShare,
 }: CaseDetailModalHeaderProps) {
   const { requestDate, notifyCoordinator, loadingAction, confirmDialog } = useCoordinatorActions()
@@ -136,6 +138,7 @@ export function CaseDetailModalHeader({
             <button
               type="button"
               onClick={onSave}
+              disabled={isSaving}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1D2FC0] hover:bg-[#18269e] text-white text-xs font-semibold shadow-xs transition-transform active:scale-95 cursor-pointer rounded-lg"
             >
               <span>Guardar</span>

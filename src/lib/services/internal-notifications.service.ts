@@ -2,6 +2,8 @@ import { InternalNotificationType, Prisma, PrismaClient } from "@prisma/client"
 import type { MentionRef } from "@/lib/mentions/types"
 import { badRequest, conflict, forbidden, notFound } from "@/lib/api/errors"
 import { createAuditEvent } from "@/lib/audit"
+import { resolveCanonicalRole, type CanonicalRole } from "@/lib/permissions/canonical-roles"
+import { buildNotificationExpedienteLink } from "@/lib/expediente-navigation"
 
 type NotificationDbClient = PrismaClient | Prisma.TransactionClient
 
@@ -300,6 +302,7 @@ export interface EmitCrossDomainNotificationInput {
   sourceEntityId: string
   eventKeyPrefix?: string
   explicitRecipientUserIds?: string[]
+  recipientRoles?: CanonicalRole[]
 }
 
 export async function emitCrossDomainNotification(
@@ -309,10 +312,12 @@ export async function emitCrossDomainNotification(
   const catalogItem = NOTIFICATION_TYPE_CATALOG[input.type]
   const domain = input.domain ?? catalogItem?.domain ?? "CIRUGIAS"
   const severity = input.severity ?? catalogItem?.defaultSeverity ?? "INFO"
-  const defaultRoles = catalogItem?.defaultRoles ?? ["admin"]
+  const defaultRoles = input.recipientRoles ?? catalogItem?.defaultRoles ?? ["admin"]
+  const recipientRole = input.recipientRoles ? resolveCanonicalRole : normalizeRole
 
   // Guard against minimal mocks in unit tests
   if (!prisma.userCompanyAccess?.findMany || !prisma.internalNotification?.createMany) {
+    if (input.recipientRoles) throw new Error("Scoped notification persistence is unavailable")
     return { createdCount: 0, attemptedCount: 0 }
   }
 
@@ -357,7 +362,7 @@ export async function emitCrossDomainNotification(
   ])
 
   const rolePolicyMap = new Map<string, boolean>(
-    rolePolicies.map((p): [string, boolean] => [normalizeRole(p.role), p.inAppEnabled])
+    rolePolicies.map((p): [string, boolean] => [recipientRole(p.role) ?? "", p.inAppEnabled])
   )
   const userMutedSet = new Set(
     userPreferences.filter((p) => p.inAppMuted).map((p) => p.userId)
@@ -375,7 +380,8 @@ export async function emitCrossDomainNotification(
       }
     }
 
-    const normalized = normalizeRole(access.role)
+    const normalized = recipientRole(access.role)
+    if (!normalized || (input.recipientRoles && !input.recipientRoles.includes(normalized as CanonicalRole))) return false
 
     // 3. Check company role policy (overrides default roles)
     const policyEnabled = rolePolicyMap.get(normalized)
@@ -423,6 +429,27 @@ export async function emitCrossDomainNotification(
 }
 
 // ─── Legacy Emitters (Maintained for backward compatibility) ──────────
+export type SurgeryReschedulingChange = { dateType: "surgery" | "shipping"; previousDate: string | null; newDate: string | null }
+
+export async function emitSurgeryReschedulingNotifications(prisma: NotificationDbClient, input: {
+  companyId: string; surgeryId: string; surgeryVisibleNumber?: string | null; sourceEntityId: string; actorUserId: string;
+  changes: SurgeryReschedulingChange[]; previousTimeSpecified?: boolean | null; newTimeSpecified?: boolean | null;
+}) {
+  if (!input.changes.length) return { createdCount: 0, attemptedCount: 0 }
+  const actorDisplayName = await getActorDisplayName(prisma, input.actorUserId)
+  const dateLabel = (value: string | null, dateType: SurgeryReschedulingChange["dateType"], timeSpecified?: boolean | null) => value ? new Intl.DateTimeFormat("es-AR", {
+    timeZone: dateType === "shipping" ? "UTC" : "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit",
+    ...(dateType === "surgery" && timeSpecified === true ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" as const } : {}),
+  }).format(new Date(value)) : "Sin fecha"
+  return emitCrossDomainNotification(prisma, {
+    companyId: input.companyId, actorUserId: input.actorUserId, type: InternalNotificationType.surgery_critical_change,
+    domain: "CIRUGIAS", severity: "WARNING", surgeryId: input.surgeryId, sourceEntityId: input.sourceEntityId,
+    eventKeyPrefix: "rescheduling", recipientRoles: ["admin", "logistics"], linkHref: buildNotificationExpedienteLink({ surgeryId: input.surgeryId }),
+    title: `${actorDisplayName} registró una reprogramación`,
+    body: `Caso ${input.surgeryVisibleNumber || input.surgeryId} · ${input.changes.map((change) => `${change.dateType === "surgery" ? "Fecha de cirugía" : "Fecha de envío de material"}: ${dateLabel(change.previousDate, change.dateType, input.previousTimeSpecified)} → ${dateLabel(change.newDate, change.dateType, input.newTimeSpecified)}`).join(" · ")}`,
+    metadata: { channel: "operational", eventType: "surgery_rescheduled", sourceEntityType: "audit_event", actorUserId: input.actorUserId, actorDisplayName, changes: input.changes },
+  })
+}
 
 export interface EmitSeguimientoMentionNotificationsInput {
   companyId: string
