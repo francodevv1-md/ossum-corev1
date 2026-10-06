@@ -12,6 +12,7 @@ const {
   hydrateBackendSurgeriesMock,
   useAuthMock,
   useOrtoTrackStoreMock,
+  useCurrentBranchMock,
 } = vi.hoisted(() => ({
   fetchBackendActiveSurgeriesMock: vi.fn(),
   clearBackendSurgeriesMock: vi.fn(),
@@ -20,10 +21,15 @@ const {
   useOrtoTrackStoreMock: Object.assign(vi.fn(), {
     getState: vi.fn(),
   }),
+  useCurrentBranchMock: vi.fn(),
 }))
 
 vi.mock("@/components/auth/AuthProvider", () => ({
   useAuth: useAuthMock,
+}))
+
+vi.mock("@/hooks/useCurrentBranch", () => ({
+  useCurrentBranch: useCurrentBranchMock,
 }))
 
 vi.mock("@/lib/api/backend-surgeries", () => ({
@@ -86,6 +92,7 @@ describe("useBackendActiveSurgeries", () => {
       return typeof selector === "function" ? selector(state) : state
     })
     useOrtoTrackStoreMock.getState.mockReturnValue({ surgeries: [] })
+    useCurrentBranchMock.mockReturnValue({ activeBranchId: null, availableBranches: [], isLoading: false, error: null, setActiveBranchId: vi.fn() })
   })
 
   it("mantiene estado neutral mientras auth/company siguen hidratando", async () => {
@@ -149,7 +156,7 @@ describe("useBackendActiveSurgeries", () => {
     }} />)
 
     await waitFor(() => {
-      expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledWith("company-default", [])
+      expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledWith("company-default", [], { branchId: null })
     })
 
     expect(hydrateBackendSurgeriesMock).toHaveBeenCalledWith([{ id: "surgery-1" }])
@@ -175,7 +182,7 @@ describe("useBackendActiveSurgeries", () => {
     await waitFor(() => {
       expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledTimes(1)
     })
-    expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledWith("company-default", [])
+    expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledWith("company-default", [], { branchId: null })
 
     authState.currentUserLoading = false
     rerender(<HookHarness onReady={(value) => {
@@ -204,9 +211,9 @@ describe("useBackendActiveSurgeries", () => {
     }} />)
 
     await waitFor(() => {
-      expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledWith("company-active", [])
+      expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledWith("company-active", [], { branchId: null })
     })
-    expect(fetchBackendActiveSurgeriesMock).not.toHaveBeenCalledWith("company-default", [])
+    expect(fetchBackendActiveSurgeriesMock).not.toHaveBeenCalledWith("company-default", [], expect.anything())
   })
 
   it("fetches again when active company changes to a different id", async () => {
@@ -228,7 +235,7 @@ describe("useBackendActiveSurgeries", () => {
     await waitFor(() => {
       expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledTimes(1)
     })
-    expect(fetchBackendActiveSurgeriesMock).toHaveBeenLastCalledWith("company-default", [])
+    expect(fetchBackendActiveSurgeriesMock).toHaveBeenLastCalledWith("company-default", [], { branchId: null })
 
     authState.activeCompany = { id: "company-active" }
     authState.currentUserLoading = false
@@ -239,7 +246,7 @@ describe("useBackendActiveSurgeries", () => {
     await waitFor(() => {
       expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledTimes(2)
     })
-    expect(fetchBackendActiveSurgeriesMock).toHaveBeenLastCalledWith("company-active", [])
+    expect(fetchBackendActiveSurgeriesMock).toHaveBeenLastCalledWith("company-active", [], { branchId: null })
   })
 
   it("does not fetch while auth session is loading", async () => {
@@ -308,7 +315,7 @@ describe("useBackendActiveSurgeries", () => {
     }} />)
 
     await waitFor(() => {
-      expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledWith("company-active", existingSurgeries)
+      expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledWith("company-active", existingSurgeries, { branchId: null })
     })
     expect(clearBackendSurgeriesMock).toHaveBeenCalledBefore(hydrateBackendSurgeriesMock)
     expect(hydrateBackendSurgeriesMock).toHaveBeenCalledWith([{ id: "backend" }])
@@ -374,7 +381,7 @@ describe("useBackendActiveSurgeries", () => {
 
     expect(hookValue.trustContextKey).toBe(failedContextKey)
     expect(clearBackendSurgeriesMock).toHaveBeenCalledTimes(1)
-    expect(fetchBackendActiveSurgeriesMock).toHaveBeenNthCalledWith(2, "company-active", [])
+    expect(fetchBackendActiveSurgeriesMock).toHaveBeenNthCalledWith(2, "company-active", [], { branchId: null })
     expect(hydrateBackendSurgeriesMock).toHaveBeenCalledWith([{ id: "recovered" }])
     expect(hookValue.hasSuccessfulData).toBe(true)
   })
@@ -401,8 +408,8 @@ describe("useBackendActiveSurgeries", () => {
     })
 
     expect(fetchBackendActiveSurgeriesMock).toHaveBeenCalledTimes(2)
-    expect(fetchBackendActiveSurgeriesMock).toHaveBeenNthCalledWith(1, "company-active", [])
-    expect(fetchBackendActiveSurgeriesMock).toHaveBeenNthCalledWith(2, "company-active", [])
+    expect(fetchBackendActiveSurgeriesMock).toHaveBeenNthCalledWith(1, "company-active", [], { branchId: null })
+    expect(fetchBackendActiveSurgeriesMock).toHaveBeenNthCalledWith(2, "company-active", [], { branchId: null })
     expect(hookValue.trustContextKey).toBe(initialContextKey)
   })
 

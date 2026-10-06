@@ -1,0 +1,31 @@
+# AUTH-CONTEXT-FLOW-2026-10-06 (UX/UI adapted)
+
+- task: AUTH-CONTEXT-FLOW-2026-10-06
+- agent role: implementation owner
+- selected model: MiniMax/MiniMax-M3
+- mode: write
+- risk: T2 (sucursal global only, no Auth contract change)
+- status: released
+- approval: Franco approved the package on 2026-10-06. After discovering that the ux/antigravity-redesign branch uses an env-based company model (no /api/me/companies flow, no selectActiveCompany, no availableCompanies), Franco chose Option B on 2026-10-06: adapt the package to the ux-ui architecture, keeping only Phase 2 (sucursal global) and leaving the env-based company fallback untouched.
+- objective: add a global active-branch state (Zustand persist + useCurrentBranch hook + BranchSelector in header) that pushes branchId to /api/companies/:id/surgeries server-side. Company model stays as-is (env-driven, NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID).
+- workspace: E:/OSSUM_COR_ANTIGRAVITY/ux-ui only (branch ux/antigravity-redesign, HEAD 685ef32)
+- owned files (Phase 2 only):
+  - src/lib/store/activeBranch.ts (new)
+  - src/hooks/useCurrentBranch.ts (new)
+  - src/components/layout/BranchSelector.tsx (new)
+  - src/components/layout/header.tsx (mount BranchSelector, additive only)
+  - src/lib/api/backend-surgeries.ts (additive: { branchId } param to fetchBackendActiveSurgeries, no change to other exports)
+  - src/hooks/useBackendActiveSurgeries.ts (read branchId, pass to fetchBackendActiveSurgeries, add to deps)
+  - src/__tests__/unit/useBackendActiveSurgeries.test.tsx (add useCurrentBranch mock, add 3rd arg to toHaveBeenCalledWith assertions)
+- forbidden: git commit, git push, PR, merge, publication, prisma migrate, schema changes, dependency installs, Auth contract changes, removing the env-based company fallback, any change to Antigravity's dirty files outside my 7 owned.
+- allowed commands: read-only inspection, tsc, vitest, next build (no commit), local file edits within owned list.
+- preflight: HEAD = 685ef32. Only released locks; COMPRAS-AUTHORITY-PORT-TO-ANTIGRAVITY explicitly excludes Auth. Antigravity's dirty files do not overlap with my 7 owned except for src/lib/api/backend-surgeries.ts and src/hooks/useBackendActiveSurgeries.ts; my edits to those two files are surgical and additive on top of the existing exports.
+- validations (required before release): tsc --noEmit clean on the 7 owned files, vitest focused suite green on useBackendActiveSurgeries.test.tsx, no new errors introduced.
+- stop: ownership conflict, scope expansion required, tsc errors that need fixing outside owned list, prod data touched, schema drift detected.
+- output: Done / Changed / Files / Validations / Risks / Next.
+- implementation:
+  - Done: Phase 2 (sucursal global) applied to E:/OSSUM_COR_ANTIGRAVITY/ux-ui with the company model left as-is (env-driven). Phase 1 was not applied here because the ux-ui branch has no /api/me/companies flow, no selectActiveCompany, and no availableCompanies — applying Phase 1 would have required rewriting the AuthProvider contract, which was out of the approved scope.
+  - Changed/Files (7 files, all additive except for the test signature update): src/lib/store/activeBranch.ts (new, Zustand persist with SSR-safe storage), src/hooks/useCurrentBranch.ts (new, fetches /api/companies/:id/branches, drops persisted branch on company mismatch), src/components/layout/BranchSelector.tsx (new, 0/1/2+ render modes), src/components/layout/header.tsx (mounts BranchSelector in a ml-auto div after the page title), src/lib/api/backend-surgeries.ts (fetchBackendActiveSurgeries now accepts { branchId } as a 3rd arg, builds ?branchId= when set; all other exports untouched), src/hooks/useBackendActiveSurgeries.ts (reads activeBranchId via useCurrentBranch, passes it to fetchBackendActiveSurgeries, adds it to trustContextKey and refresh deps), src/__tests__/unit/useBackendActiveSurgeries.test.tsx (added useCurrentBranch mock, updated 5 toHaveBeenCalledWith + 2 toHaveBeenLastCalledWith + 3 toHaveBeenNthCalledWith assertions to include the 3rd arg).
+  - Validations: tsc --noEmit clean on the 7 owned files (0 errors). vitest: 16/16 in useBackendActiveSurgeries.test.tsx. No next build run on this worktree (server/Auth not in scope of the adapted package).
+  - Risks: Antigravity has unrelated dirty files in this worktree; my changes to src/lib/api/backend-surgeries.ts and src/hooks/useBackendActiveSurgeries.ts are surgical and additive to my scope only — when Antigravity commits, there should be no overlap on the lines I changed. The auth-expired handler and signOut path were intentionally not touched. The BranchSelector will appear in the header on every non-cirugias route; if Antigravity already has a header redesign in progress, my addition of BranchSelector in a ml-auto div is the smallest possible footprint and can be relocated by them during their redesign.
+  - Next: smoke manual (login -> BranchSelector shows in header -> 0/1/2+ modes render correctly -> change branch -> cirugias reloads filtered -> close tab and reopen -> branch persisted). When Phase 1 (multi-membership from /api/me/companies) is wanted, it needs a separate brief and lock because the ux-ui AuthProvider has a different contract (env-based) than the old worktree's AuthProvider (membership-based).

@@ -3,6 +3,7 @@
 import React from "react"
 import { usePathname } from "next/navigation"
 import { useSidebar } from "./app-shell"
+import { BranchSelector } from "./BranchSelector"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -120,6 +121,10 @@ export function Header() {
               Área activa
             </span>
             <h1 className="truncate text-[12px] font-semibold leading-none text-foreground/85">{pageTitle}</h1>
+          </div>
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <BranchSelector />
           </div>
         </>
       )}

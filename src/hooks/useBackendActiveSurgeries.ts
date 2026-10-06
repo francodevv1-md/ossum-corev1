@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { useAuth } from "@/components/auth/AuthProvider"
+import { useCurrentBranch } from "@/hooks/useCurrentBranch"
 import { fetchBackendActiveSurgeries } from "@/lib/api/backend-surgeries"
 import { useOrtoTrackStore } from "@/lib/store"
 
@@ -23,6 +24,7 @@ export function useBackendActiveSurgeries(context: BackendActiveSurgeriesContext
   } = useAuth()
   const hydrateBackendSurgeries = useOrtoTrackStore((state) => state.hydrateBackendSurgeries)
   const clearBackendSurgeries = useOrtoTrackStore((state) => state.clearBackendSurgeries)
+  const { activeBranchId } = useCurrentBranch()
   const companyId = activeCompany?.id ?? DEFAULT_COMPANY_ID ?? null
   const shouldWait = isLoading || (isAuthenticated && currentUserLoading && !companyId)
   const mode = context.mode ?? "production"
@@ -31,8 +33,8 @@ export function useBackendActiveSurgeries(context: BackendActiveSurgeriesContext
   const isPreviewDenied = context.previewDenied === true
   const actorId = user?.id ?? (isAuthenticated ? "authenticated" : "anonymous")
   const trustContextKey = useMemo(
-    () => [actorId, companyId ?? "no-company", mode, subjectContactId ?? "no-subject"].join(":"),
-    [actorId, companyId, mode, subjectContactId],
+    () => [actorId, companyId ?? "no-company", activeBranchId ?? "no-branch", mode, subjectContactId ?? "no-subject"].join(":"),
+    [actorId, companyId, activeBranchId, mode, subjectContactId],
   )
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
@@ -98,6 +100,7 @@ export function useBackendActiveSurgeries(context: BackendActiveSurgeriesContext
       const surgeries = await fetchBackendActiveSurgeries(
         companyId,
         existingSurgeries,
+        { branchId: activeBranchId },
       )
 
       if (
@@ -126,6 +129,7 @@ export function useBackendActiveSurgeries(context: BackendActiveSurgeriesContext
       }
     }
   }, [
+    activeBranchId,
     clearBackendSurgeries,
     companyId,
     hydrateBackendSurgeries,
