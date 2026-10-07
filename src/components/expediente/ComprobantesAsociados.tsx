@@ -17,6 +17,7 @@ import { COMPROBANTE_LABELS, comprobanteRecords, documentMoney, type Comprobante
 import { ComprobanteDetail } from "./ComprobanteDetail"
 import { fetchRemito } from "@/lib/api/remitos"
 import { buildOperationalRemitoPrintHtml } from "@/lib/remito-print-template"
+import { useRemitoPdfDownload } from "@/hooks/useRemitoPdfDownload"
 
 interface ComprobantesAsociadosProps {
   surgery: Surgery
@@ -49,6 +50,7 @@ function ComprobantesRegister({ data, companyId, surgeryId }: { data: ReturnType
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [printing, setPrinting] = useState(false)
   const [printError, setPrintError] = useState<string | null>(null)
+  const pdf = useRemitoPdfDownload(companyId, surgeryId, data.status)
   const pendingPrint = useRef<Window | null>(null)
   useEffect(() => {
     setPrinting(false)
@@ -72,6 +74,7 @@ function ComprobantesRegister({ data, companyId, surgeryId }: { data: ReturnType
   async function printRemito(id: string) {
     if (!ready || !companyId || !surgeryId || pendingPrint.current) return
     setPrintError(null)
+    pdf.clearError()
     // Open during the user gesture, before awaiting HTTP, to avoid popup blockers.
     const popup = window.open("", "_blank", "width=900,height=700")
     if (!popup) {
@@ -138,7 +141,8 @@ function ComprobantesRegister({ data, companyId, surgeryId }: { data: ReturnType
       </div>
 
       {printing && ready && <p role="status" className="text-xs text-muted-foreground">Preparando remito para imprimir…</p>}
-      {printError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{printError}</p>}
+      {pdf.downloading && ready && <p role="status" className="text-xs text-muted-foreground">Preparando PDF del remito…</p>}
+      {(printError || pdf.error) && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{printError || pdf.error}</p>}
 
       {!ready && data.status !== "error" && <div role="status" className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">{statusText}</div>}
       {data.status === "error" && <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
@@ -149,7 +153,7 @@ function ComprobantesRegister({ data, companyId, surgeryId }: { data: ReturnType
         <div className="flex flex-wrap gap-1 border-b pb-3" aria-label="Tipos de comprobante">
           {(["all", ...Object.keys(COMPROBANTE_LABELS)] as (ComprobanteType | "all")[]).map(value => {
             const count = value === "all" ? records.length : records.filter(row => row.type === value).length
-            return <button key={value} type="button" aria-pressed={type === value} onClick={() => setType(value)}
+            return <button key={value} type="button" aria-label={`${value === "all" ? "Todos" : COMPROBANTE_LABELS[value]} ${count}`} aria-pressed={type === value} onClick={() => setType(value)}
               className={cn("relative min-h-10 rounded-lg px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary", type === value ? "text-white dark:text-slate-900" : "text-muted-foreground hover:bg-muted") }>
               {type === value && <motion.span aria-hidden layoutId={reducedMotion ? undefined : indicatorId} className="absolute inset-0 rounded-lg bg-slate-900 dark:bg-slate-100" transition={{ duration: reducedMotion ? 0 : 0.2 }} />}
               <span className="relative">{value === "all" ? "Todos" : COMPROBANTE_LABELS[value]} <span className="ml-2 tabular-nums opacity-60">{count}</span></span>
@@ -191,7 +195,7 @@ function ComprobantesRegister({ data, companyId, surgeryId }: { data: ReturnType
                 <Button variant="ghost" size="icon" aria-label={`Acciones ${row.type} ${row.number ?? row.id}`} className="size-9"><MoreHorizontal className="size-4" /></Button>
               </DropdownMenuTrigger><DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuItem onSelect={() => setSelectedKey(row.key)}><ArrowUpRight className="size-4" />Abrir comprobante</DropdownMenuItem>
-                <DropdownMenuItem disabled><Download className="size-4" />Descargar PDF · No disponible</DropdownMenuItem>
+                <DropdownMenuItem disabled={row.type !== "NR" || printing || pdf.downloading} onSelect={() => { setPrintError(null); void pdf.download(row.id) }}><Download className="size-4" />{row.type === "NR" ? "Descargar PDF" : "Descargar PDF · No disponible"}</DropdownMenuItem>
                 <DropdownMenuItem disabled={row.type !== "NR" || printing} onSelect={() => { void printRemito(row.id) }}><Printer className="size-4" />{row.type === "NR" ? "Imprimir" : "Imprimir · No disponible"}</DropdownMenuItem>
                 <DropdownMenuItem disabled><Pencil className="size-4" />Modificar · No disponible</DropdownMenuItem>
               </DropdownMenuContent></DropdownMenu></TableCell>

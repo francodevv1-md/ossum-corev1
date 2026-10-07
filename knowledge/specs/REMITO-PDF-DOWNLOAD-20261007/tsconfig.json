@@ -1,0 +1,10 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../../next-env.d.ts", "../../../src/__tests__/setup.ts",
+    "../../../src/components/expediente/ComprobantesAsociados.tsx",
+    "../../../src/hooks/useRemitoPdfDownload.ts", "../../../src/lib/remito-pdf.ts",
+    "../../../src/__tests__/components/RemitoPdfDownload.test.tsx"
+  ]
+}
