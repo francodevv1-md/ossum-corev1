@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "../../../next-env.d.ts", "../../../src/__tests__/setup.ts",
+    "../../../src/lib/api/remitos.ts", "../../../src/lib/validators/remito.ts",
+    "../../../src/app/api/companies/[companyId]/remitos/[remitoId]/emitir/route.ts",
+    "../../../src/lib/services/devolucion.service.ts",
+    "../../../src/__tests__/unit/remito-request-validation.test.ts",
+    "../../../src/__tests__/unit/remito-request-errors.test.ts",
+    "../../../src/__tests__/unit/remito-request-transport.test.ts",
+    "../../../src/__tests__/types/remito-request-contracts.ts",
+    "../../../src/hooks/useRemitos.ts",
+    "../../../src/app/remitos/page.tsx",
+    "../../../src/components/remitos/RemitoDraftDialog.tsx",
+    "../../../src/components/remitos/OperationalRemitoWorkspace.tsx",
+    "../../../src/__tests__/components/RemitoDraftDialog.test.tsx",
+    "../../../src/__tests__/components/OperationalRemitoWorkspace.test.tsx"
+  ]
+}

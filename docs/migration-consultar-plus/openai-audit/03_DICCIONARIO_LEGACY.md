@@ -1,0 +1,5 @@
+# Diccionario medido (núcleo; no completo)
+
+El esquema físico de las 510 tablas, tipo/longitud/decimales y conteos no vacíos por campo está en `profiles.json`; se requiere curación humana para significado, obligatoriedad semántica y memos. Campos verificados físicamente: CIRUGIA.CIRCOD N(7), CIRFEC/CIRFECCAR/CIRFECLOG D(8), CIRESTADO C(3), CIRPACCOD/CIRMEDCOD/CIRHOSCOD/CIROSCOD C(5), CIRFVCOD N(8); STOCK.STKCOD N(8), STKCIRCOD N(7), STKCOM C(2), STKTIP/STKES/STKDEV C(1), STKFEC D(8); STOCK1.STKCOD N(8), MOVORD N(8), ARTCOD C(13), MOVES C(1), MOVUNI C(3), MOVCAN N(12,2), MOVSTKCOD N(8), MOVMOVORD N(4).
+
+Significado **confirmado por operación**: CIRFECCAR fecha de carga, CIRFEC fecha de cirugía, CIRFECLOG logística/envío; REA realizada con consumo, FIN realizada y facturada, SCO sin consumo. Significado **alta confianza por joins**: CIRCOD identidad cirugía; STKCIRCOD referencia cirugía; STOCK1.STKCOD referencia encabezado STOCK; ARTCOD referencia artículo. STKDEV, STKTIP A/B/C, MOVUNI, STKCOM individual, factura fiscal y movimiento reverso: **no resueltos**. No interpretar códigos por expansión de siglas.

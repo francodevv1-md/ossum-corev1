@@ -12,6 +12,8 @@ export type CoordinationSurface = "personal" | "global"
 type CoordinationViewOptions = {
   surface: CoordinationSurface
   discoverPreview?: boolean
+  isolated?: boolean
+  loadAll?: boolean
 }
 
 const COORDINATION_PAGE_SIZE = 50
@@ -32,7 +34,7 @@ function isPreviewDenial(error: unknown) {
     candidate.code === "coordination_preview_target_not_found"
 }
 
-export function useCoordinationView({ surface: productionSurface, discoverPreview = false }: CoordinationViewOptions) {
+export function useCoordinationView({ surface: productionSurface, discoverPreview = false, isolated = false, loadAll = false }: CoordinationViewOptions) {
   const { activeCompany, currentUserLoading, isAuthenticated, isLoading, user } = useAuth()
   const hydrateBackendSurgeries = useOrtoTrackStore((state) => state.hydrateBackendSurgeries)
   const clearBackendSurgeries = useOrtoTrackStore((state) => state.clearBackendSurgeries)
@@ -86,7 +88,7 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
       setLoadMoreError(null)
       setPreviewDenied(false)
       if (requestMode === "dev-preview" || requestMode === "probing") setPreviewRows([])
-      if (requestMode === "production") clearBackendSurgeries()
+      if (requestMode === "production" && !isolated) clearBackendSurgeries()
     }
 
     if (append) {
@@ -98,7 +100,7 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     }
 
     try {
-      let nextResponse: CoordinationViewResponse
+      let nextResponse!: CoordinationViewResponse
       let nextMode = requestMode
       let nextSurface = surface
       let nextTarget = selectedTarget
@@ -144,7 +146,7 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
         nextResponse = surface === "personal" && selectedTarget
           ? await fetchCoordinationView(companyId, { surface: "personal", preview: true, target: selectedTarget, ...pagination })
           : await fetchCoordinationView(companyId, { surface: "global", preview: true, ...pagination })
-      } else {
+      } else if (!isolated) {
         nextResponse = await fetchCoordinationView(companyId, { surface: productionSurface, ...pagination })
       }
 
@@ -204,6 +206,7 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     clearBackendSurgeries,
     companyId,
     hydrateBackendSurgeries,
+    isolated,
     mode,
     productionSurface,
     response,
@@ -275,6 +278,10 @@ export function useCoordinationView({ surface: productionSurface, discoverPrevie
     if (!hasMore || loadingMore) return Promise.resolve()
     return runRequest(mode, { append: true })
   }, [hasMore, loadingMore, mode, runRequest])
+
+  useEffect(() => {
+    if (loadAll && hasMore && !loadingMore) void loadMore()
+  }, [hasMore, loadAll, loadingMore, loadMore])
 
   return {
     mode,

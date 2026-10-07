@@ -1,0 +1,14 @@
+# R7 return ownership
+- task: REMITOS-R7-RETURN-20261007
+- agent role: sole backend/integration/test writer; reviewer read-only
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned sources: src/lib/services/remito.service.ts (return only and read tx typing); src/lib/services/devolucion.service.ts (return composition/projection only); src/app/api/companies/[companyId]/remitos/[remitoId]/devolucion/route.ts; src/lib/validators/remito.ts; src/lib/validators/devolucion.ts (quantity only); src/lib/validators/decimal18-4.ts; src/lib/api/remitos.ts (return only); src/hooks/useRemitos.ts (return command only)
+- owned tests: src/__tests__/unit/remito-return-atomic.test.ts; src/__tests__/unit/remito-service.test.ts (return fixtures); src/__tests__/unit/devolucion-service.test.ts (return fixtures); src/__tests__/unit/remito-devolucion-route.test.ts; src/__tests__/hooks/useRemitos.test.tsx (return tests)
+- regression fixture extension: src/__tests__/unit/cajas-ui-intent-wiring.test.ts (two return transaction mocks gain $queryRaw only; required by real parent lock; existing guards/assertions unchanged)
+- owned docs: R7*; audit/map R7 status; knowledge/worklog/REMITOS_R7_RETURN_2026-10-07.md; this lock
+- preflight: R1–R6 locks released; prior dirty sources preserved; no active owner references this chain
+- exclusions: UI/schema/Auth/roles/DB/browser/deps/stock/accounting/cancellation policy/Git mutation
+- necessary same-document writer coverage: rejectDevolucion/updateDevolucionState conditional company/observed-state writes, write-stage P2025 only409. Two reproduced staged races overwrite Confirmada after quantities applied; protect incumbent transitions, no new eligibility/roles.
+- validation: offline red→green atomicity/replay/shared quantity/concurrency/precision, scoped typing/regression/independent review
+- release gates: parent502/502 across32 suites PASS, focused144/144 PASS, R7 scoped typing/owned whitespace PASS. Initial reviewer P2 in-flight replay defect reproduced with3 hook failures and fixed; independent re-review144/144+typing+3 independent in-memory checks PASS, blocker resolved/no new issue. Ownership released; no DB/browser/schema/Auth/UI/Git mutation.

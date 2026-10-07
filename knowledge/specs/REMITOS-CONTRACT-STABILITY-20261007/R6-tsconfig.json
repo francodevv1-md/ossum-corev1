@@ -1,0 +1,10 @@
+{
+  "extends": "./R5-tsconfig.json",
+  "include": [
+    "../../../next-env.d.ts", "../../../src/__tests__/setup.ts",
+    "../../../src/lib/services/remito.service.ts",
+    "../../../src/app/api/companies/[companyId]/remitos/[remitoId]/route.ts",
+    "../../../src/__tests__/unit/remito-delete-contract.test.ts",
+    "../../../src/__tests__/unit/remito-service.test.ts"
+  ]
+}

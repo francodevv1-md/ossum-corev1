@@ -1,0 +1,5 @@
+# Primera ola: elección de ventana
+
+**A (todo 2026 por CIRFEC)**: 1.193 casos, 1.086 FIN/REA, 1.182 pacientes distintos, 2.114 STOCK headers vinculados, 143.293 STOCK1 lines vinculadas, 3.443 ARTCOD distintos. No incluye abiertos sin CIRFEC: incorporar cohorte separada por carga y estado. **B (junio–septiembre por CIRFEC)**: 581 casos (48,7% de A), 533 FIN/REA, 577 pacientes, 1.066 headers, 72.802 lines, 3.249 ARTCOD. Baja 51,3% casos, pero solo 5,6% códigos de artículo: ahorra poca complejidad de catálogo y ninguna del ledger/seguridad/validación. Al 29/09 octubre 2026 aún futuro; definir ventana por fecha de corte real, no por reloj de ejecución del script.
+
+Recomendación: primero dry-run B, sin escritura ni supuestos de remito; luego A completo con mismo pipeline. Contactos/médicos/instituciones/pagadores y artículos se extraen por cierre de dependencias, no por fecha de creación del maestro; controlar empresa TEST. Subconjunto exacto FIN/REA+PRINC+FKs+fechas válidas aún **NO CUANTIFICADO**. El criterio de primera ola debe incluir explícitamente pendientes sin CIRFEC mediante cohorte distinta; nunca prometer 'todo 2026' con un solo filtro.

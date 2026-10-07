@@ -1,0 +1,60 @@
+import { fireEvent, render, screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { SmartSurgerySearch } from "@/components/cirugias/SmartSurgerySearch"
+
+vi.mock("@/lib/store", () => ({
+  useOrtoTrackStore: () => ({
+    surgeries: [],
+    searchContactos: () => [],
+  }),
+}))
+
+const chip = {
+  id: "patient-1",
+  field: "paciente" as const,
+  value: "patient-1",
+  label: "Paciente: Ada Lovelace",
+}
+
+function renderSearch(chips = [chip]) {
+  const onChipsChange = vi.fn()
+  render(<SmartSurgerySearch chips={chips} onChipsChange={onChipsChange} onSearch={vi.fn()} />)
+  return { onChipsChange }
+}
+
+describe("SmartSurgerySearch", () => {
+  beforeEach(() => {
+    if (typeof Element.prototype.scrollIntoView !== "function") {
+      Element.prototype.scrollIntoView = function () {}
+    }
+  })
+
+  it("clears all active search chips", () => {
+    const { onChipsChange } = renderSearch()
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar" }))
+
+    expect(onChipsChange).toHaveBeenCalledWith([])
+  })
+
+  it("exposes an accessible control to remove one chip", () => {
+    const { onChipsChange } = renderSearch()
+
+    fireEvent.click(screen.getByRole("button", { name: "Quitar filtro Paciente: Ada Lovelace" }))
+
+    expect(onChipsChange).toHaveBeenCalledWith([])
+  })
+
+  it("clears the draft query when Escape is pressed", () => {
+    renderSearch([])
+    const input = screen.getByRole("textbox", { name: /buscar/i })
+
+    fireEvent.change(input, { target: { value: "Lovelace" } })
+    expect(input).toHaveAttribute("aria-expanded", "true")
+
+    fireEvent.keyDown(input, { key: "Escape" })
+
+    expect(input).toHaveValue("")
+    expect(input).toHaveAttribute("aria-expanded", "false")
+  })
+})

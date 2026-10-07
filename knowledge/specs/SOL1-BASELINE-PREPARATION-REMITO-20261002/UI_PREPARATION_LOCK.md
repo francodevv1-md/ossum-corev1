@@ -1,0 +1,11 @@
+# UI preparation ownership
+- task: SOL1-UI-CALLERS-NO-DB-20261002 / preparation caller
+- agent role: Frontend preparation integration / test author
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned source: src/components/stock/CajasPhysicalUnitsSection.tsx; src/lib/api/cajas-assignments.ts (only needed type descriptors, existing transport semantics preserved); new src/__tests__/components/CajasPreparation.http.test.tsx
+- owned docs: UI_PREPARATION_LOCK.md, UI_PREPARATION_IMPLEMENTATION.md in this directory only.
+- excluded: all other source/tests/docs, Antigravity Coordination/states/calendar/notifications, Stock host/services, schema/Auth/permissions/Movimientos.
+- commands: read/search, apply_patch on exact owned files, read-only Git inspection. No Node/npm/npx/Vitest/DB/build/browser/scripts execution. Orchestrator is sole test executor.
+- release: after source/tests are ready for orchestrator checks; stopped owner can resume minimal fixes under same lock only after explicit orchestrator task.
+- release evidence: bounded source/component test authored and statically inspected; no execution. Exact runner target and limitations in UI_PREPARATION_IMPLEMENTATION.md. Source corrections require explicit orchestrator task before returning to editing.

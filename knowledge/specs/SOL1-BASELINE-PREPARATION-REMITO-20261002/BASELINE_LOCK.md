@@ -1,0 +1,25 @@
+# Sol1 baseline fixture ownership — 2026-10-02
+
+- task: SOL1-BASELINE-PREPARATION-REMITO-20261002
+- agent role: QA fixture maintainer
+- selected model: openai/gpt-6.1-sol (current runtime)
+- mode: implementation / QA / docs
+- status: released
+- risk: T2, bounded mechanical test correction; no domain or production changes.
+- workspace: E:/OSSUM_COR_ANTIGRAVITY/ux-ui
+- reference HEAD: 73e3e1b4b930fa0bc4bf44636c78529d73b33208
+- exact owned files:
+  - src/__tests__/integration/presupuestos-api.test.ts
+  - src/__tests__/unit/presupuesto-concurrency.test.ts
+  - src/__tests__/unit/presupuesto-connected-journey-e2e.test.ts
+  - src/__tests__/unit/presupuesto-service.test.ts
+  - knowledge/specs/SOL1-BASELINE-PREPARATION-REMITO-20261002/BASELINE.md
+  - knowledge/specs/SOL1-BASELINE-PREPARATION-REMITO-20261002/BASELINE_LOCK.md (explicitly requested lock lifecycle only)
+- ownership preflight: task directory absent; explorer reported released Presupuestos locks. Locally read final-validation, connected-journey and local-commit-isolation locks: released. Registry scan found no competing exact fixture claim; active Compras authority ownership is outside this allowlist. Other agent's preparation trace is read-only, as declared by the orchestrator.
+- scope: compare existing diff and each certified 73e3e1b fixture; apply only revision-token, Date/Decimal mock-cloning and assertion-strength corrections with apply_patch.
+- allowed commands: read-only Git status/diff/show/blob inspection; exact focused installed Vitest runs; installed tsc --noEmit --incremental false.
+- forbidden: all other edits; source date/time fallback (BUSINESS AMBIGUOUS); invoice/billing-gate work; Stock/Cajas/Movimientos/schema/Auth/dependencies; DB/browser/build; Git stage/restore/commit/push/PR.
+- validation: reproduce before edits; focused checks after each file correction; final combined focused regression and non-incremental TypeScript; inspect exact diff against certified fixtures.
+- stop conditions: competing fixture ownership, unexpected fixture drift, required edit outside allowlist, or ambiguous business decision.
+- handoff: Done / Changed / Files / Validations / Risks / Next in BASELINE.md and final response; release this lock after validation.
+- release evidence: all four canonical fixture blobs equal the certified manifest; per-change focused checks pass; final five-file run passes 42/42; tsc --noEmit --incremental false passes after increasing the initial 120-second timeout budget. BASELINE.md records Diagnose, inherited 19-blob/101-test evidence and remaining risks. No competing ownership or out-of-scope edit required.

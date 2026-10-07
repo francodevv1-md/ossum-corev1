@@ -1,0 +1,13 @@
+# Ownership lock
+- task: REMITOS-CX-FUNCTIONAL-DEV-20261006
+- agent role: parent orchestrator/QA and sole delegated frontend writer
+- selected model: parent openai/gpt-6.1-sol; delegate reports actual model
+- status: released
+- frontend owned files: src/components/expediente/FichaTabContent.tsx; src/components/expediente/RemitosSummaryCard.tsx; src/__tests__/components/RemitosSummaryCard.backend.test.tsx
+- parent owned files: scripts/qa/remitos-functional-dev.ts; knowledge/specs/REMITOS-CX-FUNCTIONAL-DEV-20261006/; knowledge/worklog/REMITOS_CX_FUNCTIONAL_DEV_2026-10-06.md; this lock
+- backend: read-only until a reproduced issue requires an explicit ownership update
+- overlap check: existing locks contain no references to the three frontend files or remito.service; existing dirty source is excluded
+- excluded: schema, Auth, permissions, store, base types, other agents' source/test files, migrations, database cleanup
+- source writer completed/released its three files; parent47/47 tests passed, real bounded DEV acceptance passed once, independent read-only source review no introduced blocker
+- scoped TypeScript PASS: zero diagnostics in all four owned source/test/script files; global149 foreign diagnostics remain outside scope
+- remaining: build/browser acceptance blocked by shared runtime/login; no source writer or DB runner remains active for this task

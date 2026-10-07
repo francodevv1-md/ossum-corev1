@@ -693,6 +693,29 @@ export async function listContactAddresses(
 }
 
 /** Create an address for a contact. Validates contact belongs to company first. */
+/** Read-only preview of last and next contact code for a company. */
+export async function getContactCodePreview(
+  prisma: PrismaClient,
+  companyId: string
+): Promise<{ lastCode: string | null; nextCode: string }> {
+  const links = await prisma.contactCompanyLink.findMany({
+    where: { companyId, code: { startsWith: "C-" } },
+    select: { code: true },
+  });
+  let maxNum = 0;
+  for (const link of links) {
+    const m = link.code.match(/^C-(\d+)$/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (Number.isSafeInteger(n) && n > maxNum) maxNum = n;
+    }
+  }
+  return {
+    lastCode: maxNum > 0 ? `C-${String(maxNum).padStart(4, "0")}` : null,
+    nextCode: `C-${String(maxNum + 1).padStart(4, "0")}`,
+  };
+}
+
 export async function createContactAddress(
   prisma: PrismaClient,
   companyId: string,

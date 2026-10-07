@@ -1,0 +1,12 @@
+# R8 stock projection ownership
+- task: REMITOS-R8-STOCK-20261007
+- agent role: sole backend/test/docs writer; directed reviewer read-only
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned source: src/lib/services/stock-ledger.service.ts (getStockAvailability read projection only)
+- owned tests: src/__tests__/unit/stock-availability-remitos.test.ts
+- owned docs: knowledge/specs/REMITOS-CONTRACT-STABILITY-20261007/R8*; audit/map R8 status; knowledge/worklog/REMITOS_R8_STOCK_2026-10-07.md; this lock
+- preflight: stock-ledger current worktree diff empty; no active overlapping source owner. SURGERY-IN-TRANSIT-CANONICAL-20261007 owns Surgery validators/adapters/tests, not this file or Remito catalog. Prior R7 released. Preserve all foreign changes/runtime reservations.
+- exclusions: Surgery/Remito transition writers; schema/Auth/roles/API/DTO/UI/write helpers/Cajas/accounting/reservation policy/DB/browser/dependencies/Git mutation
+- gates: predicate/select-aware offline red checks, scoped TypeScript, stock and R1–R7 regression, independent review; release on evidence
+- release:580/580 across38 suites PASS; scoped typing/whitespace PASS. Independent review34/34 R8 and59/59 across5 selected suites+typing/whitespace PASS, no concrete introduced blocker. Other agent's Surgery transition files untouched; no active writer, DB/browser/Git mutation.

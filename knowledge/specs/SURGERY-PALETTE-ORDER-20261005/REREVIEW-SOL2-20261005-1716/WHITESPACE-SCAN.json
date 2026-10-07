@@ -1,0 +1,16 @@
+{
+    "time":  "2026-10-05T17:22:09.9034856-03:00",
+    "scope":  [
+                  "src/lib/shared-constants.ts",
+                  "src/components/cirugias/view-customization/ColorReferenceDialog.tsx",
+                  "src/components/cirugias/dialogs/ChangeStateDialog.tsx",
+                  "src/components/expediente/ExpedienteHeader.tsx",
+                  "src/components/cirugias/CirugiaRow.tsx",
+                  "src/components/cirugias/CirugiasGridRow.tsx",
+                  "src/__tests__/components/SurgeryPalette.test.tsx"
+              ],
+    "trailingWhitespaceFindings":  [
+
+                                   ],
+    "status":  "PASS"
+}

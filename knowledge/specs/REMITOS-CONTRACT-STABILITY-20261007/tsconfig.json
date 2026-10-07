@@ -1,0 +1,9 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../../next-env.d.ts", "../../../src/__tests__/setup.ts",
+    "../../../src/hooks/useRemitos.ts", "../../../src/__tests__/hooks/useRemitos.test.tsx",
+    "../../../src/lib/services/remito.service.ts", "../../../src/__tests__/unit/remito-response-contract.test.ts"
+  ]
+}

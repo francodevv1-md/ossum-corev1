@@ -1,0 +1,14 @@
+# Ownership lock
+- task: SURGERY-COMPROBANTES-BACKEND-READ-DEV-001
+- owner / agent role: Sol / bounded frontend implementation
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned files:
+  - src/components/expediente/ComprobantesAsociados.tsx
+  - src/hooks/useSurgeryComprobantes.ts
+  - src/__tests__/components/ComprobantesAsociados.http.test.tsx
+  - knowledge/specs/SURGERY-COMPROBANTES-BACKEND-READ-DEV-001/*
+- preflight: panel clean in git status; inspected workspace AGENTS, current handoff, .opencode locks and Knowledge locks. No active panel ownership found. Antigravity intake/authorization/coordinator ownership remains excluded.
+- explicit concurrent lock inspected: DISTRICORR-DEMO-INTAKE-AUTHORIZATION-DEV-001 owns intake dialogs/surgery hook/client/service/validator/routes/test, not this panel or new files. Active Compras and adjustment-document locks also do not overlap.
+- stop: overlapping ownership, excluded file required, unsafe command or ambiguous domain rule.
+- release evidence: 11/11 exact-allowlist HTTP tests, TypeScript, targeted whitespace and unchanged validated source fingerprints; independent reviewer characteristic-purple-nightingale found no blocking findings. Browser/build/DB acceptance deferred, not claimed.

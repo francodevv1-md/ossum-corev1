@@ -1,0 +1,8 @@
+{
+  "command": "node node_modules/typescript/bin/tsc --noEmit --incremental false",
+  "startedAt": "2026-10-05T20:19:47.989Z",
+  "finishedAt": "2026-10-05T20:20:46.428Z",
+  "exitCode": 2,
+  "signal": null,
+  "error": null
+}

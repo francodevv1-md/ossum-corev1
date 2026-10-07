@@ -1,0 +1,457 @@
+{
+    "workspace":  "E:\\OSSUM_COR_ANTIGRAVITY\\ux-ui",
+    "head":  "21385527dcfbc6ebc5b1507096d03a2c402d8c4d",
+    "time":  "2026-10-05T16:57:11.4162664-03:00",
+    "files":  [
+                  {
+                      "path":  ".opencode/locks/DEV-QA-READINESS-SESSION-20261003.lock.md",
+                      "sha256":  "FB69078550ACFAC295CE0180BAE8AB35BCAFD8905DC72D7CDAD1B5C3898010DD",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  ".opencode/locks/SURGERY-PALETTE-ORDER-20261005.lock.md",
+                      "sha256":  "C46193A2ADB4F64C892BD55B1027303B4EB916A0F0B7B45FBE7558CC4D5A4BB9",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  ".opencode/locks/SURGERY-TYPES-20261005.lock.md",
+                      "sha256":  "3000AE9A7C7B3F98464227EFAFD9E3C960FE57AB22851756950C2B5D226E317A",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "AGENTS.md",
+                      "sha256":  "104CDF996059189DE5036519BB23E32977AE02060FB7E73737CD49EB6A5AD54B",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "knowledge/core/CANONICAL_DECISIONS.md",
+                      "sha256":  "6D7935C083AAEECC140FBCB495C91F33DC454C4ABB6B60B06C6C5F5E11D8BA5C",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "knowledge/core/CURRENT_STATE.md",
+                      "sha256":  "D1C27003982A859A14AD9D0597ECCAAEA9A6AD7199FB4E78AA5F130C69608027",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "knowledge/core/PROJECT_BRIEF.md",
+                      "sha256":  "89D657C826367216FE2C497B4381739A400F2B0FF64450AFB1CE8E6C6265E31E",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "knowledge/specs/SOL1-BASELINE-PREPARATION-REMITO-20261002/DB_TESTS_BLOCKED.md",
+                      "sha256":  "26A9611ED40A2A6CF38732A1CB3EA2AA28B8E3CA5EDB83461C2F8A18B41CD9FC",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "knowledge/specs/SURGERY-PALETTE-ORDER-20261005/HANDOFF.md",
+                      "sha256":  "B68AF71321D2D0C81CAD559E39C04E34677D8FC49B7411B0A8278C87A1ABFDED",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "next.config.ts",
+                      "sha256":  "98B8C827CC219CE1FE62C5C56E8C45F877707FEA817C156702CAC11EC605A444",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "next-env.d.ts",
+                      "sha256":  "B8B3A344484B959AF5E4E3FC1A1609DAC3CB9ECE0CDEB6C145BE29BC4C491000",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "package.json",
+                      "sha256":  "644AF574091573D56C7211202E11936B513B8ABCEAAEF6CBC72EABEDFDEF2E1A",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "package-lock.json",
+                      "sha256":  "74371FB7BE6CD861FD066051E6184112589BD89F0B863941FB9DE95BA97EBAF9",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/__tests__/components/ChangeStateDialog.test.tsx",
+                      "sha256":  "E8C44DCB734C3F5290D4B0CB1418560FC2516CCEC813990593B8B97604518ADB",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/__tests__/components/CirugiasDataGrid.test.tsx",
+                      "sha256":  "65CE5025C4480CACC0E6E157D01D9D32F976CA8D94BF8153EE1896E541FD842A",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/__tests__/components/ExpedienteHeader.test.tsx",
+                      "sha256":  "A5E66330D6DE3C54C7F7595B15AC51C084B88D4075E0A42D196DBDB9440F9897",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/__tests__/components/SurgeryPalette.test.tsx",
+                      "sha256":  "2A62AE01C034D88416A93C7A403D01AE3C1904EB6068A948D587C84340668380",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/__tests__/setup.ts",
+                      "sha256":  "F746CED0CDA400A41A05AB485F3F6B6398582CBAC94C8FABE58C275A9C65C714",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/__tests__/unit/cirugias-estado-prep-separation.test.ts",
+                      "sha256":  "8372B7305832E2DF8798E45C419EA09E44463402A02B2886B7F8FACB229FBC81",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/app/calendario/page.tsx",
+                      "sha256":  "05E6B913F1E02DB39AD22E10F7BA34401F8908E0148E55CB902B98363D8E02D2",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/app/cirugias/page.tsx",
+                      "sha256":  "7E725612627B977D77B9FC7C1D7CA1BEF326474AA60FDD21F3F53A7900F31E61",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/app/globals.css",
+                      "sha256":  "FDCEBB99063968B2D93398A6054640AE37B28DD6251C22FA0637CDA8830D6B1F",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiaOperationalBadges.tsx",
+                      "sha256":  "C21D2C15EF9F5151C116EF9BF138D4BA3A5834480D060013A02004B920B06F8A",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiaRow.tsx",
+                      "sha256":  "B19D2C7D195F756641AF3BFD702B73FA232F394F708DB8A4DD2715B2F18DF7EE",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiasDataGrid.tsx",
+                      "sha256":  "B95A8F7443A6024DBE7025066D7033BBDBA47F25D1283E34BFA23D82B6547244",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiasGridRow.tsx",
+                      "sha256":  "A6C4601031E0DE1CC5BB39C3D2001E36C87F76B22023FD7802E0793E45D5A51A",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiasTable.tsx",
+                      "sha256":  "5F6536208CE88D4A270A33342EBBA727991F13ACA46B988650EA9CB3BB2ED89E",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiaStatusCell.tsx",
+                      "sha256":  "EC10DF22FCFFB8C33AF8C7E445F1954D00A3F8FE30A4987E417250AE98886047",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiasToolbar.tsx",
+                      "sha256":  "A676CCE04979A7BC0AF75025AB930E577091CE94A83D6BB6503BA7FA55FD850D",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/cirugias/dialogs/ChangeStateDialog.tsx",
+                      "sha256":  "B0FB1383F1C4902D4CF56DF67C25E06C967036F8223DCBDB28990E8F016F92A2",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/cirugias/MobileCirugiaCard.tsx",
+                      "sha256":  "A4621F9F50B9C21CE698D621AD7B87FD577886222ECCE6B045A167917CCC4391",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/components/cirugias/MobileCirugiaFiltersSheet.tsx",
+                      "sha256":  "24EBB618CB6AE1C0754FB67E21B4F79223E39E5B519BDBDDFAD31666D0170598",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/cirugias/SurgeryContextTray.tsx",
+                      "sha256":  "91F3662DEA7EA3D35F39F5F6A387BEB082514A0F5525D5E742B0ABF4EC756C4A",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/cirugias/view-customization/ColorReferenceDialog.tsx",
+                      "sha256":  "DE7AA7A0A86CEA3CFE63A95F7EDD5AC319B485AAFE6C496FD562850AADE9DEE2",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/components/expediente/ExpedienteFullView.tsx",
+                      "sha256":  "0A53D2930DF5EA30E51ED68F6682272EBBFF8A4A4E134FE423E7502294796ED1",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/expediente/ExpedienteHeader.tsx",
+                      "sha256":  "EFCA958BDE2F098F787D396F311CBE2362AF898141F0BE3772920D992B966F60",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/components/expediente/ExpedientePreview.tsx",
+                      "sha256":  "1E0D43EEB26E158A616A1717153F7C2445093B069A9997F68D8C77C4740DE497",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/expediente/ExpedientePreviewStatusChips.tsx",
+                      "sha256":  "6AF84CEBC66465E2679E5669BDB397F2E9874B6A89B5DCC6D57E46164BEC989B",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/expediente/ExpedientePreviewSummary.tsx",
+                      "sha256":  "DD24C0432647C3DCE6442A094E244C131D3F5BC95E26A73A165E7164FA6E6552",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/expediente/FichaCirugia.tsx",
+                      "sha256":  "119B8A6BF244F4DD7B0DF44F76F2C466B96ED76172F84B5E21CEAD7556B11866",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/ui/button.tsx",
+                      "sha256":  "563988DCB65733C4E7C953E86265AE869E1372D8703D4DB0BD70F7429A7E536D",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/components/ui/dialog.tsx",
+                      "sha256":  "A3F915A4494B9A00E67700063EA040F9E0902DC7170443A3FEDEB8BCAE083030",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-boxes.ts",
+                      "sha256":  "7C4C20E99251B9470E87CAFA238C2146E42B7F79A5EF4742ED9A9C44CDD49775",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-classifications.ts",
+                      "sha256":  "393FD65834371459291C977FA0184135573DF51A04CD8D73D833C69DE780673D",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-cobros-v2.ts",
+                      "sha256":  "24D58A993AD4DEA3764B53DED158C288FFE946B1127AECB831B87FEDA192197F",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-comprobantes.ts",
+                      "sha256":  "57F5FC2CAA2873B52984C0036E71D034FE4D9046B072AF62FE86B6F5191574DF",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-consumo.ts",
+                      "sha256":  "F1B0B8BE58456EA5C23011E4FCE5EDA9DB0D72573FA88D573688036DEF2DD75A",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-contactos.ts",
+                      "sha256":  "D7BBFB6E34FBA28DDEF56631C5D10DBCB9990936595BD419C9B38BBBBE40CDB7",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-evaluaciones-proveedor.ts",
+                      "sha256":  "2816CCF2DDD4E0AF7E33EA923A217BEBBAA149D7D0508B3285B93D6557DF5D86",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-expirations.ts",
+                      "sha256":  "3F76B8392D1B7739055BAA0D1933AF4D5FB6DFFA61A1B948EF111C1A7FF7C617",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-facturas-compra.ts",
+                      "sha256":  "44C30449D3A1B7F966B57825C4243E7AF453978498B6EFBF2E3E8BC09A7F59F3",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-forecast.ts",
+                      "sha256":  "81DFDCED5209CCBBA1B2EC4DBD28295C2C6D70C270E766C4BE650AA34CB03597",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-imputaciones.ts",
+                      "sha256":  "7D0A3B4AF227176E2C201A9EDA4EB3FB696D8308BBEAD7720A18FCD92780DDB7",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-instrumentadores.ts",
+                      "sha256":  "0ACC3E4FE05CC0CA0501914E4B16D36BA2EC85115A1DC413BDB4B7BF8CB5FC2D",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-material-transito.ts",
+                      "sha256":  "4E0B254166569F4233F726DBEDFCE7687015073D8F4CA7DABFD077C9F9313BE6",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-movimientos-compra.ts",
+                      "sha256":  "76620D5C24118E8C5E7C484A87EFC9975886912EB4CEA2D704E3902623BCF0A4",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-necesidades-compra.ts",
+                      "sha256":  "AB13E5ED043EF8A7CDD6AC4E482912E03F131C9E4C98FF9A066BC3E844BC5662",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-notas-credito.ts",
+                      "sha256":  "BAAECF6FA3682A5A35C8E874C3B174BB15FB616DEF78A6C64F2C2D3A9AC620C3",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-notas-debito.ts",
+                      "sha256":  "48CC52D65811120804A3ED25F65F3AD9EA9DFAB15F90CAF546B7BC04799EA1E0",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-notes.ts",
+                      "sha256":  "9866C9137612A4685691C1CE6A7CF3667B01AEC7AC2BBDE188EB9F1DE8FE9578",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-ordenes-compra.ts",
+                      "sha256":  "13501FD394944B3BDE3CF2C75939A478F794252350D80107A3EEE4D2002BF2E0",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-ordenes-pago.ts",
+                      "sha256":  "744FD552521C76110670003A1F9A64B790F2ABD6F8CD8C841E491AAE45890E7F",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-presupuestos.ts",
+                      "sha256":  "87414C967478C5891898F34026A9AF26C881E3ED868CBBC7D661D582073E586B",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-proveedores.ts",
+                      "sha256":  "979332ED545A7D41B7B18506C015C811902EA019C46141E89B56264C59A6AAF3",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-remitos.ts",
+                      "sha256":  "5181BA8107C9D6BEA9B7811C44FDD683DB66A6115C1A1734ABCA7A41139F0B76",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-stock.ts",
+                      "sha256":  "7F341940F010C6491FF25607276AB5E33FB8CAD15832C606CE90D0D72C45BE07",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-stock-movements.ts",
+                      "sha256":  "288687D95F404A3C2792E26D1B5ABF6C9198E90B37C5070A6950C4910BCCDEFF",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-surgeries.ts",
+                      "sha256":  "CE8646D915EF92E12F011C358F77E870B627337C02EE75783C29A646D16E3BC4",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-surgery-details.ts",
+                      "sha256":  "7ADB4FEB846AD2B918B5ED1404AB049AAA6CA476A8215ED0D0146F5567E7A1E3",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/data/mock-users.ts",
+                      "sha256":  "4957C49D59355B263410432E94E8A76354E64528A3C8756A1F1529B11E6A6D47",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/api/errors.ts",
+                      "sha256":  "DEA62702D2924C2FB6A2618BC69FA20982886178C4B64DC83E29E56B643E1F93",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/api/surgery-adapter.ts",
+                      "sha256":  "67F22287884C09D49AEC0129C08DA2B410070216D99D39E72B0D0AF0057CD3D6",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/automations.ts",
+                      "sha256":  "FF28F4CA3612853FA3023D82F0004184E0F3F08FCB00D0662AA183F1AA5DF64A",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/cirugias.constants.ts",
+                      "sha256":  "7769D0852BA40FB3EA25324926EA1F111EF3D0E1C1902E9393C4640277E84D29",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/lib/cirugias.utils.ts",
+                      "sha256":  "DF06D184F40DBCB8C36C75BA344AAC23A073A8520A174A4D248E249C199F8B91",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/cirugias/cirugias-columns.tsx",
+                      "sha256":  "F061CF915E2DA58771B4A556A6070A8CE0C1F81C364947D243A77E6B16E9DDF6",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/lib/cobros.constants.ts",
+                      "sha256":  "196701B7D41EFA8CF8F2EC7D1E785FA1DA09A4D467C41F01E760B4E607069F6F",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/cobros.utils.ts",
+                      "sha256":  "3E7E858C183FB03F50882EEA3B18AFB4378888B9A66BFB8B5DE5CAF895EF4347",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/contact-code.ts",
+                      "sha256":  "599F1849FFD33BE22F762D46D8D2D0AE745D0C36B3D40BDB7DECEB047417C743",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/contacts.constants.ts",
+                      "sha256":  "65B6B50004247C486352DEF5A579F60116E08DD6CFB8CF2E43882F690EDAA672",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/formatters.ts",
+                      "sha256":  "27C5077272EAB06F155528C346AE19E6A79D6105AEE607BF0A6D91C6951BC666",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/idGenerators.ts",
+                      "sha256":  "E4A7F9CE9A24231F970CD4BA60788C6BCF0DF87372C595966E22F7E397F23492",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/services/surgery-coordinator-read-model.ts",
+                      "sha256":  "881C584917817357DB2F7D42226AB297A3EE7276C578C13E5F975D7119669686",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/shared-constants.ts",
+                      "sha256":  "906E4CB9E8D6E1DC2D082C41E8371343C9D7C3D996DAE35430231854B00EADD3",
+                      "scope":  "palette allowlist"
+                  },
+                  {
+                      "path":  "src/lib/statusHelpers.ts",
+                      "sha256":  "FEAC72536A730F73CC4AD3289D1ECA815CF42104307F2344FB2E70DD165B79CC",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/store.ts",
+                      "sha256":  "2627B128730A905B719A6BC778F7A83EDF0A4054B9B6CFD6C5DB68E9477492A2",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/utils.ts",
+                      "sha256":  "515FF51B06DBA32A06F60B8D4C08679411366053A6FFDD2C95601F2684FE4715",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "src/lib/validators/surgery.validator.ts",
+                      "sha256":  "EE0425C59B0F2A5CDE8905CB7930E65FE04FE264CCCC96605ED309FB6C160C0E",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "tsconfig.json",
+                      "sha256":  "2A72A0B0DDDAADD6E6A34CBFE3F3728156B63858626DE81D19B6A96777C06E11",
+                      "scope":  "read-only context/imports/caller"
+                  },
+                  {
+                      "path":  "vitest.config.ts",
+                      "sha256":  "81223E2B4F09B9B0193CE0EAA9E2003B0F5A5E7331A5E3046D6FD89F89C8A49D",
+                      "scope":  "read-only context/imports/caller"
+                  }
+              ]
+}

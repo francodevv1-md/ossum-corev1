@@ -1,0 +1,5 @@
+﻿ src/components/expediente/ExpedienteFullView.tsx  |  44 +-
+ src/components/expediente/ExpedienteHeader.tsx    |  56 +-
+ src/components/expediente/NovedadesTabContent.tsx |  98 +++-
+ src/components/mail/SendEmailModal.tsx            | 667 ++++++++++++++++++++++
+ 4 files changed, 859 insertions(+), 6 deletions(-)

@@ -1,0 +1,13 @@
+# R4 ownership
+- task: REMITOS-R4-REQUEST-CONTRACTS-20261007
+- agent role: sole request-boundary writer / QA; reviewer read-only
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned source: src/lib/api/remitos.ts; src/lib/validators/remito.ts; src/app/api/companies/[companyId]/remitos/[remitoId]/emitir/route.ts; src/lib/services/devolucion.service.ts (error class/import only)
+- owned checks: src/__tests__/unit/remito-request-validation.test.ts; src/__tests__/unit/remito-request-errors.test.ts; src/__tests__/unit/remito-request-transport.test.ts; src/__tests__/types/remito-request-contracts.ts
+- owned docs: knowledge/specs/REMITOS-CONTRACT-STABILITY-20261007/R4*; FLOW_AND_CONTRACT_AUDIT.md (R4 status only); knowledge/worklog/REMITOS_R4_REQUEST_CONTRACTS_2026-10-07.md; this lock
+- preflight: all four source files clean; root locks no matches; previous CAJAS-END-TO-END DISPATCH lock explicitly released; R3 released. Existing dirty work excluded.
+- allowed commands: read-only Git/search, focused Vitest/scoped TypeScript/diff checks
+- forbidden: other source/schema/Auth/roles/stock/transitions/transactions, DB/browser, dependencies, commit/push/deploy
+- validation: failing runnable schema/error checks and TypeScript contracts before source fix, regression/review required
+- release:372/372 tests across24 files, expanded R4 scoped typing and tracked whitespace PASS. Reviewer independently72/72 and scoped typing PASS after underflow correction; no remaining scoped blocker. No browser/DB/commit/push/deploy; no active writer.

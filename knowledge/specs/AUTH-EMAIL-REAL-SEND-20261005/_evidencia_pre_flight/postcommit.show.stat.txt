@@ -1,0 +1,39 @@
+﻿commit 685ef3229da012ed988388d512d91f3e3c4bad2e
+Author: MiniMax <minimax@ossum.local>
+Date:   Mon Oct 5 20:44:33 2026 -0300
+
+    feat(mail): elevated auth-email modal + post-Authorize feedback (AUTH-EMAIL-REAL-SEND-010)
+    
+    - ExpedienteHeader: 'Enviar correo con autorizado' item in 'Mas' dropdown
+      when surgery has a valid authorization (s.autorizado or s.state='Autorizada').
+      Reuses resident SendEmailModal; no modal duplication.
+    - NovedadesTabContent: post-Authorize toast action 'Enviar correo de
+      autorizacion' opens SendEmailModal with empty initial state. Uses sonner
+      toast action API.
+    - ExpedienteFullView: elevated SendEmailModal mounted at root (outside
+      TabsContent) so it survives tab changes. Opened by Header callback and
+      by the post-Authorize action. mode='authorization' so the same
+      authorization email template is generated server-side.
+    - SendEmailModal: subject formula <Cliente> - <PTE> - DR. <MEDICO> (uppercased
+      obraSocial || client || financiador || 'Cliente', patient || 'PTE',
+      'DR. ' + surgeon || 'MEDICO'); fix for Maximum update depth exceeded when
+      mounted at parent re-render scope (useRef-based one-shot init effect,
+      deps = [open] only); credentials: 'include' + x-ossum-actor-user-id
+      forwarded in fetch so dev backend accepts the request.
+    
+    Pre-flight evidence in knowledge/specs/AUTH-EMAIL-REAL-SEND-20261005/_evidencia_pre_flight/.
+    
+    Validated end-to-end in DEV: real Resend send to sistemas@districorr.com.ar
+    from notificaciones@districorr.com.ar (verified domain), toast
+    'Proveedor acepto el envio' displayed, seguimiento entry recorded with
+    'Correo aceptado por el proveedor (no se confirma entrega).' header.
+    
+    Adopts and preserves foreign hunks in ExpedienteHeader.tsx (Sol2 SHA-256
+    pinned at 6659AC97...E25) and NovedadesTabContent.tsx (SendEmailModal
+    wiring + TimelineCard auth email button); no production reverts.
+
+ src/components/expediente/ExpedienteFullView.tsx  |  44 +-
+ src/components/expediente/ExpedienteHeader.tsx    |  56 +-
+ src/components/expediente/NovedadesTabContent.tsx |  98 +++-
+ src/components/mail/SendEmailModal.tsx            | 667 ++++++++++++++++++++++
+ 4 files changed, 859 insertions(+), 6 deletions(-)

@@ -11,7 +11,7 @@ import { PreparationStateSelect } from "@/components/shared/selectors/Preparatio
 interface FiltersToolbarProps {
   search: string
   onSearchChange: (search: string) => void
-  coordinators: string[]
+  coordinators: Array<{ id: string; label: string }>
   selectedCoordinators: string[]
   onToggleCoordinator: (coordinator: string) => void
   selectedStates: string[]
@@ -232,9 +232,9 @@ export function FiltersToolbar({
             }`}
           >
             <option value="">Coordinador: Todos</option>
-            {coordinators.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {coordinators.map((coordinator) => (
+              <option key={coordinator.id} value={coordinator.id}>
+                {coordinator.label}
               </option>
             ))}
           </select>

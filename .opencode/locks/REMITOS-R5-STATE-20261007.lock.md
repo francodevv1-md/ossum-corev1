@@ -1,0 +1,13 @@
+# R5 state ownership
+- task: REMITOS-R5-STATE-20261007
+- agent role: sole backend/test writer; independent reviewer read-only
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned sources: src/lib/services/remito.service.ts (updateRemitoState only); src/lib/services/seguimiento.service.ts (logistics_delivery state synchronization only)
+- owned checks: src/__tests__/unit/remito-state-concurrency.test.ts; src/__tests__/unit/logistics-delivery-seguimiento.test.ts (guard assertion/fixture only)
+- owned docs: knowledge/specs/REMITOS-CONTRACT-STABILITY-20261007/R5*; FLOW_AND_CONTRACT_AUDIT.md (R5 status only); knowledge/worklog/REMITOS_R5_STATE_2026-10-07.md; this lock
+- overlap: preceding R1/R2/R4 locks released; remito.service existing diff is R2 projections, preserved. Seguimiento source clean. Active Contact/Surgery locks own unrelated files. No second writer.
+- approval: implementa and subsequent cancellation clarification (Engram9162); all existing allowed Anulado transitions preserved
+- exclusions: UI/schema/Auth/roles/DB/browser/dependencies/emission/returns/stock/accounting/deletion/Git writes
+- validation: offline red→green races, authority, cancellation, errors/actor/response preservation; scoped TypeScript; independent review
+- release: scoped436/436 across30 files PASS; R5 TypeScript/whitespace PASS; independent57/57+typing/whitespace PASS, no scoped blockers. Separate mocked-service Seguimiento route suite9 failures documented, not fixed. No active writer or DB/browser/Git mutation.

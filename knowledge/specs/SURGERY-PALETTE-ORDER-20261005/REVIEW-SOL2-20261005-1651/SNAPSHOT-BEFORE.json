@@ -1,0 +1,55 @@
+{
+    "workspace":  "E:\\OSSUM_COR_ANTIGRAVITY\\ux-ui",
+    "head":  "21385527dcfbc6ebc5b1507096d03a2c402d8c4d",
+    "time":  "2026-10-05T16:52:17.9095572-03:00",
+    "files":  [
+                  {
+                      "path":  "src/lib/shared-constants.ts",
+                      "sha256":  "906E4CB9E8D6E1DC2D082C41E8371343C9D7C3D996DAE35430231854B00EADD3"
+                  },
+                  {
+                      "path":  "src/lib/cirugias.constants.ts",
+                      "sha256":  "7769D0852BA40FB3EA25324926EA1F111EF3D0E1C1902E9393C4640277E84D29"
+                  },
+                  {
+                      "path":  "src/lib/cirugias/cirugias-columns.tsx",
+                      "sha256":  "F061CF915E2DA58771B4A556A6070A8CE0C1F81C364947D243A77E6B16E9DDF6"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiaStatusCell.tsx",
+                      "sha256":  "EC10DF22FCFFB8C33AF8C7E445F1954D00A3F8FE30A4987E417250AE98886047"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiaRow.tsx",
+                      "sha256":  "B19D2C7D195F756641AF3BFD702B73FA232F394F708DB8A4DD2715B2F18DF7EE"
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiasGridRow.tsx",
+                      "sha256":  "A6C4601031E0DE1CC5BB39C3D2001E36C87F76B22023FD7802E0793E45D5A51A"
+                  },
+                  {
+                      "path":  "src/components/cirugias/MobileCirugiaCard.tsx",
+                      "sha256":  "A4621F9F50B9C21CE698D621AD7B87FD577886222ECCE6B045A167917CCC4391"
+                  },
+                  {
+                      "path":  "src/components/cirugias/view-customization/ColorReferenceDialog.tsx",
+                      "sha256":  "DE7AA7A0A86CEA3CFE63A95F7EDD5AC319B485AAFE6C496FD562850AADE9DEE2"
+                  },
+                  {
+                      "path":  "src/components/expediente/ExpedienteHeader.tsx",
+                      "sha256":  "EFCA958BDE2F098F787D396F311CBE2362AF898141F0BE3772920D992B966F60"
+                  },
+                  {
+                      "path":  "src/__tests__/unit/cirugias-estado-prep-separation.test.ts",
+                      "sha256":  "8372B7305832E2DF8798E45C419EA09E44463402A02B2886B7F8FACB229FBC81"
+                  },
+                  {
+                      "path":  "src/__tests__/components/SurgeryPalette.test.tsx",
+                      "sha256":  "2A62AE01C034D88416A93C7A403D01AE3C1904EB6068A948D587C84340668380"
+                  },
+                  {
+                      "path":  ".opencode/locks/SURGERY-PALETTE-ORDER-20261005.lock.md",
+                      "sha256":  "C46193A2ADB4F64C892BD55B1027303B4EB916A0F0B7B45FBE7558CC4D5A4BB9"
+                  }
+              ]
+}

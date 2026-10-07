@@ -1,0 +1,13 @@
+# R3 emission ownership
+- task: REMITOS-R3-CAJAS-EMISSION-20261007
+- agent role: sole integration writer / QA; reviewer read-only
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned source: src/lib/cajas-intent.ts; src/lib/api/cajas-assignments.ts (existing wire DTO trace fields only); src/components/remitos/OperationalRemitoWorkspace.tsx; src/components/expediente/LogisticaTabContent.tsx
+- owned tests: src/__tests__/components/RemitoCajasEmission.http.test.tsx; src/__tests__/components/LogisticaCajasEmission.http.test.tsx; src/__tests__/unit/remito-cajas-emission-intent.test.ts; src/__tests__/unit/remito-cajas-wire-trace.test.ts; src/__tests__/components/OperationalRemitoWorkspace.test.tsx (only reproduced optional argument assertion)
+- owned docs: knowledge/specs/REMITOS-CONTRACT-STABILITY-20261007/R3*; FLOW_AND_CONTRACT_AUDIT.md (R3 status only); knowledge/worklog/REMITOS_R3_CAJAS_EMISSION_2026-10-07.md; this lock
+- preflight: source files clean; HTTP tests untracked existing work preserved. SOL1 UI_REMITO_LOCK and CAJAS-END-TO-END lock released; no matching active root locks.
+- exclusions: all other source, backend/schema/Auth/permissions/stock/data, browser, commit/push/deploy
+- validation: focused failing HTTP checks before source edits; focused regression/typing; independent read-only review
+- review extension: actual service serialization uses lotNumber/serialNumber, absent from the DTO. Type-only declaration added to allowed scope to fix the same boundary, not change the API. No root lock matches; prior preparation ownership released. Reviewer identified auth-loss/reload invalidation gaps; reproduce before source correction.
+- release: final276/276 focused tests across19 files, isolated printing22/22, R3 scoped TypeScript and scoped tracked whitespace PASS. Reviewer independently reran105/105 checks and scoped tsc; all three initial review blockers resolved. No active writer remains; no browser/DB/commit/push/deploy.

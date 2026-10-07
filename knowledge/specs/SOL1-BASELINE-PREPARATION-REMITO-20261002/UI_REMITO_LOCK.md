@@ -1,0 +1,12 @@
+# UI emission ownership
+- task: SOL1-UI-CALLERS-NO-DB-20261002 / emission intent callers
+- agent role: Frontend Remito integration / test author
+- selected model: openai/gpt-6.1-sol
+- status: released
+- preflight: current Coordination lock explicitly excludes Sol scope; read-only git status confirms owned existing source/helper/test clean. Exact ownership accepted from orchestrator; no overlap with preparation writer.
+- owned source: src/components/remitos/OperationalRemitoWorkspace.tsx; src/components/expediente/LogisticaTabContent.tsx; src/lib/cajas-intent.ts (bounded emission helper only, accounting unchanged); new src/__tests__/components/RemitoCajasEmission.http.test.tsx; new src/__tests__/components/LogisticaCajasEmission.http.test.tsx; src/__tests__/components/OperationalRemitoWorkspace.test.tsx (only proven API argument-shape fixture mismatch if reproduced by orchestrator).
+- owned docs: UI_REMITO_LOCK.md, UI_REMITO_IMPLEMENTATION.md in this directory only.
+- excluded: CajasPhysicalUnitsSection/cajas-assignments client (preparation owner's writes), all other files, Antigravity Coordination/states, APIs/services/validators/schema/Auth/permissions/Movimientos.
+- commands: read/search, apply_patch on exact owned files, read-only Git inspection. No Node/npm/npx/Vitest/DB/build/browser/scripts execution. Orchestrator is sole test executor.
+- release: after source/tests ready for orchestrator checks; no persistent acceptance claim.
+- handoff: UI_REMITO_IMPLEMENTATION.md; static targeted diff/whitespace review complete. Tests/TypeScript/build/browser/DB not executed; orchestrator remains sole runner.

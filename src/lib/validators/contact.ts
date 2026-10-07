@@ -93,3 +93,45 @@ export const contactListQuerySchema = z.object({
 export type ContactCreateInput = z.infer<typeof contactCreateSchema>;
 export type ContactUpdateInput = z.infer<typeof contactUpdateSchema>;
 export type ContactListQuery = z.infer<typeof contactListQuerySchema>;
+
+export const contactResponseSchema = z.object({
+  id: z.string(),
+  code: z.string().optional().nullable(),
+  codigo: z.string().optional().nullable(),
+  firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
+  legalName: z.string().optional().nullable(),
+  tradeName: z.string().optional().nullable(),
+  isCompany: z.boolean().optional(),
+  email: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  documentType: z.string().optional().nullable(),
+  documentNumber: z.string().optional().nullable(),
+  contactType: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  roles: z.array(z.string()).optional(),
+  linkRole: z.string().optional().nullable(),
+  linkIsActive: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  groupSlugs: z.array(z.string()).optional(),
+  mainAddress: z.any().optional().nullable(),
+  isPayer: z.boolean().optional().nullable(),
+  vatCondition: z.string().optional().nullable(),
+  paymentTerms: z.string().optional().nullable(),
+  defaultPriceList: z.string().optional().nullable(),
+  usualDiscount: z.number().optional().nullable(),
+  doctorLicense: z.string().optional().nullable(),
+  specialty: z.string().optional().nullable(),
+  deliveryNotes: z.string().optional().nullable(),
+  createdAt: z.union([z.string(), z.date()]).optional(),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+}).passthrough();
+
+export const contactCodePreviewSchema = z.object({
+  lastCode: z.string().nullable(),
+  nextCode: z.string(),
+});
+
+export type ContactResponse = z.infer<typeof contactResponseSchema>;
+export type ContactCodePreview = z.infer<typeof contactCodePreviewSchema>;
+

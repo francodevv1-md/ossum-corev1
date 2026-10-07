@@ -143,9 +143,12 @@ export function TabPaneGestion({
               <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider block">
                 Preparación
               </span>
-              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                {formData.preparationState || "Sin preparar"}
-              </span>
+              <PreparationStateSelect
+                value={formData.preparationState || ""}
+                onChange={(preparationState) => onChange({ preparationState: preparationState as PreparationState })}
+                includeAllOption={false}
+                className="h-8 w-full bg-transparent text-xs font-semibold"
+              />
             </div>
           </div>
 

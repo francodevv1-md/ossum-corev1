@@ -1,0 +1,19 @@
+{
+  "method": "Reverse only identified new presentation edits in memory; compare SHA256 against previous independently captured dirty snapshot. No source write or Git restore performed.",
+  "files": [
+    {
+      "path": "src/components/expediente/ExpedienteHeader.tsx",
+      "currentSha256": "6659AC970B1593DED8BFD95C1D23267BC05476019F906CED135CB1E321045E25",
+      "previousReviewSha256": "EFCA958BDE2F098F787D396F311CBE2362AF898141F0BE3772920D992B966F60",
+      "inMemoryInversePresentationSha256": "EFCA958BDE2F098F787D396F311CBE2362AF898141F0BE3772920D992B966F60",
+      "allOtherBytesPreserved": true
+    },
+    {
+      "path": "src/components/cirugias/dialogs/ChangeStateDialog.tsx",
+      "currentSha256": "810EA6F2F8F8DDD6CB043FA252F204607090597B29C21B9753A078CEC392630E",
+      "previousReviewSha256": "B0FB1383F1C4902D4CF56DF67C25E06C967036F8223DCBDB28990E8F016F92A2",
+      "inMemoryInversePresentationSha256": "B0FB1383F1C4902D4CF56DF67C25E06C967036F8223DCBDB28990E8F016F92A2",
+      "allOtherBytesPreserved": true
+    }
+  ]
+}

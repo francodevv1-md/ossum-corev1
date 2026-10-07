@@ -1,0 +1,51 @@
+{
+    "workspace":  "E:\\OSSUM_COR_ANTIGRAVITY\\ux-ui",
+    "head":  "21385527dcfbc6ebc5b1507096d03a2c402d8c4d",
+    "time":  "2026-10-05T17:17:21.6417000-03:00",
+    "lockPath":  ".opencode/locks/SURGERY-PALETTE-ORDER-CORRECTION-20261005.lock.md",
+    "lockSha256":  "F3B26F3E7132C94F46DEF3568DF57EAEF57F3D18D4F94A2D003A4F8A51187D6B",
+    "files":  [
+                  {
+                      "path":  "src/lib/shared-constants.ts",
+                      "declaredSha256":  "F405690D467824545442A26EAADC2C449DE1383506E1AA8E5B6988ED6AFB22D6",
+                      "sha256":  "F405690D467824545442A26EAADC2C449DE1383506E1AA8E5B6988ED6AFB22D6",
+                      "matches":  true
+                  },
+                  {
+                      "path":  "src/components/cirugias/view-customization/ColorReferenceDialog.tsx",
+                      "declaredSha256":  "D32A18822A83D26676BA2B7D81EF943AA00A57931EFC1F2A5EFD7CEBEF48D437",
+                      "sha256":  "D32A18822A83D26676BA2B7D81EF943AA00A57931EFC1F2A5EFD7CEBEF48D437",
+                      "matches":  true
+                  },
+                  {
+                      "path":  "src/components/cirugias/dialogs/ChangeStateDialog.tsx",
+                      "declaredSha256":  "810EA6F2F8F8DDD6CB043FA252F204607090597B29C21B9753A078CEC392630E",
+                      "sha256":  "810EA6F2F8F8DDD6CB043FA252F204607090597B29C21B9753A078CEC392630E",
+                      "matches":  true
+                  },
+                  {
+                      "path":  "src/components/expediente/ExpedienteHeader.tsx",
+                      "declaredSha256":  "6659AC970B1593DED8BFD95C1D23267BC05476019F906CED135CB1E321045E25",
+                      "sha256":  "6659AC970B1593DED8BFD95C1D23267BC05476019F906CED135CB1E321045E25",
+                      "matches":  true
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiaRow.tsx",
+                      "declaredSha256":  "954A13F477AD1153F6DCF74D2030F9E012902BFFFC5073F829774779CCE86749",
+                      "sha256":  "954A13F477AD1153F6DCF74D2030F9E012902BFFFC5073F829774779CCE86749",
+                      "matches":  true
+                  },
+                  {
+                      "path":  "src/components/cirugias/CirugiasGridRow.tsx",
+                      "declaredSha256":  "96BE0384EFB7E40228ECBC61A5500B5046A3BF482D0FB48010A372F89765844D",
+                      "sha256":  "96BE0384EFB7E40228ECBC61A5500B5046A3BF482D0FB48010A372F89765844D",
+                      "matches":  true
+                  },
+                  {
+                      "path":  "src/__tests__/components/SurgeryPalette.test.tsx",
+                      "declaredSha256":  "257A35D58E0C7BA35EDF1325F42C027663C42753BF149A17E4FAA6601BBFBDBE",
+                      "sha256":  "257A35D58E0C7BA35EDF1325F42C027663C42753BF149A17E4FAA6601BBFBDBE",
+                      "matches":  true
+                  }
+              ]
+}

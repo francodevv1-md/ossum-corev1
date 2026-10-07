@@ -1,0 +1,17 @@
+{
+  "method": "Reverse only variant d handling in memory; raw SHA256 comparison with previous dirty snapshot. No file edits.",
+  "files": [
+    {
+      "path": "src/components/cirugias/CirugiaRow.tsx",
+      "previousSha256": "B19D2C7D195F756641AF3BFD702B73FA232F394F708DB8A4DD2715B2F18DF7EE",
+      "inMemoryInverseSolidHandlingSha256": "B19D2C7D195F756641AF3BFD702B73FA232F394F708DB8A4DD2715B2F18DF7EE",
+      "allOtherBytesPreserved": true
+    },
+    {
+      "path": "src/components/cirugias/CirugiasGridRow.tsx",
+      "previousSha256": "A6C4601031E0DE1CC5BB39C3D2001E36C87F76B22023FD7802E0793E45D5A51A",
+      "inMemoryInverseSolidHandlingSha256": "A6C4601031E0DE1CC5BB39C3D2001E36C87F76B22023FD7802E0793E45D5A51A",
+      "allOtherBytesPreserved": true
+    }
+  ]
+}

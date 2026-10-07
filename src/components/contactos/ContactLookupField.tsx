@@ -84,7 +84,7 @@ export function ContactLookupField({ label, context, legacyRequiredRole, value, 
       const result = mapApiContactListToContactos(await listContacts(requestCompanyId, { search: requestedCode, take: 20 }))
       if (requestId !== requestRef.current || companyIdRef.current !== requestCompanyId) return
       const found = result.find((contact) => contact.codigoContacto.toUpperCase() === requestedCode)
-      if (!found) { setFeedback({ type: "error", message: "Código no encontrado." }); return }
+      if (!found) { setFeedback({ type: "error", message: "Contacto no encontrado." }); return }
       const contextFeedback = validateContext(found)
       if (contextFeedback) { setFeedback(contextFeedback); return }
       setManualCode("")
@@ -119,15 +119,160 @@ export function ContactLookupField({ label, context, legacyRequiredRole, value, 
 
   const clear = () => { requestRef.current += 1; mutationRef.current += 1; setManualCode(""); setFeedback(null); onChange(null); inputRef.current?.focus() }
 
-  return <div className="space-y-1">
-    <Label htmlFor={inputId} className={cn("text-xs", error && "text-destructive")}>{label}</Label>
-    <div className="flex items-center gap-1.5">
-      <div className="relative w-28 shrink-0"><Input id={inputId} ref={inputRef} value={code} onChange={(event) => { if (selected) onChange(null); setManualCode(event.target.value); setFeedback(null) }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void lookupByCode(code) } }} onBlur={() => { if (code.trim() && !selected && !lookingUp) void lookupByCode(code) }} placeholder={placeholder} disabled={disabled} aria-invalid={Boolean(error || feedback?.type === "error")} aria-describedby={error || feedback ? `${inputId}-feedback` : undefined} className={cn("h-11 font-mono text-sm sm:h-8 sm:text-xs", (error || feedback?.type === "error") && "border-destructive", selected && "bg-muted/40")} />{lookingUp && <Loader2 className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-gray-400 motion-reduce:animate-none" />}</div>
-      <div className="flex h-11 min-w-0 flex-1 items-center border border-[var(--ossum-line)] bg-white px-2 sm:h-8">{selected ? <><span className="truncate text-sm font-medium sm:text-xs">{selected.nombre}</span>{(selected.cuit || selected.dni) && <span className="ml-2 shrink-0 text-xs text-gray-400">{selected.cuit || selected.dni}</span>}</> : <span className="text-xs text-gray-400">Sin contacto seleccionado</span>}</div>
-      <Button type="button" variant="outline" size="icon" className="size-11 shrink-0 sm:size-8" onClick={() => setModalOpen(true)} disabled={disabled || !companyId} aria-label={`Buscar ${label.toLowerCase()}`}><Search className="size-3.5" /></Button>
-      {(selected || manualCode) && !disabled && <Button type="button" variant="ghost" size="icon" className="size-11 shrink-0 sm:size-8" onClick={clear} aria-label={`Limpiar ${label.toLowerCase()}`}><X className="size-3.5" /></Button>}
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={inputId} className={cn("text-xs", error && "text-destructive")}>
+        {label}
+      </Label>
+      
+      {selected ? (
+        <div className="flex h-11 sm:h-8 w-full items-center gap-2 rounded-md border border-border/80 bg-muted/20 px-2.5 py-1 text-xs transition-colors">
+          <input
+            id={inputId}
+            ref={inputRef}
+            type="text"
+            value={code}
+            readOnly
+            tabIndex={-1}
+            aria-label={label}
+            className="sr-only"
+          />
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            {selected.codigoContacto && (
+              <span className="shrink-0 font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                {selected.codigoContacto}
+              </span>
+            )}
+            <span className="truncate text-xs font-semibold text-foreground min-w-0" title={selected.nombre}>
+              {selected.nombre}
+            </span>
+            {(selected.cuit || selected.dni) && (
+              <span className="shrink-0 text-[10px] text-muted-foreground hidden sm:inline truncate">
+                ({selected.cuit || selected.dni})
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            {!disabled && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 sm:size-6 text-muted-foreground hover:text-foreground"
+                onClick={clear}
+                aria-label={`Limpiar ${label.toLowerCase()}`}
+              >
+                <X className="size-3.5" />
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 sm:size-6 text-muted-foreground hover:text-foreground"
+              onClick={() => setModalOpen(true)}
+              disabled={disabled || !companyId}
+              aria-label={`Buscar ${label.toLowerCase()}`}
+            >
+              <Search className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="relative flex items-center w-full">
+          <Input
+            id={inputId}
+            ref={inputRef}
+            value={code}
+            onChange={(event) => {
+              if (selected) onChange(null)
+              setManualCode(event.target.value)
+              setFeedback(null)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                void lookupByCode(code)
+              }
+            }}
+            onBlur={() => {
+              if (code.trim() && !selected && !lookingUp) void lookupByCode(code)
+            }}
+            placeholder={placeholder}
+            disabled={disabled}
+            aria-invalid={Boolean(error || feedback?.type === "error")}
+            aria-describedby={error || feedback ? `${inputId}-feedback` : undefined}
+            className={cn(
+              "h-11 sm:h-8 text-xs pr-16 font-normal",
+              (error || feedback?.type === "error") && "border-destructive",
+              selected && "bg-muted/40"
+            )}
+          />
+          <span className="sr-only">Sin contacto seleccionado</span>
+          <div className="absolute right-1 flex items-center gap-0.5">
+            {lookingUp && (
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none mr-1" />
+            )}
+            {manualCode && !disabled && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 sm:size-6 text-muted-foreground hover:text-foreground"
+                onClick={clear}
+                aria-label={`Limpiar ${label.toLowerCase()}`}
+              >
+                <X className="size-3.5" />
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 sm:size-6 text-muted-foreground hover:text-foreground"
+              onClick={() => setModalOpen(true)}
+              disabled={disabled || !companyId}
+              aria-label={`Buscar ${label.toLowerCase()}`}
+            >
+              <Search className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {(feedback || error || !companyId) && (
+        <div
+          id={`${inputId}-feedback`}
+          aria-live="polite"
+          className={cn(
+            "flex flex-wrap items-center gap-1 text-xs",
+            feedback?.type === "warning" ? "text-amber-700" : "text-destructive"
+          )}
+        >
+          <span>{error || feedback?.message || "No hay una empresa activa."}</span>
+          {feedback?.contact && feedback.missingGroup && (
+            <button
+              type="button"
+              disabled={updatingGroup}
+              onClick={() => void addGroup()}
+              className="inline-flex items-center gap-1 font-medium underline"
+            >
+              <UserPlus className="size-3" />
+              {updatingGroup ? "Actualizando…" : `Agregar ${getGroupLabel(feedback.missingGroup)}`}
+            </button>
+          )}
+        </div>
+      )}
+      <ContactSearchModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        context={effectiveContext}
+        onSelect={(contact) => {
+          setManualCode("")
+          setFeedback(null)
+          onChange(contact)
+        }}
+      />
     </div>
-    {(feedback || error || !companyId) && <div id={`${inputId}-feedback`} aria-live="polite" className={cn("flex flex-wrap items-center gap-1 text-xs", feedback?.type === "warning" ? "text-amber-700" : "text-destructive")}><span>{error || feedback?.message || "No hay una empresa activa."}</span>{feedback?.contact && feedback.missingGroup && <button type="button" disabled={updatingGroup} onClick={() => void addGroup()} className="inline-flex items-center gap-1 font-medium underline"><UserPlus className="size-3" />{updatingGroup ? "Actualizando…" : `Agregar ${getGroupLabel(feedback.missingGroup)}`}</button>}</div>}
-    <ContactSearchModal open={modalOpen} onOpenChange={setModalOpen} context={effectiveContext} onSelect={(contact) => { setManualCode(""); setFeedback(null); onChange(contact) }} />
-  </div>
+  )
 }

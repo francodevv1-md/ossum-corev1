@@ -1,0 +1,24 @@
+# LOCK — COORDINATION-NOTIFICATIONS-CALENDAR-DEMO-DEV-001
+
+- Task ID: COORDINATION-NOTIFICATIONS-CALENDAR-DEMO-DEV-001
+- Agent Role: Implementation owner — UI, hooks, contracts, server-side logic
+- Status: Released
+- Handoff: `knowledge/specs/COORDINATION-NOTIFICATIONS-CALENDAR-DEMO-DEV-001/HANDOFF.md`
+- Owned files/folders:
+  - `src/components/coordinadores/CoordinadoresAdminClient.tsx`
+  - `src/components/coordinadores/CoordinatorPersonalClient.tsx`
+  - `src/hooks/useCoordinadoresFilters.ts`
+  - `src/components/layout/MobileNotificationsSheet.tsx`
+  - `src/components/layout/ShellUtilityMenus.tsx`
+  - `src/components/notifications/NotificationsInbox.tsx`
+  - `src/lib/expediente-navigation.ts`
+  - `src/app/calendario/page.tsx`
+  - `src/app/api/companies/[companyId]/personal-events/*`
+  - `src/lib/services/personal-calendar.service.ts`
+  - `src/lib/api/personal-calendar.ts`
+  - `src/lib/validators/personal-calendar.validator.ts`
+  - `knowledge/specs/COORDINATION-NOTIFICATIONS-CALENDAR-DEMO-DEV-001/*`
+- Exclusions:
+  - Sol's files in Preparation/Remitos / Stock / Cajas / Movimientos
+  - Auth, roles, permissions modification
+  - Production database / deploy

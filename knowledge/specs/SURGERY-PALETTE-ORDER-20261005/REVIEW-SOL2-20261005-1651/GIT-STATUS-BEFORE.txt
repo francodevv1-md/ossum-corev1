@@ -1,0 +1,206 @@
+ M .gitignore
+ M .opencode/locks/COMPRAS-AUTHORITY-PORT-TO-ANTIGRAVITY.lock.md
+ M .opencode/opencode.json
+ D .opencode/plugins/background-agents.ts
+ D .opencode/plugins/graphify.js
+ D .opencode/plugins/model-variants.ts
+ M .opencode/skills/vercel-react-best-practices/AGENTS.md
+ M AGENTS.md
+ M knowledge/worklog/WORKLOG.md
+ M next-env.d.ts
+ M next.config.ts
+ M package-lock.json
+ M package.json
+ M prisma/schema.prisma
+ M src/__tests__/components/ChangeStateDialog.test.tsx
+ M src/__tests__/components/LogisticsGlobalInbox.test.tsx
+ M src/__tests__/components/OperationalRemitoWorkspace.test.tsx
+ M src/__tests__/components/ViewCustomizationDialog.test.tsx
+ M src/__tests__/unit/cirugias-estado-prep-separation.test.ts
+ M src/__tests__/unit/invoice-service.test.ts
+ M src/__tests__/unit/pending-invoices-page.test.tsx
+ M src/__tests__/unit/surgery.service-coordinator-read.test.ts
+ M src/__tests__/unit/useCirugiaActions-create-backend-only.test.tsx
+ M src/app/api/companies/[companyId]/cajas/assignments/[assignmentId]/control/route.ts
+ M src/app/api/companies/[companyId]/cajas/assignments/[assignmentId]/differences/[differenceId]/resolve/route.ts
+ M src/app/api/companies/[companyId]/cajas/assignments/[assignmentId]/reservation/route.ts
+ M src/app/api/companies/[companyId]/compras/movimientos/route.ts
+ M src/app/api/companies/[companyId]/surgeries/[surgeryId]/seguimiento/documents/route.ts
+ M src/app/api/companies/[companyId]/surgeries/route.ts
+ M src/app/calendario/page.tsx
+ M src/app/cirugias/page.tsx
+ M src/app/compras/movimientos/page.tsx
+ M src/app/compras/necesidades-compra/page.tsx
+ M src/app/configuracion/page.tsx
+ M src/app/documentacion/page.tsx
+ M src/app/login/page.tsx
+ M src/app/page.tsx
+ M src/app/roles/page.tsx
+ M src/app/ventas/pendientes-facturar/page.tsx
+ M src/components/auth/LoginForm.tsx
+ M src/components/cirugias/CirugiaRow.tsx
+ M src/components/cirugias/CirugiaStatusCell.tsx
+ M src/components/cirugias/CirugiasGridRow.tsx
+ M src/components/cirugias/CirugiasToolbar.tsx
+ M src/components/cirugias/MobileCirugiaCard.tsx
+ M src/components/cirugias/MobileCirugiasToolbar.tsx
+ M src/components/cirugias/PostCreationPanel.tsx
+ M src/components/cirugias/dialogs/AddNoteDialog.tsx
+ M src/components/cirugias/dialogs/CancelDialog.tsx
+ M src/components/cirugias/dialogs/ChangeDateDialog.tsx
+ M src/components/cirugias/dialogs/ChangeStateDialog.tsx
+ M src/components/cirugias/dialogs/NewSurgeryDialog.tsx
+ M src/components/cirugias/dialogs/SuspendDialog.tsx
+ M src/components/cirugias/view-customization/ColorReferenceDialog.tsx
+ M src/components/cirugias/view-customization/constants.ts
+ M src/components/coordinadores/CoordinadoresAdminClient.tsx
+ M src/components/coordinadores/CoordinatorPersonalClient.tsx
+ M src/components/coordinadores/CoordinatorShareDialog.tsx
+ M src/components/coordinadores/controls/FiltersToolbar.tsx
+ M src/components/coordinadores/modal/CaseDetailModalHeader.tsx
+ M src/components/coordinadores/views/DayViewDesktopTable.tsx
+ M src/components/coordinadores/views/DayViewMobileCards.tsx
+ M src/components/coordinadores/views/WeekViewGroupedView.tsx
+ M src/components/expediente/ComercialTabContent.tsx
+ M src/components/expediente/ComprobantesAsociados.tsx
+ M src/components/expediente/EditFichaDrawer.tsx
+ M src/components/expediente/ExpedienteFullView.tsx
+ M src/components/expediente/ExpedienteHeader.tsx
+ M src/components/expediente/LogisticaTabContent.tsx
+ M src/components/expediente/NovedadesTabContent.tsx
+ M src/components/expediente/PresupuestoPanel.tsx
+ M src/components/layout/MobileNotificationsSheet.tsx
+ M src/components/layout/sidebar.tsx
+ M src/components/logistica/LogisticsCardsView.tsx
+ M src/components/logistica/LogisticsControlsToolbar.tsx
+ M src/components/logistica/LogisticsGlobalInbox.tsx
+ M src/components/logistica/LogisticsTableView.tsx
+ M src/components/pdf/documents/RemitoPDF.tsx
+ M src/components/remitos/OperationalRemitoWorkspace.tsx
+ M src/components/stock/CajasPhysicalUnitsSection.tsx
+ M src/hooks/useCirugiaActions.ts
+ M src/hooks/useCompras.ts
+ M src/hooks/useNotifications.ts
+ M src/hooks/usePendingInvoiceSources.ts
+ M src/lib/api/backend-surgeries.ts
+ M src/lib/api/cajas-assignments.ts
+ M src/lib/api/compras.ts
+ M src/lib/cajas-intent.ts
+ M src/lib/cirugias.constants.ts
+ M src/lib/cirugias/cirugias-columns.tsx
+ M src/lib/services/comparativa.service.ts
+ M src/lib/services/compras-forecast.service.ts
+ M src/lib/services/compras-movimientos.service.ts
+ M src/lib/services/internal-notifications.service.ts
+ M src/lib/services/invoice.service.ts
+ M src/lib/services/operational-document-upload.service.ts
+ M src/lib/services/presupuesto.service.ts
+ M src/lib/services/seguimiento.service.ts
+ M src/lib/services/surgery.service.ts
+ M src/lib/shared-constants.ts
+ M src/lib/validators/surgery.validator.ts
+ M tsconfig.json
+?? .dev.vars.example
+?? .graphifyignore
+?? .opencode/checks/
+?? .opencode/compat/
+?? .opencode/locks/AGENT-ENV-QA-READINESS-20261003.lock.md
+?? .opencode/locks/BOUNDED-DEV-AUTONOMY-20261003.lock.md
+?? .opencode/locks/COLLECTIONS-LOCAL-COMMIT-20261004.lock.md
+?? .opencode/locks/COLLECTIONS-POPULATED-QA-DEV-20261004.lock.md
+?? .opencode/locks/COLLECTIONS-PORTFOLIO-DEV-20261004.lock.md
+?? .opencode/locks/COMPRAS-OC-RECEIPT-E2E-20261003.lock.md
+?? .opencode/locks/DEV-QA-READINESS-SESSION-20261003.lock.md
+?? .opencode/locks/OC-RECEIPT-STOCK-TRACE-DEV-20261003.lock.md
+?? .opencode/locks/OC-TRACKED-RECEIPT-DEV-001.lock.md
+?? .opencode/locks/PRESUPUESTOS-LOCAL-COMMIT-ISOLATION-20261002.lock.md
+?? .opencode/locks/SHARED-SKILLS-20261005.lock.md
+?? .opencode/locks/STOCK-UI-CHECKPOINT-20261005.lock.md
+?? .opencode/locks/SURGERY-INTAKE-AUTHORIZATION-E2E-20261003.lock.md
+?? .opencode/locks/SURGERY-PALETTE-ORDER-20261005.lock.md
+?? .opencode/locks/SURGERY-PALETTE-ORDER-SOL2-REVIEW-20261005-1651.lock.md
+?? .opencode/locks/SURGERY-TYPES-20261005.lock.md
+?? .opencode/skills/andrej-karpathy-skills/
+?? .opencode/skills/ossum-process-e2e/
+?? .opencode/skills/ossum-safe-changes/
+?? .tmp/
+?? Iniciar_Antigravity_Debug.bat
+?? cloudflare-env.d.ts
+?? docs/OSSUM_COR_MOCK_10_CIRUGIAS.md
+?? docs/migration-consultar-plus/
+?? docs/ossum_cor_editable_canva.svg
+?? e2e/compras-oc-receipt.spec.ts
+?? e2e/surgery-intake-approval.spec.ts
+?? knowledge/archive/worktree-retirement/
+?? knowledge/specs/AGENDA-STOCK-ACCEPTANCE-20261005/
+?? knowledge/specs/BOUNDED-DEV-AUTONOMY-20261003/
+?? knowledge/specs/CLOUDFLARE-BUILD-PREP-DEV-20261002/
+?? knowledge/specs/COMPRAS-OC-RECEIPT-E2E-20261003/
+?? knowledge/specs/COMPRAS-STOCK-CONTRACT-CLOSURE-MAP-001/
+?? knowledge/specs/COORDINATION-NOTIFICATIONS-CALENDAR-DEMO-DEV-001/
+?? knowledge/specs/COORDINATION-NOTIFICATIONS-CALENDAR-INDEPENDENT-REVIEW-001/
+?? knowledge/specs/DEV-MIGRATIONS-CHECKPOINT-20261005/
+?? knowledge/specs/DEV-QA-READINESS-SESSION-20261003/
+?? knowledge/specs/DOCUMENTACION-GLOBAL-BACKEND-20261005/
+?? knowledge/specs/ISOLATED-BUILD-20261005/
+?? knowledge/specs/MVP-DEMO-RUNBOOK-001/
+?? knowledge/specs/OC-RECEIPT-STOCK-TRACE-DEV-20261003/
+?? knowledge/specs/SOL1-BASELINE-PREPARATION-REMITO-20261002/
+?? knowledge/specs/STOCK-CONNECTED-CHECKPOINT-20261005/
+?? knowledge/specs/SURGERY-COMPROBANTES-BACKEND-READ-DEV-001/
+?? knowledge/specs/SURGERY-COMPROBANTES-PARENT-CLEANUP-DEV-001/
+?? knowledge/specs/SURGERY-INTAKE-AUTHORIZATION-E2E-20261003/
+?? knowledge/specs/SURGERY-PALETTE-ORDER-20261005/
+?? knowledge/specs/SURGERY-TYPES-FIX-20261005/
+?? knowledge/worklog/OC_RECEIPT_STOCK_TRACE_DEV_2026-10-03.md
+?? knowledge/worklog/SESSION_HANDOFF_MVP_DEMO_2026-10-02.md
+?? open-next.config.ts
+?? playwright.compras.config.ts
+?? playwright.process.config.ts
+?? public/_headers
+?? scripts/cloudflare/
+?? scripts/legacy-minimax-audit/
+?? scripts/legacy-openai-audit/
+?? scripts/qa/dictation-diagnostic.mjs
+?? scripts/qa/mobile-expediente.mjs
+?? scripts/qa/mobile-list-redesign.mjs
+?? scripts/qa/run-compras-process.mjs
+?? scripts/qa/run-surgery-process.mjs
+?? scripts/qa/shots/
+?? src/__tests__/components/CajasPreparation.http.test.tsx
+?? src/__tests__/components/ChangeStateDialogEvidence.test.tsx
+?? src/__tests__/components/ComercialTabAutorizar.test.tsx
+?? src/__tests__/components/ComercialTabContent.test.tsx
+?? src/__tests__/components/ComprobantesAsociados.http.test.tsx
+?? src/__tests__/components/ConfiguracionPageHonest.test.tsx
+?? src/__tests__/components/DocumentacionPage.backend.test.tsx
+?? src/__tests__/components/LogisticaCajasEmission.http.test.tsx
+?? src/__tests__/components/RemitoCajasEmission.http.test.tsx
+?? src/__tests__/components/RolesPageRedirect.test.tsx
+?? src/__tests__/components/SurgeryPalette.test.tsx
+?? src/__tests__/integration/presupuesto-revision-postgres.test.ts
+?? src/__tests__/unit/authorization-producer-consumer.test.ts
+?? src/__tests__/unit/cajas-preparation-contract.test.ts
+?? src/__tests__/unit/compras-movimientos.service.test.ts
+?? src/__tests__/unit/compras-movimientos.test.ts
+?? src/__tests__/unit/compras-reposicion.test.ts
+?? src/__tests__/unit/liquidation-billing-gate.test.ts
+?? src/__tests__/unit/notifications-scope-race.test.tsx
+?? src/__tests__/unit/pdf-barcode.test.ts
+?? src/__tests__/unit/stock-movement-origin-projection.test.ts
+?? src/__tests__/unit/surgeries-intake-authorization.test.ts
+?? src/app/api/companies/[companyId]/cajas/preparation-lines/[lineId]/selection/
+?? src/app/api/companies/[companyId]/compras/forecast/accept/
+?? src/app/api/companies/[companyId]/consumos/[consumoId]/billing-override/
+?? src/app/api/companies/[companyId]/mail/
+?? src/components/brand/
+?? src/components/compras/ReplenishmentSuggestionsSection.tsx
+?? src/components/documentacion/
+?? src/components/logistica/ChangePrepStatusDialog.tsx
+?? src/components/mail/
+?? src/components/pdf/barcode/
+?? src/hooks/useSurgeryComprobantes.ts
+?? src/lib/api/billing-gate.ts
+?? src/lib/services/billing-gate.service.ts
+?? src/lib/services/resend.service.ts
+?? wrangler.jsonc

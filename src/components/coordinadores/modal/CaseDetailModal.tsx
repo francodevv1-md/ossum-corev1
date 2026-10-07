@@ -19,10 +19,11 @@ interface CaseDetailModalProps {
   isOpen: boolean
   onClose: () => void
   onSaveGestion: (surgeryId: string, updates: SurgeryGestionFormData) => Promise<void | ReschedulingSaveResult>
-  onAddNote: (surgeryId: string, note: string) => void
+  onAddNote?: (surgeryId: string, note: string) => void
   onShare?: (surgery: Surgery) => void
   history: HistoryEntry[]
   coordinators: string[]
+  readOnly?: boolean
 }
 
 export function CaseDetailModal({

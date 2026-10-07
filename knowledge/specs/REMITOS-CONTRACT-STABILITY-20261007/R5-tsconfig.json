@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "../../../next-env.d.ts", "../../../src/__tests__/setup.ts",
+    "../../../src/lib/services/remito.service.ts",
+    "../../../src/lib/services/seguimiento.service.ts",
+    "../../../src/app/api/companies/[companyId]/remitos/[remitoId]/state/route.ts",
+    "../../../src/__tests__/unit/remito-state-concurrency.test.ts",
+    "../../../src/__tests__/unit/logistics-delivery-seguimiento.test.ts",
+    "../../../src/__tests__/unit/remito-response-contract.test.ts"
+  ]
+}

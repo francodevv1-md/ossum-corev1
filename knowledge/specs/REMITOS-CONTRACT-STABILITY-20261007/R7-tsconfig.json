@@ -1,0 +1,11 @@
+{
+  "extends": "./R6-tsconfig.json",
+  "include": [
+    "../../../next-env.d.ts", "../../../src/__tests__/setup.ts",
+    "../../../src/lib/services/remito.service.ts", "../../../src/lib/services/devolucion.service.ts",
+    "../../../src/lib/validators/remito.ts", "../../../src/lib/validators/devolucion.ts",
+    "../../../src/lib/api/remitos.ts", "../../../src/hooks/useRemitos.ts",
+    "../../../src/__tests__/unit/remito-return-atomic.test.ts",
+    "../../../src/__tests__/hooks/useRemitos.test.tsx"
+  ]
+}

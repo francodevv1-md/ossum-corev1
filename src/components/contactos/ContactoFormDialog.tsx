@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { createContactApi, updateContactApi } from "@/lib/api/contacts"
+import { createContactApi, updateContactApi, cuitLookupApi, type CuitLookupResult } from "@/lib/api/contacts"
+import { validateCuitFormat, normalizeCuit } from "@/lib/utils/cuit-validation"
 import { mapApiContactToContacto, mapContactoToApiPayload } from "@/lib/api/contact-adapter"
 import { CONTACT_GROUPS, CONTACT_ROLE_LABELS, getGroupsForRole } from "@/lib/contacts.constants"
 import { cn } from "@/lib/utils"
@@ -128,6 +129,64 @@ function ContactoFormInner({
   const [nombre, setNombre] = useState(contacto?.nombre ?? initialValues?.nombre ?? "")
   const [nombreFantasia, setNombreFantasia] = useState(contacto?.nombreFantasia ?? "")
   const [cuit, setCuit] = useState(contacto?.cuit ?? "")
+  const [cuitResult, setCuitResult] = useState<CuitLookupResult | null>(null)
+  const [cuitLookupError, setCuitLookupError] = useState("")
+  const [cuitLookupLoading, setCuitLookupLoading] = useState(false)
+  const [cuitSuggestion, setCuitSuggestion] = useState<Record<string, boolean>>({})
+  const cuitLookupInFlightRef = useRef(false)
+
+  const handleCuitLookup = async () => {
+    if (cuitLookupInFlightRef.current) return
+    const clean = normalizeCuit(cuit)
+    if (!validateCuitFormat(clean)) return
+    if (!activeCompany?.id) return
+    cuitLookupInFlightRef.current = true
+    setCuitLookupLoading(true)
+    setCuitLookupError("")
+    setCuitResult(null)
+    try {
+      const result = await cuitLookupApi(activeCompany.id, clean)
+      setCuitResult(result)
+      if (result.found) {
+        setCuitSuggestion({ legalName: true, vatCondition: true, mainAddress: true })
+      }
+    } catch (err) {
+      setCuitLookupError(err instanceof Error ? err.message : "No se pudo consultar el CUIT.")
+    } finally {
+      cuitLookupInFlightRef.current = false
+      setCuitLookupLoading(false)
+    }
+  }
+
+  const applyCuitSuggestion = () => {
+    if (!cuitResult?.found) return
+    if (cuitSuggestion.legalName && cuitResult.legalName) setNombre(cuitResult.legalName)
+    if (cuitSuggestion.vatCondition && cuitResult.vatCondition) {
+      const map: Record<string, CondicionIvaCliente> = {
+        "Responsable Inscripto": "Responsable Inscripto",
+        "Monotributo": "Responsable Monotributo",
+        "Exento": "Exento",
+        "Consumidor Final": "Consumidor Final",
+      }
+      setCondicionIva(map[cuitResult.vatCondition] ?? "Consumidor Final")
+    }
+    if (cuitSuggestion.mainAddress && cuitResult.mainAddress) {
+      const addr = cuitResult.mainAddress
+      if (addr.street) setDomicilio(addr.street)
+      if (addr.city) setLocalidad(addr.city)
+      if (addr.state) setProvincia(addr.state)
+      if (addr.zipCode) setCodigoPostal(addr.zipCode)
+    }
+    setCuitResult(null)
+    setCuitSuggestion({})
+    setCuitLookupError("")
+  }
+
+  const discardCuitSuggestion = () => {
+    setCuitResult(null)
+    setCuitSuggestion({})
+    setCuitLookupError("")
+  }
   const [dni, setDni] = useState(contacto?.dni ?? initialValues?.dni ?? "")
   const [estado, setEstado] = useState<"activo" | "inactivo">(contacto?.estado ?? "activo")
   const [observaciones, setObservaciones] = useState(contacto?.observaciones ?? "")
@@ -346,8 +405,56 @@ function ContactoFormInner({
               <Input value={nombreFantasia} onChange={(event) => setNombreFantasia(event.target.value)} placeholder="Opcional..." className={controlClass} />
             </Field>
             <Field name="cuit" label="CUIT">
-              <Input value={cuit} onChange={(event) => setCuit(event.target.value)} placeholder="00-00000000-0" className={cn(controlClass, "font-mono")} />
+              <div className="flex gap-2">
+                <Input value={cuit} onChange={(event) => setCuit(event.target.value)} placeholder="00-00000000-0" className={cn(controlClass, "font-mono")} />
+                <button
+                  type="button"
+                  data-testid="contact-cuit-lookup-btn"
+                  disabled={!validateCuitFormat(normalizeCuit(cuit)) || cuitLookupLoading}
+                  onClick={() => void handleCuitLookup()}
+                  className="shrink-0 rounded-md border border-blue-300 bg-blue-50 px-3 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                >
+                  {cuitLookupLoading ? "Buscando…" : "Buscar por CUIT"}
+                </button>
+              </div>
             </Field>
+            {cuitLookupError && (
+              <div data-testid="contact-cuit-lookup-error" className="sm:col-span-2 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                {cuitLookupError}
+              </div>
+            )}
+            {cuitResult?.found && (
+              <div data-testid="contact-cuit-lookup-diff" className="sm:col-span-2 rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-800 dark:bg-blue-950">
+                <p className="text-xs font-semibold text-blue-800 dark:text-blue-200">Sugerencia desde ARCA — confirmá los campos a aplicar:</p>
+                {cuitResult.legalName && (
+                  <label data-testid="contact-cuit-lookup-row-legalName" className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" checked={cuitSuggestion.legalName ?? false} onChange={(e) => setCuitSuggestion((s) => ({ ...s, legalName: e.target.checked }))} />
+                    <span className="font-medium">Razón social:</span>
+                    <span className="text-gray-600 dark:text-gray-300">{cuitResult.legalName}</span>
+                  </label>
+                )}
+                {cuitResult.vatCondition && (
+                  <label data-testid="contact-cuit-lookup-row-vatCondition" className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" checked={cuitSuggestion.vatCondition ?? false} onChange={(e) => setCuitSuggestion((s) => ({ ...s, vatCondition: e.target.checked }))} />
+                    <span className="font-medium">Condición IVA:</span>
+                    <span className="text-gray-600 dark:text-gray-300">{cuitResult.vatCondition}</span>
+                  </label>
+                )}
+                {cuitResult.mainAddress && (
+                  <label data-testid="contact-cuit-lookup-row-mainAddress" className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" checked={cuitSuggestion.mainAddress ?? false} onChange={(e) => setCuitSuggestion((s) => ({ ...s, mainAddress: e.target.checked }))} />
+                    <span className="font-medium">Domicilio:</span>
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {[cuitResult.mainAddress.street, cuitResult.mainAddress.city, cuitResult.mainAddress.state, cuitResult.mainAddress.zipCode].filter(Boolean).join(", ")}
+                    </span>
+                  </label>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button type="button" data-testid="contact-cuit-lookup-apply" onClick={applyCuitSuggestion} className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700">Aplicar seleccionados</button>
+                  <button type="button" data-testid="contact-cuit-lookup-discard" onClick={discardCuitSuggestion} className="rounded-md border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300">Cerrar</button>
+                </div>
+              </div>
+            )}
             {tipoPersona === "fisica" && (
               <Field name="dni" label="DNI">
                 <Input value={dni} onChange={(event) => setDni(event.target.value)} placeholder="Documento..." className={cn(controlClass, "font-mono")} />

@@ -1,0 +1,8 @@
+{
+  "extends": "./R7-tsconfig.json",
+  "include": [
+    "../../../next-env.d.ts", "../../../src/__tests__/setup.ts",
+    "../../../src/lib/services/stock-ledger.service.ts",
+    "../../../src/__tests__/unit/stock-availability-remitos.test.ts"
+  ]
+}

@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { buildReschedulingPatch, type ReschedulingSaveResult } from "@/lib/surgery/rescheduling"
 import { fetchBackendSurgery, updateBackendSurgeryManagement, updateBackendSurgeryState, addBackendSurgeryNote } from "@/lib/api/backend-surgeries"
+import { updateSurgeryPreparation } from "@/lib/api/surgery-preparation-client"
 import { useActiveCoordination } from "./useActiveCoordination"
-import { canMutateSeguimientoEvents } from "@/lib/permissions/seguimiento"
+import { canCreateSeguimientoEntry } from "@/lib/permissions/seguimiento"
 import { canManageCoordination } from "@/lib/permissions/coordination"
 import { mapApiSurgeryListToSurgeries } from "@/lib/api/surgery-adapter"
 import { useAuth } from "@/components/auth/AuthProvider"
@@ -29,6 +30,15 @@ import { DefineDateModal, type DefineDateNotePayload } from "./modal/DefineDateM
 import { CoordinatorShareDialog } from "./CoordinatorShareDialog"
 import type { CoordinatorCase } from "./coordinator-queue.helpers"
 import { UserCheck, Shield } from "lucide-react"
+
+const PREP_STATUS_BY_STATE = {
+  "En preparación": "preparing",
+  "Congelado": "frozen",
+  "Congelado con faltantes": "frozen_with_missing",
+  "Enviado": "shipped",
+  "Entregado": "delivered",
+  "Retirado": "returned",
+} as const
 
 export function CoordinatorPersonalClient() {
   const { currentAccess, activeCompany } = useAuth()
@@ -139,43 +149,49 @@ export function CoordinatorPersonalClient() {
     const existing = confirmed.current[kind]?.generation === generation ? confirmed.current[kind]!.record : mySurgeries.find((s) => s.id === surgeryId || s.backendId === surgeryId)
     if (!companyId || !existing?.backendId) throw new Error("Se requiere empresa activa e identificador de backend")
     const isCurrent = () => identity.current.companyId === companyId && identity.current[kind] === generation
+    const isSameCompany = () => identity.current.companyId === companyId
     const content = note?.content ?? (kind === "gestion" ? updates.notes : undefined)
-    if (content?.trim() && !canMutateSeguimientoEvents(currentAccess?.role)) throw new Error("Sin permiso para crear notas")
+    if (content?.trim() && !canCreateSeguimientoEntry(currentAccess?.role)) throw new Error("Sin permiso para crear notas")
     const patch: Parameters<typeof updateBackendSurgeryManagement>[2] = buildReschedulingPatch(existing, updates)
     if (updates.coordinadorContactId !== undefined && updates.coordinadorContactId !== (existing.coordinadorContactId ?? "")) patch.coordinatorContactId = updates.coordinadorContactId || null
     identity.current.load += 1
     const saved = Object.keys(patch).length ? await updateBackendSurgeryManagement(companyId, existing.backendId, patch) : null
-    if (!isCurrent()) return
+    if (!isSameCompany()) return
     let record = saved ? mapApiSurgeryListToSurgeries([saved], [existing])[0] : existing
     confirmed.current[kind] = { generation, record }
-    let stateFailed = false, noteFailed = false
+    let stateFailed = false, noteFailed = false, prepFailed = false
     if (kind === "gestion" && updates.state && updates.state !== record.state) {
       try {
         const stateRecord = await updateBackendSurgeryState(companyId, existing.backendId, updates.state, "coordinadores:gestion")
-        if (!isCurrent()) return
+        if (!isSameCompany()) return
         record = mapApiSurgeryListToSurgeries([stateRecord], [record])[0]
         confirmed.current[kind] = { generation, record }
-      } catch (error) {
+      } catch {
         stateFailed = true
-        throw new Error(error instanceof Error ? `No se pudo cambiar el estado: ${error.message}` : "No se pudo cambiar el estado")
       }
     }
-    if (!isCurrent()) return
+    const prepStatus = updates.preparationState && updates.preparationState !== existing.preparationState
+      ? PREP_STATUS_BY_STATE[updates.preparationState as keyof typeof PREP_STATUS_BY_STATE]
+      : undefined
+    if (prepStatus) {
+      try { await updateSurgeryPreparation(companyId, existing.backendId, { prepStatus, source: "coordinadores:gestion" }) }
+      catch { prepFailed = true }
+    }
+    if (!isSameCompany()) return
     if (content?.trim()) {
       try { await addBackendSurgeryNote(companyId, existing.backendId, { content, noteType: note?.noteType || "Coordinación", priority: note?.priority || "Media", isUrgent: Boolean(updates.urgente), mentions: note?.mentions }) }
       catch { noteFailed = true }
     }
-    if (!isCurrent()) return
     try {
       const canonical = await fetchBackendSurgery(companyId, existing.backendId)
-      if (!isCurrent()) return
-      confirmed.current[kind] = { generation, record: mapApiSurgeryListToSurgeries([canonical], [])[0] }
+      if (isCurrent()) confirmed.current[kind] = { generation, record: mapApiSurgeryListToSurgeries([canonical], [])[0] }
     } catch {
       window.dispatchEvent(new Event("coordination-updated"))
-      return { partialError: "Cambios enviados; no se pudo confirmar la lectura. Actualiza antes de reintentar.", noteSaved: Boolean(content?.trim()) && !noteFailed }
+      const pending = [stateFailed ? "estado" : "", prepFailed ? "preparación" : "", noteFailed ? "nota sigue pendiente" : ""].filter(Boolean)
+      return { partialError: pending.length ? `Guardado parcial. Pendiente: ${pending.join(" y ")}. Los cambios confirmados se conservaron.` : "Cambios enviados; no se pudo confirmar la lectura. Actualiza antes de reintentar.", noteSaved: Boolean(content?.trim()) && !noteFailed }
     }
     window.dispatchEvent(new Event("coordination-updated"))
-    if (stateFailed || noteFailed) return { partialError: `Guardado parcial. Pendiente: ${[stateFailed ? "estado" : "", noteFailed ? "nota sigue pendiente" : ""].filter(Boolean).join(" y ")}. Los cambios confirmados se conservaron.`, noteSaved: Boolean(content?.trim()) && !noteFailed }
+    if (stateFailed || noteFailed || prepFailed) return { partialError: `Guardado parcial. Pendiente: ${[stateFailed ? "estado" : "", prepFailed ? "preparación" : "", noteFailed ? "nota sigue pendiente" : ""].filter(Boolean).join(" y ")}. Los cambios confirmados se conservaron.`, noteSaved: Boolean(content?.trim()) && !noteFailed }
   }
   const handleSaveDefineDate = (id: string, updates: Partial<Surgery>, note?: DefineDateNotePayload) => saveRescheduling("date", id, updates, note)
   const handleSaveGestion = (id: string, updates: SurgeryGestionFormData) => saveRescheduling("gestion", id, updates)
@@ -274,7 +290,6 @@ export function CoordinatorPersonalClient() {
 
         {/* Filters Toolbar (Without Coordinator selector - locked to personal queue) */}
         <FiltersToolbar
-          surgeries={mySurgeries}
           search={filters.search}
           onSearchChange={setSearch}
           coordinators={[]}

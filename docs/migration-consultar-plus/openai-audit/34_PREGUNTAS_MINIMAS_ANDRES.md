@@ -1,0 +1,7 @@
+# Minimum vendor questions — gated by what DBFs can prove
+
+**For the Contact/Article/Surgery LOCAL read-only dry run: ZERO required questions to Andrés.** All nine observed status names and three date meanings have operator confirmation. Missing patient, duplicate CLICOD/ARTCOD, inactive refs, type gaps and tenant TEST are measurable; these are validator cases, not vendor questions. Nor is native DEV matching something Andrés can answer.
+
+**Possible blocker only for eventual full Surgery WRITE:** how should an isolated `SCO` be interpreted for the act itself—surgery performed without recorded consumption, or surgery not performed? For `TRA`, is the status solely material transit, not surgery progression? First test the linked cases/notes and ask Franco for *product mapping* if evidence remains ambiguous; consult Andrés only if operational UI and DBF still cannot distinguish. Meanwhile write subset FIN/REA does not depend on those two statuses. The storage encoding for civil-day CIRFEC and legacy-loaded date is an OSSUM architecture decision for Franco, **not** a provider question.
+
+**Defer until subsequent Remito/Consumo/Invoice waves:** exact NR/RE/STKDEV/STKTIP and returned-vs-reversed link semantics, how consumption is computed/persisted, which financial states/CAE mean legal issuance. First exhaust DBF sequence/field tests; don't ask Andrés to define what is already measurable. No permission/auth, passwords or fiscal credentials requested.

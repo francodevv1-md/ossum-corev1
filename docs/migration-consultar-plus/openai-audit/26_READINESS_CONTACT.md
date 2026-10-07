@@ -1,0 +1,17 @@
+# Contact: ready for a LOCAL read-only candidate dry run — 2026-10-01
+
+**Decision:** YES, independent of Surgery and Article. NOT ready to write. Evidence `core_closure.json.contact`, `schema.prisma:278–389`, `contact.service.ts:404–495`, `validators/contact.ts`. No access to existing DEV rows was used, so native matching remains **UNKNOWN**, not zero.
+
+9,078 active DBF rows; CLICOD 2268 occurs twice (same normalized name and active flag, but equivalence is **not** proven; inspect other fields without publishing PHI). 86 inactive `CLIACT=N`; 190 surgical role occurrences refer to inactive contact records over all years. 40 codes have >1 surgery role. Digit-normalized, syntax-only DNI of 7–8 digits yields 2 collision groups / 4 CLICOD; CUIT 11 digits yields 68 groups / 147 codes. These are collision **candidates**, not verified legal IDs (CUIT check digit not validated); 752 repeated normalized-name groups are *not* evidence to merge. Blank/document placeholder values excluded; do not store DNI/CUIT/name in public report.
+
+2026 surgery-date cohort requires **1,545 distinct codes across all five contact role fields**, no missing/ambiguous code in this referenced set; June–September requires **857**. Loaded-in-2026 needs **2,933**, with 1 missing/ambiguous code. These are references, not the number of contacts to CREATE: resolution against native DEV unknown. `Contact` is global; `ContactCompanyLink` is unique `(contactId,companyId)` and `(companyId,code)`, while `roles[]` + group memberships hold concurrent roles. `code` API accepts only `C-0001`-style (`validators/contact.ts:29`); **CLICOD is not a valid Contact.id or automatically a link code**. Suggested native link codes allocated by existing policy, with CLICOD exclusively in ledger; one link per company, preserving current roles on REUSE.
+
+| Action | Deterministic proposed rule (dry-run only) |
+|---|---|
+| MATCH | First exact ledger key `source+companyId+Contact+CLICOD`. Else read-only native search in company by valid checked document type + normalized digits; compare legal/person type and name, never email/name alone as auto-equivalence. |
+| REUSE | Exactly one confirmed native candidate with compatible type/doc and existing or resolvable company link; record native ownership REUSED, propose additive roles (not actual update). |
+| CREATE | One nonambiguous legacy CLICOD, usable name or verified identity, no conflicting native code/document, company resolved. Proposed Contact+one link; no mutation in dry-run. |
+| REVIEW | Duplicate 2268, DNI/CUIT collisions, conflicting native candidates, inactive history needing access, name-only matches, uncertain role/isCompany. Preserve both raw records in staging. |
+| REJECT | Blank/invalid legacy key, missing required identifiable field, company unresolved, contradictory tenant. Non-matching optional fields are WARNING not blanket rejection. |
+
+For dry-run without DEV: `matchStatus=UNVERIFIED_DEV`, `wouldCreate/wouldReuse=null` (cannot assert a unique match). Inactive contact linked to historical Surgery must be **referentially available**, but active-link policy (`assertContactsBelongToCompany`) rejects inactive links in normal create; isolate as future writer decision, not a reason to block read-only assessment. `contactCreateSchema` requires one identifiable field, not necessarily firstName; API can create group/address as side effects. Do not use `resolveCompanyContactReference` for migration: it may auto-create from ambiguous snapshots and returns the first match.

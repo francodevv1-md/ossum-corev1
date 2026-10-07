@@ -1,0 +1,22 @@
+# Phase B bounded contract ownership
+
+- Task: SOL1-BASELINE-PREPARATION-REMITO-20261002 / bounded contract exposure.
+- Owner: Sol1 backend API/client integration (runtime owner recorded by orchestrator as xeric-lime-bedbug).
+- Model: openai/gpt-6.1-sol; mode: implementation / testing / docs.
+- Status: released.
+- Approval: Franco `dale metele`, confirmed by current task and orchestrator LOCK.md:9. Hold lifted only for the exact six source files below.
+- Owned source files:
+  - src/lib/api/cajas-assignments.ts
+  - src/app/api/companies/[companyId]/cajas/assignments/[assignmentId]/reservation/route.ts
+  - src/app/api/companies/[companyId]/cajas/assignments/[assignmentId]/control/route.ts
+  - src/app/api/companies/[companyId]/cajas/assignments/[assignmentId]/differences/[differenceId]/resolve/route.ts
+  - ADD src/app/api/companies/[companyId]/cajas/preparation-lines/[lineId]/selection/route.ts
+  - ADD src/__tests__/unit/cajas-preparation-contract.test.ts
+- Owned docs: PHASE_B_LOCK.md and IMPLEMENTATION.md in this directory only.
+- Read-only: every other file, including services/validators/UI/Stock/Cirugias/schema/Auth/permissions/Movimientos and historical or foreign locks.
+- Commands: read-only Git status/diff/hash-object; installed focused Vitest; installed tsc --noEmit --incremental false; dedicated read/search/patch within ownership.
+- Forbidden: DB/browser/build/typegen, restart, dependencies, secrets, Git mutation, protected-source edits.
+- Preflight: no owned source diff; selection route/test and these documents absent; Cajas locks released; orchestrator owns separate docs, Compras/adjustment locks do not overlap this chain. Historical pause preserved.
+- Stop: new competing ownership, unexplained owned-source hash change, protected UI needed, scope expansion. Report blocked callers rather than synthesizing command identity/freshness.
+- Release: after focused tests, existing Cajas/Remito regressions, nonincremental TypeScript and evidence recorded in IMPLEMENTATION.md.
+- Released 2026-10-02 after clean 16-suite unit regression (184 passed / 10 skipped), nonincremental tsc PASS and hash/lock recheck. Unauthorized DB regression incident is disclosed in IMPLEMENTATION.md and requires orchestrator assessment; no persistent acceptance claimed. No other lock lifecycle changed.

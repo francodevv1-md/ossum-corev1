@@ -1,0 +1,13 @@
+# Ownership lock
+- task: CONTACTS-CREATE-STABILITY-20261007
+- agent role: Backend/Frontend implementation + focused QA
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned files: src/lib/validators/contact.ts; src/lib/api/contacts.ts; src/lib/api/contact-adapter.ts; src/lib/services/contact.service.ts; src/app/api/companies/[companyId]/contacts/route.ts; src/components/contactos/ContactoFormDialog.tsx; src/components/contactos/ContactSearchModal.tsx; src/app/contactos/page.tsx; focused contact tests; knowledge/specs/CONTACTS-CREATE-STABILITY-20261007/; knowledge/worklog/CONTACTS_CREATE_STABILITY_2026-10-07.md
+- forbidden files: schema/migrations; Auth/guards/permissions; global API client; foreign dirty ContactLookupField.tsx and NewSurgeryDialog.tsx; unrelated changes
+- approval: current explicit implementation continuation; bounded DEV only; no DB mutation/commit/publication
+- commands: focused Vitest/TypeScript checks, scoped lint/build, read-only git/source inspection
+- forbidden commands: browser/Playwright; DB mutation/integration flags; reset/checkout/delete; deploy/push/commit/PR
+- validation: console contracts, company isolation, atomic audit tests, adjacent regressions, independent read-only review
+- stop: ownership overlap, scope expansion or unapproved sensitive action
+- result: 196 tests PASS; scoped TypeScript 0 diagnostics; independent review PASS after P2 fix; global TypeScript/build/runtime gates open as documented in own HANDOFF.md

@@ -1,0 +1,5 @@
+{
+    "command":  "git diff --check -- \u003cseven declared correction paths\u003e",
+    "exitCode":  0,
+    "time":  "2026-10-05T17:19:20.3235927-03:00"
+}

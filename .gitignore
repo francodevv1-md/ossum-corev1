@@ -19,6 +19,10 @@ dist/
 build/
 *.tsbuildinfo
 .runtime/
+.open-next/
+.cloudflare-dry-run/
+.wrangler/
+scripts/qa/shots/
 
 # Local runtime and browser QA artifacts
 .playwright-cli/

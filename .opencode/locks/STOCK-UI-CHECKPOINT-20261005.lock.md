@@ -1,0 +1,21 @@
+# Stock UI Checkpoint Ownership
+
+- task: STOCK-UI-CHECKPOINT-20261005
+- agent role: Frontend UI / Component verification & isolation
+- selected model: google/gemini-3.7-flash
+- status: released (frozen for GPT2 handoff)
+- owned files:
+  - src/app/stock/page.tsx
+  - src/hooks/useStock.ts
+  - src/lib/stock/stock-ui-model.ts
+  - src/components/stock/StockArticleSheet.tsx
+  - src/components/stock/StockArticleTabs.tsx
+  - src/components/stock/StockColumns.tsx
+  - src/components/stock/ArticleCodesDialog.tsx
+  - src/components/stock/CajasPhysicalUnitsSection.tsx
+  - Deleted legacy files: BoxFicha.tsx, PlantillaFicha.tsx, ResolveDifferenceDialog.tsx, StockArticleView.tsx, src/data/stock-mock.ts
+  - 11 UI test suites under src/__tests__/components/StockArticleSheet.* and src/__tests__/unit/stock-*
+  - knowledge/specs/STOCK-CONNECTED-CHECKPOINT-20261005/
+- excluded: prisma/schema.prisma, prisma/migrations, backend services, validators, API routes, API clients, Git index, staging, commits
+- related agent: GPT2 owns Agenda Personal and backend/schema/API contracts of Stock
+- handoff: Deliver frozen UI sources and test evidence to GPT2 for connected staging and review

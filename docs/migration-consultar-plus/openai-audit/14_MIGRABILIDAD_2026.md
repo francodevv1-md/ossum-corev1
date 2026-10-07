@@ -1,0 +1,3 @@
+# Migrabilidad provisional
+
+Universo cargado 2026 = 2.539; fechado para cirugía 2026 = 1.193. Ninguno equivale automáticamente a candidato alta confianza para escritura: sin verificación completa de tenant, roles/colisiones, exactitud de fecha y estado, se clasifica **0 confirmados para write, 2.539 sin clasificar individualmente**. Esto no implica 2.539 inválidos. Dry-run read-only factible para CIRUGIA/CLIENTE/ARTICULO: contar por causa de rechazo, capacidad de match y dependencias. Primer subconjunto sugerido: CIRFEC junio–septiembre 2026, FIN/REA y EMPCOD PRINC demostrado por dependencias; cuantificar su intersección antes de fijar N. No inventar cifras de READY/TRANSFORM/REVIEW.

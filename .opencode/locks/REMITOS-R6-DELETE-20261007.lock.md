@@ -1,0 +1,12 @@
+# R6 deletion ownership
+- task: REMITOS-R6-DELETE-20261007
+- agent role: sole backend/test/docs writer; reviewer read-only
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned sources: src/lib/services/remito.service.ts (DeleteRemitoInput/deleteRemito only); src/app/api/companies/[companyId]/remitos/[remitoId]/route.ts (DELETE actor only)
+- owned tests: src/__tests__/unit/remito-delete-contract.test.ts; src/__tests__/unit/remito-service.test.ts (delete cases only)
+- owned docs: knowledge/specs/REMITOS-CONTRACT-STABILITY-20261007/R6*; FRAGILITY_MAP.md; FLOW_AND_CONTRACT_AUDIT.md (R6 status); knowledge/worklog/REMITOS_R6_DELETE_2026-10-07.md; this lock
+- preflight: R1/R2/R5 locks released; remito.service dirty only prior completed units; route and incumbent service tests clean; no active owner overlap. Other active surgery lock separate files.
+- exclusions: UI/schema/Auth/roles/stock/returns/emission/accounting/DB/browser/deps/Git mutation
+- validation: failing FK/race/actor/rollback/client-to-route checks first; focused/typecheck/regression and independent review; ranked verified fragility map
+- release:461/461 across31 scoped files, R6 typing/whitespace PASS; independent90/90+typing review PASS; separate fragility-map factual/overclaim review PASS. No active writer; no DB/browser/schema/Auth/UI/Git mutation.

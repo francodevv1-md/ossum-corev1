@@ -1,0 +1,30 @@
+# Graphify Scope Filter for OSSUM COR
+# Default: ignore all root items
+/*
+/.*
+
+# Allow required roots
+!/src/
+!/prisma/
+!/knowledge/
+
+# Within knowledge, only allow core, domain, architecture, workflow
+/knowledge/*
+!/knowledge/core/
+!/knowledge/domain/
+!/knowledge/architecture/
+!/knowledge/workflow/
+
+# Excludes
+.tmp/
+Backup_DistriCorr_29092026/
+docs/
+knowledge/specs/
+knowledge/archive/
+knowledge/testing/
+knowledge/drafts/
+knowledge/historical/
+scripts/
+*.env*
+*.log
+graphify-out/

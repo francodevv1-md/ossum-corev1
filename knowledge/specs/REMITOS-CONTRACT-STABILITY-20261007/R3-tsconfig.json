@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "../../../next-env.d.ts", "../../../src/__tests__/setup.ts",
+    "../../../src/lib/cajas-intent.ts",
+    "../../../src/components/remitos/OperationalRemitoWorkspace.tsx",
+    "../../../src/components/expediente/LogisticaTabContent.tsx",
+    "../../../src/__tests__/components/RemitoCajasEmission.http.test.tsx",
+    "../../../src/__tests__/components/LogisticaCajasEmission.http.test.tsx",
+    "../../../src/__tests__/unit/remito-cajas-emission-intent.test.ts",
+    "../../../src/__tests__/unit/remito-cajas-wire-trace.test.ts"
+  ]
+}

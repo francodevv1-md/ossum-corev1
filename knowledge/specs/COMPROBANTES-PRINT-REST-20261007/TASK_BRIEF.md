@@ -1,0 +1,14 @@
+# Comprobantes — remaining browser printing
+
+- Task/owner: COMPROBANTES-PRINT-REST-20261007 / sole GPT-6.1 Sol frontend implementer. T2 bounded related change with directed read-only final review.
+- Approval: "Si habilita el resto de impresiones". Enable PR/FV/CO printing only inside Comprobantes; no automatic commit or PDF expansion.
+- Reuse: existing synchronous popup/cancellation/error path, authenticated apiFetch, presupuesto detail client, existing invoice/payment GET routes, scoped invoice pagination, documentMoney. Preserve NR template and PDF unchanged.
+- Authority: always freshly read selected backend record. Exact id/company/surgery for PR/FV. Payment exact id/company and direct surgery OR fresh matching invoice imputation. Validate fresh invoice company/surgery list before accepting indirect links. No local props or fallback.
+- Content: saved item quantity/unit price/discount/tax/total and saved document subtotals/discount/tax/total; no recalculation. Budget known snapshot parties, terms/validity/legend/notes. Invoice explicitly operational/non-fiscal, paidTotal and balance from backend. Payment total receipt and only current-surgery allocations clearly labeled, method/date/reference/notes; never equate total receipt with current-surgery allocations.
+- Lifecycle: synchronous user-gesture popup, detach opener, safe escaped text, no remote asset/script, fail closed on HTTP or mismatch, cancel pending popup on reload/scope/unmount. Existing NR behavior retained.
+- Owned files/commands: exact lock list. Read-only git/source inspection, focused test/typecheck/isolated synthetic build/browser, task-only QA scripts. No writes to foreign source or existing tests. No DB, server takeover, dependencies, fiscalization or mutations.
+- UI: preserve current design/motion. Detail guidance must no longer falsely claim all printing unavailable. Disabled PDF labels for PR/FV/CO and Modify remain.
+- Required mobile ergonomics: only affected Acciones trigger and Imprimir item gain44px minimum mobile targets; desktop density/design/motion otherwise unchanged.
+- Responsive: responsive-density skill became available and loaded after initial lookup; validate1366×768,1920×1080,390×844 and intermediate/2K viewports. No font shrinking or scale hacks; new document screen tables scroll locally on narrow screens, A4 print remains complete.
+- Focused test contract update: existing HTTP test still asserted printing unavailable for PR, which the approved feature intentionally changes. Own exactly that assertion in src/__tests__/components/ComprobantesAsociados.http.test.tsx; keep PDF/Modify disabled assertions and every other test unchanged.
+- Gates/handoff: existing27 tests plus15 PDF tests and focused print regressions, scoped TS, isolated bundle/browser, directed read-only review. Document real evidence vs synthetic/native OS limitations. Release lock; concise Done/Changed/Files/Validations/Risks/Next.

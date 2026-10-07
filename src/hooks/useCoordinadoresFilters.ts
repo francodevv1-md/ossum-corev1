@@ -112,39 +112,15 @@ export function useCoordinadoresFilters(surgeries: Surgery[]) {
   }, [])
 
   const toggleCoordinator = useCallback((coordinator: string) => {
-    setFilters((prev) => {
-      const exists = prev.selectedCoordinators.includes(coordinator)
-      return {
-        ...prev,
-        selectedCoordinators: exists
-          ? prev.selectedCoordinators.filter((c) => c !== coordinator)
-          : [...prev.selectedCoordinators, coordinator],
-      }
-    })
+    setFilters((prev) => ({ ...prev, selectedCoordinators: prev.selectedCoordinators[0] === coordinator ? [] : [coordinator] }))
   }, [])
 
   const toggleState = useCallback((state: string) => {
-    setFilters((prev) => {
-      const exists = prev.selectedStates.includes(state)
-      return {
-        ...prev,
-        selectedStates: exists
-          ? prev.selectedStates.filter((s) => s !== state)
-          : [...prev.selectedStates, state],
-      }
-    })
+    setFilters((prev) => ({ ...prev, selectedStates: prev.selectedStates[0] === state ? [] : [state] }))
   }, [])
 
   const togglePrep = useCallback((prep: string) => {
-    setFilters((prev) => {
-      const exists = prev.selectedPreps.includes(prep)
-      return {
-        ...prev,
-        selectedPreps: exists
-          ? prev.selectedPreps.filter((p) => p !== prep)
-          : [...prev.selectedPreps, prep],
-      }
-    })
+    setFilters((prev) => ({ ...prev, selectedPreps: prev.selectedPreps[0] === prep ? [] : [prep] }))
   }, [])
 
   const toggleSoloIncidencias = useCallback(() => {
@@ -253,7 +229,7 @@ export function useCoordinadoresFilters(surgeries: Surgery[]) {
       (s) => s.state === "En tránsito" || s.preparationState === "Enviado" || s.preparationState === "Entregado"
     ).length
     const sinAsignar = surgeries.filter(
-      (s) => !s.coordinadorCx || s.coordinadorCx.trim() === "" || s.coordinadorCx === "Sin asignar"
+      (s) => !s.coordinadorContactId
     ).length
     const coordinadas = surgeries.filter((s) => s.state === "Autorizada" || s.state === "Pendiente").length
 
@@ -311,7 +287,7 @@ export function useCoordinadoresFilters(surgeries: Surgery[]) {
             return false
           }
         } else if (filters.activeIncidentFilter === "sin-asignar") {
-          if (surgery.coordinadorCx && surgery.coordinadorCx !== "Sin asignar") return false
+          if (surgery.coordinadorContactId) return false
         } else if (filters.activeIncidentFilter === "coordinadas") {
           if (surgery.state !== "Autorizada" && surgery.state !== "Pendiente") return false
         }
@@ -323,14 +299,13 @@ export function useCoordinadoresFilters(surgeries: Surgery[]) {
           surgery.urgente ||
           surgery.state === "Suspendida" ||
           !surgery.date ||
-          !surgery.coordinadorCx ||
-          surgery.coordinadorCx === "Sin asignar"
+          !surgery.coordinadorContactId
         if (!isUrgent) return false
       }
 
       // 4. Coordinator filter
       if (filters.selectedCoordinators.length > 0) {
-        const coord = surgery.coordinadorCx || "Sin asignar"
+        const coord = surgery.coordinadorContactId || "__unassigned__"
         if (!filters.selectedCoordinators.includes(coord)) return false
       }
 

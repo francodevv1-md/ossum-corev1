@@ -1,0 +1,26 @@
+# Ownership lock — CONTACTS-FRAGILITY-FIXES-20261007
+- task: CONTACTS-FRAGILITY-FIXES-20261007
+- agent role: directed implementation owner (subagent of parent session)
+- selected model: MiniMax-M3 (gentle-ai default)
+- status: released
+- owned files (additive over prior approved contact stability + correlative):
+  - src/lib/services/contact.service.ts (PATCH audit-in-tx + createContact compat for coordinator legacy role)
+  - src/components/contactos/ContactLookupField.tsx (stale-search invalidation)
+  - src/components/contactos/ContactSearchModal.tsx (close pending fetch on open + selection)
+  - src/components/contactos/ContactoFormDialog.tsx (coordinator legacy role pass-through)
+  - src/hooks/useCirugiaActions.ts (institution address allow from selected contact)
+  - src/app/contactos/page.tsx (last + next correlative badge)
+  - src/lib/api/contacts.ts (reuse existing getContactCodePreviewApi client)
+  - focused tests for items 1, 3, 5, 6, 7
+  - knowledge/specs/CONTACTS-FRAGILITY-FIXES-20261007/
+  - knowledge/worklog/CONTACTS_FRAGILITY_FIXES_20261007.md
+- foreign dirty (read-only — preserve, build on): NewSurgeryDialog.tsx (selectedContacto already passed)
+- preserved and do NOT edit: AiLateralRail / Expediente / Remitos / cloudflare / schema / migrations / auth / roles
+- scope: items 1, 3, 5, 6, 7 of the fragility map (item 2 is no-op)
+- excluded: schema/migrations, Auth/roles, provider, secret, commit, push, deploy, production, real data mutation, browser/Playwright, dependency install
+- approved: parent confirmed `Implementa following the verified fragility map`, no Browser QA per prior confirmation
+- commands allowed: focused Vitest, scoped typecheck, focused ESLint, scoped git diff --check, own run-checks.mjs, prior approved run-real-db.mjs --confirmed-disposable-dev
+- commands forbidden: browser/Playwright, real DB writes without disposable gate, reset/checkout/delete, push/merge/PR/deploy
+- validation: console tests per item, sibling review (or self-review fallback if harness depth limit), HANDOFF, worklog, Engram mem_save+session_summary
+- stop and escalate if: scope expands, critical file overlap, approval boundary crossed, migration/destructive, business rule unclear
+- result: pending implementation

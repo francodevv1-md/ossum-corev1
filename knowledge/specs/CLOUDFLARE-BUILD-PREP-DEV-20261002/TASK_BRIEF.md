@@ -1,0 +1,15 @@
+# Local compilation and Cloudflare Workers preparation
+
+- Task: CLOUDFLARE-BUILD-PREP-DEV-20261002; owner orchestration/build integration; model openai/gpt-6.1-sol.
+- User requested compile and prepare Cloudflare. Approved local dependency/config/build work only, NOT deployment/upload/publication/account resources/secrets provisioning, real-data mutation, Auth/security policy, provider/schema change or commits.
+- Target worktree: E:/OSSUM_COR_ANTIGRAVITY/ux-ui. Preserve dirty foreign source and all prior QA; current baseline nonincremental TypeScript passed.
+- Adapter: OpenNext Cloudflare retains existing Next.js/webpack backend. Do not migrate to beta vinext/Vite or static Pages/export. Current adapter1.20.8 peer requires Next>=16.3.8; same-major Next16.3.8 and matching ESLint config are finite compatibility updates, no framework rewrite.
+- Allowed files: package.json/package-lock.json; next.config.ts build/dev adapter configuration only; .gitignore; new wrangler.jsonc/open-next.config.ts/.dev.vars.example/public/_headers; new local Cloudflare asset-sanitization/build artifacts; this task folder and new milestone worklog. No Auth/login/roles/secrets/store/clinical-flow source changes without a genuine approval boundary check.
+- Build resource: own running DEV5000 launcher20096/listener8128 and shared.next output must be paused exclusively for build, then restored. Recheck process ownership before stop. No other servers or agents may be stopped.
+- Existing PostgreSQL/SupabaseAuth/R2 remain. pg8.21 meets Workers direct PostgreSQL support; Hyperdrive optional, not mandatory provider migration. Never create buckets/bindings/accounts or print credentials.
+- Generated Cloudflare assets must exclude internal technical PDFs and operational source data; originals remain untouched. Worker domains/previewURLs disabled by default; do not infer public access approval.
+- Runtime readiness: document persistent mail filesystem/OAuth storage and googleapis/native packaging risks; do not rewrite Auth token stores or disable features merely to claim ready. Validate actual adapter bundle/dry-run; package preparation is not full runtime/deployment acceptance.
+- Validation: strict TypeScript, ordinary Next build, OpenNext local bundle, Wrangler local dry-run/config validation where possible, focused checks and independent review. No Cajas/global DB/integration tests, migrations, secret reads into prompts or unrelated QA repetition.
+- Hard stops: active conflicting owner, necessary Auth/security/production/real-data/provider/major framework change, same proven blocker after two minimal Diagnose cycles.
+- Handoff: Done / Changed / Files / Validations / Risks / Next with truthful compile/package/runtime distinctions.
+- Necessary compiler correction: tsconfig.json excludes only generated standalone/Worker bundles and generated Worker runtime declarations from the application compiler; strict application source checks remain enabled. Wrangler separately validates Worker configuration/bindings.

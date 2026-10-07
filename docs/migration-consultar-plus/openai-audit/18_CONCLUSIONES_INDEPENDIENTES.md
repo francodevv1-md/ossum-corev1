@@ -1,0 +1,5 @@
+# Conclusiones independientes — CONGELADAS
+
+Congeladas antes de abrir auditorías previas. Evidencia: `profile.py`, `metrics.py`, JSON derivados fuera del backup y `prisma/schema.prisma`/`surgery.service.ts`. Confirmado por datos: 510 DBF, 7.512 cirugías no borradas, 2.539 cargadas 2026, 1.193 con CIRFEC 2026, 38 cargadas antes y fechadas 2026, 1.086 FIN/REA entre las fechadas; no confundir estado actual con ejecución fechada. Alto grado de confianza: enlaces CIRUGIA→CLIENTE, STOCK→CIRUGIA, STOCK1→STOCK/ARTICULO, CIRUGIA→CUENTAS por códigos, con huérfanos detallados en 04. Hechos funcionales provistos por Franco: semántica de estados/fechas y devolución operativa ante CAN/SUS/SCO con material.
+
+**NO RESUELTO**: representación exacta de remito/consumo/retorno/reversión, fiscalidad/CAE, imputaciones, colisiones de contacto/artículo, validación multiempresa compuesta, estado DEV y side effects exhaustivos. Recomendación de ingeniería (no hecho legacy): staging + ledger identidad por tenant/fuente/tipo/ID y writer histórico aislado. No escribir OSSUM hasta cerrar riesgos y obtener aprobación explícita.

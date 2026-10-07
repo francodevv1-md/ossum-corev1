@@ -1557,7 +1557,7 @@ export function NewSurgeryDialog({
                   </div>
                 </div>
 
-                {/* Facturar a — Segmented Control estilizado */}
+                {/* Facturar a — Selectores compactos tipo check */}
                 <div className="pt-2.5 border-t border-border/50 space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
@@ -1565,7 +1565,7 @@ export function NewSurgeryDialog({
                       <span className="text-xs font-semibold text-foreground">Facturar a:</span>
                       <HelpTip text="Indica a qué contacto o entidad se imputará el presupuesto y la factura emitida de este caso." side="top" />
                     </div>
-                    <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-border/50 gap-0.5 flex-wrap">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
                       {[
                         { id: "cliente", label: "Cliente / Obra Social" },
                         { id: "paciente", label: "Al Paciente" },
@@ -1577,6 +1577,8 @@ export function NewSurgeryDialog({
                           <button
                             key={opt.id}
                             type="button"
+                            role="checkbox"
+                            aria-checked={active}
                             onClick={() => {
                               setFacturarA(opt.id as any)
                               if (opt.id === "paciente") {
@@ -1590,14 +1592,21 @@ export function NewSurgeryDialog({
                                 if (step0Errors.client) setStep0Errors({ ...step0Errors, client: undefined })
                               }
                             }}
-                            className={cn(
-                              "h-7 text-xs font-medium rounded-md px-2.5 transition-all duration-150 ease-out active:scale-[0.98]",
-                              active
-                                ? "bg-emerald-600 text-white shadow-2xs font-semibold"
-                                : "text-slate-600 dark:text-slate-300 hover:text-foreground hover:bg-slate-200/60 dark:hover:bg-slate-700/60"
-                            )}
+                            className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-medium text-foreground select-none group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
                           >
-                            {opt.label}
+                            <div
+                              className={cn(
+                                "size-3.5 rounded-sm border flex items-center justify-center transition-colors shrink-0",
+                                active
+                                  ? "bg-emerald-600 border-emerald-600 text-white"
+                                  : "border-input bg-background group-hover:border-foreground/40"
+                              )}
+                            >
+                              {active && <Check className="size-2.5 stroke-[3]" />}
+                            </div>
+                            <span className={cn("text-[11px] sm:text-xs", active ? "font-semibold text-foreground" : "text-muted-foreground")}>
+                              {opt.label}
+                            </span>
                           </button>
                         )
                       })}

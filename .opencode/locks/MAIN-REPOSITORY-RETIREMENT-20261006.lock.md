@@ -1,0 +1,26 @@
+# Main repository retirement — 2026-10-06
+
+- task: MAIN-REPOSITORY-RETIREMENT-20261006
+- owner / role / actual model: current session / repository relocation coordinator / openai/gpt-6.1-sol
+- session: ses_eec8a5e72ffe7f42uvnvrTkh3w
+- mode: finite local filesystem and Git metadata relocation; sequential execution
+- status: reserved
+- approval: Franco requested retirement of E:/OSSUM_COR_PROJECT, approved preserving local work and relocating shared Git, then explicitly confirmed other sessions/agents are paused.
+- primary workspace: E:/OSSUM_COR_ANTIGRAVITY/ux-ui; branch ux/antigravity-redesign
+- source: E:/OSSUM_COR_PROJECT, including every tracked, untracked and ignored file
+- destination: E:/OSSUM_COR_ARCHIVE/OSSUM_COR_PROJECT-20261006 (must not exist)
+- shared resource: entire source .git directory; all four linked worktrees' .git pointer files and administrative connections
+- owned artifacts: this lock and its source/archive mirror; knowledge/archive/worktree-retirement/MAIN-REPOSITORY-20261006/; dedicated temporary relocation script and sanitized snapshot/report
+- permitted: read-only Git/status/hash checks with optional locks disabled; same-volume directory rename; git worktree repair from the relocated main tree; connectivity verification; independent read-only review
+- forbidden: deleting file contents, overwrite/merge/reset/stash/commit/push/PR; changes to app/AGENTS/config/foreign locks; credentials inspection/output; DB/provider/network/build/server/browser operations; modification of other OpenCode sessions
+- preservation: native same-volume rename retains every source entry, including ignored local files; validate directory identity, nonignored file hashes, statuses, indices, HEADs and shared refs
+- validation: original path absent, archive present, all five worktrees usable and pointing to archived shared .git; no local content/index/HEAD/ref changes; Git connectivity check
+- rollback: if repair or preservation fails, move the same directory back and run worktree repair there; never discard foreign work
+- stop: target exists, resumed writers/Git locks, missing worktree, unexpected file/ref/index changes, move/repair failure or expanded scope
+- foreign ownership: all existing task locks remain unchanged; this reservation covers only coordinated shared metadata relocation while sessions are paused
+- disk space: archive preserves the entire old directory; no disk-space recovery claimed
+- preflight result: PASS — five worktrees; 9,690 nonignored file entries fingerprinted; Git connectivity; independent read-only safety review PASS. Other sessions remain paused per Franco.
+- execution: BLOCKED — native directory rename returned WinError 32; no directory move or Git repair occurred. Source and linked connections remain unchanged.
+- demonstrated blocker: opencode-cli.exe PID 46568 has a handle to the exact source directory (native file-identity comparison). This is the active host process, not an inferred foreign writer.
+- reservation: no active writer; awaiting manual host closure and replay. Do not forcibly close its handle or terminate this session from within itself. Other agents remain paused for replay.
+- replay after closing the blocking OpenCode instance: open a new PowerShell from Start, cd E:/OSSUM_COR_ANTIGRAVITY/ux-ui, then run python C:/Users/franc/AppData/Local/Temp/opencode/ossum-main-retirement-20261006/retire_main.py --apply. Run --verify immediately afterward. A successor should release only this task's two own locks after validating result.json and both worktree connections.

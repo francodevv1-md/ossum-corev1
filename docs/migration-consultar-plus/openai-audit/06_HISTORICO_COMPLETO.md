@@ -1,0 +1,3 @@
+# Temporalidad del backup
+
+CIRFECCAR: 2024 1.730, 2025 3.243, 2026 2.539: primera carga registrada 2024. CIRFEC: 2004 1, 2005 1, 2023 1, 2024 419, 2025 1.489, 2026 1.193, 2029 1; CIRFECLOG también presenta 2005/2006 y 2029. Una fecha quirúrgica antigua no prueba existencia del módulo entonces: puede ser backfill/error. STOCK.STKFEC 2024 1.341, 2025 5.122, 2026 3.288, 2023 1. STOCK1.MOVFEC 2024 5.444, 2025 157.508, 2026 148.358, 2023 2. No se acreditan cambios de schema físico por año con un único snapshot actual. Estrategia versionada solo si pruebas de cohortes demuestran cambio semántico. Histórico anterior a 2024 quirúrgico no inferible de este CIRUGIA sin otras fuentes.

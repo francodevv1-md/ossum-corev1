@@ -84,25 +84,19 @@ describe("coordination view route", () => {
     }));
   });
 
-  it("devuelve 403 estable y privado para coordinator global antes del servicio", async () => {
+  it("permite coordinator global según la política central", async () => {
     getApiAuthContext.mockResolvedValueOnce({ ...ctx, role: "coordinator" });
     const response = await call("surface=global");
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "coordination_global_access_denied" },
-    });
-    expect(response.headers.get("Cache-Control")).toBe("private, no-store, max-age=0");
-    expect(response.headers.get("Pragma")).toBe("no-cache");
-    expect(response.headers.get("Vary")).toBe("Authorization");
-    expect(getCoordinationView).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(getCoordinationView).toHaveBeenCalledWith(expect.objectContaining({ request: expect.objectContaining({ surface: "global" }) }));
   });
 
-  it("permite operator global", async () => {
+  it("deniega operator global según la política central", async () => {
     const operatorCtx = { ...ctx, role: "operator" };
     getApiAuthContext.mockResolvedValueOnce(operatorCtx);
     const response = await call("surface=global");
-    expect(response.status).toBe(200);
-    expect(getCoordinationView).toHaveBeenCalledWith(expect.objectContaining({ ctx: operatorCtx }));
+    expect(response.status).toBe(403);
+    expect(getCoordinationView).not.toHaveBeenCalled();
   });
 
   it("el cliente usa GET autenticado, no envía subject en producción y no persiste estado", async () => {

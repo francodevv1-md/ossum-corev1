@@ -1,0 +1,26 @@
+# Surgery / budget stabilization ownership
+
+- task: SURGERY-BUDGET-CONTRACT-STABILITY-20261007
+- role: orchestrator / directed implementation
+- selected model: openai/gpt-6-astra; child implementation host-selected
+- status: released
+- implementation owner (checkpoint 2): directed intake implementer
+- owned files: src/hooks/useCirugiaActions.ts (intake only); src/components/cirugias/dialogs/NewSurgeryDialog.tsx (intake outcome/retry only); src/__tests__/unit/useCirugiaActions-create-backend-only.test.tsx; src/__tests__/components/NewSurgeryDialog.test.tsx
+- orchestrator owned files: this lock; knowledge/specs/SURGERY-BUDGET-CONTRACT-STABILITY-20261007/*; knowledge/worklog/SURGERY_BUDGET_CONTRACT_STABILITY_20261007.md
+- allowed commands: read/search/diff; focused offline Vitest; orchestrator-only TypeScript and isolated build
+- forbidden: schema/migrations, Auth/permissions, DB writes, dependencies, browser, Git mutations, unrelated files, overwriting foreign changes
+- validation: failing focused reproduction before fix; focused regression after fix; final independent review and orchestrator joint checks
+- stop: active ownership overlap, scope expansion, ambiguous business rule
+- prior overlap check: intake, rescheduling and contacts locks released; existing dev-server/.next reservation respected through isolated build
+- baseline-test owner: orchestrator; src/__tests__/integration/surgeries-create-api.test.ts (repair outdated auth fixture only, then rerun)
+- read-contract reproduction owner: orchestrator; src/__tests__/unit/presupuesto-form-roundtrip.test.ts (offline baseline only until checkpoint 2 passes)
+- checkpoint 2: completed after independent corrective review; 49 focused tests pass. Prior implementer released files.
+- checkpoint 3A owner: directed intake-field implementer; owns src/hooks/useCirugiaActions.ts (create payload only), src/app/api/companies/[companyId]/surgeries/route.ts (create fields only), src/lib/validators/surgery.validator.ts (create fields only), src/lib/services/surgery.service.ts (create/read fields only), src/lib/api/surgery-adapter.ts (authoritative intake projection), src/__tests__/integration/surgeries-create-api.test.ts, src/__tests__/unit/useCirugiaActions-create-backend-only.test.tsx, new src/__tests__/unit/surgery-intake-roundtrip.test.ts. Parent and other children do not write these files concurrently.
+- checkpoint 2 leaf follow-up owner: orchestrator; NewSurgeryDialog.tsx footer navigation and NewSurgeryDialog.test.tsx pending-confirmation assertion only. Prevent changing reviewed form while its write is pending; disjoint from checkpoint 3A files.
+- checkpoint 3A implementation released; independent reviewer read-only. Parent owns src/__tests__/unit/surgery.service-coordinator-read.test.ts to align assertions with preserved coordinator eligibility in expanded assignment read and existing visible-number detail lookup.
+- parent owns useCirugiaActions.ts and its create-backend-only test for the initial Surgery POST ambiguous-outcome guard only; no field-contract changes during reviewer inspection.
+- parent initial-POST fix released (51 related tests pass). Checkpoint 3A corrective owner: directed intake-field implementer; only surgery-adapter.ts, NewSurgeryDialog.tsx (institution selection), NewSurgeryDialog.test.tsx and surgery-intake-roundtrip.test.ts. Correct omitted-vs-null assignment response and stale automatic institution geography; preserve parent footer and hook changes.
+- checkpoint 3A corrective ownership released; 129 focused tests passed.
+- final: all implementation ownership released; both independent re-reviews PASS; 239 joint tests PASS; scoped TypeScript PASS; isolated build exit 0 in 83.507s, 66/66 static pages. Repository-wide TypeScript remains blocked by recorded baseline errors. No Browser QA or real DB integration performed.
+- checkpoint 3B implementation released; independent review read-only. Parent owns src/__tests__/unit/presupuesto-connected-journey-e2e.test.ts for missing company-reference delegates in its synthetic repository.
+- checkpoint 3B owner: directed budget implementer (host-selected model); implementation; exclusive files: src/lib/api/presupuestos.ts, src/lib/services/presupuesto.service.ts, src/lib/validators/presupuesto.ts, src/lib/presupuestos.constants.ts, src/__tests__/unit/presupuesto-form-roundtrip.test.ts, src/__tests__/unit/presupuesto-service.test.ts, src/__tests__/unit/presupuesto-mvp-closure.test.ts, src/__tests__/unit/presupuesto-concurrency.test.ts, src/__tests__/unit/presupuesto-api-routes.test.ts, src/__tests__/unit/iva-presupuesto.test.ts. Read-only callers; no intake/schema/Auth/shared VAT edits. Validate reproduced failures and related offline tests before release; parent performs final type/build checks and independent review.

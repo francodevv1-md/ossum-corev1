@@ -1,0 +1,15 @@
+# R5 — Remito state authority and concurrent writes
+
+- Task/owner: REMITOS-R5-STATE-20261007; backend implementation/QA; sole writer GPT-6.1 Sol (`openai/gpt-6.1-sol`); independent reviewer read-only. T3 safeguards apply.
+- Approval: Franco said `implementa` for R5, then clarified `debe ser viable anular un remito`. Preserve all incumbent allowed cancellation transitions. No physical-dispatch prerequisite and no automatic stock reversal.
+- Outcome: state writes cannot overwrite the state/version they did not observe; generic transitions cannot invent returned quantities. Preserve hydrated response, actual actor, timestamps and existing numbering/terminal-state guards.
+- Allowed sources: `src/lib/services/remito.service.ts` (`updateRemitoState` only, preserve R2); `src/lib/services/seguimiento.service.ts` (`createSeguimientoEntry` logistics_delivery synchronization block only).
+- Allowed checks/docs: new `src/__tests__/unit/remito-state-concurrency.test.ts`; `src/__tests__/unit/logistics-delivery-seguimiento.test.ts` (existing assertion/fixture for guarded where only); R5 scoped config/validation/handoff; audit R5 status only; R5 worklog/lock.
+- Forbidden: schema/migrations/DB/server/browser/Auth/roles/guards, UI, dependencies, emission/return/stock/accounting/deletion transactions, other sources, commit/push/deploy. No changes to theoretical transition catalog or new cancellation policy.
+- Authority: canonical return service derives Remito state from confirmed quantities; generic state route is not a return confirmation. Cajas issuance already records DISPATCH_OUT/accounting; cancellation remains documentary and does not erase evidence or settle those effects. Compensation policy remains separate, not an R5 blocker after user clarification.
+- Trace: generic state route/client/hook and separate Seguimiento delivery producer; emission already Serializable/retries; canonical return concurrency remains R7. No broad state engine or second domain flow.
+- Reproduce: deterministic read barriers for competing delivery/cancellation, duplicate requests, stale version, deleted document, Seguimiento delivery after cancellation; generic return-state bypass; cancellation green across incumbent source states including linked Cajas evidence.
+- Minimal hypothesis: existing write predicates only ID; use installed Prisma `update` with unique ID plus company/observed state/updatedAt (surgery in Seguimiento), map only that write's P2025 to409. Reuse existing response/audit/transaction patterns; keep full read select. No schema or retry machinery.
+- Commands: read-only Git/search, offline focused Vitest, scoped TypeScript noEmit, whitespace. No DB connection or build/typegen overlapping reserved .next.
+- Gates: failing runnable checks before changes, focused/regression tests, scoped TypeScript, independent review, released ownership, Caveman handoff.
+- Stop: source ownership overlap, need for stock/domain/schema/security policy changes beyond clarified scope, actual data access.

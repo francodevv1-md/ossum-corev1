@@ -1,0 +1,25 @@
+# Lock — MAIL-SIMULATION-HONESTY-010-20261005
+
+- task: `MAIL-SIMULATION-HONESTY-010` (roadmap 010) — bounded honest-communication fix for the Resend mail path when `devMode === true` (no real dispatch) and when the provider only accepted the dispatch.
+- agent role: GPT-6.1 Sol, bounded test diagnosis and validation; ownership transferred explicitly by Franco on 2026-10-06. Preserve all existing implementation and unrelated changes.
+- selected model: `openrouter/openai/gpt-6.1-sol`
+- status: `released`
+- current outcome (2026-10-06): bounded response handling/test diagnosis complete; 16/16 mocked checks PASS and independent source review PASS. Global TypeScript FAIL only in unrelated files; browser/build/DB/live-send NOT RUN. Full operational acceptance remains partial; see current HANDOFF and VALIDATION_20261006.md. No other locks released.
+- current workspace / HEAD: `E:\OSSUM_COR_ANTIGRAVITY\ux-ui` / `685ef3229da012ed988388d512d91f3e3c4bad2e`.
+- current approval: Franco confirmed transfer to diagnose hung tests and finish validation, excluding Auth, credentials and real sends. Supersedes the previous test-diagnosis stop for this bounded continuation only.
+- current commands/resources: serial focused Vitest runs (mocked network/DB), read-only TypeScript check without incremental outputs, source inspection; no server, browser, build, DB, env reads/edits, real network send, dependency install or Git publication. Independent read-only review before release.
+- owned files (write allowlist):
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\src\lib\services\resend.service.ts` (read-only review; no change expected)
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\src\app\api\companies\[companyId]\mail\send\route.ts` (audit-entry honesty: simulación etiquetada en `createSeguimientoEntry`)
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\src\components\mail\SendEmailModal.tsx` (toast strings: honest wording per mode)
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\src\components\coordinadores\CoordinatorShareDialog.tsx` (toast strings + tracking event label: honest wording per mode)
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\src\__tests__\unit\mail-send-honesty.test.ts` (route-layer honesty: sin DB / sin red / sin env real; servicio mockeado solo aquí)
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\src\__tests__\unit\resend.service.test.ts` (service real con `vi.stubEnv` + `vi.spyOn(globalThis, "fetch")`; sin red, sin DB, sin env real)
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\src\__tests__\components\SendEmailModal.test.tsx` (UI real: devMode true/false → `toast.success` per modo; `fetch` mockeado, sonner espiado, `useAuth` stub; sin red, sin DB, sin env)
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\src\__tests__\components\CoordinatorShareDialog.test.tsx` (UI real: email-formal path, devMode true/false → `toast.success` per modo; `fetch` mockeado, sonner espiado, hooks stub; sin red, sin DB, sin env)
+  - `E:\OSSUM_COR_ANTIGRAVITY\ux-ui\knowledge\specs\MAIL-SIMULATION-HONESTY-010-20261005\*` (TASK_BRIEF, HANDOFF, opcional EVIDENCE)
+  - This lockfile.
+- read allowlist: files named in the owned-files list; existing Vitest config and tests in `src/__tests__/unit/`; AGENTS.md; related brief docs.
+- excluded: `NewSurgeryDialog` and any file under Cirugía / Surgery / palette / fiscal / WhatsApp / documents; other agents' locks (`SURGERY-PALETTE-*`, `SHARED-SKILLS-*`, `COMPRAS-AUTHORITY-*`, `SAFE-TEST-INVENTORY-*`, `GPT2-*`, `STOCK-*`, `COLLECTIONS-*`, `OC-*`, `SURGERY-INTAKE-*`, `SURGERY-RESCHEDULE-*`, `SURGERY-TYPES-*`, `AGENT-ENV-*`, `BOUNDED-DEV-*`, `DEV-QA-*`, `PRESUPUESTOS-*`); env / secrets; Auth; Prisma schema / migrations / seed; CI / runner / config.
+- validation: no execution of any external side effect, no test run in this session that requires the network or a real key. Static + new test (no network) only.
+- stop conditions: any evidence that a real Resend key or real `fetch("https://api.resend.com/...")` call is reachable from the changed code without a guard → escalate.

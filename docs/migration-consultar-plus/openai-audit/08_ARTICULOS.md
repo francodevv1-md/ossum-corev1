@@ -1,0 +1,3 @@
+# Artículos
+
+ARTICULO 5.902 filas no borradas; STOCK1 referencia 5.760 códigos distintos, con 289 filas sin match exacto (incluye posibilidad de datos TEST o códigos ausentes). Para cirugías con CIRFEC 2026, 3.443 códigos ARTCOD distintos en detalles vinculados a encabezados; junio–septiembre 3.249 (no son necesariamente artículos válidos/activos). ARTATRI 24.190 declaradas; falta descifrar atributos/BOM/precios. OSSUM Article usa clave única `(organizationId,sku)` y no `(companyId,sku)`; stockEligibility está por empresa. Hacer MATCH por SKU con origen, validar colisiones, CREATE o REVIEW; no sustituir ARTCOD por Article.id. Perfil semántico/duplicados y stock actual **pendientes**.

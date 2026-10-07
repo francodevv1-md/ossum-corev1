@@ -1,0 +1,6 @@
+﻿
+ M src/__tests__/components/ExpedienteFullView.test.tsx
+ M src/__tests__/components/ExpedienteHeader.test.tsx
+?? src/__tests__/components/SendEmailModal.test.tsx
+
+

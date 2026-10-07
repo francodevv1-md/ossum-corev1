@@ -1,0 +1,3 @@
+# Remito, consumo y devolución
+
+Hecho funcional confirmado por operación: cancelada/suspendida/sin consumo con material asociado genera devolución de stock. Los datos muestran RE|E vinculado a cirugía 1.843 casos y RE|B|E|S 1.546 casos, pero el indicador STKDEV no basta para discriminar retorno, reversión y devolución. NR|S vinculado 3.479 no se traduce automáticamente a Remito. El par salida/entrada no fue probado por artículo/serie/cantidad y secuencia temporal. CIRESTADO REA/FIN es ancla de consumo funcional, NO prueba que consumo = suma enviada − devuelta. No crear Remito/Consumo/Devolucion OSSUM desde estos códigos todavía; es el mayor bloqueo de migración del circuito.
