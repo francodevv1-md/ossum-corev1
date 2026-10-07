@@ -22,7 +22,7 @@ export const CX_STATE_COLORS: Record<string, string> = {
   // Presentation-only key for an undated case; not a SurgeryState.
   "Sin fecha": "bg-white text-slate-900 border border-slate-300 dark:border-slate-700",
   "Pendiente": "bg-yellow-400 text-slate-900",
-  "Autorizada": "bg-yellow-400 text-slate-900",
+  "Autorizada": "bg-emerald-500 text-slate-900",
   "En tránsito": "bg-sky-300 text-slate-900",
   "Realizada": "bg-emerald-700 text-white",
   "Finalizada": "bg-blue-800 text-white",

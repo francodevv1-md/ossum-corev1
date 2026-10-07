@@ -4,6 +4,7 @@ import { render, screen, cleanup, within } from "@testing-library/react"
 import { ALL_STATES, CX_STATE_VISUALS, getCxStateVisual } from "@/lib/cirugias.constants"
 import { CX_STATE_COLORS, getCxStateColorKey } from "@/lib/shared-constants"
 import { CirugiaStatusCell } from "@/components/cirugias/CirugiaStatusCell"
+import { MobileCirugiaCard } from "@/components/cirugias/MobileCirugiaCard"
 import { ColorReferenceDialog } from "@/components/cirugias/view-customization/ColorReferenceDialog"
 import { ChangeStateDialog } from "@/components/cirugias/dialogs/ChangeStateDialog"
 import { ExpedienteHeader } from "@/components/expediente/ExpedienteHeader"
@@ -72,10 +73,10 @@ describe("requested surgery presentation palette", () => {
     expect(Object.keys(CX_STATE_COLORS).sort()).toEqual([...ALL_STATES, "Sin fecha"].sort())
   })
 
-  it("maps the eight color groups consistently across badges and table visuals", () => {
+  it("maps the state colors consistently across badges and table visuals", () => {
     const cases = [
       ["Sin autorizar", "bg-white", "#FFFFFF"], ["Sin fecha", "bg-white", "#FFFFFF"],
-      ["Pendiente", "bg-yellow-400", "#FACC15"], ["Autorizada", "bg-yellow-400", "#FACC15"],
+      ["Pendiente", "bg-yellow-400", "#FACC15"], ["Autorizada", "bg-emerald-500", "#10B981"],
       ["En tránsito", "bg-sky-300", "#7DD3FC"], ["Realizada", "bg-emerald-700", "#047857"],
       ["Finalizada", "bg-blue-800", "#1E40AF"], ["Suspendida", "bg-violet-600", "#7C3AED"],
       ["Cancelada", "bg-rose-900", "#881337"], ["Sin consumo", "bg-gray-600", "#4B5563"],
@@ -95,7 +96,7 @@ describe("requested surgery presentation palette", () => {
       expect(getCxStateVisual("Pendiente", date).strong).toBe("#FFFFFF")
     }
 
-    expect(getCxStateVisual("Autorizada", "2026-10-05").strong).toBe("#FACC15")
+    expect(getCxStateVisual("Autorizada", "2026-10-05").strong).toBe("#10B981")
     expect(getCxStateVisual("Pendiente", "2026-10-05").strong).toBe("#FACC15")
 
     // Static fallback for undefined date (options in dropdowns/selectors)
@@ -153,6 +154,8 @@ describe("requested surgery presentation palette", () => {
       expect(labels[i - 1].compareDocumentPosition(labels[i]) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
     }
     expect(screen.getByText("Sin autorizar")).toHaveClass("bg-white", "text-slate-900")
+    expect(screen.getByText("Autorizada")).toHaveClass("bg-emerald-500")
+    expect(screen.getByText(/Estado Autorizada: verde con fecha quirúrgica; blanco sin fecha/)).toBeInTheDocument()
     expect(screen.queryByText("Sin autorizar / Sin fecha")).not.toBeInTheDocument()
     expect(screen.queryByText("Sin fecha", { exact: true })).not.toBeInTheDocument()
     expect(screen.getByText(/pendiente de autorización\. También puede no tener fecha quirúrgica; la ausencia de fecha no es un estado de cirugía/)).toBeInTheDocument()
@@ -177,7 +180,7 @@ describe("requested surgery presentation palette", () => {
     expect(newBadge).toHaveClass("bg-white", "text-slate-900", "border-slate-300")
     unmount1()
 
-    // 2. Dated case: current Autorizada dated and new Pendiente dated -> both yellow
+    // 2. Dated case: authorized is green; pending remains yellow.
     const { unmount: unmount2 } = render(
       <ChangeStateDialog
         open={true}
@@ -190,7 +193,7 @@ describe("requested surgery presentation palette", () => {
     )
     const currentBadgeDated = within(screen.getByText("Estado Actual").parentElement!).getByText("Autorizada")
     const newBadgeDated = within(screen.getByText("Nuevo Estado").parentElement!).getByText("Pendiente")
-    expect(currentBadgeDated).toHaveClass("bg-yellow-400", "text-slate-900")
+    expect(currentBadgeDated).toHaveClass("bg-emerald-500", "text-slate-900")
     expect(newBadgeDated).toHaveClass("bg-yellow-400", "text-slate-900")
     unmount2()
   })
@@ -202,11 +205,37 @@ describe("requested surgery presentation palette", () => {
     expect(whiteButton).toHaveClass("bg-white", "text-slate-900", "border-slate-300")
     unmount1()
 
-    // Dated Autorizada -> yellow without border-slate-300
+    // Dated Autorizada -> green without border-slate-300
     const { unmount: unmount2 } = renderTestHeader(makeTestSurgery({ state: "Autorizada", date: "2026-10-06" }))
-    const yellowButton = screen.getByRole("button", { name: /Estado CX/i })
-    expect(yellowButton).toHaveClass("bg-yellow-400", "text-slate-900")
-    expect(yellowButton).not.toHaveClass("border-slate-300")
+    const greenButton = screen.getByRole("button", { name: /Estado CX/i })
+    expect(greenButton).toHaveClass("bg-emerald-500", "text-slate-900")
+    expect(greenButton).not.toHaveClass("border-slate-300")
     unmount2()
+  })
+
+  it("distinguishes authorized and pending in every status variant and mobile without changing labels", () => {
+    for (const state of ["Autorizada", "Pendiente"] as const) {
+      const bg = state === "Autorizada" ? "bg-emerald-500" : "bg-yellow-400"
+      const hex = state === "Autorizada" ? "#10B981" : "#FACC15"
+      for (const variant of ["a", "b", "c", "d"] as const) {
+        const { container, unmount } = render(
+          <CirugiaStatusCell state={state} date="2026-10-07" variant={variant} asCell={false} />
+        )
+        expect(screen.getByText(state)).toBeInTheDocument()
+        expect(container.querySelector(`.${bg}`)).not.toBeNull()
+        if (variant === "b" || variant === "c") {
+          expect(container.querySelector(`.${bg}`)).toHaveStyle({ backgroundColor: hex })
+        }
+        unmount()
+      }
+      const { unmount } = render(
+        <MobileCirugiaCard surgery={makeTestSurgery({ state, date: "2026-10-07" })}
+          onOpen={vi.fn()} onOpenActions={vi.fn()} />
+      )
+      expect(screen.getByText(state)).toHaveClass(bg, "text-slate-900")
+      unmount()
+    }
+    const colors = ALL_STATES.map((state) => CX_STATE_VISUALS[state].strong)
+    expect(new Set(colors).size).toBe(ALL_STATES.length)
   })
 })

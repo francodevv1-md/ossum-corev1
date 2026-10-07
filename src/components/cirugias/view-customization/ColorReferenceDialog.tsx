@@ -32,7 +32,7 @@ const HUMAN_STATES: StateCard[] = [
   },
   {
     state: "Autorizada",
-    meaning: "Estado Autorizada: amarillo con fecha quirúrgica; blanco sin fecha. El estado registrado no cambia.",
+    meaning: "Estado Autorizada: verde con fecha quirúrgica; blanco sin fecha. El estado registrado no cambia.",
     category: "Programación",
   },
   {

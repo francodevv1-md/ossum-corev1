@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../../src/__tests__/setup.ts",
+    "../../../src/lib/cirugias.constants.ts",
+    "../../../src/lib/shared-constants.ts",
+    "../../../src/components/cirugias/view-customization/ColorReferenceDialog.tsx",
+    "../../../src/__tests__/components/SurgeryPalette.test.tsx"
+  ]
+}

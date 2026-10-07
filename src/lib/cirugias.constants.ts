@@ -104,7 +104,7 @@ export const CX_STATE_CELL_COLORS: Record<string, string> = {
   "Sin autorizar": "bg-slate-100 text-slate-700",      // gris (was amber)
   "Sin fecha": "bg-slate-100 text-slate-600",           // gris más claro (was slate-700)
   "Pendiente": "bg-yellow-100 text-yellow-800",
-  "Autorizada": "bg-sky-100 text-sky-800",
+  "Autorizada": "bg-emerald-100 text-emerald-800",
   "En tránsito": "bg-blue-100 text-blue-800",
   "Realizada": "bg-emerald-100 text-emerald-800",
   "Finalizada": "bg-indigo-100 text-indigo-800",       // azul oscuro — distinct from En tránsito
@@ -156,15 +156,15 @@ export const CX_STATE_VISUALS: Record<string, CxStateVisual> = {
     textClass: "text-yellow-800 dark:text-yellow-300 font-semibold",
   },
   "Autorizada": {
-    strong: "#FACC15",
-    rowTint: "#FFFDF6",
-    hoverTint: "#FEF7E2",
-    darkRowTint: "#18140c",
-    darkHoverTint: "#261e10",
-    strongClass: "bg-yellow-400 text-slate-900 font-bold",
-    barClass: "bg-yellow-400",
-    dotClass: "bg-yellow-400",
-    textClass: "text-yellow-800 dark:text-yellow-300 font-semibold",
+    strong: "#10B981",
+    rowTint: "#F2FBF6",
+    hoverTint: "#E5F7ED",
+    darkRowTint: "#051c17",
+    darkHoverTint: "#092b23",
+    strongClass: "bg-emerald-500 text-slate-900 font-bold",
+    barClass: "bg-emerald-500",
+    dotClass: "bg-emerald-500",
+    textClass: "text-emerald-700 dark:text-emerald-300 font-semibold",
   },
   "En tránsito": {
     strong: "#7DD3FC",
