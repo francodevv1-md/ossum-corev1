@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
+import { isTechnicalId } from "@/lib/api/ids";
 import {
   Dialog,
   DialogContent,
@@ -74,7 +75,7 @@ export function SendEmailModal({
   const { activeCompany, currentUser } = useAuth()
   const companyId = activeCompany?.id
   const companyName = activeCompany?.name || ""
-  const surgeryId = surgery.backendId || surgery.id
+  const surgeryId = isTechnicalId(surgery.backendId) ? surgery.backendId : ""
   const contextKey = `${companyId || ""}:${surgeryId}:${currentUser?.id || ""}:${mode}`
 
   // Recipients

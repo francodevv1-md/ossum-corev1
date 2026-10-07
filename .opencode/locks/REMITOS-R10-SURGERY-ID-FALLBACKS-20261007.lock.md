@@ -1,0 +1,18 @@
+# R10 surgery technical-id fallbacks ownership
+- task: REMITOS-R10-SURGERY-ID-FALLBACKS-20261007
+- agent role: sole frontend/test/docs writer; directed reviewer read-only
+- selected model: openai/gpt-6.1-sol
+- status: released
+- owned sources:
+  - src/components/coordinadores/modal/TabPaneAdjuntos.tsx (line 111 backendId, line 157 URL)
+  - src/components/cirugias/SurgeryContextTray.tsx (line 107 surgeryBackendId)
+  - src/hooks/useCirugiaActions.ts (line 491 backendId)
+  - src/components/mail/SendEmailModal.tsx (line 77 surgeryId)
+  - src/components/facturacion/InvoiceHeaderCompact.tsx (line 123 surgeryId)
+  - src/components/expediente/NovedadesTabContent.tsx (line 1402 mailContextKey)
+- owned tests: extend src/__tests__/unit/surgery-id-guard.test.ts
+- owned docs: knowledge/specs/REMITOS-CONTRACT-STABILITY-20261007/R10*; audit/map R10 status; knowledge/worklog/REMITOS_R10_SURGERY_ID_2026-10-07.md; this lock
+- preflight: R1–R9 released; the 7 sites are flagged in FRAGILITY_MAP row 6 and were explicitly excluded from R9; SURGERY-IN-TRANSIT-CANONICAL owns Surgery adapters/catalog only, not this chain
+- exclusions: schema/Auth/roles/Cajas/returns/stock writers/dependencies/DB/browser/Git push or PR; Surgery validator/adapter code
+- validation: failing red checks first, focused + R1–R9 regression, scoped typing, independent review, release on evidence
+- release: 480/480 across 33 suites + R10 typed/whitespace PASS; ownership released.

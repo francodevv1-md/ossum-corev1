@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import { isTechnicalId } from "@/lib/api/ids";
 import {
   Building2,
   Calendar,
@@ -120,7 +121,7 @@ export function InvoiceHeaderCompact({ formData, updateField, surgeries }: Invoi
   }
 
   const handleSelectSurgery = (surgery: Surgery) => {
-    const surgeryId = surgery.backendId || surgery.id
+    const surgeryId = isTechnicalId(surgery.backendId) ? surgery.backendId : ""
     updateField("surgeryId", surgeryId)
 
     // Autocomplete client if blank

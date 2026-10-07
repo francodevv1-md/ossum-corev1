@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/hover-card"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { useSeguimientoFeed } from "@/hooks/useSeguimientoFeed"
+import { isTechnicalId } from "@/lib/api/ids"
 import { ImageViewerDialog } from "@/components/shared/image/ImageViewerDialog"
 
 interface SurgeryContextTrayProps {
@@ -104,7 +105,7 @@ export function SurgeryContextTray({
         const doc = entry.documentMeta
         const isImg = Boolean(doc.mimeType?.startsWith("image") || /\.(png|jpe?g|webp|gif|svg)$/i.test(doc.fileName))
         const companyId = activeCompany?.id || process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID || "codevdistricorr1000000000"
-        const surgeryBackendId = surgery.backendId || surgery.id
+        const surgeryBackendId = isTechnicalId(surgery.backendId) ? surgery.backendId : ""
         const docUrl = `/api/companies/${encodeURIComponent(companyId)}/surgeries/${encodeURIComponent(surgeryBackendId)}/seguimiento/documents/${encodeURIComponent(entry.id)}`
         return {
           type: isImg ? ("image" as const) : ("pdf" as const),

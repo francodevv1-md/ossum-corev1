@@ -56,6 +56,7 @@ import {
   X,
 } from "lucide-react"
 import { useSeguimientoFeed } from "@/hooks/useSeguimientoFeed"
+import { isTechnicalId } from "@/lib/api/ids"
 import type { SeguimientoEventEditInput, SeguimientoPhotoEvidenceFileInput } from "@/hooks/useSeguimientoFeed"
 import type { SeguimientoEntryView, SeguimientoNoteType, SeguimientoNotePriority } from "@/lib/api/seguimiento-adapter"
 import type { MentionComposerValue } from "@/lib/mentions/types"
@@ -1399,7 +1400,7 @@ export function NovedadesTabContent({ surgery, initialFilter = "todo", initialFo
   const [authEmailInitialNotes, setAuthEmailInitialNotes] = useState("")
   const [authEmailEvidence, setAuthEmailEvidence] = useState<SeguimientoEntryView | undefined>()
   const [authEmailEntries, setAuthEmailEntries] = useState<SeguimientoEntryView[]>([])
-  const mailContextKey = `${companyId || ""}:${surgery.backendId || surgery.id}`
+  const mailContextKey = `${companyId || ""}:${isTechnicalId(surgery.backendId) ? surgery.backendId : ""}`
   const mailContextRef = useRef(mailContextKey)
   mailContextRef.current = mailContextKey
 

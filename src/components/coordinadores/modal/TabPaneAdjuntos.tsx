@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import type { Surgery } from "@/types"
 import { useSeguimientoFeed } from "@/hooks/useSeguimientoFeed"
+import { isTechnicalId } from "@/lib/api/ids"
 import { useOrtoTrackStore } from "@/lib/store"
 import { formatDate } from "@/lib/formatters"
 import {
@@ -108,8 +109,8 @@ interface TabPaneAdjuntosProps {
 
 export function TabPaneAdjuntos({ surgery }: TabPaneAdjuntosProps) {
   const { activeCompany } = useAuth()
-  const backendId = surgery.backendId || surgery.id
-  const { entries: feedEntries, addPhotoEvidence } = useSeguimientoFeed(backendId)
+  const backendId = isTechnicalId(surgery.backendId) ? surgery.backendId : null
+  const { entries: feedEntries, addPhotoEvidence } = useSeguimientoFeed(backendId ?? "")
   const store = useOrtoTrackStore()
 
   const [uploading, setUploading] = useState(false)
@@ -154,7 +155,7 @@ export function TabPaneAdjuntos({ surgery }: TabPaneAdjuntosProps) {
         const dateObj = new Date(entry.createdAt)
         const isImg = Boolean(doc.mimeType?.startsWith("image") || /\.(png|jpe?g|webp|gif|svg)$/i.test(doc.fileName))
         const docUrl = isImg
-          ? `/api/companies/${encodeURIComponent(activeCompany?.id || "active")}/surgeries/${encodeURIComponent(surgery.backendId || surgery.id)}/seguimiento/documents/${encodeURIComponent(entry.id)}`
+          ? `/api/companies/${encodeURIComponent(activeCompany?.id || "active")}/surgeries/${encodeURIComponent(isTechnicalId(surgery.backendId) ? surgery.backendId : "")}/seguimiento/documents/${encodeURIComponent(entry.id)}`
           : undefined
 
         list.push({

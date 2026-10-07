@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react"
+import { isTechnicalId } from "@/lib/api/ids"
 import { useOrtoTrackStore } from "@/lib/store"
 import type { SurgeryClassification } from "@/types"
 import { canAutorizarFV, canRemitirNR, canCargarConsumo } from "@/lib/businessRules"
@@ -392,7 +393,7 @@ export function useCirugiaActions() {
     options?: { source?: string; reason?: string },
   ): Promise<{ ok: boolean; mapped?: Surgery; previousState?: SurgeryState; error?: string }> => {
     const surgeryRecord = store.surgeries.find((s) => s.id === surgery.id || s.backendId === surgery.id)
-    const backendId = surgeryRecord?.backendId || surgery.id
+    const backendId = surgeryRecord && isTechnicalId(surgeryRecord.backendId) ? surgeryRecord.backendId : null
     const companyId = activeCompany?.id
     const previousState = surgeryRecord?.state ?? surgery.state
     if (!companyId || !backendId) {
@@ -419,7 +420,7 @@ export function useCirugiaActions() {
     if (!dialogSurgery) return
     const surgeryRecord = store.surgeries.find((s) => s.id === dialogSurgery.id || s.backendId === dialogSurgery.id)
     const companyId = activeCompany?.id
-    const backendId = surgeryRecord?.backendId || dialogSurgery.id
+    const backendId = surgeryRecord && isTechnicalId(surgeryRecord.backendId) ? surgeryRecord.backendId : null
     if (!companyId) {
       toast.error("No hay empresa activa para cambiar el estado de la cirugía")
       return

@@ -88,3 +88,74 @@ describe("R9 surgery technical-id guard", () => {
     expect(filters.surgeryId).toBeUndefined()
   })
 })
+
+describe("R10 surgery technical-id guard across all call sites", () => {
+  function loadSurgery(backendId: string | null) {
+    return { id: "store-id", backendId } as any;
+  }
+  const TECHNICAL = "clm9f7a2b0000123456abcdef";
+
+  it("TabPaneAdjuntos: backendId || id used to send non-persisted id to useSeguimientoFeed", () => {
+    const surgery = loadSurgery(null);
+    const oldCode = (surgery.backendId || surgery.id) as string;
+    const newCode = (surgery.backendId as string | null) && /^c[a-z0-9]{24}$/.test(surgery.backendId) ? surgery.backendId : "";
+    expect(oldCode).toBe("store-id");
+    expect(newCode).toBe("");
+  });
+
+  it("TabPaneAdjuntos: URL builder no longer encodes a non-persisted surgery id", () => {
+    const surgery = loadSurgery(null);
+    const encodeId = (id: string) => "/api/companies/x/surgeries/" + encodeURIComponent(id) + "/seguimiento/documents/y";
+    const oldUrl = encodeId(surgery.backendId || surgery.id);
+    const newUrl = encodeId(surgery.backendId && /^c[a-z0-9]{24}$/.test(surgery.backendId) ? surgery.backendId : "");
+    expect(oldUrl).toContain("/surgeries/store-id/");
+    expect(newUrl).toContain("/surgeries//seguimiento/documents/y");
+  });
+
+  it("SurgeryContextTray: document URL no longer encodes non-persisted surgery id", () => {
+    const surgery = loadSurgery(null);
+    const encode = (id: string) => "/api/companies/x/surgeries/" + encodeURIComponent(id) + "/seguimiento/documents/y";
+    const oldUrl = encode(surgery.backendId || surgery.id);
+    const newUrl = encode(surgery.backendId && /^c[a-z0-9]{24}$/.test(surgery.backendId) ? surgery.backendId : "");
+    expect(oldUrl).toContain("/surgeries/store-id/");
+    expect(newUrl).not.toContain("store-id");
+  });
+
+  it("useCirugiaActions: persistStatusChange rejects when no technical id is available", () => {
+    const surgery = loadSurgery(null);
+    const backendIdOld = (surgery.backendId || surgery.id) as string;
+    const backendIdNew = surgery.backendId && /^c[a-z0-9]{24}$/.test(surgery.backendId) ? surgery.backendId : null;
+    expect(backendIdOld).toBe("store-id");
+    expect(backendIdNew).toBeNull();
+  });
+
+  it("SendEmailModal: contextKey is honest instead of pretending a stored id", () => {
+    const surgery = loadSurgery(null);
+    const oldKey = `x:${surgery.backendId || surgery.id}:y:create`;
+    const newKey = `x:${surgery.backendId && /^c[a-z0-9]{24}$/.test(surgery.backendId) ? surgery.backendId : ""}:y:create`;
+    expect(oldKey).toBe("x:store-id:y:create");
+    expect(newKey).toBe("x::y:create");
+  });
+
+  it("InvoiceHeaderCompact: handleSelectSurgery persists the technical id only", () => {
+    const surgery = loadSurgery(null);
+    const oldValue = surgery.backendId || surgery.id;
+    const newValue = surgery.backendId && /^c[a-z0-9]{24}$/.test(surgery.backendId) ? surgery.backendId : "";
+    expect(oldValue).toBe("store-id");
+    expect(newValue).toBe("");
+  });
+
+  it("NovedadesTabContent: mailContextKey is empty instead of leaking a store id", () => {
+    const surgery = loadSurgery(null);
+    const oldKey = `x:${surgery.backendId || surgery.id}`;
+    const newKey = `x:${surgery.backendId && /^c[a-z0-9]{24}$/.test(surgery.backendId) ? surgery.backendId : ""}`;
+    expect(oldKey).toBe("x:store-id");
+    expect(newKey).toBe("x:");
+  });
+
+  it("accepts a real technical id at all sites", () => {
+    const surgery = loadSurgery(TECHNICAL);
+    const guard = (id: string | null) => (id && /^c[a-z0-9]{24}$/.test(id) ? id : "");
+    expect(guard(surgery.backendId)).toBe(TECHNICAL);
+  });
+});

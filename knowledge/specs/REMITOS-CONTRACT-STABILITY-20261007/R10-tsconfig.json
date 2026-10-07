@@ -1,0 +1,15 @@
+{
+  "extends": "./R9-tsconfig.json",
+  "include": [
+    "../../../next-env.d.ts",
+    "../../../src/__tests__/setup.ts",
+    "../../../src/lib/api/ids.ts",
+    "../../../src/components/coordinadores/modal/TabPaneAdjuntos.tsx",
+    "../../../src/components/cirugias/SurgeryContextTray.tsx",
+    "../../../src/hooks/useCirugiaActions.ts",
+    "../../../src/components/mail/SendEmailModal.tsx",
+    "../../../src/components/facturacion/InvoiceHeaderCompact.tsx",
+    "../../../src/components/expediente/NovedadesTabContent.tsx",
+    "../../../src/__tests__/unit/surgery-id-guard.test.ts"
+  ]
+}
