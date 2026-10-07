@@ -11,4 +11,4 @@
 ## Risks
 - PDF/print/edit, PE/NC/ND unavailable; no live DB acceptance. Company-wide payment scan has a documented scaling ceiling. Full app TypeScript remains blocked by unrelated files; full Next build not certified.
 ## Next
-- Commit only task allowlist; no push. Live authenticated DEV acceptance and actual PDF/module-edit integration can be separate bounded tasks.
+- Local delivery commit `93514ab`, with a bounded dark-contrast follow-up after screenshot inspection; no push. Live authenticated DEV acceptance and actual PDF/module-edit integration can be separate bounded tasks.

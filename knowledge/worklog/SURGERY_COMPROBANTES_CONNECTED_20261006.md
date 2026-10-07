@@ -11,4 +11,4 @@
 ## Risks
 - Application-wide TypeScript errors outside task remain. No full Next build/live DB/production acceptance. PDF/print/edit intentionally unavailable. Foreign working-tree changes preserved.
 ## Next
-- Local allowlisted commit; separate task for actual document-specific PDF/edit integration and live DEV acceptance.
+- Local allowlisted delivery commit `93514ab` plus dark-contrast follow-up; no push. Separate task for actual document-specific PDF/edit integration and live DEV acceptance.

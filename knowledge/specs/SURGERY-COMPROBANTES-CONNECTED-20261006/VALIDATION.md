@@ -41,6 +41,7 @@ node knowledge/specs/SURGERY-COMPROBANTES-CONNECTED-20261006/qa/browser.mjs
 - Application-source-only TypeScript completed and reported unrelated errors in existing intake/authorization/Cajas/Compras/billing-gate source/tests, including foreign modified NewSurgeryDialog and untracked leftovers. These were not changed. No global TypeScript or full Next build pass claimed.
 - Test-only Diagnose: a reload fixture reused one consumed `Response` for four clients; fixed fixture by cloning. Large 1002-row mock pagination tests get an explicit 20-second local ceiling; no global timeout/config changes.
 - Vite-only Diagnose: Next-style PostCSS config did not load in isolated harness; harness now supplies the installed Tailwind plugin instance. Product config untouched.
+- Visual Diagnose: final screenshot inspection found the parent heading retained a light-only slate text class. Added explicit dark title/icon/border and register foreground; browser replay now waits for theme transitions and asserts heading color before screenshot.
 - No production data, DB commands, issuance, payment registration, fiscalization, push/PR/deploy.
 
 ## Connection contract for future agents

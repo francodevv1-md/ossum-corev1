@@ -57,7 +57,7 @@ function ComprobantesRegister({ data }: { data: ReturnType<typeof useSurgeryComp
     : "Cargando comprobantes vinculados…"
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-slate-900 dark:text-slate-100">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><p className="text-sm font-medium text-slate-900 dark:text-slate-100">El recorrido documental de esta cirugía</p>
           <p className="mt-1 text-xs text-muted-foreground">Consultá cada comprobante, desde el presupuesto hasta el cobro.</p></div>
