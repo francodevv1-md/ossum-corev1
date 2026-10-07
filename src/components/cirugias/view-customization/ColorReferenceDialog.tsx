@@ -9,7 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { CX_STATE_VISUALS, DEFAULT_CX_STATE_VISUAL } from "@/lib/cirugias.constants"
+import { ALL_STATES, getCxStateVisual } from "@/lib/cirugias.constants"
+import { cn } from "@/lib/utils"
 import { Palette, Layers, AlertCircle, PackageCheck } from "lucide-react"
 
 interface ColorReferenceDialogProps {
@@ -26,22 +27,17 @@ interface StateCard {
 const HUMAN_STATES: StateCard[] = [
   {
     state: "Pendiente",
-    meaning: "Cirugía confirmada en agenda que está a la espera de preparación de materiales o confirmación final.",
+    meaning: "Estado Pendiente: amarillo con fecha quirúrgica; blanco sin fecha. El estado registrado no cambia.",
     category: "Programación",
   },
   {
     state: "Autorizada",
-    meaning: "Cuenta con autorización médica u orden de servicio confirmada. Lista para emitir remito y despachar.",
+    meaning: "Estado Autorizada: amarillo con fecha quirúrgica; blanco sin fecha. El estado registrado no cambia.",
     category: "Programación",
   },
   {
     state: "Sin autorizar",
-    meaning: "Pendiente de aprobación de cobertura o auditoría médica. Requiere gestión antes de despachar.",
-    category: "Programación",
-  },
-  {
-    state: "Sin fecha",
-    meaning: "Expediente ingresado para cotización o reserva, pero aún sin fecha quirúrgica fijada.",
+    meaning: "Expediente ingresado para cotización o reserva, pendiente de autorización. También puede no tener fecha quirúrgica; la ausencia de fecha no es un estado de cirugía.",
     category: "Programación",
   },
   {
@@ -51,12 +47,12 @@ const HUMAN_STATES: StateCard[] = [
   },
   {
     state: "Realizada",
-    meaning: "La cirugía ya se operó. Queda pendiente recibir el protocolo quirúrgico y registrar los consumos.",
+    meaning: "Estado Realizada. El color no confirma por sí solo la existencia de consumo registrado.",
     category: "Logística y Quirófano",
   },
   {
     state: "Finalizada",
-    meaning: "Circuito completado: consumo registrado, devolución de remito controlada y cirugía facturada.",
+    meaning: "Estado Finalizada. El color no acredita por sí solo una factura emitida.",
     category: "Cierre y Facturación",
   },
   {
@@ -113,6 +109,9 @@ export function ColorReferenceDialog({ open, onOpenChange }: ColorReferenceDialo
                 <p className="text-[12px] text-slate-600 dark:text-slate-400">
                   Cada cirugía tiene su <strong>etiqueta de estado en color pleno</strong> y la <strong>fila entera con un fondo suave</strong> del mismo tono. Así podés reconocer el momento de cada operación de un vistazo sin cansar la vista.
                 </p>
+                <p className="text-[12px] text-slate-600 dark:text-slate-400">
+                  Los colores reflejan el estado operativo de la cirugía y no verifican por sí solos comprobantes de consumo ni facturas emitidas.
+                </p>
               </div>
             </div>
           </div>
@@ -124,8 +123,9 @@ export function ColorReferenceDialog({ open, onOpenChange }: ColorReferenceDialo
             </h4>
 
             <div className="grid gap-2">
-              {HUMAN_STATES.map(({ state, meaning, category }) => {
-                const visual = CX_STATE_VISUALS[state] || DEFAULT_CX_STATE_VISUAL
+              {ALL_STATES.map((state) => {
+                const { meaning, category } = HUMAN_STATES.find((item) => item.state === state)!
+                const visual = getCxStateVisual(state)
 
                 return (
                   <div
@@ -133,18 +133,18 @@ export function ColorReferenceDialog({ open, onOpenChange }: ColorReferenceDialo
                     style={{
                       "--item-bg": visual.rowTint,
                       "--item-dark-bg": visual.darkRowTint || "#0d131d",
-                      borderColor: visual.strong + "35",
+                      borderColor: visual.strong === "#FFFFFF" ? "#94A3B8" : visual.strong + "35",
                     } as React.CSSProperties}
                     className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-4 rounded-xl border bg-[var(--item-bg)] dark:bg-[var(--item-dark-bg)] px-3.5 py-2.5 text-left transition-all"
                   >
                     {/* State Badge */}
                     <div className="flex items-center gap-2.5 min-w-[150px] shrink-0">
                       <span
-                        className="h-4 w-1 rounded-sm shrink-0"
+                        className={cn("h-4 w-1 rounded-sm shrink-0", visual.barClass)}
                         style={{ backgroundColor: visual.strong }}
                       />
                       <span
-                        className="px-2.5 py-1 rounded-md text-xs font-bold text-white shadow-xs select-none"
+                        className={cn("px-2.5 py-1 rounded-md text-xs shadow-xs select-none", visual.strongClass)}
                         style={{ backgroundColor: visual.strong }}
                       >
                         {state}

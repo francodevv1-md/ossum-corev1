@@ -31,7 +31,7 @@ export function computeOpTabCounts(
 
   for (const s of surgeries) {
     if (s.urgente) urgent++
-    if (!s.date || s.date === "Sin fecha" || s.state === "Sin fecha") noCxDate++
+    if (!s.date || s.date === "Sin fecha") noCxDate++
     if (
       s.preparationState === "Sin preparar" ||
       s.preparationState === "En preparación" ||
@@ -42,7 +42,6 @@ export function computeOpTabCounts(
     if (
       s.urgente ||
       !s.date ||
-      s.state === "Sin fecha" ||
       s.state === "Sin autorizar" ||
       s.state === "Suspendida"
     ) {
@@ -158,4 +157,3 @@ export function CirugiasOpTabs({ selectedPreset, counts, onSelectTab }: Cirugias
     </div>
   )
 }
-

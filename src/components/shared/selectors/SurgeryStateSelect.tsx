@@ -34,13 +34,6 @@ export const SURGERY_STATE_CONFIGS: Record<string, SurgeryStateOptionConfig> = {
     badgeClass: "bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700",
     description: "Pendiente de aprobación médica/administrativa",
   },
-  "Sin fecha": {
-    value: "Sin fecha",
-    label: "Sin fecha",
-    dotClass: "bg-slate-400",
-    badgeClass: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
-    description: "Fecha quirúrgica aún no definida",
-  },
   "Pendiente": {
     value: "Pendiente",
     label: "Pendiente",
@@ -155,7 +148,7 @@ export function SurgeryStateSelect({
         "Cancelada",
       ]
     }
-    return keys.map((k) => {
+    return keys.filter((k) => k !== "Sin fecha").map((k) => {
       const config = SURGERY_STATE_CONFIGS[k] || {
         value: k,
         label: k || allOptionLabel,

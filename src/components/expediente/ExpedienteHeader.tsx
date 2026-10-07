@@ -28,7 +28,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { canAutorizarFV, canRemitirNR, canCargarConsumo } from "@/lib/businessRules"
-import { CX_STATE_VISUALS, DEFAULT_CX_STATE_VISUAL, PREP_STATE_CELL_COLORS } from "@/lib/cirugias.constants"
+import { getCxStateVisual, PREP_STATE_CELL_COLORS } from "@/lib/cirugias.constants"
 import type { CxOperationsDerivedDisplay } from "@/lib/cx-operations-derived"
 import type { Surgery, SurgeryState, ConsumoState } from "@/types"
 import type { ExpedienteHeaderModel } from "./expediente-header.model"
@@ -126,7 +126,7 @@ export function ExpedienteHeader({
   const primaryActionLabel = hasPR ? "Ver PR" : "Generar PR"
   const primaryAction = hasPR ? onViewPR : onGeneratePR
 
-  const cxVisual = CX_STATE_VISUALS[s.state] ?? DEFAULT_CX_STATE_VISUAL
+  const cxVisual = getCxStateVisual(s.state, s.date)
   const prepClass = PREP_STATE_CELL_COLORS[s.preparationState] || "bg-slate-100 text-slate-700 border border-slate-200"
 
   const openStateModal = () => {

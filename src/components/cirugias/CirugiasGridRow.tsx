@@ -5,8 +5,7 @@ import { flexRender, type Row } from "@tanstack/react-table"
 import { cn } from "@/lib/utils"
 import type { Surgery } from "@/types"
 import {
-  CX_STATE_VISUALS,
-  DEFAULT_CX_STATE_VISUAL,
+  getCxStateVisual,
   type CxStatusVariant,
 } from "@/lib/cirugias.constants"
 
@@ -39,8 +38,8 @@ export function CirugiasGridRow({
 }: CirugiasGridRowProps) {
   const s = row.original
   const isUrgent = !!s.urgente
-  const visuals = CX_STATE_VISUALS[s.state] || DEFAULT_CX_STATE_VISUAL
-  const isStateStrong = cxVariant === "a"
+  const visuals = getCxStateVisual(s.state, s.date)
+  const isStateStrong = cxVariant === "a" || cxVariant === "d"
 
   return (
     <tr

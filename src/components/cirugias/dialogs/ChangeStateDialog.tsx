@@ -23,13 +23,13 @@ import {
 } from "@/components/ui/dialog"
 import { Activity, ArrowRight, Check, FileCheck, FileText, Loader2, UploadCloud, X } from "lucide-react"
 import type { SurgeryState } from "@/types"
-import { ALL_STATES, CX_STATE_VISUALS, DEFAULT_CX_STATE_VISUAL } from "@/lib/cirugias.constants"
+import { ALL_STATES, CX_STATE_VISUALS, DEFAULT_CX_STATE_VISUAL, getCxStateVisual } from "@/lib/cirugias.constants"
 import { cn } from "@/lib/utils"
 
 interface ChangeStateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  dialogSurgery: { id: string; state: string } | null
+  dialogSurgery: { id: string; state: string; date?: string | null } | null
   newState: SurgeryState
   setNewState: (s: SurgeryState) => void
   onConfirm: (payload?: { authFile?: File | null; reasonWithoutAuthFile?: string }) => void | Promise<void>
@@ -44,8 +44,8 @@ export function ChangeStateDialog({
   onConfirm,
 }: ChangeStateDialogProps) {
   const currentState = dialogSurgery?.state || ""
-  const currentVisual = CX_STATE_VISUALS[currentState] || DEFAULT_CX_STATE_VISUAL
-  const newVisual = CX_STATE_VISUALS[newState] || DEFAULT_CX_STATE_VISUAL
+  const currentVisual = getCxStateVisual(currentState, dialogSurgery?.date)
+  const newVisual = getCxStateVisual(newState, dialogSurgery?.date)
 
   const [authFile, setAuthFile] = useState<File | null>(null)
   const [noComprobanteCheck, setNoComprobanteCheck] = useState(false)

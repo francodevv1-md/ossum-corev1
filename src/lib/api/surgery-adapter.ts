@@ -395,6 +395,8 @@ function normalizeSurgeryState(status: string | null): SurgeryState {
     case "en preparación":
       return "Pendiente"
     case "sin autorizar":
+    case "sin fecha":
+    case "unauthorized":
       return "Sin autorizar"
     case "authorized":
     case "autorizada":

@@ -69,10 +69,10 @@ export function mapUiStateToCanonicalCxStatus(state?: string | null): string {
     case "cancelled":
       return "cancelled"
     case "sin autorizar":
+    case "sin fecha":
     case "unauthorized":
       return "unauthorized"
     case "pendiente":
-    case "sin fecha":
     case "pending":
     default:
       return "pending"

@@ -24,7 +24,7 @@ describe("supplier remittance Zustand cleanup", () => {
     expect(useOrtoTrackStore.getState().remitosProveedor).toEqual([])
   })
 
-  it("migrates persisted version 0 once and rewrites storage as version 1", async () => {
+  it("migrates persisted version 0 once and rewrites storage as version 2", async () => {
     window.localStorage.setItem("ortotrack-v2-storage", JSON.stringify({
       state: { remitosProveedor: [remito("RP-0001"), remito("RP-REAL-001")] },
       version: 0,
@@ -33,7 +33,7 @@ describe("supplier remittance Zustand cleanup", () => {
     await useOrtoTrackStore.persist.rehydrate()
 
     expect(useOrtoTrackStore.getState().remitosProveedor).toEqual([remito("RP-REAL-001")])
-    expect(JSON.parse(window.localStorage.getItem("ortotrack-v2-storage") ?? "{}")).toMatchObject({ version: 1 })
+    expect(JSON.parse(window.localStorage.getItem("ortotrack-v2-storage") ?? "{}")).toMatchObject({ version: 2 })
 
     window.localStorage.setItem("ortotrack-v2-storage", JSON.stringify({
       state: { remitosProveedor: [remito("RP-0001"), remito("RP-REAL-002")] },

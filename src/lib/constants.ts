@@ -47,7 +47,7 @@ export const PIPELINE_COLUMNS: PipelineColumn[] = [
     color: "border-slate-400",
     bgColor: "bg-slate-50 dark:bg-slate-900/30",
     headerBg: "bg-slate-200 dark:bg-slate-800",
-    states: ["Sin autorizar", "Sin fecha", "Pendiente"],
+    states: ["Sin autorizar", "Pendiente"],
   },
   {
     id: "autorizada",

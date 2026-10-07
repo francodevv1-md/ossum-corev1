@@ -2,7 +2,6 @@ import type { SurgeryState } from "@/types"
 
 const STATE_ADVANCE_MAP: Partial<Record<SurgeryState, SurgeryState>> = {
   "Sin autorizar": "Pendiente",
-  "Sin fecha": "Pendiente",
   "Pendiente": "Autorizada",
   "En tránsito": "Realizada",
   "Realizada": "Finalizada",

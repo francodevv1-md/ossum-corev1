@@ -88,7 +88,7 @@ function stickyCellClasses(
 
 /**
  * Sticky classes for Estado CX cell.
- * When variant is "a", cellBg provides solid background; for "b" and "c",
+ * When variant is "a" or "d", cellBg provides solid background; for "b" and "c",
  * a solid neutral/urgent/selected background is provided to cover scrolled content.
  */
 function stickyStateCellClasses(
@@ -99,13 +99,13 @@ function stickyStateCellClasses(
   variant: CxStatusVariant = "b",
 ): string {
   if (!isSticky) return ""
-  const bg = variant === "a" ? "" : isSelected
+  const bg = variant === "a" || variant === "d" ? "" : isSelected
     ? "bg-sky-50 dark:bg-sky-950/90"
     : isUrgent
     ? "bg-[#FFF9F9] dark:bg-red-950/60"
     : "bg-white dark:bg-slate-950"
 
-  const hoverBg = variant === "a" ? "" : isSelected
+  const hoverBg = variant === "a" || variant === "d" ? "" : isSelected
     ? "group-hover:bg-sky-100/90 dark:group-hover:bg-sky-950"
     : isUrgent
     ? "group-hover:bg-[#FFF2F2] dark:group-hover:bg-red-950/80"
@@ -202,6 +202,7 @@ export function CirugiaRow({
           <CirugiaStatusCell
             key="state"
             state={s.state}
+            date={s.date}
             variant={cxVariant}
             compactMode={compactMode}
             tdClassName={stickyStateCellClasses(isLeftSticky("state"), isLastLeftSticky("state"), isSelected, s.urgente, cxVariant)}

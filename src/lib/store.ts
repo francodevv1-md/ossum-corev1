@@ -67,6 +67,11 @@ export function isLegacyMockSurgeryId(surgeryId: string | null | undefined) {
   return Boolean(surgeryId && LEGACY_MOCK_SURGERY_ID_SET.has(surgeryId))
 }
 
+// Local compatibility only: never infer authorization from missing dates.
+export function normalizeLegacySurgeryState<T extends { state?: string }>(surgery: T): T {
+  return surgery.state === "Sin fecha" ? { ...surgery, state: "Sin autorizar" } : surgery
+}
+
 // ===== State Interface =====
 interface OrtoTrackState {
   // Entities
@@ -318,7 +323,7 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
       // ===== SURGERY ACTIONS =====
       createSurgery: (data, options) => {
         const surgery: Surgery = {
-          ...data,
+          ...normalizeLegacySurgeryState(data),
           id: options?.id?.trim() || generateId("CX"),
           urgente: data.urgente ?? false,
           leyendaDestacada: data.leyendaDestacada ?? false,
@@ -330,11 +335,11 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
       },
 
       replaceSurgeries: (surgeries) => {
-        set(() => ({ surgeries }))
+        set(() => ({ surgeries: surgeries.map(normalizeLegacySurgeryState) }))
       },
 
       hydrateBackendSurgeries: (surgeries) => {
-        set(() => ({ surgeries }))
+        set(() => ({ surgeries: surgeries.map(normalizeLegacySurgeryState) }))
       },
 
       clearBackendSurgeries: () => {
@@ -344,7 +349,7 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
       updateSurgery: (id, data) => {
         const prev = get().getSurgeryById(id)
         set((s) => ({
-          surgeries: s.surgeries.map((sx) => (sx.id === id ? { ...sx, ...data } : sx)),
+          surgeries: s.surgeries.map((sx) => (sx.id === id ? { ...sx, ...normalizeLegacySurgeryState(data) } : sx)),
         }))
         // Track coordinator changes in history
         if (prev && data.coordinadorCx !== undefined && data.coordinadorCx !== prev.coordinadorCx) {
@@ -371,6 +376,7 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
       },
 
       changeSurgeryStatus: (id, newState) => {
+        newState = normalizeLegacySurgeryState({ state: newState }).state
         const prev = get().getSurgeryById(id)
         set((s) => ({
           surgeries: s.surgeries.map((sx) => (sx.id === id ? { ...sx, state: newState } : sx)),
@@ -1403,13 +1409,18 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
     }),
     {
       name: "ortotrack-v2-storage",
-      version: 1,
+      version: 2,
       migrate: (persistedState, version) => {
-        if (version >= 1 || !persistedState || typeof persistedState !== "object") return persistedState as OrtoTrackState
+        if (version >= 2 || !persistedState || typeof persistedState !== "object") return persistedState as OrtoTrackState
         const state = persistedState as Partial<OrtoTrackState>
         return {
           ...state,
-          remitosProveedor: removeLegacyDemoSupplierRemittances(Array.isArray(state.remitosProveedor) ? state.remitosProveedor : []),
+          ...(version < 1 ? {
+            remitosProveedor: removeLegacyDemoSupplierRemittances(Array.isArray(state.remitosProveedor) ? state.remitosProveedor : []),
+          } : {}),
+          ...(Array.isArray(state.surgeries) ? {
+            surgeries: state.surgeries.map(normalizeLegacySurgeryState),
+          } : {}),
         } as OrtoTrackState
       },
       storage: createJSONStorage(() => {

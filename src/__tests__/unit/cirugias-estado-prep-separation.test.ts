@@ -37,7 +37,7 @@ import { useOrtoTrackStore } from "@/lib/store"
 describe("Estado CX vs Preparación separation", () => {
   // Canonical CX states (from the user spec)
   const CX_STATES = [
-    "Sin autorizar", "Sin fecha", "Pendiente", "Autorizada",
+    "Sin autorizar", "Pendiente", "Autorizada",
     "En tránsito", "Realizada", "Finalizada",
     "Suspendida", "Cancelada", "Sin consumo",
   ]
@@ -55,7 +55,8 @@ describe("Estado CX vs Preparación separation", () => {
   })
 
   it("STATE_FILTER_OPTIONS includes all general CX states", () => {
-    expect(STATE_FILTER_OPTIONS).toHaveLength(10)
+    expect(STATE_FILTER_OPTIONS).toHaveLength(9)
+    expect(STATE_FILTER_OPTIONS).not.toContain("Sin fecha")
     for (const state of CX_STATES) {
       expect(STATE_FILTER_OPTIONS).toContain(state)
     }
@@ -101,13 +102,13 @@ describe("Estado CX vs Preparación separation", () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe("Color palette for Estado CX and Preparación", () => {
-  it("CX_STATE_COLORS: Sin autorizar uses slate (gray), not amber", () => {
-    expect(CX_STATE_COLORS["Sin autorizar"]).toContain("bg-slate")
-    expect(CX_STATE_COLORS["Sin autorizar"]).not.toContain("bg-amber")
+  it("CX_STATE_COLORS: Sin autorizar uses readable white", () => {
+    expect(CX_STATE_COLORS["Sin autorizar"]).toContain("bg-white")
+    expect(CX_STATE_COLORS["Sin autorizar"]).toContain("text-slate-900")
   })
 
-  it("CX_STATE_COLORS: Sin fecha uses slate (gray)", () => {
-    expect(CX_STATE_COLORS["Sin fecha"]).toContain("bg-slate")
+  it("CX_STATE_COLORS: Sin fecha uses white", () => {
+    expect(CX_STATE_COLORS["Sin fecha"]).toContain("bg-white")
   })
 
   it("CX_STATE_COLORS: Finalizada uses blue-800 (azul oscuro), not teal", () => {
@@ -119,8 +120,8 @@ describe("Color palette for Estado CX and Preparación", () => {
     expect(CX_STATE_COLORS["Pendiente"]).toContain("bg-yellow")
   })
 
-  it("CX_STATE_COLORS: En tránsito uses blue", () => {
-    expect(CX_STATE_COLORS["En tránsito"]).toContain("bg-blue")
+  it("CX_STATE_COLORS: En tránsito uses light blue", () => {
+    expect(CX_STATE_COLORS["En tránsito"]).toContain("bg-sky-300")
   })
 
   it("CX_STATE_COLORS: Realizada uses emerald (green)", () => {
@@ -131,12 +132,12 @@ describe("Color palette for Estado CX and Preparación", () => {
     expect(CX_STATE_COLORS["Suspendida"]).toContain("bg-violet")
   })
 
-  it("CX_STATE_COLORS: Cancelada uses red", () => {
-    expect(CX_STATE_COLORS["Cancelada"]).toContain("bg-red")
+  it("CX_STATE_COLORS: Cancelada uses burgundy", () => {
+    expect(CX_STATE_COLORS["Cancelada"]).toContain("bg-rose-900")
   })
 
-  it("CX_STATE_COLORS: Sin consumo uses amber-800 (marrón)", () => {
-    expect(CX_STATE_COLORS["Sin consumo"]).toContain("bg-amber")
+  it("CX_STATE_COLORS: Sin consumo uses grey", () => {
+    expect(CX_STATE_COLORS["Sin consumo"]).toContain("bg-gray-600")
   })
 
   it("PREP_STATE_COLORS has exactly 7 states", () => {

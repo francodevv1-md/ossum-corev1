@@ -10,6 +10,7 @@
  */
 
 import type { PreparationState, SurgeryState, SurgeryClassification } from "@/types"
+import { getCxStateColorKey } from "@/lib/shared-constants"
 import {
   FileText, Receipt, Activity, BookOpen, MapPin,
   Stethoscope, History, Mail,
@@ -45,7 +46,7 @@ export type PanelState = "list" | "expanded"
 // ═══════════════════════════════════════════════════════════════
 
 export const ALL_STATES: SurgeryState[] = [
-  "Sin autorizar", "Sin fecha", "Pendiente", "Autorizada",
+  "Sin autorizar", "Pendiente", "Autorizada",
   "En tránsito", "Realizada", "Finalizada",
   "Suspendida", "Cancelada", "Sin consumo",
 ]
@@ -136,7 +137,7 @@ export interface CxStateVisual {
   hoverTint: string     // Hex para el hover sutil de la fila
   darkRowTint?: string  // Hex para el tinte suave de la fila en modo oscuro
   darkHoverTint?: string // Hex para el hover sutil de la fila en modo oscuro
-  strongClass: string   // Clases Tailwind para badge / celda fuerte con texto blanco
+  strongClass: string   // Clases Tailwind para badge / celda fuerte con texto legible
   barClass: string      // Clases Tailwind para barra 4px
   dotClass: string      // Clases Tailwind para dot
   textClass: string     // Clases Tailwind para texto semántico
@@ -144,70 +145,70 @@ export interface CxStateVisual {
 
 export const CX_STATE_VISUALS: Record<string, CxStateVisual> = {
   "Pendiente": {
-    strong: "#F59E0B",
+    strong: "#FACC15",
     rowTint: "#FFFDF6",
     hoverTint: "#FEF7E2",
     darkRowTint: "#18140c",
     darkHoverTint: "#261e10",
-    strongClass: "bg-amber-500 text-white font-bold",
-    barClass: "bg-amber-500",
-    dotClass: "bg-amber-500",
-    textClass: "text-amber-700 dark:text-amber-300 font-semibold",
+    strongClass: "bg-yellow-400 text-slate-900 font-bold",
+    barClass: "bg-yellow-400",
+    dotClass: "bg-yellow-400",
+    textClass: "text-yellow-800 dark:text-yellow-300 font-semibold",
   },
   "Autorizada": {
-    strong: "#0284C7",
+    strong: "#FACC15",
+    rowTint: "#FFFDF6",
+    hoverTint: "#FEF7E2",
+    darkRowTint: "#18140c",
+    darkHoverTint: "#261e10",
+    strongClass: "bg-yellow-400 text-slate-900 font-bold",
+    barClass: "bg-yellow-400",
+    dotClass: "bg-yellow-400",
+    textClass: "text-yellow-800 dark:text-yellow-300 font-semibold",
+  },
+  "En tránsito": {
+    strong: "#7DD3FC",
     rowTint: "#F5FAFF",
     hoverTint: "#E8F4FD",
     darkRowTint: "#051624",
     darkHoverTint: "#09243a",
-    strongClass: "bg-sky-600 text-white font-bold",
-    barClass: "bg-sky-600",
-    dotClass: "bg-sky-600",
-    textClass: "text-sky-700 dark:text-sky-300 font-semibold",
-  },
-  "En tránsito": {
-    strong: "#2563EB",
-    rowTint: "#F4F8FE",
-    hoverTint: "#E8F1FC",
-    darkRowTint: "#07162d",
-    darkHoverTint: "#0b2348",
-    strongClass: "bg-blue-600 text-white font-bold",
-    barClass: "bg-blue-600",
-    dotClass: "bg-blue-600",
-    textClass: "text-blue-700 dark:text-blue-300 font-semibold",
+    strongClass: "bg-sky-300 text-slate-900 font-bold",
+    barClass: "bg-sky-300",
+    dotClass: "bg-sky-300",
+    textClass: "text-sky-800 dark:text-sky-300 font-semibold",
   },
   "Realizada": {
-    strong: "#059669",
+    strong: "#047857",
     rowTint: "#F2FBF6",
     hoverTint: "#E5F7ED",
     darkRowTint: "#051c17",
     darkHoverTint: "#092b23",
-    strongClass: "bg-emerald-600 text-white font-bold",
-    barClass: "bg-emerald-600",
-    dotClass: "bg-emerald-600",
+    strongClass: "bg-emerald-700 text-white font-bold",
+    barClass: "bg-emerald-700",
+    dotClass: "bg-emerald-700",
     textClass: "text-emerald-700 dark:text-emerald-300 font-semibold",
   },
   "Finalizada": {
-    strong: "#334155",
-    rowTint: "#F8FAFC",
-    hoverTint: "#F1F5F9",
-    darkRowTint: "#0e1522",
-    darkHoverTint: "#162034",
-    strongClass: "bg-slate-700 text-white font-bold dark:bg-slate-600",
-    barClass: "bg-slate-700 dark:bg-slate-600",
-    dotClass: "bg-slate-700 dark:bg-slate-600",
-    textClass: "text-slate-700 dark:text-slate-300 font-semibold",
+    strong: "#1E40AF",
+    rowTint: "#F4F8FE",
+    hoverTint: "#E8F1FC",
+    darkRowTint: "#07162d",
+    darkHoverTint: "#0b2348",
+    strongClass: "bg-blue-800 text-white font-bold",
+    barClass: "bg-blue-800",
+    dotClass: "bg-blue-800",
+    textClass: "text-blue-800 dark:text-blue-300 font-semibold",
   },
   "Sin autorizar": {
-    strong: "#E11D48",
-    rowTint: "#FFF6F7",
-    hoverTint: "#FEEDEF",
-    darkRowTint: "#1d0910",
-    darkHoverTint: "#2d0e19",
-    strongClass: "bg-rose-600 text-white font-bold",
-    barClass: "bg-rose-600",
-    dotClass: "bg-rose-600",
-    textClass: "text-rose-700 dark:text-rose-300 font-semibold",
+    strong: "#FFFFFF",
+    rowTint: "#FFFFFF",
+    hoverTint: "#F8FAFC",
+    darkRowTint: "#0d131d",
+    darkHoverTint: "#151e2e",
+    strongClass: "bg-white text-slate-900 font-bold border border-slate-300 dark:border-slate-700",
+    barClass: "bg-white border border-slate-300 dark:border-slate-700",
+    dotClass: "bg-white border border-slate-300 dark:border-slate-700",
+    textClass: "text-slate-700 dark:text-slate-300 font-semibold",
   },
   "Suspendida": {
     strong: "#7C3AED",
@@ -221,36 +222,37 @@ export const CX_STATE_VISUALS: Record<string, CxStateVisual> = {
     textClass: "text-violet-700 dark:text-violet-300 font-semibold",
   },
   "Cancelada": {
-    strong: "#52525B",
+    strong: "#881337",
+    rowTint: "#FFF6F7",
+    hoverTint: "#FEEDEF",
+    darkRowTint: "#1d0910",
+    darkHoverTint: "#2d0e19",
+    strongClass: "bg-rose-900 text-white font-bold",
+    barClass: "bg-rose-900",
+    dotClass: "bg-rose-900",
+    textClass: "text-rose-900 dark:text-rose-300 font-semibold",
+  },
+  "Sin consumo": {
+    strong: "#4B5563",
     rowTint: "#F8F8FA",
     hoverTint: "#F0F0F3",
     darkRowTint: "#111418",
     darkHoverTint: "#1a1f26",
-    strongClass: "bg-zinc-600 text-white font-bold",
-    barClass: "bg-zinc-600",
-    dotClass: "bg-zinc-600",
-    textClass: "text-zinc-600 dark:text-zinc-300 font-semibold",
+    strongClass: "bg-gray-600 text-white font-bold",
+    barClass: "bg-gray-600",
+    dotClass: "bg-gray-600",
+    textClass: "text-gray-700 dark:text-gray-300 font-semibold",
   },
-  "Sin consumo": {
-    strong: "#9333EA",
-    rowTint: "#FAF6FF",
-    hoverTint: "#F3EBFE",
-    darkRowTint: "#160c26",
-    darkHoverTint: "#23133c",
-    strongClass: "bg-purple-600 text-white font-bold",
-    barClass: "bg-purple-600",
-    dotClass: "bg-purple-600",
-    textClass: "text-purple-700 dark:text-purple-300 font-semibold",
-  },
+  // Presentation-only key for an undated case; not a SurgeryState.
   "Sin fecha": {
-    strong: "#64748B",
-    rowTint: "#F8FAFC",
-    hoverTint: "#F1F5F9",
+    strong: "#FFFFFF",
+    rowTint: "#FFFFFF",
+    hoverTint: "#F8FAFC",
     darkRowTint: "#0d131d",
     darkHoverTint: "#151e2e",
-    strongClass: "bg-slate-500 text-white font-bold",
-    barClass: "bg-slate-500",
-    dotClass: "bg-slate-500",
+    strongClass: "bg-white text-slate-900 font-bold border border-slate-300 dark:border-slate-700",
+    barClass: "bg-white border border-slate-300 dark:border-slate-700",
+    dotClass: "bg-white border border-slate-300 dark:border-slate-700",
     textClass: "text-slate-600 dark:text-slate-300 font-medium",
   },
 }
@@ -265,6 +267,10 @@ export const DEFAULT_CX_STATE_VISUAL: CxStateVisual = {
   barClass: "bg-slate-500",
   dotClass: "bg-slate-500",
   textClass: "text-slate-600 dark:text-slate-300 font-medium",
+}
+
+export function getCxStateVisual(state: string, date?: string | null): CxStateVisual {
+  return CX_STATE_VISUALS[getCxStateColorKey(state, date)] || DEFAULT_CX_STATE_VISUAL
 }
 
 export interface CxFullTableRowColor {
@@ -520,7 +526,7 @@ export const NON_SORTABLE_KEYS = ["actions", "doc", "facturado", "consumo", "coo
 // ═══════════════════════════════════════════════════════════════
 
 export const STATE_FILTER_OPTIONS = [
-  "Sin autorizar", "Sin fecha", "Pendiente", "Autorizada",
+  "Sin autorizar", "Pendiente", "Autorizada",
   "En tránsito", "Realizada", "Finalizada",
   "Suspendida", "Cancelada", "Sin consumo",
 ]

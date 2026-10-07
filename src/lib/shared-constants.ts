@@ -18,16 +18,24 @@ import type { SurgeryState, SurgeryClassification, LogisticsState, PreparationSt
 // ═══════════════════════════════════════════════════════════════
 
 export const CX_STATE_COLORS: Record<string, string> = {
-  "Sin autorizar": "bg-slate-500 text-white",       // gris (was amber)
-  "Sin fecha": "bg-slate-400 text-white",            // gris más claro
-  "Pendiente": "bg-yellow-500 text-white",           // amarillo
-  "Autorizada": "bg-sky-500 text-white",             // azul claro
-  "En tránsito": "bg-blue-500 text-white",           // azul
-  "Realizada": "bg-emerald-500 text-white",          // verde
-  "Finalizada": "bg-blue-800 text-white",            // azul oscuro (was teal-700)
-  "Suspendida": "bg-violet-600 text-white",          // violeta
-  "Cancelada": "bg-red-600 text-white",              // rojo
-  "Sin consumo": "bg-amber-800 text-white",          // marrón
+  "Sin autorizar": "bg-white text-slate-900 border border-slate-300 dark:border-slate-700",
+  // Presentation-only key for an undated case; not a SurgeryState.
+  "Sin fecha": "bg-white text-slate-900 border border-slate-300 dark:border-slate-700",
+  "Pendiente": "bg-yellow-400 text-slate-900",
+  "Autorizada": "bg-yellow-400 text-slate-900",
+  "En tránsito": "bg-sky-300 text-slate-900",
+  "Realizada": "bg-emerald-700 text-white",
+  "Finalizada": "bg-blue-800 text-white",
+  "Suspendida": "bg-violet-600 text-white",
+  "Cancelada": "bg-rose-900 text-white",
+  "Sin consumo": "bg-gray-600 text-white",
+}
+
+/** Read-only color key; never replaces the stored state or its displayed label. */
+export function getCxStateColorKey(state: string, date?: string | null): string {
+  return (state === "Pendiente" || state === "Autorizada") && date !== undefined && !date?.trim()
+    ? "Sin fecha"
+    : state
 }
 
 /**
@@ -70,7 +78,7 @@ export const LOGISTICS_STATE_OUTLINED_COLORS: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════
 
 export const ACTIVE_STATES: SurgeryState[] = [
-  "Sin autorizar", "Sin fecha", "Pendiente", "Autorizada",
+  "Sin autorizar", "Pendiente", "Autorizada",
   "En tránsito", "Realizada", "Sin consumo",
 ]
 
@@ -95,7 +103,7 @@ export const PIPELINE_COLUMNS: PipelineColumn[] = [
     color: "border-slate-400",
     bgColor: "bg-slate-50 dark:bg-slate-900/30",
     headerBg: "bg-slate-200 dark:bg-slate-800",
-    states: ["Sin autorizar", "Sin fecha", "Pendiente"],
+    states: ["Sin autorizar", "Pendiente"],
   },
   {
     id: "autorizada",

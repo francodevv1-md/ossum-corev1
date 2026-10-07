@@ -15,7 +15,7 @@ describe("computeOpTabCounts", () => {
     },
     {
       id: "s-2",
-      state: "Sin fecha",
+      state: "Sin autorizar",
       urgente: false,
       date: "",
       preparationState: "Entregado",
@@ -58,9 +58,20 @@ describe("computeOpTabCounts", () => {
     expect(counts.urgent).toBe(1) // s-1
     expect(counts.noCxDate).toBe(1) // s-2
     expect(counts.prepPending).toBe(1) // s-1
-    expect(counts.attention).toBe(2) // s-1 (urgente, Sin autorizar) and s-2 (Sin fecha)
+    expect(counts.attention).toBe(2) // s-1 (urgent, unauthorized) and s-2 (undated, unauthorized)
     expect(counts.withoutPr).toBe(1) // s-1
     expect(counts.withoutConsumption).toBe(1) // s-5
     expect(counts.withoutInvoice).toBe(1) // s-3 (Realizada & !facturado)
+  })
+
+  it("counts missing dates independently of authorization and preserves the actual states", () => {
+    const surgeries = [
+      { ...mockSurgeries[0], state: "Autorizada", date: "" },
+      { ...mockSurgeries[0], state: "Pendiente", date: "" },
+      { ...mockSurgeries[0], state: "Sin autorizar", date: "2026-10-06" },
+    ] as Surgery[]
+    const before = structuredClone(surgeries)
+    expect(computeOpTabCounts(surgeries).noCxDate).toBe(2)
+    expect(surgeries).toEqual(before)
   })
 })

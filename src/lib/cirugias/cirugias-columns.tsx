@@ -76,6 +76,7 @@ export function createCirugiasColumns(ctx: CirugiasColumnContext): ColumnDef<Sur
       cell: ({ row }) => (
         <CirugiaStatusCell
           state={row.original.state}
+          date={row.original.date}
           variant={ctx.cxVariant ?? "b"}
           asCell={false}
         />

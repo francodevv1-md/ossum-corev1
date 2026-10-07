@@ -1,6 +1,6 @@
 // ===== Surgery States =====
 export type SurgeryState =
-  | "Sin autorizar" | "Sin fecha" | "Pendiente" | "Autorizada"
+  | "Sin autorizar" | "Pendiente" | "Autorizada"
   | "En tránsito" | "Realizada" | "Finalizada"
   | "Suspendida" | "Cancelada" | "Sin consumo"
 

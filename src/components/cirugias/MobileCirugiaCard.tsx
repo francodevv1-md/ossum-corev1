@@ -3,7 +3,7 @@
 import React from "react"
 import { AlertCircle, ArrowRight, MoreVertical } from "lucide-react"
 import type { Surgery } from "@/types"
-import { CX_STATE_COLORS, PREP_STATE_COLORS } from "@/lib/shared-constants"
+import { CX_STATE_COLORS, getCxStateColorKey, PREP_STATE_COLORS } from "@/lib/shared-constants"
 import { cn } from "@/lib/utils"
 
 export type MobileCardPrimaryAction = {
@@ -37,7 +37,7 @@ export function MobileCirugiaCard({
   primaryAction,
   animationDelayMs = 0,
 }: MobileCirugiaCardProps) {
-  const stateColor = CX_STATE_COLORS[surgery.state] ?? "bg-slate-500 text-white"
+  const stateColor = CX_STATE_COLORS[getCxStateColorKey(surgery.state, surgery.date)] ?? "bg-slate-500 text-white"
   const prepColor = PREP_STATE_COLORS[surgery.preparationState] ?? "bg-slate-400 text-white"
   const showProcedure = !!surgery.procedure
   const showClassification = !!surgery.classification && surgery.classification !== "Otro"

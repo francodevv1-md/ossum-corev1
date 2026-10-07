@@ -37,8 +37,8 @@ const KANBAN_COLUMNS: KanbanColumn[] = [
     id: "ingreso",
     label: "Ingreso",
     color: "border-slate-400",
-    description: "Sin autorizar · Sin fecha · Pendiente",
-    matches: (surgery) => ["Sin autorizar", "Sin fecha", "Pendiente"].includes(surgery.state),
+    description: "Sin autorizar · Pendiente",
+    matches: (surgery) => ["Sin autorizar", "Pendiente"].includes(surgery.state),
   },
   {
     id: "autorizada",
@@ -143,7 +143,7 @@ export default function TableroPage() {
   const kpis = useMemo(() => {
     const all = store.surgeries
     const activeStates: SurgeryState[] = [
-      "Sin autorizar", "Sin fecha", "Pendiente", "Autorizada",
+      "Sin autorizar", "Pendiente", "Autorizada",
        "En tránsito", "Realizada", "Sin consumo",
     ]
     const activas = all.filter((s) => activeStates.includes(s.state)).length

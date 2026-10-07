@@ -1,0 +1,28 @@
+# Surgery palette recovery ownership
+
+- task: SURGERY-PALETTE-RECOVERY-20261006
+- agent role: directed Frontend/UI implementation owner; sole source writer
+- actual model: GPT-6.1 Sol, `openai/gpt-6.1-sol`
+- mode: implementation and offline testing
+- status: released
+- approval: explicit palette implementation and secondary-agent authorization conveyed by parent; initial finite DEV approval under AGENTS section 8.2, T3 safeguards retained.
+- base HEAD: 3db3c6ee2967e33f5ad84b36014ed5bfd766eef8
+- owned source files:
+  - src/lib/shared-constants.ts
+  - src/lib/cirugias.constants.ts
+  - src/lib/cirugias/cirugias-columns.tsx
+  - src/components/cirugias/CirugiaStatusCell.tsx
+  - src/components/cirugias/CirugiaRow.tsx
+  - src/components/cirugias/CirugiasGridRow.tsx
+  - src/components/cirugias/MobileCirugiaCard.tsx
+  - src/components/cirugias/view-customization/ColorReferenceDialog.tsx
+  - src/components/cirugias/dialogs/ChangeStateDialog.tsx
+  - src/components/expediente/ExpedienteHeader.tsx
+  - src/__tests__/unit/cirugias-estado-prep-separation.test.ts (palette expectations only)
+- owned artifacts: this lock; knowledge/specs/SURGERY-PALETTE-RECOVERY-20261006/TASK_BRIEF.md
+- retained foreign test: src/__tests__/components/SurgeryPalette.test.tsx, read-only unchanged
+- parent owns final HANDOFF.md, independent review and browser validation.
+- preflight: applicable surgery/palette/header source locks released; remaining active locks are disjoint or documentary, no overlapping source writer found. Existing foreign tracked changes and untracked work preserved.
+- forbidden: any other source/config/test/artifact edits; authorization/permissions/state transitions; schema/DB/Prisma/dependencies; broad discovery/build/runtime restart/.next takeover; Git staging/commit/reset/checkout/push/deploy.
+- source freezes at review; parent reviewer releases lock after review.
+- outcome: independent read-only review passed with no blocking findings; retained palette test 7/7 PASS, parent four-file replay 51/51 PASS, five-file regression 52/54 with the same two baseline authorization-evidence failures. Parent offline Chromium component/CSS smoke passed 96 checks; browser closed. Global TypeScript timed out after 120 seconds without a result. No unrelated repairs, build/runtime/DB/Git writes. Parent released ownership after validation; full-app build/visual acceptance remains separate.
