@@ -406,6 +406,19 @@ Antes de cerrar cualquier tarea técnica:
 - Riesgos abiertos declarados.
 - Engram session_summary si corresponde.
 
+### 12.1 Responsive Density — obligatorio
+
+Toda tarea que cree o modifique UI debe cargar:
+`.opencode/skills/ossum-responsive-density/SKILL.md`
+
+Ninguna tarea visual se considera cerrada sin validar al menos
+1366×768 y 1920×1080.
+
+En superficies responsive también validar 390×844.
+
+Pantallas grandes deben aumentar capacidad de información,
+no escalar proporcionalmente componentes o whitespace.
+
 ---
 
 ## 13. Handoff obligatorio
@@ -497,3 +510,13 @@ Franco aprobó explícitamente el paquete DEV `CONTACTS-BACKEND-AUTHORITY-UI-DEV
 Alcance autorizado: schema y migración aditiva de Contactos, persistencia multiempresa de código/roles/grupos/dirección/perfiles, servicios/validadores/API, UI de Contactos, selectores reutilizables por Nueva Cirugía sin modificar su núcleo, pruebas, Diagnose, revisión GGA y commit local.
 
 Exclusiones: Auth/roles/permisos, cambios del circuito núcleo de Cirugías, datos reales, producción/staging, deploy, push y PR. Evidencia operativa: Engram #6346/#6355 y `knowledge/specs/CONTACTS-BACKEND-AUTHORITY-UI-DEV-001/TASK_BRIEF.md`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

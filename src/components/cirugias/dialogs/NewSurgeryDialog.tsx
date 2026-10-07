@@ -35,13 +35,17 @@ import { CondicionesSection } from "@/components/presupuestos/CondicionesSection
 import { PresupuestoItemsTable } from "@/components/presupuestos/PresupuestoItemsTable"
 import { PresupuestoCommercialIdentityFields } from "@/components/presupuestos/PresupuestoCommercialIdentityFields"
 import { buildEstimativePresupuestoPayload, createPresupuesto, fetchPresupuestos } from "@/lib/api/presupuestos"
+import type { SurgeryIntakeResult } from "@/hooks/useCirugiaActions"
+import { ApiClientError } from "@/lib/api/client"
 import { TotalesSection } from "@/components/presupuestos/TotalesSection"
 import { TemplateSelector } from "@/components/presupuestos/TemplateSelector"
 import { ImportSubmodal } from "@/components/presupuestos/ImportSubmodal"
 import { PostCreationPanel } from "@/components/cirugias/PostCreationPanel"
 import { LeyendaPresupuestoSection } from "@/components/presupuestos/LeyendaPresupuestoSection"
 import { ClasificacionSelectorModal } from "@/components/presupuestos/ClasificacionSelectorModal"
-import { CheckCircle2, Plus, Settings2, FileText, Info, Sparkles, AlertCircle, Calendar, User, Receipt, Stethoscope, ClipboardList } from "lucide-react"
+import { LugarSelector } from "@/components/cirugias/LugarSelector"
+import { HelpTip } from "@/components/ui/info-tooltip"
+import { CheckCircle2, Plus, Settings2, FileText, Info, Sparkles, AlertCircle, Calendar, User, Receipt, Stethoscope, ClipboardList, Users, Truck, CalendarDays, UploadCloud, MapPin, Building2, Check } from "lucide-react"
 import { useAiExtraction } from "@/hooks/useAiExtraction"
 import type { NewSurgeryForm } from "@/lib/cirugias.types"
 import { EMPTY_NEW_FORM } from "@/lib/cirugias.types"
@@ -286,6 +290,17 @@ export function scoreContactMatch(params: {
     reasons.push("contacto inactivo")
   }
 
+  // Base match check: prevent false positives when only a single common first name matches
+  const hasDniMatch = Boolean(normalizedDetectedDni && normalizedContactDni && normalizedDetectedDni === normalizedContactDni)
+  const hasDirectNameMatch = Boolean(
+    score >= 20 ||
+    (normalizedDetected && normalizedContact && (normalizedDetected === normalizedContact || buildSortedTokenKey(detectedName) === buildSortedTokenKey(contacto.nombre)))
+  )
+
+  if (!hasDniMatch && !hasDirectNameMatch) {
+    return null
+  }
+
   const compatibility = getCompatibilityAdjustments(contacto, field)
   compatibilityScore = compatibility.score
   score += compatibility.score
@@ -381,7 +396,7 @@ interface NewSurgeryDialogProps {
     loadTemplate: (template: PlantillaPresupuesto) => void
     addItems: (items: FormItem[]) => void
   }
-  onConfirm: (options?: { authorizationFile?: File | null }) => boolean | Promise<boolean>
+  onConfirm: (options?: { authorizationFile?: File | null }) => boolean | SurgeryIntakeResult | Promise<boolean | SurgeryIntakeResult>
   /** CHATZAI-017E: ID of the just-created surgery (for post-creation actions) */
   createdSurgeryId?: string
   instrumentadores: string[]
@@ -432,6 +447,24 @@ export function NewSurgeryDialog({
   const [creationDone, setCreationDone] = useState(false)
   const [presupuestoCreated, setPresupuestoCreated] = useState(false)
   const [presupuestoRetrying, setPresupuestoRetrying] = useState(false)
+  const [intakeResult, setIntakeResult] = useState<SurgeryIntakeResult | null>(null)
+  const [budgetStatus, setBudgetStatus] = useState<SurgeryIntakeResult["budget"]>("not-requested")
+  const [confirming, setConfirming] = useState(false)
+  const operationRef = useRef<number | null>(null)
+  const sessionRef = useRef({ open, companyId: activeCompany?.id, generation: 0 })
+  if (sessionRef.current.open !== open || sessionRef.current.companyId !== activeCompany?.id) {
+    sessionRef.current = { open, companyId: activeCompany?.id, generation: sessionRef.current.generation + 1 }
+    operationRef.current = null
+  }
+  useEffect(() => {
+    setCreationDone(false)
+    setPresupuestoCreated(false)
+    setIntakeResult(null)
+    setBudgetStatus("not-requested")
+    setConfirming(false)
+    setPresupuestoRetrying(false)
+  }, [open, activeCompany?.id])
+  useEffect(() => () => { sessionRef.current.generation += 1 }, [])
   const [contactCreateOpen, setContactCreateOpen] = useState(false)
   const [contactFormKey, setContactFormKey] = useState(0)
   const [pendingContactCreation, setPendingContactCreation] = useState<PendingContactCreation | null>(null)
@@ -441,7 +474,7 @@ export function NewSurgeryDialog({
   const [aiSuggestionsApplied, setAiSuggestionsApplied] = useState(false)
   const [uploadedAiFile, setUploadedAiFile] = useState<File | null>(null)
   const [saveAuthorizationImage, setSaveAuthorizationImage] = useState(true)
-  const [aiRailOpen, setAiRailOpen] = useState(true)
+  const [aiRailOpen, setAiRailOpen] = useState(false)
 
   // ─── CHATZAI-025: Cancel confirmation state ───
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
@@ -449,6 +482,84 @@ export function NewSurgeryDialog({
   // ─── CHATZAI-025: Track auto-filled provincia/localidad ───
   const [autoFilledProvincia, setAutoFilledProvincia] = useState(false)
   const [autoFilledLocalidad, setAutoFilledLocalidad] = useState(false)
+
+  // ─── Estado de nuevo formulario horizontal ───
+  const [facturarA, setFacturarA] = useState<"cliente" | "paciente" | "medico" | "institucion">("cliente")
+  const [remitirAInstitucion, setRemitirAInstitucion] = useState(true)
+  const [showAdditionalRefs, setShowAdditionalRefs] = useState(false)
+
+  // Sincronizar automáticamente el pagador si 'facturarA' no es 'cliente'
+  useEffect(() => {
+    if (facturarA === "paciente") {
+      setNewForm((prev) => {
+        if (prev.client === prev.patient && prev.clientContactId === prev.patientContactId) return prev
+        return {
+          ...prev,
+          client: prev.patient || "",
+          clientContactId: prev.patientContactId,
+        }
+      })
+    } else if (facturarA === "medico") {
+      setNewForm((prev) => {
+        if (prev.client === prev.surgeon && prev.clientContactId === prev.surgeonContactId) return prev
+        return {
+          ...prev,
+          client: prev.surgeon || "",
+          clientContactId: prev.surgeonContactId,
+        }
+      })
+    } else if (facturarA === "institucion") {
+      setNewForm((prev) => {
+        if (prev.client === prev.institution && prev.clientContactId === prev.institutionContactId) return prev
+        return {
+          ...prev,
+          client: prev.institution || "",
+          clientContactId: prev.institutionContactId,
+        }
+      })
+    }
+  }, [facturarA, newForm.patient, newForm.patientContactId, newForm.surgeon, newForm.surgeonContactId, newForm.institution, newForm.institutionContactId, setNewForm])
+
+  // Sincronizar ubicación de la institución si remitirAInstitucion está activo
+  useEffect(() => {
+    if (remitirAInstitucion && newForm.institutionContactId) {
+      const inst = store.getContactoById(newForm.institutionContactId)
+      if (inst) {
+        if ((inst.provincia || "") !== newForm.provincia || (inst.localidad || "") !== newForm.localidad) {
+          setNewForm((prev) => ({
+            ...prev,
+            provincia: inst.provincia || "",
+            localidad: inst.localidad || "",
+          }))
+          setAutoFilledProvincia(Boolean(inst.provincia))
+          setAutoFilledLocalidad(Boolean(inst.localidad))
+        }
+      }
+    }
+  }, [remitirAInstitucion, newForm.institutionContactId, store, newForm.provincia, newForm.localidad, setNewForm])
+
+  // Número principal de autorización
+  const primaryAuthNumber = useMemo(() => {
+    const authRef = newForm.referenciasAdministrativas.find((r) => r.tipo === "Autorización")
+    return authRef ? authRef.valor : ""
+  }, [newForm.referenciasAdministrativas])
+
+  const handleAuthNumberChange = useCallback((val: string) => {
+    setNewForm((prev) => {
+      const existingIdx = prev.referenciasAdministrativas.findIndex((r) => r.tipo === "Autorización")
+      const updated = [...prev.referenciasAdministrativas]
+      if (existingIdx >= 0) {
+        updated[existingIdx] = { ...updated[existingIdx], valor: val }
+      } else if (val.trim()) {
+        updated.unshift({
+          id: `ref-auth-${Date.now()}`,
+          tipo: "Autorización",
+          valor: val,
+        })
+      }
+      return { ...prev, referenciasAdministrativas: updated }
+    })
+  }, [setNewForm])
 
   const companyId = activeCompany?.id || process.env.NEXT_PUBLIC_OSSUM_DEFAULT_COMPANY_ID || ""
 
@@ -604,57 +715,114 @@ export function NewSurgeryDialog({
 
   // ─── Handle confirm ───
   const handleConfirm = useCallback(async () => {
-    const success = await onConfirm({
-      authorizationFile: saveAuthorizationImage ? uploadedAiFile : null,
-    })
-    if (success) {
-      setCreationDone(true)
+    if (operationRef.current !== null || creationDone) return
+    const generation = sessionRef.current.generation
+    operationRef.current = generation
+    setConfirming(true)
+    try {
+      const result = await onConfirm({ authorizationFile: saveAuthorizationImage ? uploadedAiFile : null })
+      if (sessionRef.current.generation !== generation || !sessionRef.current.open) return
+      if (result) {
+        if (typeof result !== "boolean") {
+          if (result.companyId !== sessionRef.current.companyId) return
+          setIntakeResult(result)
+          setBudgetStatus(result.budget)
+          setPresupuestoCreated(result.budget === "confirmed")
+        }
+        setCreationDone(true)
+      }
+    } catch (cause) {
+      if (sessionRef.current.generation === generation) toast.error(cause instanceof Error ? cause.message : "No se pudo confirmar la cirugía")
+    } finally {
+      if (operationRef.current === generation) {
+        operationRef.current = null
+        setConfirming(false)
+      }
     }
-  }, [onConfirm, saveAuthorizationImage, uploadedAiFile])
+  }, [onConfirm, saveAuthorizationImage, uploadedAiFile, creationDone])
 
   useEffect(() => {
-    if (!creationDone || !createPRNow || !createdSurgeryId || !activeCompany?.id) return
+    if (!open || intakeResult || !creationDone || !createPRNow || !createdSurgeryId || !activeCompany?.id) return
     let active = true
+    const generation = sessionRef.current.generation
+    setBudgetStatus("unverified")
     fetchPresupuestos(activeCompany.id, { surgeryId: createdSurgeryId, take: 1 })
-      .then((rows) => { if (active) setPresupuestoCreated(rows.length > 0) })
-      .catch(() => { if (active) setPresupuestoCreated(false) })
+      .then((rows) => {
+        if (active && sessionRef.current.generation === generation) {
+          setPresupuestoCreated(rows.length > 0)
+          setBudgetStatus(rows.length ? "confirmed" : "unverified")
+        }
+      })
+      .catch(() => { /* Unknown persistence is not evidence of absence. */ })
     return () => { active = false }
-  }, [activeCompany?.id, createPRNow, createdSurgeryId, creationDone])
+  }, [open, intakeResult, activeCompany?.id, createPRNow, createdSurgeryId, creationDone])
 
   const retryPresupuesto = useCallback(async () => {
-    if (!activeCompany?.id || !createdSurgeryId || presupuestoRetrying) return
+    const companyId = intakeResult?.companyId ?? activeCompany?.id
+    const surgeryId = intakeResult?.surgeryId ?? createdSurgeryId
+    if (!open || !companyId || companyId !== activeCompany?.id || !surgeryId || operationRef.current !== null || presupuestoCreated) return
+    const generation = sessionRef.current.generation
+    const isCurrent = () => sessionRef.current.open && sessionRef.current.generation === generation
+    const payload = buildEstimativePresupuestoPayload(prForm.formData, prForm.items)
+    operationRef.current = generation
     setPresupuestoRetrying(true)
+    let retryStatus = budgetStatus
     try {
-      await createPresupuesto(activeCompany.id, {
-        surgeryId: createdSurgeryId,
-        ...buildEstimativePresupuestoPayload(prForm.formData, prForm.items),
-      })
+      // Always reconcile before another POST: the previous response may have been lost.
+      const existing = await fetchPresupuestos(companyId, { surgeryId, take: 1 })
+      if (!isCurrent()) return
+      if (!existing.length) {
+        if (budgetStatus !== "missing") {
+          setBudgetStatus("unverified")
+          return
+        }
+        try {
+          await createPresupuesto(companyId, { ...payload, surgeryId })
+        } catch (cause) {
+          retryStatus = cause instanceof ApiClientError && cause.status >= 400 && cause.status < 500 ? "missing" : "unverified"
+          throw cause
+        }
+      }
+      if (!isCurrent()) return
       setPresupuestoCreated(true)
+      setBudgetStatus("confirmed")
       toast.success("Presupuesto creado exitosamente")
     } catch (cause) {
+      if (!isCurrent()) return
+      setBudgetStatus(retryStatus)
       try {
-        const rows = await fetchPresupuestos(activeCompany.id, { surgeryId: createdSurgeryId, take: 1 })
+        const rows = await fetchPresupuestos(companyId, { surgeryId, take: 1 })
+        if (!isCurrent()) return
         if (rows.length > 0) {
           setPresupuestoCreated(true)
+          setBudgetStatus("confirmed")
           toast.success("Presupuesto creado exitosamente")
           return
         }
       } catch {
         // Keep the original create failure when reconciliation is unavailable.
       }
-      toast.error(cause instanceof Error ? cause.message : "No se pudo crear el presupuesto")
+      if (isCurrent()) toast.error(cause instanceof Error ? cause.message : "No se pudo crear el presupuesto")
     } finally {
-      setPresupuestoRetrying(false)
+      if (operationRef.current === generation) {
+        operationRef.current = null
+        setPresupuestoRetrying(false)
+      }
     }
-  }, [activeCompany, createdSurgeryId, prForm.formData, prForm.items, presupuestoRetrying])
+  }, [open, activeCompany?.id, intakeResult, createdSurgeryId, prForm.formData, prForm.items, presupuestoCreated, budgetStatus])
 
   // ─── Reset on close ───
   const handleClose = useCallback(() => {
+    sessionRef.current.generation += 1
+    operationRef.current = null
     onOpenChange(false)
     setWizardStep(0)
     setCreationDone(false)
     setPresupuestoCreated(false)
     setPresupuestoRetrying(false)
+    setConfirming(false)
+    setIntakeResult(null)
+    setBudgetStatus("not-requested")
     setContactCreateOpen(false)
     setPendingContactCreation(null)
     setTextOnlyContactFields({})
@@ -958,6 +1126,16 @@ export function NewSurgeryDialog({
     const { extracted } = aiExtraction.result
     const { formFields } = mapAiToWizardForm(extracted)
 
+    if (field === "patient" || field === "surgeon" || field === "institution" || field === "client") {
+      const group = contactSuggestionGroups.find((g) => g.field === field)
+      if (group?.candidates[0]) {
+        applySuggestedContact(field, group.candidates[0].contacto)
+      } else if (group?.detectedText) {
+        applyDetectedTextOnly(field, group.detectedText)
+      }
+      return
+    }
+
     setNewForm((prev) => {
       switch (field) {
         case "date":
@@ -970,26 +1148,6 @@ export function NewSurgeryDialog({
           if (extracted.localidad_sugerida.trim() && !prev.localidad.trim()) updates.localidad = extracted.localidad_sugerida.trim()
           return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev
         }
-        case "patient":
-          if (extracted.paciente.trim()) {
-            applyDetectedTextOnly("patient", extracted.paciente.trim())
-          }
-          return prev
-        case "surgeon":
-          if (extracted.medico.trim()) {
-            applyDetectedTextOnly("surgeon", extracted.medico.trim())
-          }
-          return prev
-        case "institution":
-          if (extracted.institucion.trim()) {
-            applyDetectedTextOnly("institution", extracted.institucion.trim())
-          }
-          return prev
-        case "client":
-          if (extracted.obra_social.trim()) {
-            applyDetectedTextOnly("client", extracted.obra_social.trim())
-          }
-          return prev
         default:
           return prev
       }
@@ -999,7 +1157,7 @@ export function NewSurgeryDialog({
       if (extracted.provincia_sugerida.trim()) setAutoFilledProvincia(true)
       if (extracted.localidad_sugerida.trim()) setAutoFilledLocalidad(true)
     }
-  }, [aiExtraction.result, setNewForm])
+  }, [aiExtraction.result, contactSuggestionGroups, applySuggestedContact, applyDetectedTextOnly, setNewForm])
 
   const renderInlineContactSuggestion = (field: ContactSuggestionField) => {
     const group = contactSuggestionGroups.find((candidate) => candidate.field === field)
@@ -1010,56 +1168,54 @@ export function NewSurgeryDialog({
     const quickCreateLabel = QUICK_CREATE_LABELS[group.field]
 
     return (
-      <div className="mt-2 rounded-md border border-border/70 bg-muted/20 px-2.5 py-2 text-[11px] dark:bg-muted/10">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-0.5">
+      <div className="mt-2 rounded-lg border border-border/80 bg-muted/30 p-2.5 text-[11px] dark:bg-muted/15 space-y-2">
+        <div className="space-y-1">
+          <p className="break-words leading-snug text-muted-foreground">
+            <span className="font-semibold text-foreground">Detectado por IA:</span>{" "}
+            <span className="text-foreground font-medium">{group.detectedText}</span>
+            {group.detectedDni ? <span className="text-muted-foreground"> · DNI {group.detectedDni}</span> : null}
+          </p>
+          {bestCandidate ? (
             <p className="break-words leading-snug text-muted-foreground">
-              <span className="font-medium text-foreground">Detectado por IA:</span>{" "}
-              <span className="text-foreground">{group.detectedText}</span>
-              {group.detectedDni ? <span className="text-muted-foreground"> · DNI {group.detectedDni}</span> : null}
+              <span className="font-semibold text-foreground">Coincidencia:</span>{" "}
+              <span className="text-foreground font-medium">{bestCandidate.contacto.nombre}</span>
+              {bestCandidateMeta.length > 0 ? <span> · {bestCandidateMeta.join(" · ")}</span> : null}
             </p>
-            {bestCandidate ? (
-              <p className="break-words leading-snug text-muted-foreground">
-                <span className="font-medium text-foreground">Coincidencia:</span>{" "}
-                <span className="text-foreground">{bestCandidate.contacto.nombre}</span>
-                {bestCandidateMeta.length > 0 ? <span> · {bestCandidateMeta.join(" · ")}</span> : null}
-              </p>
-            ) : (
-              <p className="leading-snug text-muted-foreground">Sin coincidencia clara en contactos existentes.</p>
-            )}
-          </div>
+          ) : (
+            <p className="leading-snug text-muted-foreground">Sin coincidencia clara en contactos existentes.</p>
+          )}
+        </div>
 
-          <div className="flex shrink-0 flex-wrap gap-1.5 sm:justify-end">
-            {bestCandidate ? (
-              <Button type="button" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => applySuggestedContact(group.field, bestCandidate.contacto)}>
-                Usar
-              </Button>
-            ) : null}
-            <Button type="button" variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => openCreateContactForField(group)}>
-              {quickCreateLabel}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/40">
+          {bestCandidate ? (
+            <Button type="button" size="sm" className="h-6.5 px-2 text-[10px] font-medium" onClick={() => applySuggestedContact(group.field, bestCandidate.contacto)}>
+              Usar
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => applyDetectedTextOnly(group.field, group.detectedText)}>
-              Mantener texto
-            </Button>
-          </div>
+          ) : null}
+          <Button type="button" variant="outline" size="sm" className="h-6.5 px-2 text-[10px] font-medium" onClick={() => openCreateContactForField(group)}>
+            {quickCreateLabel}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" className="h-6.5 px-2 text-[10px] text-muted-foreground hover:text-foreground" onClick={() => applyDetectedTextOnly(group.field, group.detectedText)}>
+            Mantener texto
+          </Button>
         </div>
 
         {alternativeCandidates.length > 0 && (
-          <details className="mt-1.5 border-t border-border/50 pt-1.5">
-            <summary className="cursor-pointer list-none text-[11px] font-medium text-muted-foreground hover:text-foreground">
+          <details className="pt-1.5 border-t border-border/40">
+            <summary className="cursor-pointer list-none text-[10px] font-medium text-muted-foreground hover:text-foreground">
               Ver alternativas ({alternativeCandidates.length})
             </summary>
-            <div className="mt-1.5 space-y-1">
+            <div className="mt-1 space-y-1">
               {alternativeCandidates.map((candidate, index) => {
                 const candidateMeta = getContactIdentityMeta(candidate.contacto)
 
                 return (
-                  <div key={`${group.field}-${candidate.contacto.id}-${index}`} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-muted/40">
-                    <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+                  <div key={`${group.field}-${candidate.contacto.id}-${index}`} className="flex items-center justify-between gap-2 rounded px-1.5 py-1 hover:bg-muted/40">
+                    <p className="min-w-0 truncate text-[10px] text-muted-foreground">
                       <span className="font-medium text-foreground">{candidate.contacto.nombre}</span>
                       {candidateMeta.length > 0 ? <span> · {candidateMeta.join(" · ")}</span> : null}
                     </p>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => applySuggestedContact(group.field, candidate.contacto)}>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => applySuggestedContact(group.field, candidate.contacto)}>
                       Usar
                     </Button>
                   </div>
@@ -1207,18 +1363,23 @@ export function NewSurgeryDialog({
                     variant={aiRailOpen ? "secondary" : "outline"}
                     size="sm"
                     className={cn(
-                      "h-7 text-[11px] gap-1.5 px-2.5 transition-colors",
+                      "h-7 text-xs gap-1.5 px-3 rounded-full transition-all duration-150 active:scale-[0.98]",
                       aiRailOpen
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700"
-                        : "text-muted-foreground"
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs font-semibold"
+                        : "border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 hover:border-emerald-500/60 font-medium"
                     )}
                     onClick={() => setAiRailOpen(!aiRailOpen)}
                     title={aiRailOpen ? "Ocultar panel asistente IA" : "Mostrar panel asistente IA"}
                   >
-                    <Sparkles className="size-3 text-emerald-600" />
+                    <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
                     <span className="hidden sm:inline">Asistente IA</span>
-                    {aiExtraction.result && (
-                      <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    {!aiRailOpen ? (
+                      <span className="relative flex size-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full size-2 bg-emerald-500" />
+                      </span>
+                    ) : (
+                      <span className="size-1.5 rounded-full bg-emerald-500" />
                     )}
                   </Button>
                 )}
@@ -1230,8 +1391,8 @@ export function NewSurgeryDialog({
         {/* ═══════════ Paso 0 — Datos del caso ═══════════ */}
         {wizardStep === 0 && !creationDone && (
           <div ref={step0Ref} className="flex-1 min-h-0 flex overflow-hidden bg-background">
-            {/* Formulario principal en 3 columnas ERP */}
-            <div className="flex-1 min-w-0 overflow-y-auto px-6 py-4 space-y-4">
+            {/* Formulario principal continuo adaptativo a 1080p y 1366x768 */}
+            <div className="flex-1 min-w-0 overflow-y-auto px-3 sm:px-6 py-3 sm:py-3.5 space-y-3 sm:space-y-3.5 @container/form">
               {/* NUEVA-CIRUGIA-IA-UX-P1 (Phase A, AC-01): Critical Missing Bar. */}
               {Object.keys(step0Errors).length > 0 && (
                 <div>
@@ -1240,319 +1401,134 @@ export function NewSurgeryDialog({
               )}
 
               {/* Sub-header con interruptor de Urgencia */}
-              <div className="flex items-center justify-between border-b pb-2.5">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
+              <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs sm:text-sm font-bold text-foreground tracking-tight">
                     Datos del caso clínico
                   </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Complete la información quirúrgica, paciente y cobertura comercial.
-                  </p>
+                  <span className="hidden sm:inline text-xs text-muted-foreground">· Información quirúrgica, paciente y cobertura comercial</span>
                 </div>
-                <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50/90 px-3 py-1 dark:border-slate-800 dark:bg-slate-900/70 shadow-2xs">
+                <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50/90 px-2.5 py-0.5 dark:border-slate-800 dark:bg-slate-900/70 shadow-2xs">
                   <Switch
                     id="urgente-switch"
                     checked={newForm.urgente}
                     onCheckedChange={(checked) => setNewForm({ ...newForm, urgente: !!checked })}
-                    className="scale-90"
+                    className="scale-75"
                   />
-                  <Label htmlFor="urgente-switch" className="cursor-pointer select-none text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <Label htmlFor="urgente-switch" className="cursor-pointer select-none text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                     Urgente
                   </Label>
-                  {newForm.urgente && <Badge variant="destructive" className="text-[9px] px-1.5 py-0 font-bold">URGENTE</Badge>}
+                  {newForm.urgente && <Badge variant="destructive" className="text-[9px] px-1 py-0 font-bold">URGENTE</Badge>}
                 </div>
               </div>
 
-              {/* 3 Columnas Temáticas ERP */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4.5 items-start">
-                {/* ── Columna 1: Comercial & Plazos ── */}
-                <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
-                  <div className="flex items-center justify-between border-b border-border/60 pb-2">
+              {/* Formulario adaptativo de 2 columnas en desktop para aprovechar el ancho y eliminar scroll */}
+              <div className="max-w-[1540px] mx-auto pb-3">
+                <div className="grid grid-cols-1 lg:grid-cols-2 @[960px]/form:grid-cols-2 gap-3.5 items-start">
+                  {/* Columna Izquierda: Actores y Destino */}
+                  <div className="space-y-3 min-w-0">
+                    {/* ── Bloque 1: Actores Intervinientes ── */}
+                <section className="rounded-xl border border-border/80 bg-card p-3 sm:p-4 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-border/50 pb-2">
                     <div className="flex items-center gap-2">
-                      <Receipt className="size-4 text-emerald-600 dark:text-emerald-400" />
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                        Comercial & Plazos
+                      <div className="size-5 rounded bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shrink-0">
+                        <Users className="size-3 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <h4 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-foreground">
+                        1. Actores Intervinientes
                       </h4>
                     </div>
-                    {newForm.client.trim() ? (
+                    {newForm.patient.trim() && newForm.surgeon.trim() && newForm.institution.trim() && (facturarA !== "cliente" || newForm.client.trim()) ? (
                       <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
-                        Completo ✓
+                        Completos ✓
                       </Badge>
                     ) : (
                       <Badge variant="secondary" className="text-[10px] text-muted-foreground">
-                        1 pendiente
+                        {[!newForm.patient.trim(), !newForm.surgeon.trim(), !newForm.institution.trim(), facturarA === "cliente" && !newForm.client.trim()].filter(Boolean).length} requeridos pendientes
                       </Badge>
                     )}
                   </div>
 
-                  {/* Cliente / Pagador */}
-                  <div data-step0-field="client">
-                    <ContactLookupField
-                      key={`client-${contactLookupRenderVersion}-${newForm.clientContactId || "none"}`}
-                      label="Cliente / Pagador *"
-                      context={WIZARD_SEARCH_CONTEXTS.client}
-                      value={getResolvedContactValue("client", newForm.clientContactId)}
-                      onChange={(contacto) => {
-                        setContactSelectionOverrides((prev) => ({ ...prev, client: contacto }))
-                        setTextOnlyContactFields((prev) => ({ ...prev, client: false }))
-                        if (contacto) {
-                          setNewForm((prev) => ({ ...prev, client: contacto.nombre, clientContactId: contacto.id }))
-                        } else {
-                          setNewForm((prev) => ({ ...prev, client: "", clientContactId: undefined }))
-                        }
-                        if (step0Errors.client) setStep0Errors({ ...step0Errors, client: undefined })
-                      }}
-                      placeholder="Buscar cliente/pagador..."
-                      error={step0Errors.client}
-                    />
-                    {renderTextOnlyContactIndicator("client")}
-                    {renderInlineContactSuggestion("client")}
-                  </div>
-
-                  {/* Referencias administrativas */}
-                  <div className="space-y-1.5 pt-1 border-t border-border/40">
-                    <Label className="text-xs font-medium text-muted-foreground">Referencias administrativas</Label>
-                    <ReferenciasAdministrativasEditor
-                      value={newForm.referenciasAdministrativas}
-                      onChange={(refs) => setNewForm({ ...newForm, referenciasAdministrativas: refs })}
-                    />
-                  </div>
-
-                  {/* Fechas de procedimiento */}
-                  <div className="space-y-3 pt-1 border-t border-border/40">
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Fecha CX</Label>
-                        <Input type="date" value={newForm.date} onChange={(e) => setNewForm({ ...newForm, date: e.target.value })} className="h-8 text-sm" />
-                        {renderInlineAiValueSuggestion({
-                          field: "date",
-                          eyebrow: "IA detectó fecha de cirugía",
-                          value: aiExtraction.result?.extracted.fecha_cirugia,
-                          hidden: Boolean(newForm.date.trim()),
-                          applyLabel: "Pasar al campo",
-                        })}
-                      </div>
-                      <div className="w-24 space-y-1">
-                        <Label className="text-xs">Hora</Label>
-                        <Input type="time" value={newForm.time} onChange={(e) => setNewForm({ ...newForm, time: e.target.value })} className="h-8 text-sm" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs">Fecha probable</Label>
-                      <Input type="date" value={newForm.probableDate} onChange={(e) => setNewForm({ ...newForm, probableDate: e.target.value })} className="h-8 text-sm" />
-                      {renderInlineAiValueSuggestion({
-                        field: "probableDate",
-                        eyebrow: "IA detectó fecha probable",
-                        value: aiExtraction.result?.extracted.fecha_probable,
-                        hidden: Boolean(newForm.probableDate.trim()),
-                        applyLabel: "Pasar al campo",
-                      })}
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs">Fecha envío material</Label>
-                      <Input type="date" value={newForm.fechaEnvioMaterial} onChange={(e) => setNewForm({ ...newForm, fechaEnvioMaterial: e.target.value })} className="h-8 text-sm" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Columna 2: Paciente & Ubicación ── */}
-                <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
-                  <div className="flex items-center justify-between border-b border-border/60 pb-2">
-                    <div className="flex items-center gap-2">
-                      <User className="size-4 text-emerald-600 dark:text-emerald-400" />
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                        Paciente & Ubicación
-                      </h4>
-                    </div>
-                    {newForm.patient.trim() ? (
-                      <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
-                        Completo ✓
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-[10px] text-muted-foreground">
-                        1 pendiente
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Paciente */}
-                  <div data-step0-field="patient">
-                    <ContactLookupField
-                      key={`patient-${contactLookupRenderVersion}-${newForm.patientContactId || "none"}`}
-                      label="Paciente *"
-                      context={WIZARD_SEARCH_CONTEXTS.patient}
-                      value={getResolvedContactValue("patient", newForm.patientContactId)}
-                      onChange={(contacto) => {
-                        setContactSelectionOverrides((prev) => ({ ...prev, patient: contacto }))
-                        setTextOnlyContactFields((prev) => ({ ...prev, patient: false }))
-                        if (contacto) {
-                          setNewForm((prev) => ({ ...prev, patient: contacto.nombre, patientContactId: contacto.id }))
-                        } else {
-                          setNewForm((prev) => ({ ...prev, patient: "", patientContactId: undefined }))
-                        }
-                        if (step0Errors.patient) setStep0Errors({ ...step0Errors, patient: undefined })
-                      }}
-                      placeholder="Buscar paciente..."
-                      error={step0Errors.patient}
-                    />
-                    {renderTextOnlyContactIndicator("patient")}
-                    {renderInlineContactSuggestion("patient")}
-                  </div>
-
-                  {/* Ubicación: Provincia & Localidad */}
-                  <div className="space-y-3 pt-1 border-t border-border/40">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1">
-                        <Label className="text-xs">Provincia</Label>
-                        {autoFilledProvincia && (
-                          <span className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground" title="Auto-completado desde la institución">
-                            <Info className="size-2.5" /> auto
-                          </span>
-                        )}
-                      </div>
-                      <Select value={newForm.provincia} onValueChange={(v) => {
-                        setNewForm({ ...newForm, provincia: v, localidad: "" })
-                        setAutoFilledProvincia(false)
-                        setAutoFilledLocalidad(false)
-                      }}>
-                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Seleccionar provincia" /></SelectTrigger>
-                        <SelectContent>
-                          {PROVINCIAS_ARGENTINA.map((p) => (<SelectItem key={p} value={p}>{p}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                      {renderInlineAiValueSuggestion({
-                        field: "provincia",
-                        eyebrow: "IA detectó ubicación",
-                        value: aiExtraction.result?.extracted.provincia_sugerida,
-                        secondaryValue: aiExtraction.result?.extracted.localidad_sugerida
-                          ? `Localidad sugerida: ${aiExtraction.result.extracted.localidad_sugerida}`
-                          : undefined,
-                        hidden: Boolean(newForm.provincia.trim()),
-                        applyLabel: "Pasar al campo",
-                      })}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1">
-                        <Label className="text-xs">Localidad</Label>
-                        {autoFilledLocalidad && (
-                          <span className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground" title="Auto-completado desde la institución">
-                            <Info className="size-2.5" /> auto
-                          </span>
-                        )}
-                      </div>
-                      <Select value={newForm.localidad} onValueChange={(v) => {
-                        setNewForm({ ...newForm, localidad: v })
-                        setAutoFilledLocalidad(false)
-                      }} disabled={!newForm.provincia || localidades.length === 0}>
-                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={newForm.provincia ? "Seleccionar localidad" : "Seleccione provincia primero"} /></SelectTrigger>
-                        <SelectContent>
-                          {localidades.map((l) => (<SelectItem key={l} value={l}>{l}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Observaciones y Leyenda */}
-                  <div className="space-y-3 pt-1 border-t border-border/40">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Leyenda</Label>
-                      <Textarea
-                        value={newForm.leyenda}
-                        onChange={(e) => setNewForm({ ...newForm, leyenda: e.target.value })}
-                        placeholder="Observaciones / leyenda para remito..."
-                        rows={2}
-                        className="text-sm"
+                  {/* Fila Actores: 2 columnas balanceadas para que ContactLookupField respire sin colapsar */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 items-start">
+                    {/* Paciente */}
+                    <div data-step0-field="patient">
+                      <ContactLookupField
+                        key={`patient-${contactLookupRenderVersion}-${newForm.patientContactId || "none"}`}
+                        label="Paciente *"
+                        context={WIZARD_SEARCH_CONTEXTS.patient}
+                        value={getResolvedContactValue("patient", newForm.patientContactId)}
+                        onChange={(contacto) => {
+                          setContactSelectionOverrides((prev) => ({ ...prev, patient: contacto }))
+                          setTextOnlyContactFields((prev) => ({ ...prev, patient: false }))
+                          if (contacto) {
+                            setNewForm((prev) => ({ ...prev, patient: contacto.nombre, patientContactId: contacto.id }))
+                          } else {
+                            setNewForm((prev) => ({ ...prev, patient: "", patientContactId: undefined }))
+                          }
+                          if (step0Errors.patient) setStep0Errors({ ...step0Errors, patient: undefined })
+                        }}
+                        placeholder="Buscar paciente..."
+                        error={step0Errors.patient}
                       />
+                      {renderTextOnlyContactIndicator("patient")}
+                      {renderInlineContactSuggestion("patient")}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Checkbox id="leyenda-destacada" checked={newForm.leyendaDestacada} onCheckedChange={(checked) => setNewForm({ ...newForm, leyendaDestacada: !!checked })} />
-                      <Label htmlFor="leyenda-destacada" className="cursor-pointer select-none text-xs">Destacada</Label>
-                      {newForm.leyendaDestacada && <Badge variant="warning" className="text-[10px]">DESTACADA</Badge>}
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Notas internas</Label>
-                      <Textarea value={newForm.notes} onChange={(e) => setNewForm({ ...newForm, notes: e.target.value })} placeholder="Notas internas operativas..." rows={2} className="text-sm" />
-                    </div>
-                  </div>
-                </div>
 
-                {/* ── Columna 3: Quirúrgico & Procedimiento ── */}
-                <div className="rounded-xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs">
-                  <div className="flex items-center justify-between border-b border-border/60 pb-2">
-                    <div className="flex items-center gap-2">
-                      <Stethoscope className="size-4 text-emerald-600 dark:text-emerald-400" />
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                        Quirúrgico & Procedimiento
-                      </h4>
+                    {/* Médico */}
+                    <div data-step0-field="surgeon">
+                      <ContactLookupField
+                        key={`surgeon-${contactLookupRenderVersion}-${newForm.surgeonContactId || "none"}`}
+                        label="Médico *"
+                        context={WIZARD_SEARCH_CONTEXTS.surgeon}
+                        value={getResolvedContactValue("surgeon", newForm.surgeonContactId)}
+                        onChange={(contacto) => {
+                          setContactSelectionOverrides((prev) => ({ ...prev, surgeon: contacto }))
+                          setTextOnlyContactFields((prev) => ({ ...prev, surgeon: false }))
+                          if (contacto) {
+                            setNewForm((prev) => ({ ...prev, surgeon: contacto.nombre, surgeonContactId: contacto.id }))
+                          } else {
+                            setNewForm((prev) => ({ ...prev, surgeon: "", surgeonContactId: undefined }))
+                          }
+                          if (step0Errors.surgeon) setStep0Errors({ ...step0Errors, surgeon: undefined })
+                        }}
+                        placeholder="Buscar médico..."
+                        error={step0Errors.surgeon}
+                      />
+                      {renderTextOnlyContactIndicator("surgeon")}
+                      {renderInlineContactSuggestion("surgeon")}
                     </div>
-                    {newForm.surgeon.trim() && newForm.institution.trim() && newForm.classification ? (
-                      <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
-                        Completo ✓
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-[10px] text-muted-foreground">
-                        {[!newForm.surgeon.trim(), !newForm.institution.trim(), !newForm.classification].filter(Boolean).length} pendientes
-                      </Badge>
-                    )}
-                  </div>
 
-                  {/* Médico */}
-                  <div data-step0-field="surgeon">
-                    <ContactLookupField
-                      key={`surgeon-${contactLookupRenderVersion}-${newForm.surgeonContactId || "none"}`}
-                      label="Médico *"
-                      context={WIZARD_SEARCH_CONTEXTS.surgeon}
-                      value={getResolvedContactValue("surgeon", newForm.surgeonContactId)}
-                      onChange={(contacto) => {
-                        setContactSelectionOverrides((prev) => ({ ...prev, surgeon: contacto }))
-                        setTextOnlyContactFields((prev) => ({ ...prev, surgeon: false }))
-                        if (contacto) {
-                          setNewForm((prev) => ({ ...prev, surgeon: contacto.nombre, surgeonContactId: contacto.id }))
-                        } else {
-                          setNewForm((prev) => ({ ...prev, surgeon: "", surgeonContactId: undefined }))
-                        }
-                        if (step0Errors.surgeon) setStep0Errors({ ...step0Errors, surgeon: undefined })
-                      }}
-                      placeholder="Buscar médico..."
-                      error={step0Errors.surgeon}
-                    />
-                    {renderTextOnlyContactIndicator("surgeon")}
-                    {renderInlineContactSuggestion("surgeon")}
-                  </div>
-
-                  {/* Institución */}
-                  <div data-step0-field="institution">
-                    <ContactLookupField
-                      key={`institution-${contactLookupRenderVersion}-${newForm.institutionContactId || "none"}`}
-                      label="Institución *"
-                      context={WIZARD_SEARCH_CONTEXTS.institution}
-                      value={getResolvedContactValue("institution", newForm.institutionContactId)}
-                      onChange={(contacto) => {
-                        setContactSelectionOverrides((prev) => ({ ...prev, institution: contacto }))
-                        setTextOnlyContactFields((prev) => ({ ...prev, institution: false }))
-                        if (contacto) {
-                          setNewForm((prev) => {
-                            const updates: Partial<NewSurgeryForm> = {
-                              institution: contacto.nombre,
-                              institutionContactId: contacto.id,
-                            }
-                            if (contacto.provincia && !prev.provincia) {
-                              updates.provincia = contacto.provincia
-                              setAutoFilledProvincia(true)
-                            }
-                            if (contacto.localidad && !prev.localidad) {
-                              updates.localidad = contacto.localidad
-                              setAutoFilledLocalidad(true)
-                            }
+                    {/* Institución */}
+                    <div data-step0-field="institution">
+                      <ContactLookupField
+                        key={`institution-${contactLookupRenderVersion}-${newForm.institutionContactId || "none"}`}
+                        label="Institución *"
+                        context={WIZARD_SEARCH_CONTEXTS.institution}
+                        value={getResolvedContactValue("institution", newForm.institutionContactId)}
+                        onChange={(contacto) => {
+                          setContactSelectionOverrides((prev) => ({ ...prev, institution: contacto }))
+                          setTextOnlyContactFields((prev) => ({ ...prev, institution: false }))
+                          if (contacto) {
+                            setNewForm((prev) => {
+                              const updates: Partial<NewSurgeryForm> = {
+                                institution: contacto.nombre,
+                                institutionContactId: contacto.id,
+                              }
+                              if (remitirAInstitucion) {
+                                updates.provincia = contacto.provincia || ""
+                                updates.localidad = contacto.localidad || ""
+                                setAutoFilledProvincia(Boolean(contacto.provincia))
+                                setAutoFilledLocalidad(Boolean(contacto.localidad))
+                              }
                             return { ...prev, ...updates }
                           })
                         } else {
-                          setNewForm((prev) => ({ ...prev, institution: "", institutionContactId: undefined }))
-                          setAutoFilledProvincia(false)
-                          setAutoFilledLocalidad(false)
+                          setNewForm((prev) => ({ ...prev, institution: "", institutionContactId: undefined, ...(remitirAInstitucion ? { provincia: "", localidad: "" } : {}) }))
+                          if (remitirAInstitucion) {
+                            setAutoFilledProvincia(false)
+                            setAutoFilledLocalidad(false)
+                          }
                         }
                         if (step0Errors.institution) setStep0Errors({ ...step0Errors, institution: undefined })
                       }}
@@ -1563,37 +1539,8 @@ export function NewSurgeryDialog({
                     {renderInlineContactSuggestion("institution")}
                   </div>
 
-                  {/* Clasificación */}
-                  <div className="space-y-1" data-step0-field="classification">
-                    <Label className="text-xs">Clasificación *</Label>
-                    <ClasificacionSelectorModal
-                      value={newForm.classification}
-                      onSelect={(classification) => {
-                        setNewForm({ ...newForm, classification })
-                        if (step0Errors.classification) setStep0Errors({ ...step0Errors, classification: undefined })
-                      }}
-                    >
-                      {(openModal) => (
-                        <Button
-                          variant="outline"
-                          type="button"
-                          className={cn(
-                            "h-8 text-sm w-full justify-between font-normal",
-                            step0Errors.classification && "border-destructive"
-                          )}
-                          onClick={openModal}
-                        >
-                          {newForm.classification || "Seleccionar clasificación..."}
-                        </Button>
-                      )}
-                    </ClasificacionSelectorModal>
-                    {step0Errors.classification && (
-                      <p className="text-[10px] text-destructive mt-1">{step0Errors.classification}</p>
-                    )}
-                  </div>
-
-                  {/* Equipo operativo */}
-                  <div className="space-y-3 pt-1 border-t border-border/40">
+                  {/* Coordinador de CX */}
+                  <div>
                     <ContactLookupField
                       label="Coordinador de CX"
                       context={WIZARD_SEARCH_CONTEXTS.coordinadorCx}
@@ -1607,55 +1554,519 @@ export function NewSurgeryDialog({
                       }}
                       placeholder="Buscar coordinador..."
                     />
-
-                    <ContactLookupField
-                      label="Vendedor"
-                      context={WIZARD_SEARCH_CONTEXTS.vendedor}
-                      value={store.getContactoById(newForm.vendedorContactId || "")}
-                      onChange={(contacto) => {
-                        if (contacto) {
-                          setNewForm((prev) => ({ ...prev, vendedor: contacto.nombre, vendedorContactId: contacto.id }))
-                        } else {
-                          setNewForm((prev) => ({ ...prev, vendedor: "Sin asignar", vendedorContactId: undefined }))
-                        }
-                      }}
-                      placeholder="Buscar vendedor..."
-                    />
-
-                    <ContactLookupField
-                      label="Instrumentador"
-                      context={WIZARD_SEARCH_CONTEXTS.instrumentador}
-                      value={store.getContactoById(newForm.instrumentadorContactId || "")}
-                      onChange={(contacto) => {
-                        if (contacto) {
-                          setNewForm((prev) => ({ ...prev, instrumentador: contacto.nombre, instrumentadorContactId: contacto.id }))
-                        } else {
-                          setNewForm((prev) => ({ ...prev, instrumentador: "Sin asignar", instrumentadorContactId: undefined }))
-                        }
-                      }}
-                      placeholder="Buscar instrumentador..."
-                    />
                   </div>
                 </div>
+
+                {/* Facturar a — Segmented Control estilizado */}
+                <div className="pt-2.5 border-t border-border/50 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Receipt className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-xs font-semibold text-foreground">Facturar a:</span>
+                      <HelpTip text="Indica a qué contacto o entidad se imputará el presupuesto y la factura emitida de este caso." side="top" />
+                    </div>
+                    <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-border/50 gap-0.5 flex-wrap">
+                      {[
+                        { id: "cliente", label: "Cliente / Obra Social" },
+                        { id: "paciente", label: "Al Paciente" },
+                        { id: "medico", label: "Al Médico" },
+                        { id: "institucion", label: "A la Institución" },
+                      ].map((opt) => {
+                        const active = facturarA === opt.id
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setFacturarA(opt.id as any)
+                              if (opt.id === "paciente") {
+                                setNewForm((prev) => ({ ...prev, client: prev.patient || "Paciente", clientContactId: prev.patientContactId }))
+                                if (step0Errors.client) setStep0Errors({ ...step0Errors, client: undefined })
+                              } else if (opt.id === "medico") {
+                                setNewForm((prev) => ({ ...prev, client: prev.surgeon || "Médico", clientContactId: prev.surgeonContactId }))
+                                if (step0Errors.client) setStep0Errors({ ...step0Errors, client: undefined })
+                              } else if (opt.id === "institucion") {
+                                setNewForm((prev) => ({ ...prev, client: prev.institution || "Institución", clientContactId: prev.institutionContactId }))
+                                if (step0Errors.client) setStep0Errors({ ...step0Errors, client: undefined })
+                              }
+                            }}
+                            className={cn(
+                              "h-7 text-xs font-medium rounded-md px-2.5 transition-all duration-150 ease-out active:scale-[0.98]",
+                              active
+                                ? "bg-emerald-600 text-white shadow-2xs font-semibold"
+                                : "text-slate-600 dark:text-slate-300 hover:text-foreground hover:bg-slate-200/60 dark:hover:bg-slate-700/60"
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {facturarA === "cliente" ? (
+                    <div data-step0-field="client" className="pt-0.5 max-w-2xl">
+                      <ContactLookupField
+                        key={`client-${contactLookupRenderVersion}-${newForm.clientContactId || "none"}`}
+                        label="Cliente / Pagador *"
+                        context={WIZARD_SEARCH_CONTEXTS.client}
+                        value={getResolvedContactValue("client", newForm.clientContactId)}
+                        onChange={(contacto) => {
+                          setContactSelectionOverrides((prev) => ({ ...prev, client: contacto }))
+                          setTextOnlyContactFields((prev) => ({ ...prev, client: false }))
+                          if (contacto) {
+                            setNewForm((prev) => ({ ...prev, client: contacto.nombre, clientContactId: contacto.id }))
+                          } else {
+                            setNewForm((prev) => ({ ...prev, client: "", clientContactId: undefined }))
+                          }
+                          if (step0Errors.client) setStep0Errors({ ...step0Errors, client: undefined })
+                        }}
+                        placeholder="Buscar obra social, prepaga o empresa..."
+                        error={step0Errors.client}
+                      />
+                      {renderTextOnlyContactIndicator("client")}
+                      {renderInlineContactSuggestion("client")}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 text-[11px] text-foreground max-w-2xl">
+                      <Check className="size-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="truncate">
+                        Factura y presupuesto a nombre de{" "}
+                        <strong>{facturarA === "paciente" ? "Paciente" : facturarA === "medico" ? "Médico" : "Institución"}</strong>:{" "}
+                        <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+                          {newForm.client || "(Seleccione el contacto arriba para completar el pagador)"}
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+                {/* ── Bloque 2: Lugar de Entrega & Remisión ── */}
+                <section className="rounded-xl border border-border/80 bg-card p-3 sm:p-4 shadow-2xs space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/50 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="size-5 rounded bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shrink-0">
+                        <Truck className="size-3 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <h4 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-foreground">
+                        2. Lugar de Entrega & Remisión
+                      </h4>
+                      <HelpTip text="Destino para el remito de materiales y logística de cajas de cirugía." side="top" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="remitir-inst-switch"
+                        checked={remitirAInstitucion}
+                        onCheckedChange={(checked) => {
+                          const val = !!checked
+                          setRemitirAInstitucion(val)
+                          if (val && newForm.institutionContactId) {
+                            const inst = store.getContactoById(newForm.institutionContactId)
+                            if (inst) {
+                              setNewForm((prev) => ({
+                                ...prev,
+                                provincia: inst.provincia || "",
+                                localidad: inst.localidad || "",
+                              }))
+                            }
+                          }
+                        }}
+                        className="scale-75"
+                      />
+                      <Label htmlFor="remitir-inst-switch" className="cursor-pointer select-none text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                        Remitir a la institución por defecto
+                        <HelpTip text="Sincroniza automáticamente localidad y provincia con la institución seleccionada." side="top" />
+                      </Label>
+                    </div>
+                  </div>
+
+                  <div className="max-w-2xl space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs font-semibold text-foreground/90">Lugar (Localidad & Provincia)</Label>
+                      <HelpTip text="Podés buscar cualquier localidad de Argentina o ingresar texto libre. Se utilizará para remito y logística." side="top" />
+                      {remitirAInstitucion && newForm.institution.trim() && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30">
+                          Tomado de {newForm.institution}
+                        </Badge>
+                      )}
+                    </div>
+                    <LugarSelector
+                      provincia={newForm.provincia}
+                      localidad={newForm.localidad}
+                      onChange={({ provincia, localidad }) => {
+                        setNewForm((prev) => ({ ...prev, provincia, localidad }))
+                        setAutoFilledProvincia(false)
+                        setAutoFilledLocalidad(false)
+                        if (remitirAInstitucion) setRemitirAInstitucion(false)
+                      }}
+                      placeholder="Buscar localidad y provincia (ej: Curuzú Cuatiá, Corrientes)..."
+                    />
+                    {renderInlineAiValueSuggestion({
+                      field: "provincia",
+                      eyebrow: "IA detectó ubicación",
+                      value: aiExtraction.result?.extracted.provincia_sugerida,
+                      secondaryValue: aiExtraction.result?.extracted.localidad_sugerida
+                        ? `Localidad sugerida: ${aiExtraction.result.extracted.localidad_sugerida}`
+                        : undefined,
+                      hidden: Boolean(newForm.provincia.trim() && newForm.localidad.trim()),
+                      applyLabel: "Pasar al campo",
+                    })}
+                  </div>
+                </section>
+              </div>
+
+              {/* Columna Derecha: Tiempos, Autorización & Operatoria */}
+              <div className="space-y-3 min-w-0">
+                {/* ── Bloque 3: Fechas & Autorización ── */}
+                <section className="rounded-xl border border-border/80 bg-card p-3 sm:p-4 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="size-5 rounded bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shrink-0">
+                        <CalendarDays className="size-3 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <h4 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-foreground">
+                        3. Fechas & Autorización Médica
+                      </h4>
+                    </div>
+                  </div>
+
+                  {/* Fila Fechas Operativas */}
+                  <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 @[600px]/form:grid-cols-4 gap-2.5 items-start">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium flex items-center gap-1">
+                        Fecha CX
+                        <HelpTip text="Fecha programada de la intervención quirúrgica." side="top" />
+                      </Label>
+                      <Input
+                        type="date"
+                        value={newForm.date}
+                        onChange={(e) => setNewForm({ ...newForm, date: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                      {renderInlineAiValueSuggestion({
+                        field: "date",
+                        eyebrow: "IA detectó fecha de cirugía",
+                        value: aiExtraction.result?.extracted.fecha_cirugia,
+                        hidden: Boolean(newForm.date.trim()),
+                        applyLabel: "Pasar al campo",
+                      })}
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium">Hora</Label>
+                      <Input
+                        type="time"
+                        value={newForm.time}
+                        onChange={(e) => setNewForm({ ...newForm, time: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium flex items-center gap-1">
+                        Fecha probable
+                        <HelpTip text="Fecha estimada si la confirmación de quirófano aún no es definitiva." side="top" />
+                      </Label>
+                      <Input
+                        type="date"
+                        value={newForm.probableDate}
+                        onChange={(e) => setNewForm({ ...newForm, probableDate: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                      {renderInlineAiValueSuggestion({
+                        field: "probableDate",
+                        eyebrow: "IA detectó fecha probable",
+                        value: aiExtraction.result?.extracted.fecha_probable,
+                        hidden: Boolean(newForm.probableDate.trim()),
+                        applyLabel: "Pasar al campo",
+                      })}
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium flex items-center gap-1">
+                        Fecha envío material
+                        <HelpTip text="Fecha límite en que la caja e implantes deben arribar al centro médico." side="top" />
+                      </Label>
+                      <Input
+                        type="date"
+                        value={newForm.fechaEnvioMaterial}
+                        onChange={(e) => setNewForm({ ...newForm, fechaEnvioMaterial: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fila Autorización & Carga IA */}
+                  <div className="pt-2.5 border-t border-border/50 grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                    {/* N° de Autorización */}
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-medium flex items-center gap-1">
+                            N° de Autorización
+                            <HelpTip text="Número emitido por la obra social o prepaga para trazabilidad y facturación." side="top" />
+                          </Label>
+                          {aiExtraction.result?.extracted.numero_autorizacion && !primaryAuthNumber && (
+                            <button
+                              type="button"
+                              onClick={() => handleAuthNumberChange(aiExtraction.result?.extracted.numero_autorizacion || "")}
+                              className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <Sparkles className="size-2.5" /> Aplicar: {aiExtraction.result.extracted.numero_autorizacion}
+                            </button>
+                          )}
+                        </div>
+                        <Input
+                          type="text"
+                          value={primaryAuthNumber}
+                          onChange={(e) => handleAuthNumberChange(e.target.value)}
+                          placeholder="Ej: AUT-2026-9812..."
+                          className="h-8 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowAdditionalRefs(!showAdditionalRefs)}
+                        >
+                          {showAdditionalRefs ? "Ocultar referencias adicionales ▲" : "+ Agregar otras referencias (DNI, Siniestro, etc.) ▼"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Dropzone directa de orden / autorización */}
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium flex items-center gap-1">
+                        Documento de orden / autorización médica
+                        <HelpTip text="Subí el PDF o foto para autocompletar el caso automáticamente con IA." side="top" />
+                      </Label>
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (e.dataTransfer.files?.[0]) {
+                            await handleAiFileSelected(e.dataTransfer.files[0])
+                          }
+                        }}
+                        className={cn(
+                          "relative flex items-center justify-center border border-dashed rounded-lg p-2.5 text-center transition-colors cursor-pointer hover:bg-muted/30 min-h-[58px]",
+                          uploadedAiFile ? "border-emerald-500/50 bg-emerald-50/20 dark:bg-emerald-950/20" : "border-border/80"
+                        )}
+                      >
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                          onChange={async (e) => {
+                            if (e.target.files?.[0]) {
+                              await handleAiFileSelected(e.target.files[0])
+                            }
+                          }}
+                        />
+                        {uploadedAiFile ? (
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                            <div className="text-left">
+                              <p className="text-xs font-medium text-foreground truncate max-w-[200px]">{uploadedAiFile.name}</p>
+                              <p className="text-[10px] text-muted-foreground">Documento adjunto y procesado con IA</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive ml-2 z-10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleResetAiResult();
+                              }}
+                            >
+                              Cambiar
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-muted-foreground py-0.5">
+                            <UploadCloud className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <div className="text-left">
+                              <p className="text-xs font-medium text-foreground">Soltá la orden médica acá o hacé clic</p>
+                              <p className="text-[10px]">PDF o imagen hasta 4MB para autocompletar con IA</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Editor colapsable de referencias adicionales */}
+                  {showAdditionalRefs && (
+                    <div className="pt-2 border-t border-border/40">
+                      <ReferenciasAdministrativasEditor
+                        value={newForm.referenciasAdministrativas}
+                        onChange={(refs) => setNewForm({ ...newForm, referenciasAdministrativas: refs })}
+                      />
+                    </div>
+                  )}
+                </section>
+
+                {/* ── Bloque 4: Operativo & Observaciones ── */}
+                <section className="rounded-xl border border-border/80 bg-card p-3 sm:p-4 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="size-5 rounded bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shrink-0">
+                        <ClipboardList className="size-3 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <h4 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-foreground">
+                        4. Procedimiento & Observaciones Operativas
+                      </h4>
+                    </div>
+                    {newForm.classification ? (
+                      <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
+                        Clasificación asignada ✓
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+                        Clasificación pendiente *
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Fila Clasificación, Vendedor, Instrumentador */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3 items-start">
+                    {/* Clasificación */}
+                    <div className="space-y-1" data-step0-field="classification">
+                      <Label className="text-xs font-medium flex items-center gap-1">
+                        Clasificación *
+                        <HelpTip text="Clasificación quirúrgica para parametrización y estadísticas operativas." side="top" />
+                      </Label>
+                      <ClasificacionSelectorModal
+                        value={newForm.classification}
+                        onSelect={(classification) => {
+                          setNewForm({ ...newForm, classification })
+                          if (step0Errors.classification) setStep0Errors({ ...step0Errors, classification: undefined })
+                        }}
+                      >
+                        {(openModal) => (
+                          <Button
+                            variant="outline"
+                            type="button"
+                            className={cn(
+                              "h-8 text-sm w-full justify-between font-normal",
+                              step0Errors.classification && "border-destructive text-destructive"
+                            )}
+                            onClick={openModal}
+                          >
+                            {newForm.classification || "Seleccionar clasificación..."}
+                          </Button>
+                        )}
+                      </ClasificacionSelectorModal>
+                      {step0Errors.classification && (
+                        <p className="text-[10px] text-destructive mt-1">{step0Errors.classification}</p>
+                      )}
+                    </div>
+
+                    {/* Vendedor */}
+                    <div>
+                      <ContactLookupField
+                        label="Vendedor"
+                        context={WIZARD_SEARCH_CONTEXTS.vendedor}
+                        value={store.getContactoById(newForm.vendedorContactId || "")}
+                        onChange={(contacto) => {
+                          if (contacto) {
+                            setNewForm((prev) => ({ ...prev, vendedor: contacto.nombre, vendedorContactId: contacto.id }))
+                          } else {
+                            setNewForm((prev) => ({ ...prev, vendedor: "Sin asignar", vendedorContactId: undefined }))
+                          }
+                        }}
+                        placeholder="Buscar vendedor..."
+                      />
+                    </div>
+
+                    {/* Instrumentador */}
+                    <div>
+                      <ContactLookupField
+                        label="Instrumentador"
+                        context={WIZARD_SEARCH_CONTEXTS.instrumentador}
+                        value={store.getContactoById(newForm.instrumentadorContactId || "")}
+                        onChange={(contacto) => {
+                          if (contacto) {
+                            setNewForm((prev) => ({ ...prev, instrumentador: contacto.nombre, instrumentadorContactId: contacto.id }))
+                          } else {
+                            setNewForm((prev) => ({ ...prev, instrumentador: "Sin asignar", instrumentadorContactId: undefined }))
+                          }
+                        }}
+                        placeholder="Buscar instrumentador..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fila Leyenda y Notas */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3 items-start pt-2 border-t border-border/40">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium flex items-center gap-1">
+                          Leyenda para remito
+                          <HelpTip text="Texto impreso en el remito de materiales para chofer o instrumentación." side="top" />
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="leyenda-destacada"
+                            checked={newForm.leyendaDestacada}
+                            onCheckedChange={(checked) => setNewForm({ ...newForm, leyendaDestacada: !!checked })}
+                          />
+                          <Label htmlFor="leyenda-destacada" className="cursor-pointer select-none text-[11px] font-medium text-muted-foreground">
+                            Destacada
+                          </Label>
+                          {newForm.leyendaDestacada && <Badge variant="warning" className="text-[9px] px-1.5 py-0">DESTACADA</Badge>}
+                        </div>
+                      </div>
+                      <Textarea
+                        value={newForm.leyenda}
+                        onChange={(e) => setNewForm({ ...newForm, leyenda: e.target.value })}
+                        placeholder="Observaciones / leyenda impresa en el remito..."
+                        rows={2}
+                        className="text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Notas internas operativas</Label>
+                      <Textarea
+                        value={newForm.notes}
+                        onChange={(e) => setNewForm({ ...newForm, notes: e.target.value })}
+                        placeholder="Comentarios internos del equipo de coordinación..."
+                        rows={2}
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
+          </div>
+        </div>
 
             {/* Asistente lateral de IA */}
             {aiRailOpen && (
               <AiLateralRail
                 isOpen={aiRailOpen}
-                onToggleOpen={() => setAiRailOpen(!aiRailOpen)}
+                onClose={() => setAiRailOpen(false)}
                 companyId={companyId}
-                aiExtraction={aiExtraction}
-                onFileSelected={handleAiFileSelected}
-                onResetAiResult={handleResetAiResult}
-                onApplyAiResult={handleApplyAiResult}
-                aiSuggestionsApplied={aiSuggestionsApplied}
-                onReviewAiFields={handleReviewAiFields}
-                onDismissSuggestionsApplied={() => setAiSuggestionsApplied(false)}
-                uploadedAiFile={uploadedAiFile}
+                isProcessing={aiExtraction.isProcessing}
+                error={aiExtraction.error}
+                result={aiExtraction.result}
+                uploadedFile={uploadedAiFile}
                 saveAuthorizationImage={saveAuthorizationImage}
-                onSaveAuthorizationImageChange={setSaveAuthorizationImage}
+                onToggleSaveAuthorizationImage={setSaveAuthorizationImage}
+                onFileSelected={handleAiFileSelected}
+                onApplyAll={handleApplyAiResult}
+                onReset={handleResetAiResult}
+                hasApplied={aiSuggestionsApplied}
+                onReviewData={handleReviewAiFields}
                 onApplyField={(field) => applyInlineAiValue(field)}
                 patientValue={newForm.patient}
                 surgeonValue={newForm.surgeon}
@@ -2166,22 +2577,34 @@ export function NewSurgeryDialog({
         {/* ═══════════ Post-creation success panel ═══════════ */}
         {creationDone && (
           <div className="flex-1 overflow-y-auto px-4 py-3">
+            {(budgetStatus === "missing" || budgetStatus === "unverified" || intakeResult?.attachment === "unverified" || intakeResult?.refreshFailed) && (
+              <div role="status" className="mb-3 space-y-1 text-xs text-amber-700 dark:text-amber-400">
+                {budgetStatus === "missing" && <p>Alta parcial: cirugía guardada; presupuesto pendiente. Los datos se conservan para reintentar.</p>}
+                {budgetStatus === "unverified" && <p>Cirugía guardada; resultado del presupuesto sin verificar. Solo se verificará su estado para evitar duplicados.</p>}
+                {intakeResult?.attachment === "unverified" && <p>No se pudo confirmar el comprobante. Revise Seguimiento antes de volver a adjuntarlo.</p>}
+                {intakeResult?.refreshFailed && <p>La cirugía está guardada, pero la lista no pudo actualizarse. Recargue para verla.</p>}
+              </div>
+            )}
+            {presupuestoRetrying && <p role="status" className="mb-2 text-xs">Verificando presupuesto…</p>}
             <PostCreationPanel
               hasPresupuesto={Boolean(presupuestoCreated)}
               surgeryId={createdSurgeryId || "—"}
               patientName={newForm.patient}
               classification={newForm.classification}
               onGoToExpediente={() => {
-                if (createdSurgeryId && onOpenCreatedSurgery) {
-                  onOpenCreatedSurgery(store.surgeries.find((item) => item.backendId === createdSurgeryId)?.id ?? createdSurgeryId)
-                  handleClose()
-                } else if (createdSurgeryId) {
-                  handleClose()
+                const surgeryId = intakeResult?.surgeryId ?? createdSurgeryId
+                const loadedSurgery = store.surgeries.find((item) => item.backendId === surgeryId || item.id === surgeryId)
+                if (!loadedSurgery || !onOpenCreatedSurgery) {
+                  toast.error("No se pudo abrir el expediente: la cirugía aún no está disponible en la lista. Los datos se conservan en este diálogo.")
+                  return
                 }
+                onOpenCreatedSurgery(loadedSurgery.id)
+                handleClose()
               }}
               onCreatePresupuestoLater={() => {
-                if (createPRNow && !presupuestoCreated && !presupuestoRetrying) void retryPresupuesto()
-                else handleClose()
+                if (createPRNow && !presupuestoCreated) {
+                  if (!presupuestoRetrying) void retryPresupuesto()
+                } else handleClose()
               }}
             />
           </div>
@@ -2199,7 +2622,7 @@ export function NewSurgeryDialog({
             <MissingCountText count={Object.keys(step0Errors).length} />
           )}
           {!creationDone && wizardStep > 0 && (
-            <Button variant="outline" size="sm" onClick={() => setWizardStep(wizardStep - 1)}>
+            <Button variant="outline" size="sm" disabled={confirming} onClick={() => setWizardStep(wizardStep - 1)}>
               Anterior
             </Button>
           )}
@@ -2209,7 +2632,7 @@ export function NewSurgeryDialog({
             </Button>
           )}
           {!creationDone && wizardStep === 2 && (
-            <Button size="sm" onClick={() => { void handleConfirm() }} className="bg-emerald-600 hover:bg-emerald-700" data-testid="wizard-confirm-btn">
+            <Button size="sm" disabled={confirming} onClick={() => { void handleConfirm() }} className="bg-emerald-600 hover:bg-emerald-700" data-testid="wizard-confirm-btn">
               {createPRNow && prForm.items.length > 0 ? "Crear cirugía + Generar PR" : "Crear cirugía"}
             </Button>
           )}

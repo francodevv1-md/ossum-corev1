@@ -13,7 +13,7 @@
  * here (only the surrounding heavy children/hooks are mocked).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent, act } from "@testing-library/react"
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { useState } from "react"
 
 import { NewSurgeryDialog } from "@/components/cirugias/dialogs/NewSurgeryDialog"
@@ -21,6 +21,17 @@ import { findContactCandidates, scoreContactMatch } from "@/components/cirugias/
 import { EMPTY_NEW_FORM } from "@/lib/cirugias.types"
 import type { NewSurgeryForm } from "@/lib/cirugias.types"
 import type { Contacto } from "@/types"
+import type { SurgeryIntakeResult } from "@/hooks/useCirugiaActions"
+import { ApiClientError } from "@/lib/api/client"
+
+const { apiFetchMock, toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
+  apiFetchMock: vi.fn(), toastSuccessMock: vi.fn(), toastErrorMock: vi.fn(),
+}))
+let mockCompanyId = "test-co"
+vi.mock("@/lib/api/client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/api/client")>(), apiFetch: apiFetchMock,
+}))
+vi.mock("sonner", () => ({ toast: { success: toastSuccessMock, error: toastErrorMock } }))
 
 // ─── Mocks: heavy dependencies are stubbed to keep the focused render stable ───
 
@@ -35,6 +46,7 @@ let mockAiHookState: {
 }
 
 const mockStore = {
+  surgeries: [] as { id: string; backendId?: string }[],
   contactos: [] as Contacto[],
   classifications: [] as string[],
   getContactoById: (id: string) => mockStore.contactos.find((contacto) => contacto.id === id),
@@ -45,7 +57,7 @@ vi.mock("@/lib/store", () => ({
 }))
 
 vi.mock("@/components/auth/AuthProvider", () => ({
-  useAuth: () => ({ activeCompany: { id: "test-co" } }),
+  useAuth: () => ({ activeCompany: { id: mockCompanyId } }),
 }))
 
 vi.mock("@/hooks/useAiExtraction", () => ({
@@ -101,7 +113,6 @@ vi.mock("@/components/presupuestos/TotalesSection", () => ({ TotalesSection: () 
 vi.mock("@/components/presupuestos/TemplateSelector", () => ({ TemplateSelector: () => null }))
 vi.mock("@/components/presupuestos/ImportSubmodal", () => ({ ImportSubmodal: () => null }))
 vi.mock("@/components/presupuestos/LeyendaPresupuestoSection", () => ({ LeyendaPresupuestoSection: () => null }))
-vi.mock("@/components/cirugias/PostCreationPanel", () => ({ PostCreationPanel: () => null }))
 vi.mock("@/components/contactos/ContactoFormDialog", () => ({ ContactoFormDialog: () => null }))
 vi.mock("@/components/cirugias/AiResultsPanel", () => ({ AiResultsPanel: () => null }))
 vi.mock("@/components/cirugias/AiUploadZone", () => ({ AiUploadZone: () => null }))
@@ -206,6 +217,7 @@ function renderDialogWithFormControls(initialForm: NewSurgeryForm = EMPTY_NEW_FO
           onConfirm={onConfirm}
           instrumentadores={[]}
         />
+        <pre data-testid="form-state">{JSON.stringify(newForm)}</pre>
       </>
     )
   }
@@ -230,9 +242,14 @@ function buildContacto(overrides: Partial<Contacto>): Contacto {
 
 describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)", () => {
   beforeEach(() => {
+    mockCompanyId = "test-co"
+    apiFetchMock.mockReset()
+    toastSuccessMock.mockReset()
+    toastErrorMock.mockReset()
     initialLookupCallbacks.clear()
     latestLookupCallbacks.clear()
     mockStore.contactos = []
+    mockStore.surgeries = []
     mockStore.classifications = []
     mockAiHookState = {
       extract: vi.fn(),
@@ -567,6 +584,30 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     expect(screen.getByText("Datos del caso").closest("div")?.getAttribute("aria-current")).toBe("step")
   })
 
+  it("clears institution-derived geography when switching to an institution without an address", () => {
+    const institutionA = { id: "institution-a", nombre: "Institution A", provincia: "Corrientes", localidad: "Goya" } as Contacto
+    const institutionB = { id: "institution-b", nombre: "Institution B" } as Contacto
+    mockStore.contactos = [institutionA, institutionB]
+    renderDialog()
+    act(() => latestLookupCallbacks.get("Institución *")!(institutionA))
+    expect(JSON.parse(screen.getByTestId("form-state").textContent!)).toMatchObject({ provincia: "Corrientes", localidad: "Goya" })
+    act(() => latestLookupCallbacks.get("Institución *")!(institutionB))
+    expect(JSON.parse(screen.getByTestId("form-state").textContent!)).toMatchObject({ institutionContactId: "institution-b", provincia: "", localidad: "" })
+    act(() => latestLookupCallbacks.get("Institución *")!(institutionA))
+    act(() => latestLookupCallbacks.get("Institución *")!(null))
+    expect(JSON.parse(screen.getByTestId("form-state").textContent!)).toMatchObject({ institution: "", provincia: "", localidad: "" })
+  })
+
+  it("preserves manual geography on institution selection when automatic remittance is off", () => {
+    const institution = { id: "institution-b", nombre: "Institution B" } as Contacto
+    mockStore.contactos = [institution]
+    renderDialogWithFormControls()
+    fireEvent.click(screen.getByRole("switch", { name: /Remitir a la institución por defecto/i }))
+    fireEvent.click(screen.getByTestId("set-provincia"))
+    act(() => latestLookupCallbacks.get("Institución *")!(institution))
+    expect(JSON.parse(screen.getByTestId("form-state").textContent!)).toMatchObject({ provincia: "Buenos Aires" })
+  })
+
   it("keeps provincia/localidad Selects controlled from first render", () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 
@@ -584,5 +625,253 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
     ).toBe(false)
 
     consoleErrorSpy.mockRestore()
+  })
+
+  function renderIntakeResult(result: SurgeryIntakeResult, confirm?: DialogProps["onConfirm"]) {
+    const prForm = buildPrFormStub()
+    prForm.formData = { ...prForm.formData, fechaEmision: "2026-10-07", vigencia: "30 días", concepto: "Keep concept", clientContactId: "payer-1" }
+    prForm.items = [{ id: "line-1", name: "Implant", code: "IMP", quantity: 2, unitPrice: 100, ivaKey: "21", catalogItemId: "catalog-1" } as DialogProps["prForm"]["items"][number]]
+    const props: DialogProps = {
+      open: true, onOpenChange: vi.fn(), wizardStep: 2, setWizardStep: vi.fn(),
+      newForm: { ...EMPTY_NEW_FORM, patient: "Keep patient", notes: "Keep notes" }, setNewForm: vi.fn(),
+      createPRNow: true, setCreatePRNow: vi.fn(), prForm,
+      onConfirm: confirm ?? vi.fn().mockResolvedValue(result), createdSurgeryId: result.surgeryId, instrumentadores: [],
+      onOpenCreatedSurgery: vi.fn(),
+    }
+    return { ...render(<NewSurgeryDialog {...props} />), props }
+  }
+
+  const partialResult: SurgeryIntakeResult = {
+    surgeryId: "db-surgery-1", companyId: "test-co", budget: "missing", attachment: "not-requested", refreshFailed: false,
+  }
+
+  it("preserves partial intake data and reconciles before posting a budget with backend ID", async () => {
+    apiFetchMock.mockResolvedValueOnce([]).mockResolvedValueOnce({ id: "budget-1" })
+    const { props } = renderIntakeResult(partialResult)
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    expect(await screen.findByText(/Alta parcial:/)).toBeInTheDocument()
+    expect(apiFetchMock).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await screen.findByText("Cirugía y presupuesto creados exitosamente")
+    expect(apiFetchMock.mock.calls[0]).toEqual(["/api/companies/test-co/presupuestos?surgeryId=db-surgery-1&take=1"])
+    expect(apiFetchMock.mock.calls[1][0]).toBe("/api/companies/test-co/presupuestos")
+    expect(apiFetchMock.mock.calls[1][1].method).toBe("POST")
+    expect(JSON.parse(apiFetchMock.mock.calls[1][1].body)).toMatchObject({
+      surgeryId: "db-surgery-1", title: "Keep concept", clientContactId: "payer-1",
+      items: [{ description: "Implant", quantity: 2, unitPrice: 100, vatRate: 21 }],
+    })
+    expect(props.setNewForm).not.toHaveBeenCalled()
+    expect(props.prForm.resetForm).not.toHaveBeenCalled()
+    expect(props.onConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses confirmed intake evidence even if a later list request would fail", async () => {
+    apiFetchMock.mockRejectedValue(new Error("Offline"))
+    renderIntakeResult({ ...partialResult, budget: "confirmed", attachment: "unverified", refreshFailed: true })
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText("Cirugía y presupuesto creados exitosamente")
+    expect(screen.getByText(/No se pudo confirmar el comprobante/)).toBeInTheDocument()
+    expect(screen.getByText(/la lista no pudo actualizarse/)).toBeInTheDocument()
+    expect(apiFetchMock).not.toHaveBeenCalled()
+  })
+
+  it("does not duplicate an existing budget when reconciling an unverified outcome", async () => {
+    apiFetchMock.mockResolvedValue([{ id: "already-saved" }])
+    renderIntakeResult({ ...partialResult, budget: "unverified" })
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/resultado del presupuesto sin verificar/)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await screen.findByText("Cirugía y presupuesto creados exitosamente")
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+    expect(apiFetchMock.mock.calls[0][1]).toBeUndefined()
+  })
+
+  it("waits for a delayed original commit without another POST after empty reconciliation", async () => {
+    apiFetchMock.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "delayed-original" }])
+    renderIntakeResult({ ...partialResult, budget: "unverified" })
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/resultado del presupuesto sin verificar/)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await waitFor(() => expect(screen.queryByText("Verificando presupuesto…")).not.toBeInTheDocument())
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+    expect(screen.getByText(/resultado del presupuesto sin verificar/)).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await screen.findByText("Cirugía y presupuesto creados exitosamente")
+    expect(apiFetchMock.mock.calls.every(call => call[1] === undefined)).toBe(true)
+  })
+
+  it("retains partial intake when expediente is absent after refresh failure", async () => {
+    const { props } = renderIntakeResult({ ...partialResult, refreshFailed: true })
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/Alta parcial:/)
+    fireEvent.click(screen.getByTestId("action-expediente"))
+    expect(props.onOpenChange).not.toHaveBeenCalled()
+    expect(props.onOpenCreatedSurgery).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("la cirugía aún no está disponible"))
+    expect(props.prForm.resetForm).not.toHaveBeenCalled()
+    expect(screen.getByText(/Alta parcial:/)).toBeInTheDocument()
+  })
+
+  it("opens the loaded expediente by visible ID before closing", async () => {
+    mockStore.surgeries = [{ id: "CX-100", backendId: partialResult.surgeryId }]
+    const { props } = renderIntakeResult(partialResult)
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/Alta parcial:/)
+    fireEvent.click(screen.getByTestId("action-expediente"))
+    expect(props.onOpenCreatedSurgery).toHaveBeenCalledWith("CX-100")
+    expect(props.onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it.each([new Error("Lost response"), new ApiClientError("Server failure", 503)])("never retries another POST after an ambiguous retry and empty reads", async (error) => {
+    apiFetchMock.mockResolvedValueOnce([]).mockRejectedValueOnce(error).mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "late-retry-commit" }])
+    renderIntakeResult(partialResult)
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/Alta parcial:/)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(screen.getByText(/resultado del presupuesto sin verificar/)).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await waitFor(() => expect(screen.queryByText("Verificando presupuesto…")).not.toBeInTheDocument())
+    expect(apiFetchMock).toHaveBeenCalledTimes(4)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await screen.findByText("Cirugía y presupuesto creados exitosamente")
+    expect(apiFetchMock.mock.calls.filter(call => call[1]?.method === "POST")).toHaveLength(1)
+  })
+
+  it("allows a new attempt after a definitive retry rejection", async () => {
+    apiFetchMock.mockResolvedValueOnce([]).mockRejectedValueOnce(new ApiClientError("Rejected", 422))
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce({ id: "pr-1" })
+    renderIntakeResult(partialResult)
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/Alta parcial:/)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(screen.getByText(/Alta parcial:/)).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await screen.findByText("Cirugía y presupuesto creados exitosamente")
+    expect(apiFetchMock.mock.calls.filter(call => call[1]?.method === "POST")).toHaveLength(2)
+  })
+
+  it("keeps an unverified result and never POSTs while reconciliation is unavailable", async () => {
+    apiFetchMock.mockRejectedValue(new Error("Offline"))
+    renderIntakeResult({ ...partialResult, budget: "unverified" })
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/resultado del presupuesto sin verificar/)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(apiFetchMock.mock.calls.every(call => call[1] === undefined)).toBe(true)
+    expect(toastSuccessMock).not.toHaveBeenCalled()
+    expect(screen.getByText(/resultado del presupuesto sin verificar/)).toBeInTheDocument()
+  })
+
+  it("reconciles a lost retry response and prevents concurrent retries", async () => {
+    let resolveRead!: (value: unknown) => void
+    apiFetchMock.mockImplementationOnce(() => new Promise(resolve => { resolveRead = resolve }))
+      .mockRejectedValueOnce(new Error("Response lost"))
+      .mockResolvedValueOnce([{ id: "persisted-budget" }])
+    const { props } = renderIntakeResult(partialResult)
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/Alta parcial:/)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+    expect(props.onOpenChange).not.toHaveBeenCalled()
+    await act(async () => { resolveRead([]) })
+    await screen.findByText("Cirugía y presupuesto creados exitosamente")
+    expect(apiFetchMock).toHaveBeenCalledTimes(3)
+    expect(apiFetchMock.mock.calls.filter(call => call[1]?.method === "POST")).toHaveLength(1)
+  })
+
+  it.each(["company", "close"])("discards pending confirmation after %s change", async (change) => {
+    let resolveConfirm!: (value: SurgeryIntakeResult) => void
+    const onConfirm = vi.fn(() => new Promise<SurgeryIntakeResult>(resolve => { resolveConfirm = resolve }))
+    const { props, rerender } = renderIntakeResult(partialResult, onConfirm)
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole("button", { name: "Anterior" })).toBeDisabled()
+    if (change === "company") mockCompanyId = "company-2"
+    rerender(<NewSurgeryDialog {...props} open={change !== "close"} />)
+    await act(async () => { resolveConfirm(partialResult) })
+    expect(screen.queryByTestId("action-create-pr-later")).not.toBeInTheDocument()
+    expect(apiFetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each(["company", "close"])("ignores a retry POST response after %s change", async (change) => {
+    let resolvePost!: (value: unknown) => void
+    apiFetchMock.mockResolvedValueOnce([])
+      .mockImplementationOnce(() => new Promise(resolve => { resolvePost = resolve }))
+    const { props, rerender } = renderIntakeResult(partialResult)
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/Alta parcial:/)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2))
+    expect(apiFetchMock.mock.calls[1][0]).toBe("/api/companies/test-co/presupuestos")
+    if (change === "company") mockCompanyId = "company-2"
+    rerender(<NewSurgeryDialog {...props} open={change !== "close"} />)
+    await act(async () => { resolvePost({ id: "saved-in-old-company" }) })
+    expect(toastSuccessMock).not.toHaveBeenCalled()
+    expect(screen.queryByText("Cirugía y presupuesto creados exitosamente")).not.toBeInTheDocument()
+    expect(apiFetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(["company", "close"])("does not continue a budget retry after %s change", async (change) => {
+    let resolveRead!: (value: unknown) => void
+    apiFetchMock.mockImplementation(() => new Promise(resolve => { resolveRead = resolve }))
+    const { props, rerender } = renderIntakeResult(partialResult)
+    fireEvent.click(screen.getByTestId("wizard-confirm-btn"))
+    await screen.findByText(/Alta parcial:/)
+    fireEvent.click(screen.getByTestId("action-create-pr-later"))
+    if (change === "company") mockCompanyId = "company-2"
+    rerender(<NewSurgeryDialog {...props} open={change !== "close"} />)
+    await act(async () => { resolveRead([]) })
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+    expect(toastSuccessMock).not.toHaveBeenCalled()
+  })
+
+  it("does not false-positive match on single common first name without surname/DNI match", () => {
+    const contact: Contacto = {
+      id: "cont-1",
+      nombre: "López, Diego",
+      codigoContacto: "C-1",
+      roles: ["cliente"],
+      groups: ["pacientes"],
+      tipoPersona: "fisica",
+      estado: "activo",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    const match = scoreContactMatch({
+      contacto: contact,
+      detectedName: "BOBADILLA DIEGO",
+      field: "patient",
+    })
+
+    expect(match).toBeNull()
+  })
+
+  it("correctly matches contact when surname and first name match in different order", () => {
+    const contact: Contacto = {
+      id: "cont-2",
+      nombre: "Diego Bobadilla",
+      codigoContacto: "C-2",
+      roles: ["cliente"],
+      groups: ["pacientes"],
+      tipoPersona: "fisica",
+      estado: "activo",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    const match = scoreContactMatch({
+      contacto: contact,
+      detectedName: "BOBADILLA DIEGO",
+      field: "patient",
+    })
+
+    expect(match).not.toBeNull()
+    expect(match?.contacto.nombre).toBe("Diego Bobadilla")
   })
 })

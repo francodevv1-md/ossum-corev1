@@ -84,7 +84,7 @@ export function AiLateralRail({
       aria-label="Panel asistente de IA"
       className={cn(
         "flex flex-col border-l border-border/80 bg-muted/15 min-h-0",
-        "w-full lg:w-[350px] xl:w-[390px] shrink-0 overflow-hidden transition-all duration-200"
+        "w-80 max-w-[340px] shrink-0 overflow-hidden transition-all duration-200"
       )}
     >
       {/* Header del Riel */}
