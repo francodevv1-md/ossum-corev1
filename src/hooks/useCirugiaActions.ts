@@ -474,7 +474,7 @@ export function useCirugiaActions() {
     if (!dialogSurgery || !newDate) return
     if (isSubmittingDateRef.current) return
     const existing = store.surgeries.find((s) => s.id === dialogSurgery.id || s.backendId === dialogSurgery.id)
-    const backendId = (dialogSurgery.backendId || existing?.backendId)?.trim(), companyId = activeCompany?.id
+    const backendId = (isTechnicalId(dialogSurgery.backendId) ? dialogSurgery.backendId : isTechnicalId(existing?.backendId) ? existing.backendId : null), companyId = activeCompany?.id
     if (!companyId || !backendId) { const message = !companyId ? "Se requiere una empresa activa para reprogramar la fecha quirúrgica" : "Se requiere el identificador técnico de backend para reprogramar la cirugía"; setDateChangeError(message); toast.error(message); return }
     if (!dateDialogSessionRef.current.isOpen) dateDialogSessionRef.current = { generation: dateDialogSessionRef.current.generation + 1, companyId, backendId, surgeryId: dialogSurgery.id, isOpen: true }
     const session = { ...dateDialogSessionRef.current }

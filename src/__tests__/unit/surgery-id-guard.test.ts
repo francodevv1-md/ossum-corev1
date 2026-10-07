@@ -3,6 +3,9 @@ import { cleanup, renderHook, waitFor } from "@testing-library/react"
 import type { ListRemitosParams, RemitoApiRow } from "@/lib/api/remitos"
 import { isTechnicalId } from "@/lib/api/ids"
 
+vi.mock("@/lib/auth/client", () => ({ getAccessToken: vi.fn().mockResolvedValue(null) }))
+import { loadAuthorizationAttachments, loadAuthorizationFeed } from "@/lib/mail/authorization-evidence"
+
 const mocks = vi.hoisted(() => ({
   company: "company-a" as string | undefined,
   user: "user-a",
@@ -159,3 +162,15 @@ describe("R10 surgery technical-id guard across all call sites", () => {
     expect(guard(surgery.backendId)).toBe(TECHNICAL);
   });
 });
+
+describe("R10 authorization-evidence helpers short-circuit on missing technical id", () => {
+  it("loadAuthorizationFeed returns an empty feed when surgeryId is empty", async () => {
+    const result = await loadAuthorizationFeed("company", "")
+    expect(result.entries).toEqual([])
+    expect(result.meta.total).toBe(0)
+    expect(result.meta.hasMore).toBe(false)
+  })
+  it("loadAuthorizationAttachments throws when surgeryId is empty", async () => {
+    await expect(loadAuthorizationAttachments("company", "", {} as any)).rejects.toThrow(/identificador t.cnico/i)
+  })
+})

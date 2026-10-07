@@ -4,12 +4,13 @@ import { useState } from "react"
 import { Bell, CalendarClock, Loader2 } from "lucide-react"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { apiFetch } from "@/lib/api/client"
+import { isTechnicalId } from "@/lib/api/ids"
 import { Button } from "@/components/ui/button"
 import type { Surgery } from "@/types"
 
 export function CoordinatorSupervisionActions({ surgery, coordinatorName }: { surgery: Surgery; coordinatorName: string }) {
   const { activeCompany } = useAuth()
-  const backendSurgeryId = surgery.backendId ?? surgery.id
+  const backendSurgeryId = isTechnicalId(surgery.backendId) ? surgery.backendId : ""
   const [addingNote, setAddingNote] = useState(false)
   const [notifying, setNotifying] = useState(false)
   const [message, setMessage] = useState<string | null>(null)

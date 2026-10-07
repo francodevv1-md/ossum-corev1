@@ -154,8 +154,8 @@ export function TabPaneAdjuntos({ surgery }: TabPaneAdjuntosProps) {
         const doc = entry.documentMeta
         const dateObj = new Date(entry.createdAt)
         const isImg = Boolean(doc.mimeType?.startsWith("image") || /\.(png|jpe?g|webp|gif|svg)$/i.test(doc.fileName))
-        const docUrl = isImg
-          ? `/api/companies/${encodeURIComponent(activeCompany?.id || "active")}/surgeries/${encodeURIComponent(isTechnicalId(surgery.backendId) ? surgery.backendId : "")}/seguimiento/documents/${encodeURIComponent(entry.id)}`
+        const docUrl = isImg && isTechnicalId(surgery.backendId)
+          ? `/api/companies/${encodeURIComponent(activeCompany?.id || "active")}/surgeries/${encodeURIComponent(surgery.backendId ?? "")}/seguimiento/documents/${encodeURIComponent(entry.id)}`
           : undefined
 
         list.push({

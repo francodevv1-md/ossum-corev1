@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useMemo, useEffect, useRef } from "react"
+import { isTechnicalId } from "@/lib/api/ids";
 import {
   Activity,
   Calendar,
@@ -96,7 +97,7 @@ export function InvoiceSurgeryLinkModal({
         (s) => s.backendId === highlightedId || s.id === highlightedId
       )
       if (!exists) {
-        setHighlightedId(filteredSurgeries[0].backendId || filteredSurgeries[0].id)
+        setHighlightedId(isTechnicalId(filteredSurgeries[0].backendId) ? filteredSurgeries[0].backendId : null)
       }
     } else {
       setHighlightedId(null)
@@ -107,23 +108,23 @@ export function InvoiceSurgeryLinkModal({
     if (filteredSurgeries.length === 0) return
 
     const currentIndex = filteredSurgeries.findIndex(
-      (s) => (s.backendId || s.id) === highlightedId
+      (s) => (isTechnicalId(s.backendId) ? s.backendId : null) === highlightedId
     )
 
     if (e.key === "ArrowDown") {
       e.preventDefault()
       const nextIndex = currentIndex < filteredSurgeries.length - 1 ? currentIndex + 1 : 0
       const nextItem = filteredSurgeries[nextIndex]
-      setHighlightedId(nextItem.backendId || nextItem.id)
+      setHighlightedId(isTechnicalId(nextItem.backendId) ? nextItem.backendId : null)
     } else if (e.key === "ArrowUp") {
       e.preventDefault()
       const prevIndex = currentIndex > 0 ? currentIndex - 1 : filteredSurgeries.length - 1
       const prevItem = filteredSurgeries[prevIndex]
-      setHighlightedId(prevItem.backendId || prevItem.id)
+      setHighlightedId(isTechnicalId(prevItem.backendId) ? prevItem.backendId : null)
     } else if (e.key === "Enter" && highlightedId) {
       e.preventDefault()
       const selected = filteredSurgeries.find(
-        (s) => (s.backendId || s.id) === highlightedId
+        (s) => (isTechnicalId(s.backendId) ? s.backendId : null) === highlightedId
       )
       if (selected) {
         onSelect(selected)
@@ -135,7 +136,7 @@ export function InvoiceSurgeryLinkModal({
   const handleConfirmSelect = () => {
     if (!highlightedId) return
     const selected = filteredSurgeries.find(
-      (s) => (s.backendId || s.id) === highlightedId
+      (s) => (isTechnicalId(s.backendId) ? s.backendId : null) === highlightedId
     )
     if (selected) {
       onSelect(selected)
@@ -262,7 +263,7 @@ export function InvoiceSurgeryLinkModal({
           ) : (
             <div className="space-y-1" role="listbox" aria-label="Lista de cirugías disponibles">
               {filteredSurgeries.map((s) => {
-                const surgeryKey = s.backendId || s.id
+                const surgeryKey = isTechnicalId(s.backendId) ? s.backendId : null
                 const isSelected = highlightedId === surgeryKey
                 const isCurrentlyLinked = (s.backendId === selectedSurgeryId || s.id === selectedSurgeryId)
 

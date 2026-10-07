@@ -2,23 +2,21 @@
 
 import React, { useState, useCallback, useMemo } from "react"
 import { useAuth } from "@/components/auth/AuthProvider"
-import { useOrtoTrackStore } from "@/lib/store"
-import { apiFetch } from "@/lib/api/client"
+import { addBackendSurgeryNote } from "@/lib/api/backend-surgeries"
+import { isTechnicalId } from "@/lib/api/ids"
+import { canCreateSeguimientoEntry } from "@/lib/permissions/seguimiento"
 import type { Surgery } from "@/types"
 import { toast } from "sonner"
-import {
-  dispatchDateRequestedAlert,
-  sendNtfyNotification,
-  getCoordinatorTopic,
-} from "@/lib/services/ntfy.service"
 import {
   CoordinatorActionConfirmDialog,
   type CoordinatorActionType,
 } from "@/components/coordinadores/modal/CoordinatorActionConfirmDialog"
 
 export function useCoordinatorActions() {
-  const { activeCompany } = useAuth()
-  const store = useOrtoTrackStore()
+  const { activeCompany, currentAccess } = useAuth()
+  const canRequestDate = canCreateSeguimientoEntry(currentAccess?.role)
+  // No supported generic operational event exists for this action.
+  const canNotify = false
   const [loadingAction, setLoadingAction] = useState<Record<string, "request-date" | "notify" | null>>({})
 
   // Modal confirmation state
@@ -34,21 +32,19 @@ export function useCoordinatorActions() {
 
   // Open confirmation modal for requesting date
   const requestDate = useCallback((surgery: Surgery) => {
+    if (!canRequestDate) return
     setConfirmState({
       isOpen: true,
       actionType: "request-date",
       surgery,
     })
-  }, [])
+  }, [canRequestDate])
 
   // Open confirmation modal for notifying coordinator
   const notifyCoordinator = useCallback((surgery: Surgery) => {
-    setConfirmState({
-      isOpen: true,
-      actionType: "notify",
-      surgery,
-    })
-  }, [])
+    if (!canNotify) return
+    setConfirmState({ isOpen: true, actionType: "notify", surgery })
+  }, [canNotify])
 
   const closeConfirmDialog = useCallback(() => {
     setConfirmState((prev) => ({ ...prev, isOpen: false }))
@@ -62,7 +58,11 @@ export function useCoordinatorActions() {
 
       const surgeryKey = surgery.id
       const coordName = surgery.coordinadorCx?.trim() || "el coordinador"
-      const backendId = surgery.backendId || surgery.id
+      const backendId = isTechnicalId(surgery.backendId) ? surgery.backendId : null
+      if (!activeCompany?.id || !backendId) {
+        toast.error("La solicitud requiere una cirugía y empresa sincronizadas con el servidor")
+        return
+      }
 
       if (actionType === "request-date") {
         setLoadingAction((prev) => ({ ...prev, [surgeryKey]: "request-date" }))
@@ -71,113 +71,20 @@ export function useCoordinatorActions() {
             ? `Se solicita a ${coordName} definir fecha definitiva de cirugía. Observación: ${customNote.trim()}`
             : `Se solicita a ${coordName} definir fecha definitiva de cirugía.`
 
-          // Register in store
-          store.addSurgeryNote(
-            surgery.id,
-            noteText,
-            "Urgente",
-            "Alta",
-            false
-          )
-          store.addAuditEvent(
-            surgery.id,
-            "Solicitud de fecha",
-            `Solicitud de fecha enviada para ${coordName}`
-          )
-
-          // Backend API call if available
-          if (activeCompany?.id) {
-            try {
-              await apiFetch(
-                `/api/companies/${activeCompany.id}/surgeries/${encodeURIComponent(backendId)}/seguimiento`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    entryType: "note",
-                    summary: "Solicitud de fecha de cirugía",
-                    content: noteText,
-                    evidenceRef: { priority: "alta", highlighted: true, noteType: "coordinacion" },
-                  }),
-                }
-              )
-            } catch {
-              // Local store fallback already populated
-            }
-          }
-
-          // Push alert
-          dispatchDateRequestedAlert(surgery, undefined, customNote).catch(() => {})
-
-          toast.success(`Solicitud de fecha enviada y notificada a ${coordName}`)
+          await addBackendSurgeryNote(activeCompany.id, backendId, { content: noteText, noteType: "Coordinación", priority: "Alta", isUrgent: true })
+          window.dispatchEvent(new Event("coordination-updated"))
+          toast.success("Solicitud registrada en Seguimiento")
           closeConfirmDialog()
         } catch (err) {
-          toast.error("Error al registrar solicitud de fecha")
+          toast.error(err instanceof Error ? err.message : "Error al registrar solicitud de fecha")
         } finally {
           setLoadingAction((prev) => ({ ...prev, [surgeryKey]: null }))
         }
       } else if (actionType === "notify") {
-        setLoadingAction((prev) => ({ ...prev, [surgeryKey]: "notify" }))
-        try {
-          const noteText = customNote?.trim()
-            ? `Notificación operativa enviada a ${coordName}. Mensaje: ${customNote.trim()}`
-            : `Notificación operativa enviada a ${coordName} sobre el estado del caso.`
-
-          // Register in store
-          store.addSurgeryNote(
-            surgery.id,
-            noteText,
-            "Logística",
-            "Media",
-            false
-          )
-          store.addAuditEvent(
-            surgery.id,
-            "Notificación a coordinador",
-            `Aviso emitido a ${coordName}`
-          )
-
-          if (activeCompany?.id) {
-            try {
-              await apiFetch(
-                `/api/companies/${activeCompany.id}/surgeries/${encodeURIComponent(backendId)}/notifications/operational`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    sourceEntityId: `notif:${backendId}`,
-                    eventType: "surgery_coordination_alert",
-                    coordinatorName: coordName,
-                    note: customNote?.trim() || undefined,
-                  }),
-                }
-              )
-            } catch {
-              // fallback
-            }
-          }
-
-          // Push alert to coordinator topic
-          sendNtfyNotification({
-            topic: getCoordinatorTopic(surgery.coordinadorCx),
-            title: `🔔 Aviso Coordinación: CX ${surgery.visibleNumber || surgery.id}`,
-            message: customNote?.trim()
-              ? `Seguimiento de ${surgery.patient} (${surgery.institution}). ${customNote.trim()}`
-              : `Seguimiento de ${surgery.patient} (${surgery.institution}). Estado: ${surgery.state}`,
-            priority: "high",
-            tags: ["bell", "hospital"],
-          }).catch(() => {})
-
-          toast.success(`Notificación enviada a ${coordName} para CX ${surgery.visibleNumber || surgery.id}`)
-          closeConfirmDialog()
-        } catch (err) {
-          toast.error("Error al notificar al coordinador")
-        } finally {
-          setLoadingAction((prev) => ({ ...prev, [surgeryKey]: null }))
-        }
+        toast.error("No hay un evento operativo válido para notificar al coordinador desde esta vista")
       }
     },
-    [confirmState, activeCompany, store, closeConfirmDialog]
+    [confirmState, activeCompany, closeConfirmDialog]
   )
 
   const shareViaWhatsApp = useCallback((surgery: Surgery) => {
@@ -227,5 +134,6 @@ export function useCoordinatorActions() {
     closeConfirmDialog,
     executeConfirmedAction,
     confirmDialog,
+    canNotify,
   }
 }
