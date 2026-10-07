@@ -123,7 +123,28 @@ export const CX_STATUS_TRANSITIONS: Partial<Record<CxStatus, readonly CxStatus[]
   scheduled: ["performed", "suspended", "cancelled"],
   performed: ["finalized", "suspended"],
   suspended: ["authorized", "pending", "scheduled", "cancelled"],
+  cancelled: [],
+  finalized: [],
 };
+
+const UI_TO_CANONICAL: Record<string, CxStatus> = {
+  pendiente: "pending",
+  autorizada: "authorized",
+  "en transito": "scheduled",
+  realizada: "performed",
+  finalizada: "finalized",
+  suspendida: "suspended",
+  cancelada: "cancelled",
+  "sin autorizar": "unauthorized",
+  scheduled: "scheduled",
+  programmed: "scheduled",
+};
+
+export function mapUiToCanonicalCxStatus(value: string): CxStatus | null {
+  if (!value) return null
+  const canonical = UI_TO_CANONICAL[value.trim().toLowerCase()]
+  return canonical ?? null
+}
 
 function isCxStatus(value: string): value is CxStatus {
   return CX_STATUS.includes(value as CxStatus);
@@ -142,11 +163,14 @@ export function validateCxStatus(status: string): CxStatus {
     throw badRequest("cxStatus is required", "missing_cx_status");
   }
 
-  if (!isCxStatus(status)) {
-    throw badRequest(`Invalid surgery cxStatus: ${status}`, "invalid_surgery_cx_status");
+  if (isCxStatus(status)) {
+    return status;
   }
 
-  return status;
+  const fromUi = mapUiToCanonicalCxStatus(status);
+  if (fromUi) return fromUi;
+
+  throw badRequest(`Invalid surgery cxStatus: ${status}`, "invalid_surgery_cx_status");
 }
 
 export function validatePrepStatus(status: string): PrepStatus {

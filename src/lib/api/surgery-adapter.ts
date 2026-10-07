@@ -406,19 +406,21 @@ function normalizeSurgeryState(status: string | null): SurgeryState {
     case "draft":
     case "pending":
     case "pendiente":
-    case "scheduled":
-    case "preparing":
-    case "en preparación":
       return "Pendiente"
+    case "unauthorized":
     case "sin autorizar":
     case "sin fecha":
-    case "unauthorized":
       return "Sin autorizar"
     case "authorized":
     case "autorizada":
       return "Autorizada"
+    case "scheduled":
+    case "programada":
+      return "Pendiente"
     case "in transit":
+    case "in_transit":
     case "en tránsito":
+    case "en transito":
       return "En tránsito"
     case "performed":
     case "realizada":
@@ -426,10 +428,15 @@ function normalizeSurgeryState(status: string | null): SurgeryState {
     case "finalized":
     case "finalizada":
       return "Finalizada"
+    case "suspended":
     case "suspendida":
       return "Suspendida"
+    case "cancelled":
     case "cancelada":
       return "Cancelada"
+    case "preparing":
+    case "en preparación":
+      return "Pendiente"
     default:
       return "Pendiente"
   }
@@ -437,20 +444,34 @@ function normalizeSurgeryState(status: string | null): SurgeryState {
 
 function normalizePreparationState(status: string | null): PreparationState {
   switch (status?.trim().toLowerCase()) {
+    case null:
+    case undefined:
+    case "":
     case "sin preparar":
+    case "not_started":
+    case "frozen_with_missing":
+    case "delivered":
+    case "returned":
       return "Sin preparar"
     case "preparing":
     case "en preparación":
       return "En preparación"
-    case "entregado":
-      return "Entregado"
-    case "shipped":
-    case "enviado":
-      return "Enviado"
     case "frozen":
     case "congelado":
       return "Congelado"
+    case "shipped":
+    case "enviado":
+    case "despachado":
+    case "despachada":
+      return "Enviado"
+    case "delivered":
+    case "entregado":
+    case "entregada":
+      return "Entregado"
+    case "returned":
     case "retirado":
+    case "devuelto":
+    case "devuelta":
       return "Retirado"
     case "con faltantes":
     case "congelado con faltantes":
@@ -531,7 +552,7 @@ export function mapApiSurgeryRowToSurgery(
     expedienteNumber: row.expedienteNumber ?? existing?.expedienteNumber,
     preparationState: normalizePreparationState(row.prepStatus),
     facturado: existing?.facturado ?? false,
-    autorizado: existing?.autorizado ?? normalizedState === "Autorizada",
+    autorizado: normalizedState === "Autorizada" ? true : (existing?.autorizado ?? false),
     urgente: row.priority === "urgent",
     leyendaDestacada: existing?.leyendaDestacada ?? false,
     materialAvailabilityDate: normalizeDate(row.materialAvailabilityDate) || undefined,

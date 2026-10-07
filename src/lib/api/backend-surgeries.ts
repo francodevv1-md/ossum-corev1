@@ -4,9 +4,14 @@ import {
   type RawSurgeryApiRecord,
 } from "@/lib/api/surgery-adapter"
 import type { Surgery } from "@/types"
+import type { MentionRef } from "@/lib/mentions/types"
 
 export type FetchBackendActiveSurgeriesParams = {
   branchId?: string | null
+}
+
+export function fetchBackendSurgery(companyId: string, surgeryId: string) {
+  return apiFetch<RawSurgeryApiRecord>(`/api/companies/${encodeURIComponent(companyId)}/surgeries/${encodeURIComponent(surgeryId)}`, { cache: "no-store" })
 }
 
 export async function fetchBackendActiveSurgeries(
@@ -28,6 +33,7 @@ export async function updateBackendSurgeryManagement(
   companyId: string,
   surgeryId: string,
   input: {
+    coordinatorContactId?: string | null
     surgeryDate?: string | null
     surgeryTimeSpecified?: boolean | null
     priority?: "normal" | "urgent"
@@ -46,15 +52,18 @@ export async function updateBackendSurgeryManagement(
 }
 export function mapUiStateToCanonicalCxStatus(state?: string | null): string {
   if (!state) return "pending"
-  switch (state.trim().toLowerCase()) {
+  const trimmed = state.trim().toLowerCase()
+  switch (trimmed) {
     case "autorizada":
     case "authorized":
       return "authorized"
     case "en tránsito":
     case "en transito":
-    case "programada":
-    case "scheduled":
+    case "in transit":
     case "in_transit":
+    case "scheduled":
+    case "scheduled":
+    case "programada":
       return "scheduled"
     case "realizada":
     case "performed":
@@ -104,6 +113,7 @@ export async function addBackendSurgeryNote(
     noteType?: string
     priority?: string
     isUrgent?: boolean
+    mentions?: MentionRef[]
   }
 ) {
   return apiFetch(
@@ -113,9 +123,13 @@ export async function addBackendSurgeryNote(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         content: payload.content,
-        entryType: payload.noteType || "Coordinación",
-        priority: payload.priority || "Media",
-        isUrgent: payload.isUrgent || false,
+        entryType: "note",
+        mentions: payload.mentions,
+        evidenceRef: {
+          noteType: (payload.noteType || "Coordinación").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(),
+          priority: (payload.priority || "Media").toLowerCase(),
+          highlighted: payload.isUrgent || false,
+        },
       }),
     }
   )

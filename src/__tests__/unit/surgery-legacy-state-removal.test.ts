@@ -52,6 +52,26 @@ describe("finite surgery legacy-state removal", () => {
   })
 
   it.each([
+    ["Pendiente", "pending"], ["Autorizada", "authorized"],
+    ["En tránsito", "scheduled"], ["en transito", "scheduled"],
+    ["Realizada", "performed"], ["Finalizada", "finalized"],
+    ["Suspendida", "suspended"], ["Cancelada", "cancelled"],
+    ["Sin autorizar", "unauthorized"],
+  ])("round-trips %s through canonical encoder", (ui, canonical) => {
+    expect(mapUiStateToCanonicalCxStatus(ui)).toBe(canonical)
+  })
+
+  it.each([
+    ["cancelled", "Cancelada"], ["suspended", "Suspendida"],
+    ["performed", "Realizada"], ["finalized", "Finalizada"],
+    ["unauthorized", "Sin autorizar"], ["authorized", "Autorizada"],
+    ["pending", "Pendiente"],
+  ])("preserves %s in adapter state", (canonical, expected) => {
+    const [mapped] = mapApiSurgeryListToSurgeries([{ id: "backend-1", cxStatus: canonical, surgeryDate: "2026-10-07" }])
+    expect(mapped.state).toBe(expected)
+  })
+
+  it.each([
     ["pending", "Pendiente"], ["authorized", "Autorizada"],
     ["scheduled", "Pendiente"], ["unknown", "Pendiente"],
   ])("preserves inbound %s mapping without inferring authorization from missing dates", (status, expected) => {
@@ -59,7 +79,7 @@ describe("finite surgery legacy-state removal", () => {
     expect(mapped.state).toBe(expected)
     expect(mapped.backendCxStatus).toBe(status)
     expect(mapped.date).toBe("")
-    expect(mapUiStateToCanonicalCxStatus(status)).toBe(status === "unknown" ? "pending" : status)
+    expect(mapUiStateToCanonicalCxStatus(status)).toBe(status === "unknown" ? "pending" : status === "scheduled" ? "scheduled" : status)
   })
 
   it("normalizes only exact local state immutably, preserving dates, IDs and all unrelated data", () => {

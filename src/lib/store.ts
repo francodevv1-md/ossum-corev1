@@ -117,6 +117,7 @@ interface OrtoTrackState {
   hydrateBackendSurgeries: (surgeries: Surgery[]) => void
   clearBackendSurgeries: () => void
   updateSurgery: (id: string, data: Partial<Surgery>) => void
+  replaceSurgery: (id: string, surgery: Surgery) => void
   authorizeSurgery: (id: string) => void
   changeSurgeryStatus: (id: string, newState: SurgeryState) => void
   changeSurgeryDate: (id: string, newDate: string, newTime?: string) => void
@@ -360,6 +361,26 @@ export const useOrtoTrackStore = create<OrtoTrackState>()(
             prev.coordinadorCx || "Sin asignar",
             data.coordinadorCx || "Sin asignar"
           )
+        }
+      },
+
+      replaceSurgery: (id, surgery) => {
+        const incoming = normalizeLegacySurgeryState(surgery)
+        const previous = get().getSurgeryById(id)
+        set((s) => {
+          let replaced = false
+          const next = s.surgeries.map((sx) => {
+            if (sx.id !== id && sx.backendId !== id && sx.id !== incoming.id && sx.backendId !== incoming.backendId) return sx
+            replaced = true
+            return { ...sx, ...incoming }
+          })
+          if (!replaced) {
+            next.push(incoming)
+          }
+          return { surgeries: next }
+        })
+        if (previous && previous.state !== incoming.state) {
+          get().addAuditEvent(incoming.id, "Cambio de estado", `Estado cambiado a ${incoming.state}`, previous.state, incoming.state)
         }
       },
 

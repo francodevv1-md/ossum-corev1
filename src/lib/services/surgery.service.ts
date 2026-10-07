@@ -993,16 +993,20 @@ export async function updateSurgeryCxStatus(
   }
 
   validateCxStatusTransition(currentSurgery.cxStatus, validatedData.cxStatus);
+  if (currentSurgery.archivedAt) throw badRequest(`Surgery ${surgeryId} is archived`, "surgery_archived");
+  if (currentSurgery.cancelledDate) throw badRequest(`Surgery ${surgeryId} is cancelled and immutable`, "surgery_cancelled_immutable");
 
   return prisma.$transaction(async (tx) => {
     const result = await tx.surgery.updateMany({
-      where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null },
+      where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null, cxStatus: currentSurgery.cxStatus, updatedAt: currentSurgery.updatedAt },
       data: { cxStatus: validatedData.cxStatus },
     });
 
     if (result.count !== 1) {
-      throw new Error(
-        `Failed to update surgery cxStatus for ${surgeryId} in company ${scopedCompanyId}`
+      const latest = await tx.surgery.findFirst({ where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null } });
+      throw badRequest(
+        `cxStatus cambió en simultáneo: ya está en ${latest?.cxStatus ?? "otro estado"}. Recargá la lista.`,
+        "cx_status_concurrent_update",
       );
     }
 

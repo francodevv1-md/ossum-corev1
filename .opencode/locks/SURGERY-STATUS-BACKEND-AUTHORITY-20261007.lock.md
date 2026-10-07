@@ -1,0 +1,32 @@
+# Surgery status backend authority ownership
+
+- task: SURGERY-STATUS-BACKEND-AUTHORITY-20261007
+- role: Frontend UI / directed implementation
+- selected model: openai/gpt-6
+- status: editing
+- owner: GPT-6.1 status implementer
+- owned files:
+  - src/hooks/useCirugiaActions.ts (handleChangeState, handleSuspend, handleCancel, handleRecover, and helpers they call)
+  - src/lib/api/surgery-adapter.ts (normalizeSurgeryState / normalizePreparationState / mapApiSurgeryRowToSurgery authoritative state projection; preserve unrelated surgery-adapter fields)
+  - src/lib/api/backend-surgeries.ts (updateBackendSurgeryState canonicalization and response hydration)
+  - src/lib/validators/surgery.validator.ts (CX_STATUS and transition tables only)
+  - src/lib/services/surgery.service.ts (updateSurgeryCxStatus transition validation and concurrency guard only)
+  - src/lib/store.ts (Surgery.action methods used by status handlers: changeSurgeryStatus, authorizeSurgery, suspendSurgery, cancelSurgery, recoverSurgery; helpers strictly required to honor backend response)
+  - src/app/api/companies/[companyId]/surgeries/[surgeryId]/status/route.ts (request validation only; preserve Auth/roles)
+  - src/__tests__/unit/surgery-legacy-state-removal.test.ts
+  - src/__tests__/components/SurgeryPalette.test.tsx
+  - src/__tests__/unit/useCirugiaActions-change-state.test.tsx (new)
+  - knowledge/specs/SURGERY-STATUS-BACKEND-AUTHORITY-20261007/**
+  - knowledge/worklog/SURGERY_STATUS_BACKEND_AUTHORITY_20261007.md
+  - this lock
+- approval: Franco fully authorized the bounded DEV package on 2026-10-07, excluding Auth/roles productive, schema/migrations, production/staging, deploy, real data, push and PR.
+- prior overlap check:
+  - SURGERY-BUDGET-CONTRACT-STABILITY-20261007 status editing (intake only); its checkpoints do not include status handlers or status transition table; orchestrator confirmed handoff in chat.
+  - SURGERY-RESCHEDULE-012-CORE released; subsequent reschedule recovery locks released.
+  - SURGERY-SIN-FECHA-REMOVAL-20261006 released; source overrides preserved.
+  - SURGERY-PALETTE-CORRECTION released; unrelated to status semantics.
+- allowed commands: read/search/diff, focused Vitest, scoped TypeScript, isolated production-mode build, synthetic component browser fixtures, local commit.
+- forbidden: schema/migrations, Auth/roles productive, dependency installs, live DB writes, server restarts, push, PR, merge, deploy, destructive Git, foreign hunk overwrites.
+- validation: failing reproduction first; focused regression after each fix; scoped type/build with no incremental output; component QA at 1366x768, 1920x1080, 390x844 in light/dark; reject coverage required for invalid status, two-actor race, network error, two-tab reload.
+- stop: ownership overlap, ambiguous business rule, change to Auth, schema or production data required.
+- release: handlers persist-then-mutate; validator and adapter corrected; backend compare-and-set; tests + scoped tsc PASS; lock released.

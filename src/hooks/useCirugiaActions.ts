@@ -20,7 +20,7 @@ import { usePresupuestoForm } from "@/hooks/usePresupuestoForm"
 import type { FacturarDialogData } from "@/components/facturacion/FacturarDialog"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { fetchBackendActiveSurgeries } from "@/lib/api/backend-surgeries"
-import { updateBackendSurgeryManagement } from "@/lib/api/backend-surgeries"
+import { updateBackendSurgeryManagement, updateBackendSurgeryState } from "@/lib/api/backend-surgeries"
 import { buildReschedulingPatch, encodeReschedulingDate } from "@/lib/surgery/rescheduling"
 import { mapApiSurgeryListToSurgeries } from "@/lib/api/surgery-adapter"
 import { apiFetch, ApiClientError } from "@/lib/api/client"
@@ -392,26 +392,32 @@ export function useCirugiaActions() {
     const targetSurgeryId = dialogSurgery.id
     const surgeryRecord = store.surgeries.find((s) => s.id === targetSurgeryId || s.backendId === targetSurgeryId)
     const backendId = surgeryRecord?.backendId || targetSurgeryId
+    const companyId = activeCompany?.id
+
+    if (!companyId) {
+      toast.error("No hay empresa activa para cambiar el estado de la cirugía")
+      return
+    }
+    if (!backendId) {
+      toast.error("Esta cirugía todavía no fue sincronizada con el backend. Recargá la lista antes de cambiar el estado.")
+      return
+    }
+
+    const previousState = surgeryRecord?.state ?? dialogSurgery.state
 
     try {
-      if (activeCompany?.id && newState === "Autorizada") {
+      if (newState === "Autorizada") {
         if (payload?.authFile) {
           const formData = new FormData()
           formData.set("file", payload.authFile)
           formData.set("description", "Comprobante de autorización médica")
           await apiFetch(
-            `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(backendId)}/seguimiento/documents`,
-            {
-              method: "POST",
-              body: formData,
-            }
-          ).catch((err) => {
-            console.error("Failed to upload authorization document:", err)
-            toast.warning("Se cambió el estado pero ocurrió un problema al adjuntar el comprobante.")
-          })
+            `/api/companies/${encodeURIComponent(companyId)}/surgeries/${encodeURIComponent(backendId)}/seguimiento/documents`,
+            { method: "POST", body: formData }
+          )
         } else if (payload?.reasonWithoutAuthFile) {
           await apiFetch(
-            `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(backendId)}/seguimiento`,
+            `/api/companies/${encodeURIComponent(companyId)}/surgeries/${encodeURIComponent(backendId)}/seguimiento`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -420,41 +426,22 @@ export function useCirugiaActions() {
                 content: `Autorizada sin comprobante adjunto. Motivo: ${payload.reasonWithoutAuthFile}`,
               }),
             }
-          ).catch((err) => {
-            console.error("Failed to post authorization note:", err)
-          })
-        }
-      }
-
-      // Sync status with backend if available
-      if (activeCompany?.id) {
-        try {
-          await apiFetch(
-            `/api/companies/${encodeURIComponent(activeCompany.id)}/surgeries/${encodeURIComponent(backendId)}/status`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                status: newState,
-                source: "cirugias-ui:change-state",
-              }),
-            }
           )
-        } catch {
-          // Graceful fallback for DEV mock
         }
       }
 
-      store.changeSurgeryStatus(dialogSurgery.id, newState)
-      if (newState === "Autorizada") {
-        store.authorizeSurgery(dialogSurgery.id)
-      }
+      const updated = await updateBackendSurgeryState(companyId, backendId, newState, "cirugias-ui:change-state")
+      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [dialogSurgery])[0]
+      store.replaceSurgery(dialogSurgery.id, mapped)
 
       toast.success(`Estado cambiado a ${newState}${payload?.authFile ? " (comprobante fijado)" : ""}`)
       setChangeStateDialogOpen(false)
       setDialogSurgery(null)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error al cambiar el estado")
+      const message = error instanceof Error ? error.message : "Error al cambiar el estado"
+      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
+      setChangeStateDialogOpen(false)
+      setDialogSurgery(null)
     }
   }, [activeCompany?.id, dialogSurgery, newState, store])
 
@@ -482,23 +469,61 @@ export function useCirugiaActions() {
     } finally { isSubmittingDateRef.current = false; setIsSubmittingDate(false) }
   }, [store, dialogSurgery, newDate, newTime, dateType, activeCompany?.id])
 
-  const handleSuspend = useCallback(() => {
+  const handleSuspend = useCallback(async () => {
     if (!dialogSurgery) return
-    store.suspendSurgery(dialogSurgery.id, reason || undefined)
-    toast.success("Cirugía suspendida")
-    setSuspendDialogOpen(false)
-    setReason("")
-    setDialogSurgery(null)
-  }, [store, dialogSurgery, reason])
+    const surgeryRecord = store.surgeries.find((s) => s.id === dialogSurgery.id || s.backendId === dialogSurgery.id)
+    const backendId = surgeryRecord?.backendId || dialogSurgery.id
+    const companyId = activeCompany?.id
+    if (!companyId || !backendId) {
+      toast.error("No se puede suspender sin empresa activa o identificador de backend")
+      return
+    }
+    const previousState = surgeryRecord?.state ?? dialogSurgery.state
+    try {
+      const updated = await updateBackendSurgeryState(companyId, backendId, "Suspendida", "cirugias-ui:suspend")
+      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [dialogSurgery])[0]
+      const previousNotes = surgeryRecord?.notes
+      store.replaceSurgery(dialogSurgery.id, {
+        ...mapped,
+        notes: reason ? (previousNotes ? `${previousNotes}\nSUSPENDIDA: ${reason}` : `SUSPENDIDA: ${reason}`) : mapped.notes,
+      })
+      toast.success("Cirugía suspendida")
+      setSuspendDialogOpen(false)
+      setReason("")
+      setDialogSurgery(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al suspender la cirugía"
+      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
+    }
+  }, [store, dialogSurgery, reason, activeCompany?.id])
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = useCallback(async () => {
     if (!dialogSurgery) return
-    store.cancelSurgery(dialogSurgery.id, reason || undefined)
-    toast.success("Cirugía cancelada")
-    setCancelDialogOpen(false)
-    setReason("")
-    setDialogSurgery(null)
-  }, [store, dialogSurgery, reason])
+    const surgeryRecord = store.surgeries.find((s) => s.id === dialogSurgery.id || s.backendId === dialogSurgery.id)
+    const backendId = surgeryRecord?.backendId || dialogSurgery.id
+    const companyId = activeCompany?.id
+    if (!companyId || !backendId) {
+      toast.error("No se puede cancelar sin empresa activa o identificador de backend")
+      return
+    }
+    const previousState = surgeryRecord?.state ?? dialogSurgery.state
+    try {
+      const updated = await updateBackendSurgeryState(companyId, backendId, "Cancelada", "cirugias-ui:cancel")
+      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [dialogSurgery])[0]
+      const previousNotes = surgeryRecord?.notes
+      store.replaceSurgery(dialogSurgery.id, {
+        ...mapped,
+        notes: reason ? (previousNotes ? `${previousNotes}\nCANCELADA: ${reason}` : `CANCELADA: ${reason}`) : mapped.notes,
+      })
+      toast.success("Cirugía cancelada")
+      setCancelDialogOpen(false)
+      setReason("")
+      setDialogSurgery(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al cancelar la cirugía"
+      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
+    }
+  }, [store, dialogSurgery, reason, activeCompany?.id])
 
   const handleAddNote = useCallback((selectedSurgery: Surgery | null) => {
     const s = dialogSurgery || selectedSurgery
@@ -510,10 +535,25 @@ export function useCirugiaActions() {
     setDialogSurgery(null)
   }, [store, dialogSurgery, noteText, noteType, notePriority])
 
-  const handleRecover = useCallback((s: Surgery) => {
-    store.recoverSurgery(s.id)
-    toast.success("Cirugía recuperada")
-  }, [store])
+  const handleRecover = useCallback(async (s: Surgery) => {
+    const surgeryRecord = store.surgeries.find((it) => it.id === s.id || it.backendId === s.id)
+    const backendId = surgeryRecord?.backendId || s.id
+    const companyId = activeCompany?.id
+    if (!companyId || !backendId) {
+      toast.error("No se puede recuperar sin empresa activa o identificador de backend")
+      return
+    }
+    const previousState = surgeryRecord?.state ?? s.state
+    try {
+      const updated = await updateBackendSurgeryState(companyId, backendId, "Pendiente", "cirugias-ui:recover")
+      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [s])[0]
+      store.replaceSurgery(s.id, mapped)
+      toast.success("Cirugía recuperada")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al recuperar la cirugía"
+      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
+    }
+  }, [store, activeCompany?.id])
 
   // ── Business rule helpers ──
   const canFacturar = useCallback((s: Surgery) => {
