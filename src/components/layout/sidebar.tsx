@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { useIsMobile } from "@/hooks/useIsMobile"
+import { OssumCorLogo } from "@/components/brand/OssumCorLogo"
 import { getCoordinationDestination } from "@/lib/permissions/coordination"
 import {
   Activity,
@@ -287,8 +288,8 @@ export function Sidebar({ embedded = false }: { embedded?: boolean }) {
               ? "h-[54px] gap-2.5 px-3"
               : "h-[54px] justify-center px-0",
         )}>
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-[#1D2FC0] text-white">
-            <Scissors className="size-[15px]" strokeWidth={1.8} />
+          <div className="flex size-7 shrink-0 items-center justify-center">
+            <OssumCorLogo className="size-7" />
           </div>
           {showExpandedContent && (
             <>
