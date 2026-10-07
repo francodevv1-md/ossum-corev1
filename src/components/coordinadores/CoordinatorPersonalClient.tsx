@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { buildReschedulingPatch, type ReschedulingSaveResult } from "@/lib/surgery/rescheduling"
-import { fetchBackendActiveSurgeries, updateBackendSurgeryManagement, updateBackendSurgeryState, addBackendSurgeryNote } from "@/lib/api/backend-surgeries"
+import { fetchBackendSurgery, updateBackendSurgeryManagement, updateBackendSurgeryState, addBackendSurgeryNote } from "@/lib/api/backend-surgeries"
+import { useActiveCoordination } from "./useActiveCoordination"
+import { canMutateSeguimientoEvents } from "@/lib/permissions/seguimiento"
+import { canManageCoordination } from "@/lib/permissions/coordination"
 import { mapApiSurgeryListToSurgeries } from "@/lib/api/surgery-adapter"
-import { useOrtoTrackStore } from "@/lib/store"
 import { useAuth } from "@/components/auth/AuthProvider"
 import type { Surgery } from "@/types"
 import type { SurgeryGestionFormData } from "@/types/coordinadores.types"
@@ -23,28 +25,29 @@ import { DayViewMobileCards } from "./views/DayViewMobileCards"
 import { WeekViewGroupedView } from "./views/WeekViewGroupedView"
 import { MonthLoadCalendar } from "./views/MonthLoadCalendar"
 import { CaseDetailModal } from "./modal/CaseDetailModal"
-import { DefineDateModal } from "./modal/DefineDateModal"
+import { DefineDateModal, type DefineDateNotePayload } from "./modal/DefineDateModal"
 import { CoordinatorShareDialog } from "./CoordinatorShareDialog"
 import type { CoordinatorCase } from "./coordinator-queue.helpers"
 import { UserCheck, Shield } from "lucide-react"
 
 export function CoordinatorPersonalClient() {
-  const store = useOrtoTrackStore()
-  const { currentUser, currentAccess, activeCompany } = useAuth()
-  const identity = useRef({ companyId: activeCompany?.id, date: 0, gestion: 0, load: 0 })
+  const { currentAccess, activeCompany } = useAuth()
+  const view = useActiveCoordination("personal")
+  const canManage = view.hasSuccessfulData && view.response?.context.personalResolution?.status === "resolved" && !view.response.context.readOnly && canManageCoordination(currentAccess?.role)
+  const contextKey = `${view.trustContextKey}:${view.waitingForAuth}:${currentAccess?.role}`
+  const identity = useRef({ companyId: activeCompany?.id, contextKey, date: 0, gestion: 0, load: 0 })
   const confirmed = useRef<Partial<Record<"date" | "gestion", { generation: number; record: Surgery }>>>({})
-  if (identity.current.companyId !== activeCompany?.id) {
+  if (identity.current.contextKey !== contextKey) {
+    identity.current.contextKey = contextKey
     identity.current.companyId = activeCompany?.id
     identity.current.date += 1; identity.current.gestion += 1
   }
   useEffect(() => () => { identity.current.date += 1; identity.current.gestion += 1 }, [])
   useEffect(() => {
-    if (!activeCompany?.id) return
-    let active = true
-    const load = identity.current.load
-    fetchBackendActiveSurgeries(activeCompany.id, store.surgeries).then((surgeries) => { if (active && load === identity.current.load) store.hydrateBackendSurgeries(surgeries) }).catch(() => {})
-    return () => { active = false }
-  }, [activeCompany?.id])
+    identity.current.date += 1; identity.current.gestion += 1
+    setIsModalOpen(false); setIsDefineDateOpen(false); setIsShareOpen(false)
+    confirmed.current = {}
+  }, [contextKey])
   const [selectedSurgery, setSelectedSurgery] = useState<Surgery | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [defineDateSurgery, setDefineDateSurgery] = useState<Surgery | null>(null)
@@ -55,19 +58,10 @@ export function CoordinatorPersonalClient() {
   const [pageSize, setPageSize] = useState(15)
 
   // Identify active coordinator name
-  const currentCoordinatorName = useMemo(() => {
-    if (currentUser?.firstName) return currentUser.firstName
-    if (currentUser?.displayName) return currentUser.displayName.split(" ")[0]
-    return "Nelson"
-  }, [currentUser])
+  const currentCoordinatorName = view.response?.context.viewSubject?.label ?? "Identidad sin resolver"
 
   // Filter surgeries scoped to this coordinator
-  const mySurgeries = useMemo(() => {
-    return store.surgeries.filter((s) => {
-      if (!s.coordinadorCx || s.coordinadorCx.trim() === "") return false
-      return s.coordinadorCx.toLowerCase().includes(currentCoordinatorName.toLowerCase())
-    })
-  }, [store.surgeries, currentCoordinatorName])
+  const mySurgeries = view.surgeries
 
   // Temporal navigation hook
   const {
@@ -139,52 +133,59 @@ export function CoordinatorPersonalClient() {
     setIsDefineDateOpen(false)
   }, [])
 
-  const saveRescheduling = async (kind: "date" | "gestion", surgeryId: string, updates: Partial<Surgery>, note?: { content: string; noteType?: any; priority?: any }): Promise<void | ReschedulingSaveResult> => {
+  const saveRescheduling = async (kind: "date" | "gestion", surgeryId: string, updates: Partial<Surgery>, note?: DefineDateNotePayload): Promise<void | ReschedulingSaveResult> => {
     const generation = identity.current[kind], companyId = activeCompany?.id
-    const existing = confirmed.current[kind]?.generation === generation ? confirmed.current[kind]!.record : store.surgeries.find((s) => s.id === surgeryId || s.backendId === surgeryId)
+    if (!canManage) throw new Error("Sin permiso para modificar Coordinación")
+    const existing = confirmed.current[kind]?.generation === generation ? confirmed.current[kind]!.record : mySurgeries.find((s) => s.id === surgeryId || s.backendId === surgeryId)
     if (!companyId || !existing?.backendId) throw new Error("Se requiere empresa activa e identificador de backend")
     const isCurrent = () => identity.current.companyId === companyId && identity.current[kind] === generation
-    const patch = buildReschedulingPatch(existing, updates)
+    const content = note?.content ?? (kind === "gestion" ? updates.notes : undefined)
+    if (content?.trim() && !canMutateSeguimientoEvents(currentAccess?.role)) throw new Error("Sin permiso para crear notas")
+    const patch: Parameters<typeof updateBackendSurgeryManagement>[2] = buildReschedulingPatch(existing, updates)
+    if (updates.coordinadorContactId !== undefined && updates.coordinadorContactId !== (existing.coordinadorContactId ?? "")) patch.coordinatorContactId = updates.coordinadorContactId || null
     identity.current.load += 1
     const saved = Object.keys(patch).length ? await updateBackendSurgeryManagement(companyId, existing.backendId, patch) : null
     if (!isCurrent()) return
     let record = saved ? mapApiSurgeryListToSurgeries([saved], [existing])[0] : existing
-    store.updateSurgery(existing.id, record)
     confirmed.current[kind] = { generation, record }
     let stateFailed = false, noteFailed = false
     if (kind === "gestion" && updates.state && updates.state !== record.state) {
       try {
-        await updateBackendSurgeryState(companyId, existing.backendId, updates.state)
+        const stateRecord = await updateBackendSurgeryState(companyId, existing.backendId, updates.state, "coordinadores:gestion")
         if (!isCurrent()) return
-        record = { ...record, state: updates.state }
+        record = mapApiSurgeryListToSurgeries([stateRecord], [record])[0]
         confirmed.current[kind] = { generation, record }
-        store.updateSurgery(existing.id, { state: updates.state })
-      } catch { stateFailed = true }
+      } catch (error) {
+        stateFailed = true
+        throw new Error(error instanceof Error ? `No se pudo cambiar el estado: ${error.message}` : "No se pudo cambiar el estado")
+      }
     }
     if (!isCurrent()) return
-    const content = note?.content ?? (kind === "gestion" ? updates.notes : undefined)
     if (content?.trim()) {
-      try { await addBackendSurgeryNote(companyId, existing.backendId, { content, noteType: note?.noteType || "Coordinación", priority: note?.priority || "Media", isUrgent: Boolean(updates.urgente) }) }
+      try { await addBackendSurgeryNote(companyId, existing.backendId, { content, noteType: note?.noteType || "Coordinación", priority: note?.priority || "Media", isUrgent: Boolean(updates.urgente), mentions: note?.mentions }) }
       catch { noteFailed = true }
     }
     if (!isCurrent()) return
-    if (stateFailed || noteFailed) return { partialError: `Guardado parcial. Pendiente: ${[stateFailed ? "estado" : "", noteFailed ? "nota sigue pendiente" : ""].filter(Boolean).join(" y ")}. La fecha ya está guardada.`, noteSaved: Boolean(content?.trim()) && !noteFailed }
+    try {
+      const canonical = await fetchBackendSurgery(companyId, existing.backendId)
+      if (!isCurrent()) return
+      confirmed.current[kind] = { generation, record: mapApiSurgeryListToSurgeries([canonical], [])[0] }
+    } catch {
+      window.dispatchEvent(new Event("coordination-updated"))
+      return { partialError: "Cambios enviados; no se pudo confirmar la lectura. Actualiza antes de reintentar.", noteSaved: Boolean(content?.trim()) && !noteFailed }
+    }
+    window.dispatchEvent(new Event("coordination-updated"))
+    if (stateFailed || noteFailed) return { partialError: `Guardado parcial. Pendiente: ${[stateFailed ? "estado" : "", noteFailed ? "nota sigue pendiente" : ""].filter(Boolean).join(" y ")}. Los cambios confirmados se conservaron.`, noteSaved: Boolean(content?.trim()) && !noteFailed }
   }
-  const handleSaveDefineDate = (id: string, updates: Partial<Surgery>, note?: { content: string; noteType?: any; priority?: any }) => saveRescheduling("date", id, updates, note)
+  const handleSaveDefineDate = (id: string, updates: Partial<Surgery>, note?: DefineDateNotePayload) => saveRescheduling("date", id, updates, note)
   const handleSaveGestion = (id: string, updates: SurgeryGestionFormData) => saveRescheduling("gestion", id, updates)
 
-  const handleAddNote = useCallback(
-    (surgeryId: string, note: string) => {
-      store.addSurgeryNote(surgeryId, note, "Logística", "Media", false)
-    },
-    [store]
-  )
 
   const handleOpenShare = useCallback(
     (surgery: Surgery) => {
       const entry: CoordinatorCase = {
         surgery,
-        history: store.getHistoryBySurgeryId(surgery.id),
+        history: [],
         bucket: surgery.state === "Autorizada" ? "autorizado" : surgery.state === "En tránsito" ? "transito" : null,
         subgroup: null,
         materialAvailabilityLabel: surgery.materialAvailabilityDate || "Disponibilidad sin definir",
@@ -198,7 +199,7 @@ export function CoordinatorPersonalClient() {
       setShareCase(entry)
       setIsShareOpen(true)
     },
-    [store]
+    []
   )
 
   // Temporal grouped views
@@ -213,13 +214,15 @@ export function CoordinatorPersonalClient() {
   // Reset pagination when filters or view mode change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filters, viewMode])
+  }, [filters, viewMode, startDateStr, endDateStr, filteredSurgeries])
+
+  const periodSurgeries = useMemo(() => filteredSurgeries.filter(s => !s.date || isDateInPeriod(s.date)), [filteredSurgeries, isDateInPeriod])
 
   // Paginated surgeries for day view
   const paginatedSurgeries = useMemo(() => {
     const start = (currentPage - 1) * pageSize
-    return filteredSurgeries.slice(start, start + pageSize)
-  }, [filteredSurgeries, currentPage, pageSize])
+    return periodSurgeries.slice(start, start + pageSize)
+  }, [periodSurgeries, currentPage, pageSize])
 
   const unscheduledSurgeries = useMemo(() => {
     return filteredSurgeries.filter((s) => !s.date || s.date.trim() === "")
@@ -227,6 +230,9 @@ export function CoordinatorPersonalClient() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
+      {view.loading && <p role="status">Cargando Coordinación…</p>}
+      {view.error && <p role="alert">{view.error} <button onClick={() => void view.refresh()}>Reintentar</button></p>}
+      {view.hasSuccessfulData && view.response?.context.personalResolution?.status !== "resolved" && <p role="status">No se pudo vincular tu identidad a un coordinador de esta empresa.</p>}
       {/* 1. Incidents Metrics Strip (Personal) */}
       <IncidentsMetricsStrip
         metrics={incidentMetrics}
@@ -240,7 +246,7 @@ export function CoordinatorPersonalClient() {
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-2xs">
           <TimelinePeriodNavigator
             periodTitle={periodTitle}
-            visibleCount={filteredSurgeries.length}
+            visibleCount={periodSurgeries.length}
             totalCount={mySurgeries.length}
             onPrev={goToPrev}
             onNext={goToNext}
@@ -268,6 +274,7 @@ export function CoordinatorPersonalClient() {
 
         {/* Filters Toolbar (Without Coordinator selector - locked to personal queue) */}
         <FiltersToolbar
+          surgeries={mySurgeries}
           search={filters.search}
           onSearchChange={setSearch}
           coordinators={[]}
@@ -387,7 +394,7 @@ export function CoordinatorPersonalClient() {
               {filteredSurgeries.length > 0 && (
                 <PaginationControls
                   currentPage={currentPage}
-                  totalItems={filteredSurgeries.length}
+                  totalItems={periodSurgeries.length}
                   pageSize={pageSize}
                   onPageChange={setCurrentPage}
                   onPageSizeChange={(newSize) => {
@@ -429,22 +436,22 @@ export function CoordinatorPersonalClient() {
 
       {/* 4. Case Management Modal / Drawer */}
       <CaseDetailModal
-        key={`${activeCompany?.id}-${identity.current.gestion}`}
+        key={`gestion-${activeCompany?.id}-${identity.current.gestion}`}
         surgery={selectedSurgery}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onSaveGestion={handleSaveGestion}
-        onAddNote={handleAddNote}
         onShare={handleOpenShare}
-        history={selectedSurgery ? store.getHistoryBySurgeryId(selectedSurgery.id) : []}
+        history={[]}
         coordinators={[currentCoordinatorName]}
+        readOnly={!canManage}
       />
 
       {/* 5. Quick Define Date & Scheduling Modal */}
       <DefineDateModal
-        key={`${activeCompany?.id}-${identity.current.date}`}
+        key={`date-${activeCompany?.id}-${identity.current.date}`}
         surgery={defineDateSurgery}
-        isOpen={isDefineDateOpen}
+        isOpen={isDefineDateOpen && canManage}
         onClose={handleCloseDefineDate}
         onSave={handleSaveDefineDate}
       />

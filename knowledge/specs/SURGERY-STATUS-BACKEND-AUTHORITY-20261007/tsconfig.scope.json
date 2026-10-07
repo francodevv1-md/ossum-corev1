@@ -9,7 +9,13 @@
     "../../../src/lib/api/backend-surgeries.ts",
     "../../../src/lib/validators/surgery.validator.ts",
     "../../../src/lib/services/surgery.service.ts",
+    "../../../src/lib/automations.ts",
     "../../../src/app/api/companies/[companyId]/surgeries/[surgeryId]/status/route.ts",
-    "../../../src/__tests__/unit/useCirugiaActions-change-state.test.tsx"
+    "../../../src/app/tablero/page.tsx",
+    "../../../src/app/expediente/page.tsx",
+    "../../../src/components/coordinadores/CoordinadoresAdminClient.tsx",
+    "../../../src/components/coordinadores/CoordinatorPersonalClient.tsx",
+    "../../../src/__tests__/unit/useCirugiaActions-change-state.test.tsx",
+    "../../../src/__tests__/unit/automations-terminal.test.ts"
   ]
 }

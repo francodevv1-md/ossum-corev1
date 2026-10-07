@@ -386,14 +386,40 @@ export function useCirugiaActions() {
     setDialogSurgery(null)
   }, [store, dialogSurgery])
 
+  const persistStatusChange = useCallback(async (
+    surgery: Surgery,
+    nextState: SurgeryState,
+    options?: { source?: string; reason?: string },
+  ): Promise<{ ok: boolean; mapped?: Surgery; previousState?: SurgeryState; error?: string }> => {
+    const surgeryRecord = store.surgeries.find((s) => s.id === surgery.id || s.backendId === surgery.id)
+    const backendId = surgeryRecord?.backendId || surgery.id
+    const companyId = activeCompany?.id
+    const previousState = surgeryRecord?.state ?? surgery.state
+    if (!companyId || !backendId) {
+      const error = "No se puede cambiar el estado sin empresa activa o identificador de backend"
+      toast.error(error)
+      return { ok: false, error, previousState }
+    }
+    try {
+      const updated = await updateBackendSurgeryState(companyId, backendId, nextState, options?.source ?? "cirugias-ui:status")
+      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [surgery])[0]
+      const augmented = options?.reason
+        ? { ...mapped, notes: surgeryRecord?.notes ? `${surgeryRecord.notes}\n${nextState.toUpperCase()}: ${options.reason}` : `${nextState.toUpperCase()}: ${options.reason}` }
+        : mapped
+      store.replaceSurgery(surgery.id, augmented)
+      return { ok: true, mapped: augmented, previousState }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al cambiar el estado"
+      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
+      return { ok: false, error: message, previousState }
+    }
+  }, [store, activeCompany?.id])
+
   const handleChangeState = useCallback(async (payload?: { authFile?: File | null; reasonWithoutAuthFile?: string }) => {
     if (!dialogSurgery) return
-
-    const targetSurgeryId = dialogSurgery.id
-    const surgeryRecord = store.surgeries.find((s) => s.id === targetSurgeryId || s.backendId === targetSurgeryId)
-    const backendId = surgeryRecord?.backendId || targetSurgeryId
+    const surgeryRecord = store.surgeries.find((s) => s.id === dialogSurgery.id || s.backendId === dialogSurgery.id)
     const companyId = activeCompany?.id
-
+    const backendId = surgeryRecord?.backendId || dialogSurgery.id
     if (!companyId) {
       toast.error("No hay empresa activa para cambiar el estado de la cirugía")
       return
@@ -402,8 +428,6 @@ export function useCirugiaActions() {
       toast.error("Esta cirugía todavía no fue sincronizada con el backend. Recargá la lista antes de cambiar el estado.")
       return
     }
-
-    const previousState = surgeryRecord?.state ?? dialogSurgery.state
 
     try {
       if (newState === "Autorizada") {
@@ -430,20 +454,20 @@ export function useCirugiaActions() {
         }
       }
 
-      const updated = await updateBackendSurgeryState(companyId, backendId, newState, "cirugias-ui:change-state")
-      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [dialogSurgery])[0]
-      store.replaceSurgery(dialogSurgery.id, mapped)
-
-      toast.success(`Estado cambiado a ${newState}${payload?.authFile ? " (comprobante fijado)" : ""}`)
+      const result = await persistStatusChange(dialogSurgery, newState, { source: "cirugias-ui:change-state" })
+      if (result.ok) {
+        toast.success(`Estado cambiado a ${newState}${payload?.authFile ? " (comprobante fijado)" : ""}`)
+      }
       setChangeStateDialogOpen(false)
       setDialogSurgery(null)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error al cambiar el estado"
-      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
+      const previous = surgeryRecord?.state ?? dialogSurgery.state
+      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previous}.`)
       setChangeStateDialogOpen(false)
       setDialogSurgery(null)
     }
-  }, [activeCompany?.id, dialogSurgery, newState, store])
+  }, [activeCompany?.id, dialogSurgery, newState, store, persistStatusChange])
 
   const handleChangeDate = useCallback(async () => {
     if (!dialogSurgery || !newDate) return
@@ -471,59 +495,21 @@ export function useCirugiaActions() {
 
   const handleSuspend = useCallback(async () => {
     if (!dialogSurgery) return
-    const surgeryRecord = store.surgeries.find((s) => s.id === dialogSurgery.id || s.backendId === dialogSurgery.id)
-    const backendId = surgeryRecord?.backendId || dialogSurgery.id
-    const companyId = activeCompany?.id
-    if (!companyId || !backendId) {
-      toast.error("No se puede suspender sin empresa activa o identificador de backend")
-      return
-    }
-    const previousState = surgeryRecord?.state ?? dialogSurgery.state
-    try {
-      const updated = await updateBackendSurgeryState(companyId, backendId, "Suspendida", "cirugias-ui:suspend")
-      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [dialogSurgery])[0]
-      const previousNotes = surgeryRecord?.notes
-      store.replaceSurgery(dialogSurgery.id, {
-        ...mapped,
-        notes: reason ? (previousNotes ? `${previousNotes}\nSUSPENDIDA: ${reason}` : `SUSPENDIDA: ${reason}`) : mapped.notes,
-      })
-      toast.success("Cirugía suspendida")
-      setSuspendDialogOpen(false)
-      setReason("")
-      setDialogSurgery(null)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Error al suspender la cirugía"
-      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
-    }
-  }, [store, dialogSurgery, reason, activeCompany?.id])
+    const result = await persistStatusChange(dialogSurgery, "Suspendida", { source: "cirugias-ui:suspend", reason: reason || undefined })
+    if (result.ok) toast.success("Cirugía suspendida")
+    setSuspendDialogOpen(false)
+    setReason("")
+    setDialogSurgery(null)
+  }, [dialogSurgery, reason, persistStatusChange])
 
   const handleCancel = useCallback(async () => {
     if (!dialogSurgery) return
-    const surgeryRecord = store.surgeries.find((s) => s.id === dialogSurgery.id || s.backendId === dialogSurgery.id)
-    const backendId = surgeryRecord?.backendId || dialogSurgery.id
-    const companyId = activeCompany?.id
-    if (!companyId || !backendId) {
-      toast.error("No se puede cancelar sin empresa activa o identificador de backend")
-      return
-    }
-    const previousState = surgeryRecord?.state ?? dialogSurgery.state
-    try {
-      const updated = await updateBackendSurgeryState(companyId, backendId, "Cancelada", "cirugias-ui:cancel")
-      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [dialogSurgery])[0]
-      const previousNotes = surgeryRecord?.notes
-      store.replaceSurgery(dialogSurgery.id, {
-        ...mapped,
-        notes: reason ? (previousNotes ? `${previousNotes}\nCANCELADA: ${reason}` : `CANCELADA: ${reason}`) : mapped.notes,
-      })
-      toast.success("Cirugía cancelada")
-      setCancelDialogOpen(false)
-      setReason("")
-      setDialogSurgery(null)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Error al cancelar la cirugía"
-      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
-    }
-  }, [store, dialogSurgery, reason, activeCompany?.id])
+    const result = await persistStatusChange(dialogSurgery, "Cancelada", { source: "cirugias-ui:cancel", reason: reason || undefined })
+    if (result.ok) toast.success("Cirugía cancelada")
+    setCancelDialogOpen(false)
+    setReason("")
+    setDialogSurgery(null)
+  }, [dialogSurgery, reason, persistStatusChange])
 
   const handleAddNote = useCallback((selectedSurgery: Surgery | null) => {
     const s = dialogSurgery || selectedSurgery
@@ -536,24 +522,9 @@ export function useCirugiaActions() {
   }, [store, dialogSurgery, noteText, noteType, notePriority])
 
   const handleRecover = useCallback(async (s: Surgery) => {
-    const surgeryRecord = store.surgeries.find((it) => it.id === s.id || it.backendId === s.id)
-    const backendId = surgeryRecord?.backendId || s.id
-    const companyId = activeCompany?.id
-    if (!companyId || !backendId) {
-      toast.error("No se puede recuperar sin empresa activa o identificador de backend")
-      return
-    }
-    const previousState = surgeryRecord?.state ?? s.state
-    try {
-      const updated = await updateBackendSurgeryState(companyId, backendId, "Pendiente", "cirugias-ui:recover")
-      const mapped = mapApiSurgeryListToSurgeries([updated], surgeryRecord ? [surgeryRecord] : [s])[0]
-      store.replaceSurgery(s.id, mapped)
-      toast.success("Cirugía recuperada")
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Error al recuperar la cirugía"
-      toast.error(`${message}. No se aplicó el cambio. Estado actual: ${previousState}.`)
-    }
-  }, [store, activeCompany?.id])
+    const result = await persistStatusChange(s, "Pendiente", { source: "cirugias-ui:recover" })
+    if (result.ok) toast.success("Cirugía recuperada")
+  }, [persistStatusChange])
 
   // ── Business rule helpers ──
   const canFacturar = useCallback((s: Surgery) => {
@@ -639,6 +610,7 @@ export function useCirugiaActions() {
     handleCancel,
     handleAddNote,
     handleRecover,
+    persistStatusChange,
     // Business rule helpers
     canFacturar,
     canRemit,

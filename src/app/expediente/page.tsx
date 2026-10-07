@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation"
 import { NovedadesTabContent } from "@/components/expediente/NovedadesTabContent"
 import { useBackendActiveSurgeries } from "@/hooks/useBackendActiveSurgeries"
 import { useOrtoTrackStore } from "@/lib/store"
+import { useCirugiaActions } from "@/hooks/useCirugiaActions"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/formatters"
 import { getBadgeVariant, comprobanteTypeLabels, CLIENT_OPTIONS, INSTITUTION_OPTIONS, CLASSIFICATION_OPTIONS, SURGERY_STATE_OPTIONS } from "@/lib/statusHelpers"
 import { canAutorizarFV, canRemitirNR, canCargarConsumo, canValidateConsumption } from "@/lib/businessRules"
@@ -92,6 +93,7 @@ function ExpedienteContent() {
   const searchParams = useSearchParams()
   const store = useOrtoTrackStore()
   const backendSurgeries = useBackendActiveSurgeries()
+  const { persistStatusChange } = useCirugiaActions()
 
   const [selectedId, setSelectedId] = useState<string>("")
   const [activeTab, setActiveTab] = useState<TabValue>("resumen")
@@ -158,10 +160,10 @@ function ExpedienteContent() {
   }, [comprobantes, compFilter])
 
   // ── Actions ──
-  const handleAutorizar = () => {
+  const handleAutorizar = async () => {
     if (!surgery) return
-    store.authorizeSurgery(surgery.id)
-    toast.success("Cirugía autorizada")
+    const result = await persistStatusChange(surgery, "Autorizada", { source: "expediente:autorizar" })
+    if (result.ok) toast.success("Cirugía autorizada")
   }
 
   const handleFacturar = () => {

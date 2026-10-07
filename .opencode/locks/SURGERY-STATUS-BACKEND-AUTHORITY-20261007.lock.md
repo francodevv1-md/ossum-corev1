@@ -13,9 +13,18 @@
   - src/lib/services/surgery.service.ts (updateSurgeryCxStatus transition validation and concurrency guard only)
   - src/lib/store.ts (Surgery.action methods used by status handlers: changeSurgeryStatus, authorizeSurgery, suspendSurgery, cancelSurgery, recoverSurgery; helpers strictly required to honor backend response)
   - src/app/api/companies/[companyId]/surgeries/[surgeryId]/status/route.ts (request validation only; preserve Auth/roles)
+  - src/components/coordinadores/CoordinatorPersonalClient.tsx (saveRescheduling state branch only; no other handlers)
+  - src/components/coordinadores/CoordinadoresAdminClient.tsx (saveRescheduling state branch only; no other handlers)
+  - src/components/coordinadores/CoordinatorInboxView.tsx (no edits; documented as consumer of useCirugiaActions handlers)
+  - src/app/tablero/page.tsx (handleAdvance + handleRecover wrappers; bind to the same backend-authoritative flow as useCirugiaActions)
+  - src/app/expediente/page.tsx (handleAutorizar wrapper; bind to the same backend-authoritative flow as useCirugiaActions)
+  - src/lib/automations.ts (getNextState/runAutomations — keep helper but add terminal/Suspendida/Cancelada guard so handleAdvance can never reach a local store)
   - src/__tests__/unit/surgery-legacy-state-removal.test.ts
   - src/__tests__/components/SurgeryPalette.test.tsx
-  - src/__tests__/unit/useCirugiaActions-change-state.test.tsx (new)
+  - src/__tests__/unit/useCirugiaActions-change-state.test.tsx
+  - src/__tests__/unit/tablero-status-actions.test.tsx (new)
+  - src/__tests__/unit/expediente-autorizar-action.test.tsx (new)
+  - src/__tests__/unit/coordination-status-save.test.tsx (new)
   - knowledge/specs/SURGERY-STATUS-BACKEND-AUTHORITY-20261007/**
   - knowledge/worklog/SURGERY_STATUS_BACKEND_AUTHORITY_20261007.md
   - this lock

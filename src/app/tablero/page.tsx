@@ -14,7 +14,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils"
 import { formatDate, formatCurrency } from "@/lib/formatters"
 import { SURGERY_STATE_OPTIONS, CLASSIFICATION_OPTIONS, getBadgeVariant } from "@/lib/statusHelpers"
-import { runAutomations } from "@/lib/automations"
+import { runAutomations, getNextState } from "@/lib/automations"
+import { useCirugiaActions } from "@/hooks/useCirugiaActions"
 import { toast } from "sonner"
 import { Scissors, ShieldCheck, Package, Truck, Receipt, Plus, Zap, Download, Search, CheckCircle2, XCircle, FileText, Activity, ArrowRight, RotateCcw, Kanban, Eye } from "lucide-react"
 import type { SurgeryState, SurgeryClassification, Surgery } from "@/types"
@@ -97,6 +98,7 @@ const COLUMN_HEADER_BG: Record<string, string> = {
 
 export default function TableroPage() {
   const store = useOrtoTrackStore()
+  const { persistStatusChange } = useCirugiaActions()
   const { openExpediente } = useExpedienteDrawer()
 
   // ── Filters ──
@@ -166,24 +168,25 @@ export default function TableroPage() {
 
   // ── Advance state action ──
   const handleAdvance = useCallback(
-    (surgery: Surgery) => {
-      const success = runAutomations(store.changeSurgeryStatus, surgery.id, surgery.state)
-      if (success) {
-        toast.success(`Estado de ${surgery.id} avanzado`)
-      } else {
+    async (surgery: Surgery) => {
+      const next = getNextState(surgery.state)
+      if (!next) {
         toast.info("No se puede avanzar desde este estado")
+        return
       }
+      const result = await persistStatusChange(surgery, next, { source: "tablero:advance" })
+      if (result.ok) toast.success(`Estado de ${surgery.id} avanzado a ${next}`)
     },
-    [store]
+    [persistStatusChange]
   )
 
   // ── Recover action ──
   const handleRecover = useCallback(
-    (surgery: Surgery) => {
-      store.recoverSurgery(surgery.id)
-      toast.success(`Cirugía ${surgery.id} recuperada`)
+    async (surgery: Surgery) => {
+      const result = await persistStatusChange(surgery, "Pendiente", { source: "tablero:recover" })
+      if (result.ok) toast.success(`Cirugía ${surgery.id} recuperada`)
     },
-    [store]
+    [persistStatusChange]
   )
 
   // ── Indicator icons for a surgery ──
