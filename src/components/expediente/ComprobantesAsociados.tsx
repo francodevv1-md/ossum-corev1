@@ -1,395 +1,135 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import { useId, useState } from "react"
+import { motion, useReducedMotion } from "framer-motion"
+import { FileText, Search, RefreshCw, ArrowUpRight, MoreHorizontal, Download, Printer, Pencil, CircleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
-import {
-  Link2, MoreHorizontal, Eye, Printer, Download, Edit,
-  XCircle, FileText, CreditCard, Search, FileSearch,
-  ChevronDown, ChevronRight,
-} from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/components/auth/AuthProvider"
-import { FiscalEvidenceDialog } from "@/components/facturacion/FiscalEvidenceDialog"
-import { formatDate, formatCurrency } from "@/lib/formatters"
+import { useSurgeryComprobantes } from "@/hooks/useSurgeryComprobantes"
+import { formatDate } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import type { Surgery, Comprobante, Presupuesto } from "@/types"
-import type { ResumenCobranzaSurgery, FacturaCobranzaDetalle } from "@/lib/cobros.utils"
+import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
+import { COMPROBANTE_LABELS, comprobanteRecords, documentMoney, type ComprobanteType } from "./comprobantes-model"
+import { ComprobanteDetail } from "./ComprobanteDetail"
 
 interface ComprobantesAsociadosProps {
   surgery: Surgery
+  // Compatibility only: parents still pass local projections. Never use them as authority.
   comprobantes: Comprobante[]
   resumenCobranza: ResumenCobranzaSurgery
   presupuestos: Presupuesto[]
 }
 
-type CompFilterType = "all" | "PR" | "PE" | "NR" | "FV" | "CO" | "NC" | "ND"
-
-const COMP_TYPE_BADGES: Record<string, string> = {
-  PR: "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200",
-  PE: "border-indigo-300 bg-indigo-100 text-indigo-800 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200",
-  NR: "border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200",
-  FV: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200",
-  CO: "border-green-300 bg-green-100 text-green-800 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-200",
-  NC: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200",
-  ND: "border-orange-300 bg-orange-100 text-orange-800 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-200",
+const TYPE_COLORS = {
+  PR: "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300",
+  FV: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+  NR: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+  CO: "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300",
 }
 
-/** Badge de estado de cobranza para una FV */
-const ESTADO_COBRANZA_COLORS: Record<string, string> = {
-  sin_cobrar: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200",
-  cobro_parcial: "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200",
-  cobrada: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200",
-  vencida: "border-red-300 bg-red-100 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200",
-}
-
-const ESTADO_COBRANZA_LABELS: Record<string, string> = {
-  sin_cobrar: "Sin cobrar",
-  cobro_parcial: "Cobro parcial",
-  cobrada: "Cobrada",
-  vencida: "Vencida",
-}
-
-export function ComprobantesAsociados({
-  surgery: _surgery, comprobantes, resumenCobranza, presupuestos,
-}: ComprobantesAsociadosProps) {
+export function ComprobantesAsociados({ surgery }: ComprobantesAsociadosProps) {
   const { activeCompany } = useAuth()
-  const [filterType, setFilterType] = useState<CompFilterType>("all")
-  const [filterState, setFilterState] = useState<string>("all")
-  const [searchText, setSearchText] = useState("")
-  const [expandedFVs, setExpandedFVs] = useState<Set<string>>(new Set())
-  const [fiscalTarget, setFiscalTarget] = useState<{ invoiceId: string; invoiceLabel: string } | null>(null)
+  const data = useSurgeryComprobantes(activeCompany?.id, surgery.backendId)
+  // Reset filters and selected record on company/surgery changes. Do not animate old-scope exits.
+  return <ComprobantesRegister key={JSON.stringify([activeCompany?.id, surgery.backendId])} data={data} />
+}
 
-  // Build factura detail map from resumenCobranza
-  const facturaDetailMap = useMemo(() => {
-    const map = new Map<string, FacturaCobranzaDetalle>()
-    for (const fv of resumenCobranza.facturas) {
-      map.set(fv.facturaNumber, fv)
-    }
-    return map
-  }, [resumenCobranza])
-
-  // Build unified rows: comprobantes + presupuestos
-  // Cobros are now shown as sub-rows under each FV, not as separate top-level rows
-  const allRows = useMemo(() => {
-    const rows: Array<{
-      id: string; type: string; number: string; date: string;
-      client: string; concept: string; amount: number; toCollect: number;
-      state: string; source: "comp" | "pr"; facturaDetail?: FacturaCobranzaDetalle
-    }> = []
-
-    // Presupuestos as PR
-    presupuestos.forEach(pr => {
-      rows.push({
-        id: pr.id, type: "PR", number: pr.id, date: pr.createdAt,
-        client: pr.client, concept: `Presupuesto - ${pr.patient || pr.concepto || pr.client}`,
-        amount: pr.total, toCollect: pr.total, state: pr.state, source: "pr",
-      })
-    })
-
-    // Comprobantes — for FVs, attach cobranza detail
-    comprobantes.forEach(c => {
-      const detail = c.type === "FV" ? facturaDetailMap.get(c.number) : undefined
-      rows.push({
-        id: c.id, type: c.type, number: c.number, date: c.date,
-        client: c.client, concept: c.concept,
-        amount: c.amount,
-        toCollect: detail ? detail.saldoPendiente : c.toCollect,
-        state: detail ? ESTADO_COBRANZA_LABELS[detail.estadoCobranza] || detail.estadoCobranza : c.state,
-        source: "comp",
-        facturaDetail: detail,
-      })
-    })
-
-    return rows
-  }, [comprobantes, presupuestos, facturaDetailMap])
-
-  // Filtered rows
-  const filteredRows = useMemo(() => {
-    let result = allRows
-    if (filterType !== "all") result = result.filter(r => r.type === filterType)
-    if (filterState !== "all") result = result.filter(r => r.state === filterState)
-    if (searchText.trim()) {
-      const q = searchText.toLowerCase()
-      result = result.filter(r =>
-        r.number.toLowerCase().includes(q) ||
-        r.client.toLowerCase().includes(q) ||
-        r.concept.toLowerCase().includes(q)
-      )
-    }
-    // Sort by date desc
-    return result.sort((a, b) => b.date.localeCompare(a.date))
-  }, [allRows, filterType, filterState, searchText])
-
-  const uniqueStates = useMemo(() => {
-    const states = new Set(allRows.map(r => r.state))
-    return Array.from(states).sort()
-  }, [allRows])
-
-  const typeCounts = useMemo(() => {
-    return {
-      PR: allRows.filter(r => r.type === "PR").length,
-      PE: allRows.filter(r => r.type === "PE").length,
-      NR: allRows.filter(r => r.type === "NR").length,
-      FV: allRows.filter(r => r.type === "FV").length,
-      CO: allRows.filter(r => r.facturaDetail && r.facturaDetail.cobros.length > 0).length,
-      NC: allRows.filter(r => r.type === "NC").length,
-      ND: allRows.filter(r => r.type === "ND").length,
-    }
-  }, [allRows])
-
-  // Summary totals — use resumenCobranza for financial consistency
-  const totalAmount = filteredRows.reduce((s, r) => s + r.amount, 0)
-  const totalToCollect = resumenCobranza.saldoPendiente
-
-  const toggleFVExpanded = (fvNumber: string) => {
-    setExpandedFVs(prev => {
-      const next = new Set(prev)
-      if (next.has(fvNumber)) next.delete(fvNumber)
-      else next.add(fvNumber)
-      return next
-    })
-  }
+function ComprobantesRegister({ data }: { data: ReturnType<typeof useSurgeryComprobantes> }) {
+  const reducedMotion = useReducedMotion()
+  const indicatorId = useId()
+  const [search, setSearch] = useState("")
+  const [type, setType] = useState<ComprobanteType | "all">("all")
+  const [state, setState] = useState("all")
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const records = comprobanteRecords(data.budgets, data.invoices, data.remittances, data.payments)
+  const states = [...new Set(records.map(row => row.state))].sort()
+  const query = search.trim().toLocaleLowerCase("es-AR")
+  const filtered = records.filter(row => (type === "all" || row.type === type) && (state === "all" || row.state === state) &&
+    (!query || `${row.id} ${row.number ?? ""} ${row.concept} ${row.type} ${row.state}`.toLocaleLowerCase("es-AR").includes(query)))
+  const selected = data.status === "ready" ? records.find(row => row.key === selectedKey) : undefined
+  const ready = data.status === "ready"
+  const statusText = data.status === "missing-company" ? "Seleccioná una empresa para ver sus comprobantes."
+    : data.status === "missing-identity" ? "Esta cirugía no tiene identidad backend. No se muestran datos locales."
+    : "Cargando comprobantes vinculados…"
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Comprobantes Asociados</h2>
-          <p className="text-[11px] text-muted-foreground">Vista compacta de presupuestos, comprobantes y cobranzas vinculadas.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="h-6 rounded-md px-2 text-[10px] font-medium">
-            {filteredRows.length} visibles
-          </Badge>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><p className="text-sm font-medium text-slate-900 dark:text-slate-100">El recorrido documental de esta cirugía</p>
+          <p className="mt-1 text-xs text-muted-foreground">Consultá cada comprobante, desde el presupuesto hasta el cobro.</p></div>
+        <Button variant="outline" size="sm" onClick={() => { setSelectedKey(null); data.reload() }} disabled={data.status !== "ready" && data.status !== "error"} className="h-9 gap-2">
+          <RefreshCw className="size-3.5" aria-hidden />Recargar
+        </Button>
       </div>
 
-      {/* ── Filters bar ── */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-950/60">
-        <div className="relative min-w-[200px] flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-            placeholder="Buscar comprobante..."
-            className="h-7 border-slate-200 bg-white pl-8 text-[11px] dark:border-slate-700 dark:bg-slate-900"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-1">
-          <Button
-            variant={filterType === "all" ? "default" : "outline"}
-            size="sm" className="h-6 rounded-md px-2 text-[10px]"
-            onClick={() => setFilterType("all")}
-          >
-            Todos
-          </Button>
-          {(["PR", "PE", "NR", "FV", "CO", "NC", "ND"] as const).map(t => {
-            const count = typeCounts[t]
-            if (count === 0) return null
-            return (
-              <Button
-                key={t}
-                variant={filterType === t ? "default" : "outline"}
-                size="sm" className="h-6 gap-1 rounded-md px-2 text-[10px]"
-                onClick={() => setFilterType(t)}
-              >
-                {t}
-                <span className="text-[9px] opacity-60">{count}</span>
-              </Button>
-            )
+      {!ready && data.status !== "error" && <div role="status" className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">{statusText}</div>}
+      {data.status === "error" && <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+        <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden /><div><p className="font-medium">No pudimos cargar los comprobantes.</p><p className="mt-1">{data.error}</p><p className="mt-1 text-xs">Usá Recargar para volver a intentarlo. No se muestran datos locales.</p></div>
+      </div>}
+
+      {ready && <>
+        <div className="flex flex-wrap gap-1 border-b pb-3" aria-label="Tipos de comprobante">
+          {(["all", ...Object.keys(COMPROBANTE_LABELS)] as (ComprobanteType | "all")[]).map(value => {
+            const count = value === "all" ? records.length : records.filter(row => row.type === value).length
+            return <button key={value} type="button" aria-pressed={type === value} onClick={() => setType(value)}
+              className={cn("relative min-h-10 rounded-lg px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary", type === value ? "text-white dark:text-slate-900" : "text-muted-foreground hover:bg-muted") }>
+              {type === value && <motion.span aria-hidden layoutId={reducedMotion ? undefined : indicatorId} className="absolute inset-0 rounded-lg bg-slate-900 dark:bg-slate-100" transition={{ duration: reducedMotion ? 0 : 0.2 }} />}
+              <span className="relative">{value === "all" ? "Todos" : COMPROBANTE_LABELS[value]} <span className="ml-2 tabular-nums opacity-60">{count}</span></span>
+            </button>
           })}
         </div>
-        {uniqueStates.length > 1 && (
-          <select
-            value={filterState}
-            onChange={e => setFilterState(e.target.value)}
-            className="h-6 rounded-md border border-slate-200 bg-white px-2 text-[10px] text-muted-foreground shadow-xs dark:border-slate-700 dark:bg-slate-900"
-          >
-            <option value="all">Todos los estados</option>
-            {uniqueStates.map(st => <option key={st} value={st}>{st}</option>)}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 basis-60"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" aria-hidden />
+            <Input aria-label="Buscar comprobante" placeholder="Buscar por número, referencia o concepto" value={search} onChange={event => setSearch(event.target.value)} className="h-10 pl-9 text-sm" /></div>
+          <select aria-label="Estado del comprobante" value={state} onChange={event => setState(event.target.value)} className="h-10 max-w-full rounded-md border bg-background px-3 text-xs">
+            <option value="all">Todos los estados</option>{states.map(value => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}
           </select>
-        )}
-      </div>
-
-      {/* ── Summary row ── */}
-      <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950/60 sm:grid-cols-3">
-        <div className="rounded-md bg-white/80 px-3 py-2 dark:bg-slate-900/80">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Total visible</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(totalAmount)}</p>
+          <span className="px-1 text-xs tabular-nums text-muted-foreground">{filtered.length} visibles</span>
         </div>
-        <div className="rounded-md bg-white/80 px-3 py-2 dark:bg-slate-900/80">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo pendiente</p>
-          <p className="mt-1 text-sm font-semibold text-amber-700">{formatCurrency(totalToCollect)}</p>
-        </div>
-        {resumenCobranza.totalCobrado > 0 && (
-          <div className="rounded-md bg-white/80 px-3 py-2 dark:bg-slate-900/80">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Cobrado</p>
-            <p className="mt-1 text-sm font-semibold text-emerald-700">{formatCurrency(resumenCobranza.totalCobrado)}</p>
-          </div>
-        )}
-      </div>
 
-      {/* ── Grid ── */}
-      {filteredRows.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50/80 hover:bg-slate-50/80 dark:bg-slate-950/80 dark:hover:bg-slate-950/80">
-                <TableHead className="h-8 w-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500"></TableHead>
-                <TableHead className="h-8 w-16 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Tipo</TableHead>
-                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Comprobante</TableHead>
-                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Fecha</TableHead>
-                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Cliente</TableHead>
-                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Concepto</TableHead>
-                <TableHead className="h-8 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Importe</TableHead>
-                <TableHead className="h-8 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Saldo</TableHead>
-                <TableHead className="h-8 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Estado</TableHead>
-                <TableHead className="h-8 w-12 text-[10px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRows.map(row => {
-                const comp = row.source === "comp" ? comprobantes.find(c => c.id === row.id) : undefined
-                const facturaData = comp?.facturaData
-                const hasCobros = row.facturaDetail && row.facturaDetail.cobros.length > 0
-                const isExpanded = expandedFVs.has(row.number)
-
-                return (
-                  <React.Fragment key={row.id}>
-                    <TableRow className="group border-slate-100 hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-800/40">
-                      {/* Expand toggle for FV with cobros */}
-                      <TableCell className="w-8 py-2.5 align-top">
-                        {hasCobros ? (
-                          <Button variant="ghost" size="sm" className="h-5 w-5 rounded-sm p-0 text-slate-500" onClick={() => toggleFVExpanded(row.number)}>
-                            {isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-                          </Button>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="py-2.5 align-top">
-                        <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold leading-none", COMP_TYPE_BADGES[row.type] || "bg-gray-100 text-gray-800 border-gray-300")}>
-                          {row.type}
-                        </span>
-                      </TableCell>
-                       <TableCell className="py-2.5 text-xs font-medium font-mono align-top text-slate-900 dark:text-slate-100">{row.number}</TableCell>
-                      <TableCell className="py-2.5 text-xs text-muted-foreground align-top">{formatDate(row.date)}</TableCell>
-                       <TableCell className="py-2.5 text-xs align-top text-slate-900 dark:text-slate-100">{row.client}</TableCell>
-                      <TableCell className="max-w-[220px] py-2.5 text-xs align-top text-muted-foreground truncate">{row.concept}</TableCell>
-                       <TableCell className="py-2.5 text-right text-xs font-medium align-top text-slate-900 dark:text-slate-100">{formatCurrency(row.amount)}</TableCell>
-                      <TableCell className={cn("py-2.5 text-right text-xs font-medium align-top", row.toCollect > 0 ? "text-amber-700" : "text-muted-foreground")}>
-                        {row.toCollect > 0 ? formatCurrency(row.toCollect) : "—"}
-                      </TableCell>
-                      <TableCell className="py-2.5 text-xs align-top">
-                        {row.facturaDetail ? (
-                          <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none", ESTADO_COBRANZA_COLORS[row.facturaDetail.estadoCobranza] || "")}>
-                            {ESTADO_COBRANZA_LABELS[row.facturaDetail.estadoCobranza] || row.facturaDetail.estadoCobranza}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">{row.state}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2.5 align-top">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 rounded-sm p-0 text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
-                              <MoreHorizontal className="size-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem><Eye className="size-4 mr-2" /> Abrir</DropdownMenuItem>
-                            <DropdownMenuItem><Printer className="size-4 mr-2" /> Imprimir</DropdownMenuItem>
-                            <DropdownMenuItem><Download className="size-4 mr-2" /> Descargar PDF</DropdownMenuItem>
-                            <DropdownMenuItem><Edit className="size-4 mr-2" /> Modificar</DropdownMenuItem>
-                            {row.type === "FV" && (
-                              <DropdownMenuItem onClick={() => setFiscalTarget({ invoiceId: row.id, invoiceLabel: row.number })}>
-                                <FileSearch className="size-4 mr-2" /> Evidencia fiscal DEV
-                              </DropdownMenuItem>
-                            )}
-                            {row.type === "FV" && row.toCollect > 0 && (
-                              <DropdownMenuItem><CreditCard className="size-4 mr-2" /> Cobrar</DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem><FileText className="size-4 mr-2" /> Ver historial</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive"><XCircle className="size-4 mr-2" /> Anular</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                    {/* Extended FV data row (facturaData from CHATZAI-010) */}
-                    {facturaData && row.type === "FV" && (
-                       <TableRow className="bg-slate-50/60 dark:bg-slate-950/60">
-                        <TableCell colSpan={10} className="px-4 py-2">
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-                            <span>Base: <strong className="text-foreground">{facturaData.baseFacturacion}</strong></span>
-                            <span>PR: {facturaData.presupuestoBaseId || "—"}</span>
-                            <span>Presup.: {formatCurrency(facturaData.totalPresupuestado)}</span>
-                            <span>Consumo val.: {formatCurrency(facturaData.totalConsumidoValorizado)}</span>
-                            <span>Delta: {facturaData.deltaDetectado >= 0 ? "+" : ""}{formatCurrency(facturaData.deltaDetectado)}</span>
-                            <span>Diff acept.: {formatCurrency(facturaData.diferenciasAceptadas)}</span>
-                            {facturaData.presupuestoVersion && (
-                              <span>Versión: {facturaData.presupuestoVersion}</span>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {/* Expanded cobros imputados sub-rows */}
-                    {isExpanded && row.facturaDetail && (
-                       <TableRow className="bg-emerald-50/20 dark:bg-emerald-500/5">
-                        <TableCell colSpan={10} className="px-8 py-2.5">
-                          <div className="space-y-1">
-                            <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Cobros aplicados a {row.number}</p>
-                            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-x-4 gap-y-1 items-center text-[10px]">
-                              {row.facturaDetail.cobros.map(co => (
-                                <React.Fragment key={co.cobroId}>
-                                  <span className="text-muted-foreground">{formatDate(co.fecha)}</span>
-                                  <span className="font-medium">{co.medioCobro}</span>
-                                  <span className="text-muted-foreground">{co.referencia ? `Ref. ${co.referencia}` : ""}{co.observaciones ? ` — ${co.observaciones}` : ""}</span>
-                                  <span className="font-medium text-emerald-700 text-right">{formatCurrency(co.importeImputado)}</span>
-                                </React.Fragment>
-                              ))}
-                            </div>
-                            <div className="flex items-center justify-between border-t border-emerald-200/50 pt-1 text-[10px]">
-                              <span className="text-muted-foreground">Total cobrado</span>
-                              <span className="font-semibold text-emerald-700">{formatCurrency(row.facturaDetail.totalCobrado)}</span>
-                            </div>
-                            {row.facturaDetail.saldoPendiente > 0 && (
-                              <div className="flex items-center justify-between text-[10px]">
-                                <span className="text-muted-foreground">Saldo pendiente</span>
-                                <span className="font-semibold text-amber-700">{formatCurrency(row.facturaDetail.saldoPendiente)}</span>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </React.Fragment>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      ) : (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center dark:border-slate-800 dark:bg-slate-950/50">
-            <Link2 className="mb-2 size-8 text-muted-foreground/35" />
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Sin comprobantes asociados</p>
-            <p className="text-[11px] text-muted-foreground">Se mostrarán acá cuando el expediente genere movimiento comercial.</p>
-          </div>
-      )}
-
-      {fiscalTarget && activeCompany?.id ? (
-        <FiscalEvidenceDialog
-          companyId={activeCompany.id}
-          invoiceId={fiscalTarget.invoiceId}
-          invoiceLabel={fiscalTarget.invoiceLabel}
-          open={Boolean(fiscalTarget)}
-          onOpenChange={(open) => { if (!open) setFiscalTarget(null) }}
-        />
-      ) : null}
+        {filtered.length ? <div className="overflow-hidden rounded-lg border">
+          <Table><TableHeader><TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead className="w-16 text-xs">Tipo</TableHead><TableHead className="text-xs">Comprobante</TableHead>
+            <TableHead className="hidden text-xs md:table-cell">Fecha</TableHead><TableHead className="hidden text-xs lg:table-cell">Concepto</TableHead>
+            <TableHead className="text-right text-xs">Importe</TableHead><TableHead className="hidden text-right text-xs md:table-cell">Saldo</TableHead>
+            <TableHead className="hidden text-xs sm:table-cell">Estado</TableHead><TableHead><span className="sr-only">Acciones</span></TableHead>
+          </TableRow></TableHeader><TableBody>
+            {filtered.map((row, index) => <motion.tr key={row.key} initial={reducedMotion || index > 7 ? false : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: reducedMotion ? 0 : 0.18, delay: reducedMotion ? 0 : Math.min(index, 7) * 0.025 }}
+              className="group border-b transition-colors last:border-b-0 hover:bg-muted/40">
+              <TableCell><span className={cn("rounded-md px-2 py-1 text-[11px] font-semibold", TYPE_COLORS[row.type])}>{row.type}</span></TableCell>
+              <TableCell className="min-w-32 py-3">
+                <button type="button" onClick={() => setSelectedKey(row.key)} aria-label={`Abrir ${row.type} ${row.number ?? row.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900 hover:text-primary focus-visible:outline-2 dark:text-slate-100">
+                  {row.number ?? "Sin numeración"}<ArrowUpRight className="size-3.5 text-muted-foreground" aria-hidden />
+                </button><p className="mt-1 max-w-48 truncate font-mono text-[10px] text-muted-foreground" title={row.id}>{row.id}</p>
+                <p className="mt-1 text-xs text-muted-foreground md:hidden">{formatDate(row.date)}</p><p className="mt-1 text-xs text-muted-foreground sm:hidden">{row.state.replaceAll("_", " ")}</p>
+              </TableCell>
+              <TableCell className="hidden whitespace-nowrap text-xs text-muted-foreground md:table-cell">{formatDate(row.date)}</TableCell>
+              <TableCell className="hidden max-w-56 truncate text-xs text-muted-foreground lg:table-cell" title={row.concept}>{row.concept}</TableCell>
+              <TableCell className="whitespace-nowrap text-right text-xs tabular-nums">{row.type === "NR" ? "No aplica" : documentMoney(row.amount, row.currency)}</TableCell>
+              <TableCell className="hidden whitespace-nowrap text-right text-xs tabular-nums md:table-cell">{row.type === "FV" ? documentMoney(row.balance, row.currency) : "No aplica"}</TableCell>
+              <TableCell className="hidden text-xs sm:table-cell"><span className="whitespace-nowrap rounded-md border px-2 py-1">{row.state.replaceAll("_", " ")}</span></TableCell>
+              <TableCell className="px-1"><DropdownMenu><DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={`Acciones ${row.type} ${row.number ?? row.id}`} className="size-9"><MoreHorizontal className="size-4" /></Button>
+              </DropdownMenuTrigger><DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onSelect={() => setSelectedKey(row.key)}><ArrowUpRight className="size-4" />Abrir comprobante</DropdownMenuItem>
+                <DropdownMenuItem disabled><Download className="size-4" />Descargar PDF · No disponible</DropdownMenuItem>
+                <DropdownMenuItem disabled><Printer className="size-4" />Imprimir · No disponible</DropdownMenuItem>
+                <DropdownMenuItem disabled><Pencil className="size-4" />Modificar · No disponible</DropdownMenuItem>
+              </DropdownMenuContent></DropdownMenu></TableCell>
+            </motion.tr>)}
+          </TableBody></Table>
+        </div> : <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center">
+          <FileText className="size-8 text-muted-foreground/50" aria-hidden /><p className="text-sm font-medium">{records.length ? "Ningún comprobante coincide con los filtros." : "Sin comprobantes vinculados a esta cirugía."}</p>
+          {records.length > 0 && <Button variant="outline" size="sm" onClick={() => { setSearch(""); setType("all"); setState("all") }}>Limpiar filtros</Button>}
+        </div>}
+      </>}
+      <p className="text-[11px] leading-relaxed text-muted-foreground">Datos del sistema · Solo lectura. Pedidos (PE), notas de crédito (NC) y débito (ND): no disponibles en esta vista.</p>
+      {selected && <ComprobanteDetail key={selected.key} record={selected} onClose={() => setSelectedKey(null)} />}
     </div>
   )
 }

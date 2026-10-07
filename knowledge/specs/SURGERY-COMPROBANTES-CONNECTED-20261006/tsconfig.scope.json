@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../../next-env.d.ts",
+    "../../../src/__tests__/setup.ts",
+    "../../../src/components/expediente/ComercialTabContent.tsx",
+    "../../../src/components/expediente/ComprobantesAsociados.tsx",
+    "../../../src/components/expediente/ComprobanteDetail.tsx",
+    "../../../src/components/expediente/comprobantes-model.ts",
+    "../../../src/hooks/useSurgeryComprobantes.ts",
+    "../../../src/__tests__/components/ComprobantesAsociados.http.test.tsx",
+    "../../../src/__tests__/components/ComercialTabContent.test.tsx",
+    "../../../src/__tests__/components/ComercialTabAutorizar.test.tsx"
+  ]
+}
