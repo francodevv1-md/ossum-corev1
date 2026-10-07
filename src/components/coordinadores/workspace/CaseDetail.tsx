@@ -18,6 +18,7 @@ import {
 } from "@/components/coordinadores/coordinator-queue.helpers"
 import { formatDate } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
+import { isTechnicalId } from "@/lib/api/ids"
 import type { CoordinatorCase } from "@/components/coordinadores/coordinator-queue.helpers"
 
 type SitTone = "danger" | "warning" | "success" | "info" | "neutral"
@@ -504,7 +505,12 @@ export function CaseDetail({ entry, canMutate, actions, onBack, compact }: CaseD
   const sitTone = situationTone(advisory.situation)
   const sitClass = `op-sit-${sitTone === "success" ? "success" : sitTone}`
   const caseRef = surgery.visibleNumber?.trim() || `CX ${surgery.id}`
-  const surgeryId = surgery.backendId ?? surgery.id
+  // Technical id only: the local store id is for React reconciliation, not
+  // for the readers (seguimiento feed, attachments, composer, presupuestos).
+  // useSeguimientoFeed short-circuits on falsy id, which is the honest surface
+  // when the surgery hasn't been persisted yet.
+  const surgeryId = isTechnicalId(surgery.backendId) ? surgery.backendId : null
+  const followUpSurgeryId = surgeryId ?? ""
   const presupuestoIdentity = useMemo(() => {
     if (presupuestoAuthority.loading || presupuestoAuthority.error) return null
     const presupuesto = presupuestoAuthority.presupuestos.find((item) => item.surgeryId === surgeryId && item.slot === "CURRENT")
@@ -551,7 +557,7 @@ export function CaseDetail({ entry, canMutate, actions, onBack, compact }: CaseD
         ) : (
           <p className="op-text-muted mt-1.5 text-[12px]">Sin fecha</p>
         )}
-        {canMutate ? <div className="mt-3"><FollowUpComposer surgeryId={surgeryId} /></div> : null}
+        {canMutate ? <div className="mt-3"><FollowUpComposer surgeryId={followUpSurgeryId} /></div> : null}
       </header>
 
       {/* Situación */}
@@ -599,13 +605,13 @@ export function CaseDetail({ entry, canMutate, actions, onBack, compact }: CaseD
          {tab === "seguimiento" ? (
            <div className="flex min-h-0 flex-1 flex-col">
              <div className="min-h-0 flex-1 overflow-y-auto py-2">
-               <FollowUpFeed surgeryId={surgeryId} />
+               <FollowUpFeed surgeryId={followUpSurgeryId} />
              </div>
            </div>
          ) : tab === "datos" ? (
            <CaseDataView entry={entry} />
          ) : tab === "adjuntos" ? (
-           <CaseAttachmentsView surgeryId={surgeryId} />
+           <CaseAttachmentsView surgeryId={followUpSurgeryId} />
          ) : (
             <CaseReceiptsView entry={entry} presupuestoIdentity={presupuestoIdentity} />
          )}

@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { MediaLightboxModal } from "./MediaLightboxModal"
 import { useRemitos } from "@/hooks/useRemitos"
+import { isTechnicalId } from "@/lib/api/ids"
 import { toast } from "sonner"
 
 interface TabPaneSeguimientoProps {
@@ -30,9 +31,12 @@ interface TabPaneSeguimientoProps {
 }
 
 export function TabPaneSeguimiento({ surgery, history = [], onAddNote }: TabPaneSeguimientoProps) {
-  const backendId = surgery.backendId || surgery.id
-  const { entries: feedEntries, loading, addNote, addPhotoEvidence, addLogisticsDelivery } = useSeguimientoFeed(backendId)
-  const { remitos, refresh: refreshRemitos } = useRemitos({ surgeryId: backendId, take: 50 })
+  // Backend id is the only key the shared readers can query. Falling back to the
+  // local store id would send a non-persisted key and silently return an empty
+  // result; we now surface the missing technical id instead.
+  const surgeryId = isTechnicalId(surgery.backendId) ? surgery.backendId : null
+  const { entries: feedEntries, loading, addNote, addPhotoEvidence, addLogisticsDelivery } = useSeguimientoFeed(surgeryId ?? "")
+  const { remitos, refresh: refreshRemitos } = useRemitos({ surgeryId: surgeryId ?? undefined, take: 50 })
   const store = useOrtoTrackStore()
 
   const [newNote, setNewNote] = useState("")

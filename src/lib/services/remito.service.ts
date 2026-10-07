@@ -13,10 +13,12 @@ import { ApiError, badRequest, notFound } from "../api/errors";
 import { emitCrossDomainNotification } from "./internal-notifications.service";
 import { acceptCajasDispatch } from "./cajas-dispatch.service";
 import { cajasDispatchSchema } from "../validators/cajas-assignment";
+import { positiveQuantity } from "../validators/decimal18-4";
 import type { z } from "zod";
 import {
   confirmDevolucion,
   createDevolucion,
+  lockRemitoForReturn,
   updateDevolucionState,
 } from "./devolucion.service";
 
@@ -93,7 +95,7 @@ function toDecimal(value: number | string): Prisma.Decimal {
   return new Prisma.Decimal(value);
 }
 
-function serializeDate(value: Date | null): string | null {
+function serializeDate(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
 
@@ -110,6 +112,10 @@ function serializeRemitoForAudit(remito: {
   boxId: string | null;
   presupuestoId: string | null;
   destinatarioContactId: string | null;
+  destinatarioSnapshot?: unknown;
+  shippingAddressSnapshot?: unknown;
+  transportSnapshot?: unknown;
+  metadata?: unknown;
   state: string;
   issuedAt: Date | null;
   deliveredAt: Date | null;
@@ -118,6 +124,21 @@ function serializeRemitoForAudit(remito: {
   updatedById: string | null;
   createdAt: Date;
   updatedAt: Date;
+  items?: ReadonlyArray<{
+    id: string;
+    itemId?: string | null;
+    sku?: string | null;
+    description?: string | null;
+    quantity: Prisma.Decimal | number | string;
+    unit?: string | null;
+    boxId?: string | null;
+    presupuestoItemId?: string | null;
+    lotNumber?: string | null;
+    serialNumber?: string | null;
+    expirationDate?: Date | null;
+    returnedQuantity?: Prisma.Decimal | number | string | null;
+    metadata?: unknown;
+  }>;
 }) {
   return {
     id: remito.id,
@@ -132,12 +153,37 @@ function serializeRemitoForAudit(remito: {
     boxId: remito.boxId,
     presupuestoId: remito.presupuestoId,
     destinatarioContactId: remito.destinatarioContactId,
+    destinatarioSnapshot: remito.destinatarioSnapshot ?? null,
+    shippingAddressSnapshot: remito.shippingAddressSnapshot ?? null,
+    transportSnapshot: remito.transportSnapshot ?? null,
     state: remito.state,
     issuedAt: serializeDate(remito.issuedAt),
     deliveredAt: serializeDate(remito.deliveredAt),
     returnedAt: serializeDate(remito.returnedAt),
     createdById: remito.createdById,
     updatedById: remito.updatedById,
+    metadata: remito.metadata ?? null,
+    items: Array.isArray(remito.items)
+      ? remito.items.map((item) => ({
+          id: item.id,
+          itemId: item.itemId ?? null,
+          sku: item.sku ?? null,
+          description: item.description ?? null,
+          quantity: item.quantity instanceof Prisma.Decimal ? item.quantity.toString() : String(item.quantity),
+          unit: item.unit ?? null,
+          boxId: item.boxId ?? null,
+          presupuestoItemId: item.presupuestoItemId ?? null,
+          lotNumber: item.lotNumber ?? null,
+          serialNumber: item.serialNumber ?? null,
+          expirationDate: serializeDate(item.expirationDate ?? null),
+          returnedQuantity: item.returnedQuantity instanceof Prisma.Decimal
+            ? item.returnedQuantity.toString()
+            : item.returnedQuantity == null
+              ? null
+              : String(item.returnedQuantity),
+          metadata: item.metadata ?? null,
+        }))
+      : undefined,
     createdAt: remito.createdAt.toISOString(),
     updatedAt: remito.updatedAt.toISOString(),
   };
@@ -341,7 +387,7 @@ export interface ListRemitosInput {
 export interface GetRemitoInput {
   companyId: string;
   remitoId: string;
-  prisma: PrismaClient;
+  prisma: PrismaClient | Prisma.TransactionClient;
 }
 
 export interface EmitirRemitoInput {
@@ -392,12 +438,14 @@ export interface RegistrarDevolucionInput {
   remitoId: string;
   items: DevolucionItemInput[];
   updatedById?: string;
+  idempotencyKey?: string;
   prisma: PrismaClient;
 }
 
 export interface DeleteRemitoInput {
   companyId: string;
   remitoId: string;
+  deletedById: string;
   prisma: PrismaClient;
 }
 
@@ -513,35 +561,7 @@ export async function createRemito(input: CreateRemitoInput) {
           })),
         },
       },
-      select: {
-        id: true,
-        visibleNumber: true,
-        companyId: true,
-        branchId: true,
-        issuedBranchId: true,
-        documentType: true,
-        surgeryId: true,
-        origin: true,
-        salidaReason: true,
-        boxId: true,
-        presupuestoId: true,
-        destinatarioContactId: true,
-        destinatarioSnapshot: true,
-        shippingAddressSnapshot: true,
-        transportSnapshot: true,
-        packageCount: true,
-        declaredValue: true,
-        state: true,
-        issuedAt: true,
-        deliveredAt: true,
-        returnedAt: true,
-        createdById: true,
-        updatedById: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-        items: { select: { id: true, description: true, quantity: true } },
-      },
+      select: remitoReadSelect,
     });
 
     if (createdById) {
@@ -964,6 +984,7 @@ export async function updateRemitoState(input: UpdateRemitoStateInput) {
       issuedAt: true,
       deliveredAt: true,
       returnedAt: true,
+      updatedAt: true,
     },
   });
 
@@ -993,35 +1014,29 @@ export async function updateRemitoState(input: UpdateRemitoStateInput) {
     );
   }
 
+  if (newState === "Devuelto" || newState === "Parcialmente_devuelto") {
+    throw new RemitoError(
+      "remito_return_requires_devolucion",
+      "Return states must be derived from a confirmed Devolucion",
+      409
+    );
+  }
+
   return prisma.$transaction(async (tx) => {
     const now = new Date();
     const result = await tx.remito.update({
-      where: { id: input.remitoId },
+      where: { id: input.remitoId, companyId, state: currentState, updatedAt: current.updatedAt },
       data: {
         state: newState,
-        ...(newState === "Emitido" && !current.issuedAt ? { issuedAt: now } : {}),
         ...(newState === "Entregado" && !current.deliveredAt ? { deliveredAt: now } : {}),
-        ...(newState === "Devuelto" && !current.returnedAt ? { returnedAt: now } : {}),
         updatedById,
       },
-      select: {
-        id: true,
-        visibleNumber: true,
-        companyId: true,
-        surgeryId: true,
-        origin: true,
-        boxId: true,
-        presupuestoId: true,
-        state: true,
-        issuedAt: true,
-        deliveredAt: true,
-        returnedAt: true,
-        createdById: true,
-        updatedById: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: remitoReadSelect,
+    }).catch((error: unknown) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new RemitoError("remito_state_conflict", "Remito changed. Reload before changing its state.", 409);
+      }
+      throw error;
     });
 
     if (updatedById) {
@@ -1091,120 +1106,73 @@ export async function registrarDevolucion(input: RegistrarDevolucionInput) {
     throw badRequest("devolucion items must be a non-empty array", "remito_empty_devolucion");
   }
 
-  // Prefetch remito + items para validar existencia, cantidades y armar la Devolucion auditable.
-  const current = await prisma.remito.findFirst({
-    where: { id: input.remitoId, companyId },
-    select: {
-      id: true,
-      state: true,
-      companyId: true,
-      surgeryId: true,
-      returnedAt: true,
-      items: {
-        select: {
-          id: true,
-          sku: true,
-          description: true,
-          quantity: true,
-          returnedQuantity: true,
-          unit: true,
-          lotNumber: true,
-          serialNumber: true,
-          expirationDate: true,
-        },
-      },
-    },
-  });
-
-  requireCompanyMatch(current, companyId, input.remitoId);
-
-  if (current.state === "Anulado" || current.state === "Devuelto") {
-    throw new RemitoError(
-      "remito_devolucion_not_allowed",
-      `Cannot register devolucion on remito in state ${current.state}`,
-      409
-    );
+  const key = input.idempotencyKey?.trim();
+  if (input.idempotencyKey !== undefined && (!key || key.length > 128)) {
+    throw badRequest("Invalid return command key", "invalid_remito_return_key");
   }
-
-  const itemMap = new Map(current.items.map((it) => [it.id, it]));
-  const requestedByItem = new Map<string, number>();
-  for (const requestedItem of input.items) {
-    const existing = itemMap.get(requestedItem.itemId);
-    if (!existing) {
-      throw badRequest(
-        `Item ${requestedItem.itemId} does not belong to remito ${input.remitoId}`,
-        "remito_item_not_found"
-      );
-    }
-    const requestedQty = Number(requestedItem.returnedQuantity);
-    if (!Number.isFinite(requestedQty) || requestedQty <= 0) {
-      throw badRequest(
-        `Item ${requestedItem.itemId} returnedQuantity must be a positive number`,
-        "invalid_returned_quantity"
-      );
-    }
-    requestedByItem.set(
-      requestedItem.itemId,
-      (requestedByItem.get(requestedItem.itemId) ?? 0) + requestedQty
-    );
+  const requestedByItem = new Map<string, Prisma.Decimal>();
+  for (const item of input.items) {
+    const quantity = positiveQuantity.safeParse(item.returnedQuantity);
+    if (!quantity.success) throw badRequest("returnedQuantity must be a positive Decimal(18,4)", "invalid_returned_quantity");
+    requestedByItem.set(item.itemId, (requestedByItem.get(item.itemId) ?? new Prisma.Decimal(0)).plus(quantity.data));
   }
+  const content = JSON.stringify([...requestedByItem].sort(([a], [b]) => a.localeCompare(b)).map(([id, quantity]) => [id, quantity.toString()]));
 
-  for (const [itemId, requestedQty] of requestedByItem.entries()) {
-    const existing = itemMap.get(itemId)!;
-    const alreadyReturned = Number(existing.returnedQuantity ?? 0);
-    const totalRequested = alreadyReturned + requestedQty;
-    const itemQuantity = Number(existing.quantity);
-    if (totalRequested > itemQuantity) {
-      throw new RemitoError(
-        "remito_devolucion_quantity_exceeded",
-        `Item ${itemId} returnedQuantity would exceed quantity (max ${itemQuantity - alreadyReturned})`,
-        409
-      );
+  return prisma.$transaction(async (tx) => {
+    await lockRemitoForReturn(tx, companyId, input.remitoId);
+    const current = await tx.remito.findFirst({ where: { id: input.remitoId, companyId }, select: remitoReadSelect });
+    requireCompanyMatch(current, companyId, input.remitoId);
+
+    if (key) {
+      // ponytail: metadata lookup under the parent lock; index a receipt table if per-remito history becomes large.
+      const receipt = await tx.devolucion.findFirst({
+        where: { companyId, remitoId: input.remitoId, metadata: { path: ["returnCommand", "key"], equals: key } },
+        select: { state: true, metadata: true, createdById: true, items: { select: { remitoItemId: true, returnedQuantity: true } } },
+      });
+      if (receipt) {
+        const command = (receipt.metadata as { returnCommand?: { content: string; actor: string | null } } | null)?.returnCommand;
+        const accepted = new Map<string, Prisma.Decimal>();
+        for (const item of receipt.items) {
+          if (item.remitoItemId) accepted.set(item.remitoItemId, (accepted.get(item.remitoItemId) ?? new Prisma.Decimal(0)).plus(item.returnedQuantity));
+        }
+        const acceptedContent = JSON.stringify([...accepted].sort(([a], [b]) => a.localeCompare(b)).map(([id, quantity]) => [id, quantity.toString()]));
+        if (receipt.state !== "Confirmada" || command?.content !== content || command.actor !== updatedById || receipt.createdById !== updatedById || acceptedContent !== content || receipt.items.some((item) => !item.remitoItemId)) {
+          throw new RemitoError("remito_return_replay_conflict", "Return command key was already used for another command.", 409);
+        }
+        return current;
+      }
     }
-  }
 
-  const devolucion = await createDevolucion({
-    companyId,
-    remitoId: input.remitoId,
-    surgeryId: current.surgeryId ?? undefined,
-    items: input.items.map((requestedItem) => {
-      const existing = itemMap.get(requestedItem.itemId)!;
-      return {
-        remitoItemId: requestedItem.itemId,
-        sku: existing.sku ?? undefined,
-        description: existing.description,
-        returnedQuantity: requestedItem.returnedQuantity,
-        unit: existing.unit ?? undefined,
-        lotNumber: existing.lotNumber ?? undefined,
-        serialNumber: existing.serialNumber ?? undefined,
-        expirationDate: existing.expirationDate ?? undefined,
-      };
-    }),
-    reason: "legacy_remito_devolucion",
-    createdById: updatedById ?? undefined,
-    metadata: { source: "legacy_remito_devolucion_endpoint" },
-    prisma,
-  });
+    if (current.state !== "Entregado" && current.state !== "Parcialmente_devuelto") {
+      throw new RemitoError("remito_devolucion_not_allowed", `Cannot register devolucion on remito in state ${current.state}`, 409);
+    }
+    const itemMap = new Map(current.items.map((item) => [item.id, item]));
+    for (const [itemId, requested] of requestedByItem) {
+      const item = itemMap.get(itemId);
+      if (!item) throw badRequest(`Item ${itemId} does not belong to remito ${input.remitoId}`, "remito_item_not_found");
+      const remaining = item.quantity.minus(item.returnedQuantity ?? 0);
+      if (requested.gt(remaining)) {
+        throw new RemitoError("remito_devolucion_quantity_exceeded", `Item ${itemId} returnedQuantity would exceed quantity (max ${remaining.toString()})`, 409);
+      }
+    }
+    const dispatch = await tx.cajasDispatch.findFirst({ where: { companyId, remitoId: input.remitoId }, select: { id: true } });
+    if (dispatch) throw badRequest("El remito asociado contiene un despacho de Cajas que requiere imputación de devolución", "cajas_accounting_required");
 
-  await updateDevolucionState({
-    companyId,
-    devolucionId: devolucion.id,
-    newState: "Pendiente",
-    updatedById: updatedById ?? undefined,
-    prisma,
-  });
-
-  await confirmDevolucion({
-    companyId,
-    devolucionId: devolucion.id,
-    updatedById: updatedById ?? undefined,
-    prisma,
-  });
-
-  return getRemito({
-    companyId,
-    remitoId: input.remitoId,
-    prisma,
+    const devolucion = await createDevolucion({
+      companyId, remitoId: input.remitoId, surgeryId: current.surgeryId ?? undefined,
+      items: [...requestedByItem].map(([itemId, quantity]) => {
+        const item = itemMap.get(itemId)!;
+        return { remitoItemId: itemId, sku: item.sku ?? undefined, description: item.description,
+          returnedQuantity: quantity.toString(), unit: item.unit ?? undefined,
+          lotNumber: item.lotNumber ?? undefined, serialNumber: item.serialNumber ?? undefined, expirationDate: item.expirationDate ?? undefined };
+      }),
+      reason: "legacy_remito_devolucion", createdById: updatedById ?? undefined,
+      metadata: { source: "legacy_remito_devolucion_endpoint", ...(key ? { returnCommand: { key, content, actor: updatedById } } : {}) },
+      prisma: tx,
+    });
+    await updateDevolucionState({ companyId, devolucionId: devolucion.id, newState: "Pendiente", updatedById: updatedById ?? undefined, prisma: tx });
+    await confirmDevolucion({ companyId, devolucionId: devolucion.id, updatedById: updatedById ?? undefined, prisma: tx });
+    return getRemito({ companyId, remitoId: input.remitoId, prisma: tx });
   });
 }
 
@@ -1212,10 +1180,12 @@ export async function registrarDevolucion(input: RegistrarDevolucionInput) {
 export async function deleteRemito(input: DeleteRemitoInput) {
   const companyId = requireCompanyId(input.companyId);
   const prisma = input.prisma;
+  const deletedById = input.deletedById?.trim();
+  if (!deletedById) throw badRequest("Deleting actor is required", "remito_delete_actor_required");
 
   const current = await prisma.remito.findFirst({
     where: { id: input.remitoId, companyId },
-    select: { id: true, state: true, companyId: true, createdById: true },
+    select: { id: true, state: true, companyId: true, updatedAt: true },
   });
 
   requireCompanyMatch(current, companyId, input.remitoId);
@@ -1229,29 +1199,40 @@ export async function deleteRemito(input: DeleteRemitoInput) {
   }
 
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.remito.findUnique({
-      where: { id: input.remitoId },
-      select: { id: true, visibleNumber: true },
+    // Claim/lock the observed draft before touching its children.
+    const claimed = await tx.remito.updateMany({
+      where: { id: input.remitoId, companyId, state: "Borrador", updatedAt: current.updatedAt },
+      data: { updatedById: deletedById },
     });
-    if (!existing) {
-      throw notFound(`Remito ${input.remitoId} not found`, "remito_not_found");
+    if (claimed.count !== 1) {
+      throw new RemitoError("remito_delete_conflict", "Remito changed. Reload before deleting its draft.", 409);
     }
 
-    await tx.remito.delete({ where: { id: input.remitoId } });
-
-    if (current.createdById) {
-      await createAuditEvent({
-        prisma: tx as unknown as PrismaClient,
-        companyId,
-        userId: current.createdById,
-        entityType: "Remito",
-        entityId: input.remitoId,
-        action: "remito.deleted",
-        module: "remito",
-        oldValue: { id: input.remitoId, state: current.state },
-        newValue: null,
+    try {
+      // Preserve referenced lines, including optional FKs that otherwise SetNull.
+      // Any surviving owned line makes the Restrict parent delete roll back everything.
+      await tx.remitoItem.deleteMany({
+        where: { companyId, remitoId: input.remitoId, consumoItems: { none: {} }, devolucionItems: { none: {} }, cajasDispatchLines: { none: {} } },
       });
+      await tx.remito.delete({ where: { id: input.remitoId, companyId, state: "Borrador" } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+        throw new RemitoError("remito_delete_dependencies", "Remito has dependent records and cannot be deleted.", 409);
+      }
+      throw error;
     }
+
+    await createAuditEvent({
+      prisma: tx as unknown as PrismaClient,
+      companyId,
+      userId: deletedById,
+      entityType: "Remito",
+      entityId: input.remitoId,
+      action: "remito.deleted",
+      module: "remito",
+      oldValue: { id: input.remitoId, state: current.state },
+      newValue: null,
+    });
 
     return { id: input.remitoId, deleted: true };
   });

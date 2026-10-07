@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { useAuth } from "@/components/auth/AuthProvider"
+import { isTechnicalId } from "@/lib/api/ids"
 import { ApiClientError } from "@/lib/api/client"
 import {
   createRemito,
@@ -20,7 +21,7 @@ import {
 } from "@/lib/api/remitos"
 
 export function useRemitos(filters?: ListRemitosParams) {
-  const { activeCompany, currentUserLoading, isAuthenticated, isLoading } = useAuth()
+  const { activeCompany, currentUser, currentUserLoading, isAuthenticated, isLoading } = useAuth()
   const [remitos, setRemitos] = useState<RemitoApiRow[]>([])
   const [selectedRemito, setSelectedRemito] = useState<RemitoApiRow | null>(null)
   const [loading, setLoading] = useState(false)
@@ -29,9 +30,36 @@ export function useRemitos(filters?: ListRemitosParams) {
   const [mutatingId, setMutatingId] = useState<string | null>(null)
 
   const companyId = activeCompany?.id
-  const filtersKey = useMemo(() => JSON.stringify(filters ?? {}), [filters])
+  const { state, origin, salidaReason, branchId, surgeryId, take, skip } = filters ?? {}
+  // Defence in depth: callers that pass a non-technical id (visible number, store id)
+  // must not send it to the backend. R9 closed the TabPaneSeguimiento/CaseDetail
+  // fallback, but this hook still trusts the input.
+  const safeSurgeryId = isTechnicalId(surgeryId) ? surgeryId : undefined
+  const stableFilters = useMemo(() => ({ state, origin, salidaReason, branchId, surgeryId: safeSurgeryId, take, skip }),
+    [state, origin, salidaReason, branchId, safeSurgeryId, take, skip])
+  const scopeKey = JSON.stringify([companyId, currentUser?.id, isLoading, currentUserLoading, isAuthenticated, stableFilters])
+  // Object identity invalidates old requests even after company/filter A -> B -> A.
+  const scopeRef = useRef({ key: scopeKey, list: 0, detail: 0, initialized: false })
+  const returnCommand = useRef<{ scope: typeof scopeRef.current; content: string; key: string; pending?: Promise<RemitoApiRow> } | null>(null)
+  if (scopeRef.current.key !== scopeKey) scopeRef.current = { key: scopeKey, list: 0, detail: 0, initialized: false }
+  const [dataScope, setDataScope] = useState(scopeRef.current)
+  const mounted = useRef(false)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
 
   const refresh = useCallback(async () => {
+    const scope = scopeRef.current
+    if (scope.key !== scopeKey || !mounted.current) return
+    const request = ++scope.list
+    const selection = scope.detail
+    const isCurrent = () => mounted.current && scopeRef.current === scope && scope.list === request
+    if (!scope.initialized) {
+      scope.initialized = true
+      setRemitos([])
+      setSelectedRemito(null)
+      setReady(false)
+      setMutatingId(null)
+      setDataScope(scope)
+    }
     if (isLoading || (isAuthenticated && currentUserLoading)) {
       setLoading(false)
       setReady(false)
@@ -52,62 +80,77 @@ export function useRemitos(filters?: ListRemitosParams) {
     setError(null)
 
     try {
-      const data = await fetchRemitos(companyId, filters)
+      const data = await fetchRemitos(companyId, stableFilters)
+      if (!isCurrent()) return
       setRemitos(data)
-      setSelectedRemito((current) => {
+      if (scope.detail === selection) setSelectedRemito((current) => {
         if (!current) return data[0] ?? null
         return data.find((remito) => remito.id === current.id) ?? data[0] ?? null
       })
       setReady(true)
     } catch (err) {
+      if (!isCurrent()) return
       const message = err instanceof ApiClientError ? err.message : "No se pudieron cargar los remitos"
       setError(message)
       setRemitos([])
       setSelectedRemito(null)
       setReady(true)
     } finally {
-      setLoading(false)
+      if (isCurrent()) setLoading(false)
     }
-  }, [companyId, currentUserLoading, filters, isAuthenticated, isLoading])
+  }, [companyId, currentUserLoading, stableFilters, isAuthenticated, isLoading, scopeKey])
 
   useEffect(() => {
     void refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refresh, filtersKey])
+    const scope = scopeRef.current
+    return () => { scope.list += 1; scope.detail += 1 }
+  }, [refresh])
 
   const selectRemito = useCallback(async (remito: RemitoApiRow) => {
-    if (!companyId) return
+    const scope = scopeRef.current
+    if (!companyId || !mounted.current || scope.key !== scopeKey || isLoading || (isAuthenticated && currentUserLoading)) return
+    const request = ++scope.detail
+    const isCurrent = () => mounted.current && scopeRef.current === scope && scope.detail === request
     setSelectedRemito(remito)
     setError(null)
     try {
       const detail = await fetchRemito(companyId, remito.id)
+      if (!isCurrent()) return
       setSelectedRemito(detail)
       setRemitos((current) => current.map((row) => (row.id === detail.id ? detail : row)))
     } catch (err) {
+      if (!isCurrent()) return
       const message = err instanceof ApiClientError ? err.message : "No se pudo cargar el detalle del remito"
       setError(message)
     }
-  }, [companyId])
+  }, [companyId, scopeKey, isLoading, isAuthenticated, currentUserLoading])
 
   const runMutation = useCallback(async (remitoId: string, action: () => Promise<RemitoApiRow>) => {
+    const scope = scopeRef.current
+    if (scope.key !== scopeKey || !mounted.current) throw new Error("La vista de remitos cambió. Actualizá antes de continuar.")
+    const isCurrent = () => mounted.current && scopeRef.current === scope
+    // Reads started before a write must never replace the refreshed document.
+    scope.list += 1
+    scope.detail += 1
+    setLoading(false)
     setMutatingId(remitoId)
     setError(null)
     try {
       const updated = await action()
-      // Some mutation routes return a compact Remito shape. Refetch the list/detail
-      // before exposing the selected row again so the page always renders `items`.
-      await refresh()
+      // Refresh the authoritative list instead of reconstructing filtered rows locally.
+      if (isCurrent()) await refresh()
       return updated
     } catch (err) {
+      if (!isCurrent()) throw err
       const message = err instanceof ApiClientError && err.status === 409 && err.code === "remito_update_conflict"
         ? "El remito fue actualizado por otro usuario. Actualizá la vista antes de guardar para no perder cambios."
         : err instanceof ApiClientError ? err.message : "No se pudo actualizar el remito"
       setError(message)
       throw err
     } finally {
-      setMutatingId(null)
+      if (isCurrent()) setMutatingId(null)
     }
-  }, [refresh])
+  }, [refresh, scopeKey])
 
   const emit = useCallback((remitoId: string, intent?: import("@/lib/validators/remito").RemitoEmitInput) => {
     if (!companyId) throw new Error("No hay empresa activa")
@@ -121,28 +164,55 @@ export function useRemitos(filters?: ListRemitosParams) {
 
   const devolucion = useCallback((remitoId: string, items: Array<{ itemId: string; returnedQuantity: string | number }>) => {
     if (!companyId) throw new Error("No hay empresa activa")
-    return runMutation(remitoId, () => registrarRemitoDevolucion(companyId, remitoId, items))
-  }, [companyId, runMutation])
+    const scope = scopeRef.current
+    if (scope.key !== scopeKey || !mounted.current) return Promise.reject(new Error("La vista de remitos cambió. Actualizá antes de continuar."))
+    const content = JSON.stringify([remitoId, items])
+    if (returnCommand.current?.scope !== scope || returnCommand.current.content !== content) {
+      returnCommand.current = { scope, content, key: crypto.randomUUID() }
+    }
+    const command = returnCommand.current
+    if (command.pending) return command.pending
+    command.pending = runMutation(remitoId, () => registrarRemitoDevolucion(companyId, remitoId, items, command.key)).then((updated) => {
+      if (returnCommand.current === command) returnCommand.current = null
+      return updated
+    }, (error: unknown) => {
+      command.pending = undefined
+      throw error
+    })
+    return command.pending
+  }, [companyId, runMutation, scopeKey])
 
   const createDraft = useCallback(async (payload: CreateRemitoPayload) => {
     if (!companyId) throw new Error("No hay empresa activa")
+    const scope = scopeRef.current
+    if (scope.key !== scopeKey || !mounted.current) throw new Error("La vista de remitos cambió. Actualizá antes de continuar.")
+    const isCurrent = () => mounted.current && scopeRef.current === scope
+    scope.list += 1
+    scope.detail += 1
+    setLoading(false)
     setMutatingId("__create__")
     setError(null)
     try {
       const created = await createRemito(companyId, payload)
+      if (!isCurrent()) return created
       await refresh()
+      if (!isCurrent()) return created
+      const selection = scope.detail
       const detail = await fetchRemito(companyId, created.id)
-      setSelectedRemito(detail)
-      setRemitos((current) => [detail, ...current.filter((row) => row.id !== detail.id)])
+      if (isCurrent()) {
+        if (scope.detail === selection) setSelectedRemito(detail)
+        setRemitos((current) => [detail, ...current.filter((row) => row.id !== detail.id)])
+      }
       return detail
     } catch (err) {
+      if (!isCurrent()) throw err
       const message = err instanceof ApiClientError ? err.message : "No se pudo crear el remito"
       setError(message)
       throw err
     } finally {
-      setMutatingId(null)
+      if (isCurrent()) setMutatingId(null)
     }
-  }, [companyId, refresh])
+  }, [companyId, refresh, scopeKey])
 
   const updateDraft = useCallback((remitoId: string, payload: UpdateRemitoDraftPayload) => {
     if (!companyId) throw new Error("No hay empresa activa")
@@ -150,15 +220,16 @@ export function useRemitos(filters?: ListRemitosParams) {
     return runMutation(remitoId, () => updateRemitoDraft(companyId, remitoId, { ...payload, expectedUpdatedAt }))
   }, [companyId, remitos, runMutation, selectedRemito?.updatedAt])
 
+  const visible = dataScope === scopeRef.current
   return {
     companyId,
-    remitos,
-    selectedRemito,
+    remitos: visible ? remitos : [],
+    selectedRemito: visible ? selectedRemito : null,
     setSelectedRemito,
-    loading,
-    ready,
-    error,
-    mutatingId,
+    loading: visible ? loading : Boolean(companyId),
+    ready: visible && ready,
+    error: visible ? error : null,
+    mutatingId: visible ? mutatingId : null,
     refresh,
     selectRemito,
     emit,
@@ -166,6 +237,6 @@ export function useRemitos(filters?: ListRemitosParams) {
     devolucion,
     createDraft,
     updateDraft,
-    blocked: ready && !companyId,
+    blocked: visible && ready && !companyId,
   }
 }

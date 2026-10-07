@@ -1,0 +1,14 @@
+{
+  "extends": "./R8-tsconfig.json",
+  "include": [
+    "../../../next-env.d.ts",
+    "../../../src/__tests__/setup.ts",
+    "../../../src/lib/api/ids.ts",
+    "../../../src/hooks/useRemitos.ts",
+    "../../../src/components/coordinadores/modal/TabPaneSeguimiento.tsx",
+    "../../../src/components/coordinadores/workspace/CaseDetail.tsx",
+    "../../../src/lib/services/remito.service.ts",
+    "../../../src/__tests__/unit/surgery-id-guard.test.ts",
+    "../../../src/__tests__/unit/remito-audit-content.test.ts"
+  ]
+}
