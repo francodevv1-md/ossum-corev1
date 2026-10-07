@@ -12,6 +12,7 @@ const prismaMock = vi.hoisted(() => {
     contactCompanyLink: {
       create: vi.fn(),
       findUnique: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     contactGroup: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -63,6 +64,7 @@ const ADMIN_AUTH = {
   supabaseAuthId: "supabase-user-1",
   companyId: "company-1",
   role: "admin",
+  canonicalRole: "admin",
   source: "dev-header" as const,
 }
 
@@ -231,5 +233,53 @@ describe("POST /api/companies/[companyId]/surgeries", () => {
     expect(body.error?.code).toBe("surgery_patient_contact_resolution_failed")
     expect(body.error?.message).toContain("Patient contact")
     expect(createSurgery).not.toHaveBeenCalled()
+    expect(prismaMock.__tx.contact.create).not.toHaveBeenCalled()
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it("passes explicit precision, shipping and assignment IDs into create", async () => {
+    prismaMock.contactCompanyLink.findUnique.mockResolvedValue({ isActive: true })
+    const response = await POST(new Request("http://localhost/api/companies/company-1/surgeries", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientId: "patient-1", surgeryDate: "2026-10-07T00:00:00-03:00", surgeryTimeSpecified: true, materialShippingDate: "2026-10-06", coordinatorContactId: "coordinator-1", salespersonContactId: "salesperson-1", instrumentatorContactId: "instrumentator-1" }),
+    }), { params: Promise.resolve({ companyId: "company-1" }) })
+    expect(response.status).toBe(201)
+    expect(createSurgery.mock.calls[0][2]).toMatchObject({ surgeryDate: new Date("2026-10-07T03:00:00Z"), surgeryTimeSpecified: true, materialShippingDate: new Date("2026-10-06T00:00:00Z"), coordinatorContactId: "coordinator-1", salespersonContactId: "salesperson-1", instrumentatorContactId: "instrumentator-1" })
+    expect(prismaMock.__tx.contact.create).not.toHaveBeenCalled()
+  })
+
+  it.each(["coordinatorContactId", "salespersonContactId", "instrumentatorContactId"])("rejects a missing assignment %s without snapshot creation", async field => {
+    prismaMock.contactCompanyLink.findUnique.mockResolvedValue(null)
+    const response = await POST(new Request("http://localhost/api/companies/company-1/surgeries", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientId: "patient-1", [field]: "wrong-id" }),
+    }), { params: Promise.resolve({ companyId: "company-1" }) })
+    expect(response.status).toBe(400)
+    expect(createSurgery).not.toHaveBeenCalled()
+    expect(prismaMock.__tx.contact.create).not.toHaveBeenCalled()
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { surgeryDate: "2026-02-30" },
+    { surgeryDate: "2026-02-30T10:00:00-03:00" },
+    { surgeryDate: "2026-10-07T24:00:00-03:00" },
+    { surgeryDate: "2026-10-07T12:60:00-03:00" },
+    { surgeryDate: "2026-10-07", surgeryTimeSpecified: true },
+    { surgeryDate: "2026-10-07T03:00:00Z", surgeryTimeSpecified: "true" },
+    { surgeryDate: "2026-10-07T12:00:00Z", surgeryTimeSpecified: false },
+    { surgeryTimeSpecified: true },
+    { materialShippingDate: "2026-02-30" },
+    { materialShippingDate: "2026-10-06T00:00:00Z" },
+    { probableDate: "2026-02-30" },
+  ])("rejects malformed create dates before snapshot resolution: %j", async fields => {
+    const response = await POST(new Request("http://localhost/api/companies/company-1/surgeries", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patientId: "missing", patientContact: { id: "missing", nombre: "Patient" }, ...fields }),
+    }), { params: Promise.resolve({ companyId: "company-1" }) })
+    expect(response.status).toBe(400)
+    expect(createSurgery).not.toHaveBeenCalled()
+    expect(prismaMock.contactCompanyLink.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.__tx.contact.create).not.toHaveBeenCalled()
   })
 })

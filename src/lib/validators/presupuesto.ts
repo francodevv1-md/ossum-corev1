@@ -24,6 +24,8 @@ const nonNegativeDecimal = decimalStringOrNumber.refine((value) => {
   return Number.isFinite(parsed) && parsed >= 0;
 }, "must be a non-negative number");
 
+const generalDiscountRate = nonNegativeDecimal.refine((value) => Number(value) <= 100, "general discount must be between 0 and 100");
+
 export const presupuestoItemCreateSchema = z.object({
   sku: z.string().trim().optional().nullable(),
   description: z.string().trim().min(1, "description is required"),
@@ -85,7 +87,7 @@ export const presupuestoCreateSchema = z.object({
   legend: z.string().trim().optional().nullable(),
   notes: z.string().trim().optional().nullable(),
   validUntil: z.coerce.date().optional().nullable(),
-  generalDiscountRate: nonNegativeDecimal.optional().nullable(),
+  generalDiscountRate: generalDiscountRate.optional().nullable(),
   commercial: z.record(z.string(), z.unknown()).optional().nullable(),
   items: z.array(presupuestoItemCreateSchema).min(1, "items must not be empty"),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -106,7 +108,7 @@ export const presupuestoUpdateDraftSchema = z.object({
   legend: z.string().trim().optional().nullable(),
   notes: z.string().trim().optional().nullable(),
   validUntil: z.coerce.date().optional().nullable(),
-  generalDiscountRate: nonNegativeDecimal.optional().nullable(),
+  generalDiscountRate: generalDiscountRate.optional().nullable(),
   commercial: z.record(z.string(), z.unknown()).optional().nullable(),
   expectedRevision: z.coerce.number().int().positive("expectedRevision must be a positive integer"),
   items: z.array(presupuestoItemCreateSchema).min(1, "items must not be empty"),

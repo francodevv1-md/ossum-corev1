@@ -7,6 +7,7 @@ import prisma from "../../../../../lib/prisma";
 import type { FrontendContactSnapshot } from "../../../../../lib/services/contact.service";
 import { resolveCompanyContactReference } from "../../../../../lib/services/contact.service";
 import { createSurgery, listSurgeriesByCompany } from "../../../../../lib/services/surgery.service";
+import { parseIsoTimestamp, validateCreateSurgeryInput } from "../../../../../lib/validators/surgery.validator";
 
 type RouteContext = {
   params: Promise<{ companyId: string }>;
@@ -52,11 +53,14 @@ function parseOptionalDate(value: unknown, fieldName: string): Date | null | und
   const trimmed = value.trim();
   if (!trimmed) return null;
 
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
-    throw badRequest(`${fieldName} must be a valid ISO date string`, "invalid_date_field");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    if (fieldName === "materialShippingDate") throw badRequest("materialShippingDate must use YYYY-MM-DD", "invalid_date_field");
+    return parseIsoTimestamp(trimmed, fieldName);
   }
-
+  const parsed = new Date(`${trimmed}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== trimmed) {
+    throw badRequest(`${fieldName} must be a valid calendar date`, "invalid_date_field");
+  }
   return parsed;
 }
 
@@ -151,6 +155,37 @@ export async function POST(request: Request, { params }: RouteContext) {
     requireCompanyMutationAccess(ctx, SURGERY_MUTATION_ROLES);
 
     const body = await parseJsonBody(request);
+    const createFields = validateCreateSurgeryInput({
+      // Validate non-reference fields before legacy snapshot resolution can write contacts.
+      patientId: typeof body.patientId === "string" && body.patientId.trim() ? body.patientId.trim() : "snapshot-pending",
+      branchId: parseOptionalString(body.branchId),
+      coordinatorContactId: parseOptionalString(body.coordinatorContactId),
+      salespersonContactId: parseOptionalString(body.salespersonContactId),
+      instrumentatorContactId: parseOptionalString(body.instrumentatorContactId),
+      classification: parseOptionalString(body.classification),
+      description: parseOptionalString(body.description),
+      priority: parseOptionalString(body.priority),
+      probableDate: parseOptionalDate(body.probableDate, "probableDate"),
+      scheduledDate: parseOptionalDate(body.scheduledDate, "scheduledDate"),
+      surgeryDate: body.surgeryDate != null && body.surgeryTimeSpecified != null
+        ? parseIsoTimestamp(body.surgeryDate, "surgeryDate")
+        : parseOptionalDate(body.surgeryDate, "surgeryDate"),
+      surgeryTimeSpecified: body.surgeryTimeSpecified as boolean | null | undefined,
+      materialShippingDate: parseOptionalDate(body.materialShippingDate, "materialShippingDate"),
+      performedDate: parseOptionalDate(body.performedDate, "performedDate"),
+      cancelledDate: parseOptionalDate(body.cancelledDate, "cancelledDate"),
+      source: parseOptionalString(body.source),
+      notes: parseOptionalString(body.notes),
+    });
+    for (const [field, role] of [
+      ["coordinatorContactId", "coordinator"],
+      ["salespersonContactId", "salesperson"],
+      ["instrumentatorContactId", "instrumentator"],
+    ] as const) {
+      if (createFields[field]) await resolveCompanyContactReference(prisma, {
+        companyId: ctx.companyId, contactId: createFields[field], role, fieldLabel: role,
+      });
+    }
     const patientContact = parseOptionalContactSnapshot(body.patientContact, "patientContact");
     const doctorContact = parseOptionalContactSnapshot(body.doctorContact, "doctorContact");
     const institutionContact = parseOptionalContactSnapshot(body.institutionContact, "institutionContact");
@@ -195,21 +230,11 @@ export async function POST(request: Request, { params }: RouteContext) {
         module: "surgery",
       },
       {
-        branchId: parseOptionalString(body.branchId),
+        ...createFields,
         patientId: patientId ?? "",
         doctorId,
         institutionId,
         payerContactId,
-        classification: parseOptionalString(body.classification),
-        description: parseOptionalString(body.description),
-        priority: parseOptionalString(body.priority),
-        probableDate: parseOptionalDate(body.probableDate, "probableDate"),
-        scheduledDate: parseOptionalDate(body.scheduledDate, "scheduledDate"),
-        surgeryDate: parseOptionalDate(body.surgeryDate, "surgeryDate"),
-        performedDate: parseOptionalDate(body.performedDate, "performedDate"),
-        cancelledDate: parseOptionalDate(body.cancelledDate, "cancelledDate"),
-        source: parseOptionalString(body.source),
-        notes: parseOptionalString(body.notes),
       }
     );
 

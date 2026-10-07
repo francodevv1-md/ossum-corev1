@@ -36,9 +36,15 @@ export type SurgeryApiRow = {
   id: string
   companyId: string | null
   source: string | null
-  notes: string | null
+  notes?: string | null
   visibleNumber: string | null
   patientName: string | null
+  patientId?: string | null
+  doctorId?: string | null
+  salespersonContactId?: string | null
+  salespersonName?: string | null
+  instrumentatorContactId?: string | null
+  instrumentatorName?: string | null
   doctorName: string | null
   institutionName: string | null
   institutionId: string | null
@@ -50,7 +56,7 @@ export type SurgeryApiRow = {
   cxStatus: string | null
   prepStatus: string | null
   status: string | null
-  surgeryDate: string | null
+  surgeryDate?: string | null
   surgeryTimeSpecified?: boolean | null
   materialAvailabilityDate: string | null
   materialShippingDate?: string | null
@@ -173,6 +179,10 @@ export function coordinationEzequielDevDiagnostic(surgery: Surgery): Coordinatio
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function readOptionalString(record: Record<string, unknown>, key: string): string | null | undefined {
+  return Object.prototype.hasOwnProperty.call(record, key) ? readString(record[key]) : undefined
 }
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -320,9 +330,15 @@ export function mapApiSurgeryToRow(apiSurgery: RawSurgeryApiRecord): SurgeryApiR
     id: pickString(apiSurgery, ["id"]) ?? "—",
     companyId: pickString(apiSurgery, ["companyId"]),
     source: pickString(apiSurgery, ["source"]),
-    notes: typeof apiSurgery.notes === "string" ? apiSurgery.notes : null,
+    notes: Object.prototype.hasOwnProperty.call(apiSurgery, "notes") ? typeof apiSurgery.notes === "string" ? apiSurgery.notes : null : undefined,
     visibleNumber: pickString(apiSurgery, ["visibleNumber"]),
     patientName: pickNestedName(apiSurgery, ["patient", "paciente"], ["patientName", "patient", "paciente"]),
+    patientId: readOptionalString(apiSurgery, "patientId"),
+    doctorId: readOptionalString(apiSurgery, "doctorId"),
+    salespersonContactId: readOptionalString(apiSurgery, "salespersonContactId"),
+    salespersonName: readOptionalString(apiSurgery, "salespersonName"),
+    instrumentatorContactId: readOptionalString(apiSurgery, "instrumentatorContactId"),
+    instrumentatorName: readOptionalString(apiSurgery, "instrumentatorName"),
     doctorName: pickNestedName(apiSurgery, ["doctor", "medico"], ["doctorName", "surgeonName", "doctor", "medico"]),
     institutionName: pickNestedName(apiSurgery, ["institution", "institucion"], ["institutionName", "institution", "institucion"]),
     institutionId: pickString(apiSurgery, ["institutionId"]),
@@ -334,8 +350,8 @@ export function mapApiSurgeryToRow(apiSurgery: RawSurgeryApiRecord): SurgeryApiR
     cxStatus: pickString(apiSurgery, ["cxStatus"]),
     prepStatus: pickString(apiSurgery, ["prepStatus"]),
     status: pickString(apiSurgery, ["cxStatus", "status", "estado"]),
-    surgeryDate: pickString(apiSurgery, ["surgeryDate", "fechaCirugia", "date"]),
-    surgeryTimeSpecified: apiSurgery.surgeryTimeSpecified === true || apiSurgery.surgeryTimeSpecified === false ? apiSurgery.surgeryTimeSpecified : ["surgeryDate", "fechaCirugia", "date"].some((key) => Object.prototype.hasOwnProperty.call(apiSurgery, key)) || apiSurgery.surgeryTimeSpecified === null ? null : undefined,
+    surgeryDate: ["surgeryDate", "fechaCirugia", "date"].some(key => Object.prototype.hasOwnProperty.call(apiSurgery, key)) ? pickString(apiSurgery, ["surgeryDate", "fechaCirugia", "date"]) : undefined,
+    surgeryTimeSpecified: apiSurgery.surgeryTimeSpecified === true || apiSurgery.surgeryTimeSpecified === false ? apiSurgery.surgeryTimeSpecified : Object.prototype.hasOwnProperty.call(apiSurgery, "surgeryTimeSpecified") ? null : undefined,
     materialAvailabilityDate: pickString(apiSurgery, ["materialAvailabilityDate"]),
     materialShippingDate: Object.prototype.hasOwnProperty.call(apiSurgery, "materialShippingDate") ? pickString(apiSurgery, ["materialShippingDate"]) : undefined,
     materialTransport: Object.prototype.hasOwnProperty.call(apiSurgery, "materialTransport") ? pickString(apiSurgery, ["materialTransport"]) : undefined,
@@ -482,6 +498,7 @@ export function mapApiSurgeryRowToSurgery(
   const resolvedCoordinator = coordinatorAssignment.status === "resolved"
     ? coordinatorAssignment.resolved
     : null
+  const surgeryTimeSpecified = row.surgeryDate === null ? null : row.surgeryTimeSpecified !== undefined ? row.surgeryTimeSpecified : existing?.surgeryTimeSpecified ?? null
 
   const surgery: Surgery = {
     ...existing,
@@ -490,16 +507,23 @@ export function mapApiSurgeryRowToSurgery(
     backendCxStatus: row.cxStatus ?? row.status ?? undefined,
     visibleNumber,
     patient: row.patientName ?? existing?.patient ?? "Paciente sin nombre",
+    patientContactId: row.patientId === undefined ? existing?.patientContactId : row.patientId ?? undefined,
+    surgeonContactId: row.doctorId === undefined ? existing?.surgeonContactId : row.doctorId ?? undefined,
+    notes: row.notes === undefined ? existing?.notes : row.notes ?? undefined,
+    vendedorContactId: row.salespersonContactId === undefined ? existing?.vendedorContactId : row.salespersonContactId ?? undefined,
+    vendedor: row.salespersonName === undefined ? existing?.vendedor : row.salespersonName ?? undefined,
+    instrumentadorContactId: row.instrumentatorContactId === undefined ? existing?.instrumentadorContactId : row.instrumentatorContactId ?? undefined,
+    instrumentador: row.instrumentatorName === undefined ? existing?.instrumentador : row.instrumentatorName ?? undefined,
     patientDni: existing?.patientDni ?? "",
     surgeon: row.doctorName ?? existing?.surgeon ?? "—",
     institution: row.institutionName ?? existing?.institution ?? "—",
     institutionContactId: row.institutionId ?? undefined,
     institutionCity: existing?.institutionCity ?? "",
     procedure: row.description ?? existing?.procedure ?? "",
-    date: row.surgeryDate === null && row.surgeryTimeSpecified === undefined ? existing?.date ?? "" : normalizeLocalDate(row.surgeryDate),
+    date: row.surgeryDate === undefined ? existing?.date ?? "" : normalizeLocalDate(row.surgeryDate),
     probableDate: normalizeDate(row.probableDate, existing?.probableDate ?? "") || undefined,
-    surgeryTimeSpecified: row.surgeryTimeSpecified !== undefined ? row.surgeryTimeSpecified : existing?.surgeryTimeSpecified ?? null,
-    time: row.surgeryTimeSpecified === true ? normalizeTime(row.surgeryDate, existing?.time ?? "") : row.surgeryTimeSpecified === undefined && row.surgeryDate === null ? existing?.time ?? "" : "",
+    surgeryTimeSpecified,
+    time: row.surgeryDate === undefined && row.surgeryTimeSpecified === undefined ? existing?.time ?? "" : surgeryTimeSpecified === true ? normalizeTime(row.surgeryDate ?? null, existing?.time ?? "") : "",
     state: normalizedState,
     client: row.clientName ?? row.payerName ?? existing?.client ?? "—",
     clientContactId: row.payerContactId ?? undefined,

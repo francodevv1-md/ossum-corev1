@@ -165,8 +165,10 @@ describe("IVA calculation — IVA discriminado sobre base neta", () => {
 // ─── 4. IVA_OPTIONS completeness ───
 
 describe("IVA_OPTIONS — opciones de IVA completas", () => {
-  it("tiene 5 opciones", () => {
-    expect(IVA_OPTIONS.length).toBe(5)
+  it("distingue exento, no gravado y gravado al 0%", () => {
+    expect(IVA_OPTIONS.filter((option) => option.value === 0).map((option) => option.key)).toEqual(["exento", "no_gravado", "0"])
+    expect(ivaValueFromKey("no_gravado")).toBe(0)
+    expect(ivaKeyFromValue(0)).toBe("0")
   })
 
   it("cada opción tiene key único", () => {

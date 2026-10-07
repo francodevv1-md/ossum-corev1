@@ -55,17 +55,21 @@ describe("surgery service coordinator read projection", () => {
         materialTransport: true,
         contactAssignments: expect.objectContaining({
           where: expect.objectContaining({
-            role: "coordinator",
-            contact: expect.objectContaining({
-              companyLinks: { some: { companyId: "company-1", isActive: true, role: "coordinator" } },
-            }),
+            OR: expect.arrayContaining([{
+              role: "coordinator",
+              contact: {
+                isActive: true,
+                isCompany: false,
+                companyLinks: { some: { companyId: "company-1", isActive: true, role: "coordinator" } },
+              },
+            }]),
           }),
           select: expect.objectContaining({ id: true, contactId: true, createdAt: true }),
         }),
       }),
     }));
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "surgery-1", companyId: "company-1", archivedAt: null },
+      where: { OR: [{ id: "surgery-1" }, { visibleNumber: "surgery-1" }], companyId: "company-1", archivedAt: null },
     }));
   });
 

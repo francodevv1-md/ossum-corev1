@@ -20,11 +20,12 @@ export const CONDICION_PAGO_OPTIONS = ["Contado", "30 días", "60 días", "A con
 /**
  * CHATZAI-017J: Opciones de IVA para el presupuesto.
  * Cada opción tiene un key único para el selector y un valor numérico para el cálculo.
- * "exento" = alícuota 0% con tratamiento fiscal exento/no gravado (visualmente distinto de 0%).
+ * "exento" y "no_gravado" conservan tratamientos distintos de gravado al 0%.
  * Las alícuotas siguen la nomenclatura AFIP vigente.
  */
 export const IVA_OPTIONS = [
-  { key: "exento", value: 0, label: "Exento / No gravado" },
+  { key: "exento", value: 0, label: "Exento" },
+  { key: "no_gravado", value: 0, label: "No gravado" },
   { key: "0", value: 0, label: "0%" },
   { key: "10.5", value: 10.5, label: "10,5%" },
   { key: "21", value: 21, label: "21%" },
@@ -42,7 +43,7 @@ export function ivaValueFromKey(key: string): number {
 /** Lookup: valor numérico → IVA key (toma el primero que coincide) */
 export function ivaKeyFromValue(value: number): string {
   // Para 0, distinguir exento vs 0%: por defecto devolver "0"
-  return IVA_OPTIONS.find((o) => o.value === value && o.key !== "exento")?.key ?? "0"
+  return IVA_OPTIONS.find((o) => o.value === value && o.key !== "exento" && o.key !== "no_gravado")?.key ?? "0"
 }
 
 export { VENDEDORES_OPTIONS } from "@/lib/shared-constants"

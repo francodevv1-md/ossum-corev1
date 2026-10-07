@@ -34,6 +34,12 @@ describe("PRESUPUESTOS: End-to-End Connected Journey Integration", () => {
 
   const makePrismaMock = () => {
     return {
+      branch: {
+        findFirst: vi.fn(async ({ where }) => where.companyId === companyId && where.id === "branch-central" ? { id: where.id } : null),
+      },
+      contactCompanyLink: {
+        findFirst: vi.fn(async ({ where }) => where.companyId === companyId && where.contactId === "contact-swiss-medical" && where.isActive === true ? { id: "link-swiss-medical" } : null),
+      },
       surgery: {
         findFirst: vi.fn().mockImplementation(async ({ where }) => {
           if (where.id === surgeryId && where.companyId === companyId) {

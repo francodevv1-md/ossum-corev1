@@ -75,13 +75,13 @@ export type PresupuestoDraftPayload = {
   branchId?: string | null
   clientContactId?: string | null
   payerContactId?: string | null
-  title?: string
+  title?: string | null
   currency?: string
   documentDate?: string
-  paymentTerms?: string
-  priceListCode?: string
+  paymentTerms?: string | null
+  priceListCode?: string | null
   legend?: string
-  notes?: string
+  notes?: string | null
   validUntil?: string
   generalDiscountRate?: string | number
   commercial?: { pricingMode: "ESTIMATIVE" } | {
@@ -106,6 +106,7 @@ export type PresupuestoDraftPayload = {
     discountRate?: string | number
     discountPercent?: string | number
     discount?: string | number
+    tax?: string | number
     taxRate?: string | number
     vatRate?: string | number
     vatTreatment?: string
@@ -236,18 +237,19 @@ function metadataObject(value: unknown): Record<string, unknown> {
 }
 
 function formVatKey(line: PresupuestoItemApiRow) {
-  return line.vatTreatment === "EXENTO" || line.vatTreatment === "NO_GRAVADO" ? "exento" : ivaKeyFromValue(Number(line.vatRate ?? line.taxRate))
+  return line.vatTreatment === "NO_GRAVADO" ? "no_gravado" : line.vatTreatment === "EXENTO" ? "exento" : ivaKeyFromValue(Number(line.vatRate ?? line.taxRate))
 }
 
 export function toPresupuestoEditFormData(row: PresupuestoApiRow): Partial<PresupuestoFormData> {
-  const legacy = toLegacyPresupuestoProjection(row)
   const meta = metadataObject(row.metadata)
+  const editableText = (key: "client" | "financiador" | "vendedor" | "patient" | "institution") =>
+    row[key] !== undefined ? row[key] ?? "" : typeof meta[key] === "string" ? meta[key] as string : ""
   const days = row.validUntil ? Math.round((Date.parse(row.validUntil) - Date.parse(row.documentDate ?? row.createdAt)) / 86400000) : 30
   return {
     branchId: row.branchId ?? "", clientContactId: row.clientContactId ?? "", payerContactId: row.payerContactId ?? "",
-    client: legacy.client ?? "", financiador: legacy.financiador ?? "", obraSocial: typeof meta.obraSocial === "string" ? meta.obraSocial : "",
-    vendedor: legacy.vendedor ?? "", patient: legacy.patient ?? "", institution: legacy.institution ?? "",
-    concepto: row.title ?? "", fechaEmision: legacy.fechaEmision, vigencia: typeof meta.vigencia === "string" ? meta.vigencia : `${Math.max(1, days)} días`,
+    client: editableText("client"), financiador: editableText("financiador"), obraSocial: typeof meta.obraSocial === "string" ? meta.obraSocial : "",
+    vendedor: editableText("vendedor"), patient: editableText("patient"), institution: editableText("institution"),
+    concepto: row.title ?? "", fechaEmision: row.documentDate?.slice(0, 10) ?? row.createdAt.slice(0, 10), vigencia: typeof meta.vigencia === "string" ? meta.vigencia : `${Math.max(1, days)} días`,
     listaPrecios: row.priceListCode ?? "", condicionPago: row.paymentTerms ?? "", descuento: Number(row.generalDiscountRate),
     iva: row.items[0] ? formVatKey(row.items[0]) : "21", observaciones: row.notes ?? "", surgeryId: row.surgeryId ?? undefined,
     items: row.items.map((line) => {
@@ -264,22 +266,33 @@ export function buildPresupuestoEditPayload(row: PresupuestoApiRow, form: Presup
   const payload = buildEstimativePresupuestoPayload(form, items)
   const initial = toPresupuestoEditFormData(row)
   return { ...payload, expectedRevision: row.revision, currency: row.currency, legend: row.legend ?? undefined,
+    branchId: form.branchId || null, clientContactId: form.clientContactId || null, payerContactId: form.payerContactId || null,
+    title: form.concepto || null, paymentTerms: form.condicionPago || null, priceListCode: form.listaPrecios || null, notes: form.observaciones || null,
+    generalDiscountRate: form.descuento === Number(row.generalDiscountRate) ? row.generalDiscountRate : form.descuento,
     ...(form.fechaEmision === initial.fechaEmision && form.vigencia === initial.vigencia ? { validUntil: row.validUntil ?? undefined } : {}),
     commercial: Object.keys(metadataObject(row.commercial)).length ? metadataObject(row.commercial) : payload.commercial,
-    metadata: { ...metadataObject(row.metadata), ...payload.metadata },
+    metadata: { ...metadataObject(row.metadata), ...Object.fromEntries(Object.entries(payload.metadata ?? {}).map(([key, value]) => [key, value ?? null])) },
     items: payload.items.map((line, index) => {
       const item = items[index] as FormItem & { persistedItemId?: string }
       const source = row.items.find((entry) => entry.id === item.persistedItemId)
       if (!source) return line
       const sameVat = item.ivaKey === formVatKey(source)
-      const unchangedAmounts = item.quantity === Number(source.quantity) && item.unitPrice === Number(source.unitPrice) &&
-        item.discountPercent === Number(source.discountRate) && sameVat
+      const inputs = metadataObject(metadataObject(source.metadata).budgetLineInputs)
+      const sameDiscount = item.discountPercent === Number(source.discountRate)
+      const legacy = !Object.keys(inputs).length
+      const unchangedLegacyAmounts = legacy && sameDiscount && sameVat &&
+        item.quantity === Number(source.quantity) && item.unitPrice === Number(source.unitPrice) &&
+        form.descuento === Number(row.generalDiscountRate)
       return { ...line, unit: source.unit ?? undefined,
+        quantity: item.quantity === Number(source.quantity) ? source.quantity : item.quantity,
+        unitPrice: item.unitPrice === Number(source.unitPrice) ? source.unitPrice : item.unitPrice,
         metadata: { ...metadataObject(source.metadata), ...line.metadata, catalogItemId: item.catalogItemId || undefined },
         ...(sameVat ? { vatTreatment: source.vatTreatment, vatRate: source.vatRate } : {}),
-        // Preserve exact fixed amounts on note/description-only edits, rather than round-tripping a rounded discount percentage.
-        ...(unchangedAmounts ? { quantity: source.quantity, unitPrice: source.unitPrice, discount: source.discount, tax: source.tax,
-          discountPercent: undefined, discountRate: undefined } : {}),
+        // Original fixed amounts and rates are distinct from the combined persisted discount.
+        ...(sameDiscount ? (typeof inputs.discount === "string" || unchangedLegacyAmounts
+          ? { discount: typeof inputs.discount === "string" ? inputs.discount : source.discount, discountPercent: undefined, discountRate: undefined }
+          : { discountRate: source.discountRate, discountPercent: undefined }) : {}),
+        ...(sameVat && (typeof inputs.tax === "string" || unchangedLegacyAmounts) ? { tax: typeof inputs.tax === "string" ? inputs.tax : source.tax } : {}),
       }
     }),
   }

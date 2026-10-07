@@ -630,7 +630,7 @@ describe("NewSurgeryDialog — NUEVA-CIRUGIA-IA-UX-P1 (Phase A, focused render)"
   function renderIntakeResult(result: SurgeryIntakeResult, confirm?: DialogProps["onConfirm"]) {
     const prForm = buildPrFormStub()
     prForm.formData = { ...prForm.formData, fechaEmision: "2026-10-07", vigencia: "30 días", concepto: "Keep concept", clientContactId: "payer-1" }
-    prForm.items = [{ id: "line-1", name: "Implant", code: "IMP", quantity: 2, unitPrice: 100, ivaKey: "21", catalogItemId: "catalog-1" } as DialogProps["prForm"]["items"][number]]
+    prForm.items = [{ name: "Implant", code: "IMP", quantity: 2, unitPrice: 100, ivaKey: "21", catalogItemId: "catalog-1", discountPercent: 0, isArticuloLibre: false, descripcionLibre: "", codeResolved: true }]
     const props: DialogProps = {
       open: true, onOpenChange: vi.fn(), wizardStep: 2, setWizardStep: vi.fn(),
       newForm: { ...EMPTY_NEW_FORM, patient: "Keep patient", notes: "Keep notes" }, setNewForm: vi.fn(),

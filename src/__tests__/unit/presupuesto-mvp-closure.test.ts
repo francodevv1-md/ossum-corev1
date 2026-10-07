@@ -185,6 +185,8 @@ describe("PRESUPUESTOS-MVP-CLOSURE-DEV-001: Backend Authority & Commercial Contr
   describe("3. Service Layer CRUD & Lifecycle", () => {
     it("creates a draft with initial versionNumber = 1 and calculates totals", async () => {
       const prismaMock = {
+        branch: { findFirst: vi.fn(async ({ where }) => where.id === "branch-1" && where.companyId === companyId ? { id: "branch-1" } : null) },
+        contactCompanyLink: { findFirst: vi.fn(async ({ where }) => where.contactId === "contact-1" && where.companyId === companyId && where.isActive ? { contactId: "contact-1" } : null) },
         surgery: {
           findFirst: vi.fn().mockResolvedValue({ id: surgeryId }),
         },
@@ -452,6 +454,7 @@ describe("PRESUPUESTOS-MVP-CLOSURE-DEV-001: Backend Authority & Commercial Contr
       const prismaMock = {
         $transaction: vi.fn().mockImplementation(async (callback) => {
           const tx = {
+            branch: { findFirst: vi.fn(async ({ where }) => where.id === "branch-1" && where.companyId === companyId ? { id: "branch-1" } : null) },
             presupuesto: {
               findFirst: vi.fn().mockResolvedValue({
                 id: "pres-1",

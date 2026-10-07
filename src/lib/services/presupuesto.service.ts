@@ -83,6 +83,44 @@ function toDecimal(value: number | string | Prisma.Decimal): Prisma.Decimal {
 
 const quantizeMoney = (value: Prisma.Decimal) => value.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
 
+function generalDiscount(value: unknown): Prisma.Decimal {
+  let rate: Prisma.Decimal;
+  try { rate = new Prisma.Decimal(value == null ? 0 : String(value)); }
+  catch { throw badRequest("General discount must be between 0 and 100", "invalid_general_discount"); }
+  if (!rate.isFinite() || rate.lt(0) || rate.gt(100)) {
+    throw badRequest("General discount must be between 0 and 100", "invalid_general_discount");
+  }
+  return rate;
+}
+
+function metadataObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+// These values have validated top-level contracts; arbitrary metadata cannot replace them.
+function customMetadata(value: unknown): Record<string, unknown> {
+  const { branchId, clientContactId, payerContactId, generalDiscountRate, ...rest } = metadataObject(value);
+  return rest;
+}
+
+function commercialReferences(input: { branchId?: string | null; clientContactId?: string | null; payerContactId?: string | null; metadata?: Record<string, unknown> | null }, existing: Record<string, unknown> = {}) {
+  return Object.fromEntries((["branchId", "clientContactId", "payerContactId"] as const).map((key) => [
+    key, input[key] !== undefined ? input[key] : input.metadata?.[key] !== undefined ? input.metadata[key] : existing[key] ?? null,
+  ]));
+}
+
+async function assertCommercialReferences(prisma: PrismaClient | Prisma.TransactionClient, companyId: string, values: Record<string, unknown>) {
+  for (const key of ["branchId", "clientContactId", "payerContactId"] as const) {
+    const id = values[key];
+    if (id == null) continue;
+    if (typeof id !== "string" || !id.trim()) throw badRequest(`Invalid ${key}`, "invalid_presupuesto_reference");
+    const exists = key === "branchId"
+      ? await prisma.branch.findFirst({ where: { id, companyId }, select: { id: true } })
+      : await prisma.contactCompanyLink.findFirst({ where: { contactId: id, companyId, isActive: true }, select: { contactId: true } });
+    if (!exists) throw badRequest(`${key} does not belong to company`, "invalid_presupuesto_reference");
+  }
+}
+
 function serializeDate(value: Date | null): string | null {
   return value ? value.toISOString() : null;
 }
@@ -265,8 +303,10 @@ export function serializePresupuestoRow(row: PresupuestoDatabaseRow) {
     const itemTax = toDecimal(item.tax);
     const itemTotal = toDecimal(item.total);
     const lineBruto = itemQty.mul(itemPrice);
-    const discountRate = lineBruto.gt(0)
-      ? quantizeMoney(itemDisc.mul(100).div(lineBruto)).toString()
+    const inputs = metadataObject(metadataObject(item.metadata).budgetLineInputs);
+    const lineDiscount = inputs.discount !== undefined ? toDecimal(String(inputs.discount)) : itemDisc;
+    const discountRate = typeof inputs.discountRate === "string" ? inputs.discountRate : lineBruto.gt(0)
+      ? quantizeMoney(lineDiscount.mul(100).div(lineBruto)).toString()
       : "0";
 
     return {
@@ -498,7 +538,8 @@ export interface DeletePresupuestoInput extends GetPresupuestoInput {
   expectedRevision: number;
 }
 
-export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
+export function recalculatePresupuestoTotals(items: PresupuestoItemInput[], generalDiscountRate: number | string | Prisma.Decimal | null = 0) {
+  const generalRate = generalDiscount(generalDiscountRate);
   if (!Array.isArray(items) || items.length === 0) {
     throw badRequest("items must be a non-empty array", "presupuesto_empty_items");
   }
@@ -512,11 +553,11 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
     if (item.discount !== undefined && item.discount !== null) {
       discount = quantizeMoney(toDecimal(item.discount));
     } else if (item.discountRate !== undefined && item.discountRate !== null) {
-      const rate = quantizeMoney(toDecimal(item.discountRate));
+      const rate = toDecimal(item.discountRate);
       const lineBruto = quantizeMoney(quantity.mul(unitPrice));
       discount = quantizeMoney(lineBruto.mul(rate).div(100));
     } else if (item.discountPercent !== undefined && item.discountPercent !== null) {
-      const rate = quantizeMoney(toDecimal(item.discountPercent));
+      const rate = toDecimal(item.discountPercent);
       const lineBruto = quantizeMoney(quantity.mul(unitPrice));
       discount = quantizeMoney(lineBruto.mul(rate).div(100));
     } else {
@@ -542,6 +583,15 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
       );
     }
 
+    const lineInputs = {
+      ...(item.discount != null ? { discount: discount.toString() } : {
+        discountRate: toDecimal(item.discountRate ?? item.discountPercent ?? 0).toString(),
+      }),
+      ...(item.tax != null ? { tax: quantizeMoney(toDecimal(item.tax)).toString() } : {}),
+    };
+    const gross = quantizeMoney(quantity.mul(unitPrice));
+    if (discount.gt(gross)) throw badRequest("Discount cannot exceed line net amount", "invalid_presupuesto_item_amount");
+    discount = quantizeMoney(discount.plus(quantizeMoney(gross.minus(discount).mul(generalRate).div(100))));
     const effectiveVatRate = item.vatRate ?? item.taxRate;
     const lineCalc = calculateLineCommercial({
       quantity,
@@ -572,7 +622,7 @@ export function recalculatePresupuestoTotals(items: PresupuestoItemInput[]) {
       total,
       vatTreatment: lineCalc.vatTreatment,
       vatRate: lineCalc.vatRate,
-      metadata: (item.metadata ?? null) as Prisma.InputJsonValue | undefined,
+      metadata: { ...metadataObject(item.metadata), budgetLineInputs: lineInputs } as Prisma.InputJsonValue,
     };
   });
 
@@ -604,20 +654,21 @@ export async function createPresupuesto(input: CreatePresupuestoInput) {
   const prisma = input.prisma;
   await assertSurgeryBelongsToCompany(prisma, companyId, input.surgeryId);
 
-  const totals = recalculatePresupuestoTotals(input.items);
+  const rate = generalDiscount(input.generalDiscountRate);
+  const references = commercialReferences(input);
+  await assertCommercialReferences(prisma, companyId, references);
+  const totals = recalculatePresupuestoTotals(input.items, rate);
   const createdById = optionalUserId(input.createdById);
 
   const mergedMetadata: Record<string, unknown> = {
-    ...(input.metadata ?? {}),
-    ...(input.branchId ? { branchId: input.branchId } : {}),
-    ...(input.clientContactId ? { clientContactId: input.clientContactId } : {}),
-    ...(input.payerContactId ? { payerContactId: input.payerContactId } : {}),
+    ...customMetadata(input.metadata),
+    ...references,
     ...(input.documentDate ? { documentDate: typeof input.documentDate === "string" ? input.documentDate : input.documentDate.toISOString() } : {}),
     ...(input.paymentTerms ? { paymentTerms: input.paymentTerms } : {}),
     ...(input.priceListCode ? { priceListCode: input.priceListCode } : {}),
     ...(input.legend ? { legend: input.legend } : {}),
     ...(input.notes ? { notes: input.notes } : {}),
-    ...(input.generalDiscountRate !== undefined && input.generalDiscountRate !== null ? { generalDiscountRate: input.generalDiscountRate } : {}),
+    generalDiscountRate: rate.toString(),
     ...(input.commercial ? { commercial: input.commercial } : {}),
     writeRevision: 1,
   };
@@ -692,25 +743,26 @@ export async function updatePresupuestoDraft(input: UpdatePresupuestoDraftInput)
     const currentWriteRevision = getPresupuestoWriteRevision(current.metadata, current.versionNumber);
     assertExpectedRevision(currentWriteRevision, input.expectedRevision);
 
-    const totals = recalculatePresupuestoTotals(input.items);
+    const existingMeta = metadataObject(current.metadata);
+    const rate = generalDiscount(input.generalDiscountRate === undefined ? existingMeta.generalDiscountRate : input.generalDiscountRate);
+    const totals = recalculatePresupuestoTotals(input.items, rate);
     const nextWriteRevision = currentWriteRevision + 1;
 
-    const existingMeta = (current.metadata && typeof current.metadata === "object" ? current.metadata : {}) as Record<string, unknown>;
     const updatedMetadata: Record<string, unknown> = {
       ...existingMeta,
-      ...(input.metadata ?? {}),
-      ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
-      ...(input.clientContactId !== undefined ? { clientContactId: input.clientContactId } : {}),
-      ...(input.payerContactId !== undefined ? { payerContactId: input.payerContactId } : {}),
+      ...customMetadata(input.metadata),
+      ...commercialReferences(input, existingMeta),
       ...(input.documentDate !== undefined ? { documentDate: typeof input.documentDate === "string" ? input.documentDate : input.documentDate?.toISOString() ?? null } : {}),
       ...(input.paymentTerms !== undefined ? { paymentTerms: input.paymentTerms } : {}),
       ...(input.priceListCode !== undefined ? { priceListCode: input.priceListCode } : {}),
       ...(input.legend !== undefined ? { legend: input.legend } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
-      ...(input.generalDiscountRate !== undefined ? { generalDiscountRate: input.generalDiscountRate } : {}),
+      generalDiscountRate: rate.toString(),
       ...(input.commercial !== undefined ? { commercial: input.commercial } : {}),
       writeRevision: nextWriteRevision,
     };
+
+    await assertCommercialReferences(tx, companyId, updatedMetadata);
 
     // Delete existing items and recreate
     await tx.presupuestoItem.deleteMany({
@@ -952,7 +1004,7 @@ export async function updatePresupuestoState(input: UpdatePresupuestoStateInput)
     const existingMeta = (current.metadata && typeof current.metadata === "object" ? current.metadata : {}) as Record<string, unknown>;
     const updatedMeta: Record<string, unknown> = {
       ...existingMeta,
-      ...(input.metadata ?? {}),
+      ...customMetadata(input.metadata),
       writeRevision: currentWriteRevision + 1,
     };
 
@@ -1011,21 +1063,27 @@ export async function createPresupuestoVersion(input: CreatePresupuestoVersionIn
       _max: { versionNumber: true },
     });
     const nextVersionNumber = (maxVersion._max.versionNumber ?? source.versionNumber) + 1;
-    const sourceItems: PresupuestoItemInput[] = source.items.map((item) => ({
-      sku: item.sku ?? undefined,
+    const sourceItems = source.items.map((item) => ({
+      sku: item.sku,
       description: item.description,
       quantity: item.quantity,
-      unit: item.unit ?? undefined,
+      unit: item.unit,
       unitPrice: item.unitPrice,
       discount: item.discount,
       tax: item.tax,
       vatTreatment: item.vatTreatment,
       vatRate: item.vatRate,
-      metadata: (item.metadata as Record<string, unknown> | null) ?? undefined,
+      metadata: (item.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
     }));
-    const totals = recalculatePresupuestoTotals(input.items ?? sourceItems);
-
     const sourceMeta = (source.metadata && typeof source.metadata === "object" ? source.metadata : {}) as Record<string, unknown>;
+    const references = commercialReferences(input, sourceMeta);
+    await assertCommercialReferences(tx, companyId, references);
+    const rate = generalDiscount(sourceMeta.generalDiscountRate);
+    // A revision without replacements copies final monetary values, never discounts them again.
+    const totals = input.items ? recalculatePresupuestoTotals(input.items, rate) : {
+      items: sourceItems.map((item, index) => ({ ...item, total: source.items[index].total })),
+      subtotal: source.subtotal, discountTotal: source.discountTotal, taxTotal: source.taxTotal, total: source.total,
+    };
     await tx.presupuesto.update({
       where: { id: source.id },
       data: {
@@ -1037,7 +1095,8 @@ export async function createPresupuestoVersion(input: CreatePresupuestoVersionIn
 
     const mergedMeta: Record<string, unknown> = {
       ...sourceMeta,
-      ...(input.metadata ?? {}),
+      ...customMetadata(input.metadata),
+      ...references,
       writeRevision: 1,
     };
 

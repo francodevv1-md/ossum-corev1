@@ -160,18 +160,20 @@ function surgeryReadSelect(companyId: string) {
     },
     contactAssignments: {
       where: {
-        role: "coordinator",
-        contact: {
-          isActive: true,
-          isCompany: false,
-          companyLinks: {
-            some: {
-              companyId,
+        OR: [
+          {
+            role: "coordinator",
+            contact: {
               isActive: true,
-              role: "coordinator",
+              isCompany: false,
+              companyLinks: { some: { companyId, isActive: true, role: "coordinator" } },
             },
           },
-        },
+          {
+            role: { in: ["salesperson", "instrumentator"] },
+            contact: { isActive: true, companyLinks: { some: { companyId, isActive: true } } },
+          },
+        ],
       },
       select: {
         id: true,
@@ -192,7 +194,6 @@ function surgeryReadSelect(companyId: string) {
               where: {
                 companyId,
                 isActive: true,
-                role: "coordinator",
               },
               select: {
                 companyId: true,
@@ -205,6 +206,26 @@ function surgeryReadSelect(companyId: string) {
       },
     },
   } satisfies Prisma.SurgerySelect;
+}
+
+function serializeSurgeryIntakeReadModel(surgery: Prisma.SurgeryGetPayload<{ select: ReturnType<typeof surgeryReadSelect> }>) {
+  const assignedContact = (role: "salesperson" | "instrumentator") => {
+    const assignments = (surgery.contactAssignments ?? []).filter(assignment => assignment.role === role &&
+      assignment.contact.isActive && assignment.contact.companyLinks.some(link => link.companyId === surgery.companyId && link.isActive));
+    const contactIds = new Set(assignments.map(assignment => assignment.contactId));
+    // Never pick an arbitrary contact when legacy data contains multiple assignees.
+    const contact = contactIds.size === 1 ? assignments[0].contact : null;
+    return { id: contact?.id ?? null, name: contact ? contact.legalName || [contact.firstName, contact.lastName].filter(Boolean).join(" ") : null };
+  };
+  const salesperson = assignedContact("salesperson");
+  const instrumentator = assignedContact("instrumentator");
+  return {
+    ...serializeSurgeryCoordinatorReadModel(surgery),
+    salespersonContactId: salesperson.id,
+    salespersonName: salesperson.name,
+    instrumentatorContactId: instrumentator.id,
+    instrumentatorName: instrumentator.name,
+  };
 }
 
 type SurgeryAuditShape = Pick<
@@ -482,7 +503,7 @@ export async function listSurgeriesByCompany(
     ...(options?.skip !== undefined ? { skip: options.skip } : {}),
   });
 
-  return surgeries.map(serializeSurgeryCoordinatorReadModel);
+  return surgeries.map(serializeSurgeryIntakeReadModel);
 }
 
 /** Get a single surgery by ID, scoped to a company. */
@@ -505,7 +526,7 @@ export async function getSurgeryById(
     },
   });
 
-  return surgery ? serializeSurgeryCoordinatorReadModel(surgery) : null;
+  return surgery ? serializeSurgeryIntakeReadModel(surgery) : null;
 }
 
 /** Build a read-only deletion/archival preview for a surgery, scoped to a company. */
@@ -744,6 +765,12 @@ export async function createSurgery(
   const scopedCompanyId = requireCompanyId(scopedContext.companyId);
   const validatedData = validateCreateSurgeryInput(data);
 
+  const assignments = ([
+    ["coordinator", validatedData.coordinatorContactId],
+    ["salesperson", validatedData.salespersonContactId],
+    ["instrumentator", validatedData.instrumentatorContactId],
+  ] as const).flatMap(([role, contactId]) => contactId ? [{ role, contactId }] : []);
+
   await assertSurgeryReferencesBelongToCompany(prisma, scopedCompanyId, {
     patientId: validatedData.patientId,
     doctorId: validatedData.doctorId,
@@ -755,6 +782,19 @@ export async function createSurgery(
   for (let attempt = 0; attempt < CREATE_SURGERY_MAX_RETRIES; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
+        await assertContactsBelongToCompany(tx as unknown as PrismaClient, scopedCompanyId, assignments.map(assignment => assignment.contactId));
+        for (const assignment of assignments) {
+          const link = await tx.contactCompanyLink.findFirst({
+            where: {
+              companyId: scopedCompanyId,
+              contactId: assignment.contactId,
+              isActive: true,
+              ...(assignment.role === "coordinator" ? { role: "coordinator", contact: { isActive: true, isCompany: false } } : { contact: { isActive: true } }),
+            },
+            select: { contactId: true },
+          });
+          if (!link) throw badRequest(`Selected ${assignment.role} is not eligible in the active company`, `invalid_surgery_${assignment.role}`);
+        }
         const visibleNumber = shouldGenerateVisibleNumber(validatedData)
           ? await getNextSurgeryVisibleNumber(tx, scopedCompanyId)
           : validatedData.visibleNumber ?? null;
@@ -777,10 +817,13 @@ export async function createSurgery(
             probableDate: validatedData.probableDate ?? null,
             scheduledDate: validatedData.scheduledDate ?? null,
             surgeryDate: validatedData.surgeryDate ?? null,
+            surgeryTimeSpecified: validatedData.surgeryTimeSpecified ?? null,
+            materialShippingDate: validatedData.materialShippingDate ?? null,
             performedDate: validatedData.performedDate ?? null,
             cancelledDate: validatedData.cancelledDate ?? null,
             source: validatedData.source ?? null,
             notes: validatedData.notes,
+            ...(assignments.length ? { contactAssignments: { create: assignments } } : {}),
           },
         });
 
@@ -794,7 +837,7 @@ export async function createSurgery(
           module: scopedContext.module ?? "surgery",
           oldValue: null,
           newValue: serializeSurgeryForAudit(surgery),
-          metadata: auditMetadata(scopedContext),
+          metadata: { ...auditMetadata(scopedContext), contactAssignments: assignments },
         });
 
         return surgery;
@@ -847,6 +890,17 @@ export async function updateSurgery(
   return prisma.$transaction(async (tx) => {
     const currentSurgery = await tx.surgery.findFirst({ where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null } });
     if (!currentSurgery) throw new Error(`Surgery ${surgeryId} not found in company ${scopedCompanyId}`);
+    const coordinatorContactId = validatedData.coordinatorContactId;
+    if (coordinatorContactId) {
+      const eligible = await tx.contactCompanyLink.findFirst({
+        where: { companyId: scopedCompanyId, contactId: coordinatorContactId, role: "coordinator", isActive: true, contact: { isActive: true, isCompany: false } },
+        select: { contactId: true },
+      });
+      if (!eligible) throw badRequest("Selected coordinator is not eligible in the active company", "invalid_surgery_coordinator");
+    }
+    const previousAssignments = coordinatorContactId !== undefined
+      ? await tx.surgeryContactAssignment.findMany({ where: { surgeryId, role: "coordinator", surgery: { companyId: scopedCompanyId } }, select: { contactId: true } })
+      : [];
     if (validatedData.cxStatus !== undefined) validateCxStatusTransition(currentSurgery.cxStatus, validatedData.cxStatus);
     const dateChanges: SurgeryReschedulingChange[] = (["surgeryDate", "materialShippingDate"] as const).flatMap((field) => {
       const next = validatedData[field], previous = currentSurgery[field];
@@ -893,6 +947,10 @@ export async function updateSurgery(
       );
     }
 
+    if (coordinatorContactId !== undefined && (previousAssignments.length !== (coordinatorContactId ? 1 : 0) || previousAssignments[0]?.contactId !== (coordinatorContactId ?? undefined))) {
+      await tx.surgeryContactAssignment.deleteMany({ where: { surgeryId, role: "coordinator", surgery: { companyId: scopedCompanyId } } });
+      if (coordinatorContactId) await tx.surgeryContactAssignment.create({ data: { surgeryId, contactId: coordinatorContactId, role: "coordinator", isPrimary: true } });
+    }
     const updatedSurgery = await tx.surgery.findFirst({
       where: { id: surgeryId, companyId: scopedCompanyId, archivedAt: null },
     });
@@ -907,7 +965,7 @@ export async function updateSurgery(
       module: scopedContext.module ?? "surgery",
       oldValue: serializeSurgeryForAudit(currentSurgery),
       newValue: serializeSurgeryForAudit(updatedSurgery),
-      metadata: { ...auditMetadata(scopedContext), ...(dateChanges.length ? { rescheduling: { mode: "in_app", recipientRoles: ["admin", "logistics"], changes: dateChanges } } : {}) },
+      metadata: { ...auditMetadata(scopedContext), ...(coordinatorContactId !== undefined ? { coordinatorAssignment: { previousContactIds: previousAssignments.map(a => a.contactId), contactId: coordinatorContactId } } : {}), ...(dateChanges.length ? { rescheduling: { mode: "in_app", recipientRoles: ["admin", "logistics"], changes: dateChanges } } : {}) },
     });
 
     if (dateChanges.length) await emitSurgeryReschedulingNotifications(tx, { companyId: scopedCompanyId, surgeryId, surgeryVisibleNumber: updatedSurgery?.visibleNumber, sourceEntityId: auditEvent.id, actorUserId: scopedContext.actorUserId, changes: dateChanges, previousTimeSpecified: currentSurgery.surgeryTimeSpecified, newTimeSpecified: resolvedTimeSpecified === undefined ? currentSurgery.surgeryTimeSpecified : resolvedTimeSpecified });

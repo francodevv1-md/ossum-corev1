@@ -7,6 +7,9 @@ export type CreateSurgeryInput = {
   doctorId?: string | null;
   institutionId?: string | null;
   payerContactId?: string | null;
+  coordinatorContactId?: string | null;
+  salespersonContactId?: string | null;
+  instrumentatorContactId?: string | null;
   classification?: string | null;
   description?: string | null;
   priority?: string | null;
@@ -16,12 +19,15 @@ export type CreateSurgeryInput = {
   scheduledDate?: Date | null;
   surgeryDate?: Date | null;
   performedDate?: Date | null;
+  surgeryTimeSpecified?: boolean | null;
+  materialShippingDate?: Date | null;
   cancelledDate?: Date | null;
   source?: string | null;
   notes?: string | null;
 };
 
 export type UpdateSurgeryInput = {
+  coordinatorContactId?: string | null;
   branchId?: string | null;
   visibleNumber?: string | null;
   patientId?: string;
@@ -288,6 +294,9 @@ export function validateCreateSurgeryInput(
   validateOptionalNullableString(data.doctorId, "doctorId");
   validateOptionalNullableString(data.institutionId, "institutionId");
   validateOptionalNullableString(data.payerContactId, "payerContactId");
+  validateOptionalNullableString(data.coordinatorContactId, "coordinatorContactId");
+  validateOptionalNullableString(data.salespersonContactId, "salespersonContactId");
+  validateOptionalNullableString(data.instrumentatorContactId, "instrumentatorContactId");
   validateOptionalNullableString(data.classification, "classification");
   validateOptionalNullableString(data.description, "description");
   validateOptionalNullableString(data.source, "source");
@@ -310,6 +319,17 @@ export function validateCreateSurgeryInput(
   validateOptionalNullableDate(data.performedDate, "performedDate");
   validateOptionalNullableDate(data.cancelledDate, "cancelledDate");
 
+  if (data.surgeryTimeSpecified !== undefined && data.surgeryTimeSpecified !== null && typeof data.surgeryTimeSpecified !== "boolean") {
+    throw badRequest("surgeryTimeSpecified must be boolean or null", "invalid_surgery_time_specified");
+  }
+  if (data.surgeryTimeSpecified != null && !data.surgeryDate) {
+    throw badRequest("Time precision requires a surgery date", "incompatible_surgery_time_specified");
+  }
+  if (data.surgeryTimeSpecified === false && data.surgeryDate && !isArgentineMidnightAnchor(data.surgeryDate)) {
+    throw badRequest("Date-only surgery must use Argentine midnight", "incompatible_surgery_time_specified");
+  }
+  validateOptionalNullableDate(data.materialShippingDate, "materialShippingDate");
+
   if (
     data.notes !== undefined &&
     data.notes !== null &&
@@ -324,6 +344,8 @@ export function validateCreateSurgeryInput(
 export function validateUpdateSurgeryInput(
   data: UpdateSurgeryInput
 ): UpdateSurgeryInput {
+  validateOptionalNullableString(data.coordinatorContactId, "coordinatorContactId");
+  if (typeof data.coordinatorContactId === "string" && !data.coordinatorContactId.trim()) throw badRequest("coordinatorContactId must not be empty", "invalid_surgery_coordinator");
   validateOptionalNullableString(data.branchId, "branchId");
   validateOptionalNullableString(data.visibleNumber, "visibleNumber");
   validateOptionalString(data.patientId, "patientId");
