@@ -1,0 +1,21 @@
+# Comprobantes — bounded design-only task
+
+- task: COMPROBANTES-DESIGN-ONLY-20261007
+- agent role: sole frontend visual implementation owner
+- selected model: openai/gpt-6.1-sol
+- mode: implementation
+- status: released
+- approval: user requested design first, movement separately, functionality/validation handled by user; switched to Build and requested start
+- scope: refine existing Comprobantes register typography, spacing, filter grouping, table hierarchy and narrow-width layout; retain incumbent operational identity
+- owned files: src/components/expediente/ComprobantesAsociados.tsx; this lock
+- overlap evidence: prior SURGERY-COMPROBANTES-CONNECTED-20261006 lock verified released after user confirmed completion; target clean before edits; preserve newly completed NR printing
+- forbidden: other tabs/components, detail/hook/model/API/Auth/schema/global tokens, new animations, functional changes, dependencies, DB access, shared build/server restart, commit/push/deploy
+- allowed commands: read-only source/git inspection, diff check, syntax/static preservation checks, scoped design detector
+- validation: structural syntax and unchanged behavior/motion checks only; user owns functional/visual acceptance, no full application PASS claimed
+- stop: ownership overlap, functional/API change required, scope expansion
+- handoff: single Done/Changed/Files/Validations/Risks/Next closure; release after edit
+- delivered: operational typography/spacing, underlined type filters with readable counts, visible search/state labels, calmer table/empty states, clearer document/amount hierarchy and existing dark tokens; one product file changed
+- checks: TypeScript TSX parse PASS; pre-render data/filter/printing code identical to HEAD; all 12 event/disabled attributes identical; both Motion element configurations identical; git diff check PASS; scoped Impeccable detector returned no findings
+- not run: application build, database operations, functional tests or browser acceptance; user reserved functionality and visual/functional validation for their subsequent phase
+- next: movement is a separate task, not started; no dependencies/installations/commit/push/server takeover
+- subsequent delivery: movement completed separately; user explicitly requested one local design/motion commit on 2026-10-07. Include only our panel styling/motion diff, scoped checker and these two locks; PDF functionality is already committed in eb489b0 and is unchanged

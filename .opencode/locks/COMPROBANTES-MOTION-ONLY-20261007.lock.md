@@ -1,0 +1,23 @@
+# Comprobantes — bounded motion task
+
+- task: COMPROBANTES-MOTION-ONLY-20261007
+- agent role: sole frontend motion implementation owner
+- selected model: openai/gpt-6.1-sol
+- mode: implementation
+- status: released
+- approval: user requested sequential design then movement and now said Continua after design handoff; functionality/visual acceptance remains user-owned
+- scope: shared filter indicator for pointer interaction, immediate keyboard/reduced-motion path, restrained press feedback; remove repeated row entrance/stagger to avoid slowing filtering
+- owned files: src/components/expediente/ComprobantesAsociados.tsx; .opencode/checks/comprobantes-motion.test.mjs; this lock
+- overlap: prior printing and design locks verified released; preserve existing uncommitted design in target
+- forbidden: new functions/features, design/layout/copy changes, API/hooks/Auth/schema/detail/shared components/globalCSS/dependencies, DB/build/server takeover, commit/push/deploy
+- implementation: reuse installed framer-motion and native CSS; short no-bounce shared indicator, no exit retention or delayed data rendering; no Animate UI dependency needed
+- validation: small runnable static motion/preservation check and diff only; no browser/functional acceptance claimed
+- stop: scope expansion or overlapping writer
+- handoff: Done/Changed/Files/Validations/Risks/Next; release ownership at completion
+- delivered: pointer-only shared underline with 220ms no-bounce spring; keyboard/reduced-motion marker instant; subtle pointer press feedback; removed row fade/rise/stagger so filtering renders immediately
+- checks: runnable static TSX/logic-preservation check PASS for all four pointer/reduced-motion combinations, business event attributes and pre-render data/printing logic preserved; diff check PASS; scoped design detector returned no findings
+- limits: browser, functional tests, build and DB operations not run; no runtime animation smoothness or functional acceptance claimed; design/printing and unrelated modified work preserved
+- local commit approval: user said Realiza el commit after leaving Plan; commit only this task's panel diff, static checker and the two design/motion locks; no push
+- commit preflight: PDF task lock released; baseline eb489b0 already contains its functional integration. Compared current panel against HEAD: pre-render logic excluding pointer-motion state and every business event/disabled expression are identical
+- Diagnose: old static checker reproduced ERR_ASSERTION because its pre-PDF baseline hashes were stale; replaced only those hashes after independent HEAD equality verification, normalized CRLF for Windows; no product or PDF logic changes
+- commit gate: refreshed static check PASS, diff check PASS, scoped detector no findings; product diff reviewed as design/motion only, foreign functionality retained. Source edits complete; local commit selects exactly the four approved files and does not certify browser/full-build acceptance
