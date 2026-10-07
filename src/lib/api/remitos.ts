@@ -119,7 +119,8 @@ export type CreateRemitoPayload = {
   metadata?: Record<string, unknown> | null
 }
 
-export type UpdateRemitoDraftPayload = Omit<CreateRemitoPayload, "origin"> & {
+export type UpdateRemitoDraftPayload = Partial<Omit<CreateRemitoPayload, "origin" | "surgeryId">> & {
+  surgeryId?: string | null
   expectedUpdatedAt?: string
 }
 
@@ -221,12 +222,13 @@ export function updateRemitoState(companyId: string, remitoId: string, state: Re
 export function registrarRemitoDevolucion(
   companyId: string,
   remitoId: string,
-  items: Array<{ itemId: string; returnedQuantity: string | number }>
+  items: Array<{ itemId: string; returnedQuantity: string | number }>,
+  idempotencyKey?: string
 ) {
   return apiFetch<RemitoApiRow>(`${remitoPath(companyId, remitoId)}/devolucion`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items, idempotencyKey }),
   })
 }
 

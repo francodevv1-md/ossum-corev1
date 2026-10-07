@@ -690,8 +690,11 @@ describe("registrarDevolucion", () => {
     const returnItemsState: Record<string, { quantity: number; returnedQuantity: number }> = updatedItemsState;
 
     let finalRemito = buildRemito({ state: "Entregado", visibleNumber: 1 });
+    let returnState = "Borrador";
 
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "remito-1" }]),
+      cajasDispatch: { findFirst: vi.fn().mockResolvedValue(null) },
       devolucion: {
         create: vi.fn().mockResolvedValue({
           id: "devolucion-1",
@@ -714,7 +717,8 @@ describe("registrarDevolucion", () => {
           id: "devolucion-1",
           companyId: "company-1",
           remitoId: "remito-1",
-          state: "Confirmada",
+          state: returnState,
+          validatedAt: null,
           items: (opts.requestedItems ?? [])
             .filter((it) => it.returnedQuantity > 0)
             .map((it) => ({
@@ -723,7 +727,7 @@ describe("registrarDevolucion", () => {
               returnedQuantity: new Prisma.Decimal(it.returnedQuantity),
             })),
         })),
-        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        updateMany: vi.fn().mockImplementation(async () => { returnState = "Confirmada"; return { count: 1 }; }),
         update: vi.fn().mockImplementation(async ({ data }: { data: { state: string; validatedAt?: Date } }) => ({
           id: "devolucion-1",
           visibleNumber: 1,
@@ -731,7 +735,7 @@ describe("registrarDevolucion", () => {
           surgeryId: "sx-1",
           remitoId: "remito-1",
           consumoId: null,
-          state: data.state,
+          state: (returnState = data.state),
           reason: "legacy_remito_devolucion",
           validatedAt: data.validatedAt ?? null,
           createdById: "user-1",
@@ -766,12 +770,14 @@ describe("registrarDevolucion", () => {
       },
       remito: {
         findFirst: vi.fn().mockImplementation(async () => ({
+          ...finalRemito,
           id: "remito-1",
           companyId: "company-1",
-          state: "Entregado",
-          returnedAt: null,
-          items: Object.entries(itemsByQuantity).map(([id, it]) => ({
-            id,
+          state: finalRemito.state,
+          returnedAt: finalRemito.returnedAt,
+          items: Object.entries(updatedItemsState).map(([id, it]) => ({
+             id,
+             description: "Implant",
             quantity: new Prisma.Decimal(it.quantity),
             returnedQuantity: new Prisma.Decimal(it.returnedQuantity),
           })),
@@ -926,7 +932,7 @@ describe("registrarDevolucion", () => {
     const findFirst = vi.fn().mockResolvedValue(buildRemito({ state: "Anulado", visibleNumber: 1 }));
     const prismaMock = {
       remito: { findFirst },
-      $transaction: vi.fn(),
+      $transaction: vi.fn(async (cb: any) => cb({ $queryRaw: vi.fn(), remito: { findFirst } })),
     } as any;
 
     await expect(
@@ -938,7 +944,7 @@ describe("registrarDevolucion", () => {
         prisma: prismaMock,
       })
     ).rejects.toMatchObject({ code: "remito_devolucion_not_allowed", status: 409 });
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -947,7 +953,8 @@ describe("deleteRemito", () => {
   it("deletes a Borrador remito", async () => {
     const findFirst = vi.fn().mockResolvedValue(buildRemito({ state: "Borrador", visibleNumber: null }));
     const tx = {
-      remito: { findUnique: vi.fn().mockResolvedValue({ id: "remito-1" }), delete: vi.fn().mockResolvedValue({ id: "remito-1" }) },
+      remito: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), delete: vi.fn().mockResolvedValue({ id: "remito-1" }) },
+      remitoItem: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
       auditEvent: { create: vi.fn().mockResolvedValue(undefined) },
     };
     const prismaMock = {
@@ -958,11 +965,12 @@ describe("deleteRemito", () => {
     const result = await deleteRemito({
       companyId: "company-1",
       remitoId: "remito-1",
+      deletedById: "user-1",
       prisma: prismaMock,
     });
 
     expect(result).toEqual({ id: "remito-1", deleted: true });
-    expect(tx.remito.delete).toHaveBeenCalledWith({ where: { id: "remito-1" } });
+    expect(tx.remito.delete).toHaveBeenCalledWith({ where: { id: "remito-1", companyId: "company-1", state: "Borrador" } });
   });
 
   it("refuses delete when state !== Borrador", async () => {
@@ -976,6 +984,7 @@ describe("deleteRemito", () => {
       deleteRemito({
         companyId: "company-1",
         remitoId: "remito-1",
+        deletedById: "user-1",
         prisma: prismaMock,
       })
     ).rejects.toMatchObject({ code: "remito_not_deletable", status: 409 });

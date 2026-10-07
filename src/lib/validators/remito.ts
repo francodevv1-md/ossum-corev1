@@ -4,6 +4,8 @@
 // src/lib/services/remito.service.ts to keep a single source of truth.
 
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
+import { decimal18_4, positiveQuantity } from "./decimal18-4";
 import { cajasDispatchSchema } from "./cajas-assignment";
 import { REMITO_ORIGINS, REMITO_SALIDA_REASONS, REMITO_STATES, REMITO_TRANSITIONS } from "../services/remito.service";
 
@@ -16,24 +18,9 @@ export type RemitoState = (typeof REMITO_STATES)[number];
 export const remitoEmitSchema = z.object({ cajasDispatch: cajasDispatchSchema.optional() }).strict();
 export type RemitoEmitInput = z.input<typeof remitoEmitSchema>;
 
-// ─── Decimal-friendly item quantity schema ────────────────────────────────
-// quantity reaches the service as number/string; we coerce to string for
-// safe Decimal construction alongside Prisma's @db.Decimal(18,4).
-const positiveQuantity = z
-  .union([z.number(), z.string()])
-  .transform((value) => String(value))
-  .refine((value) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0;
-  }, "quantity must be a positive number");
-
-const nonNegativeDecimal = z
-  .union([z.number(), z.string()])
-  .transform((value) => String(value))
-  .refine((value) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed >= 0;
-  }, "value must be a non-negative number");
+const nonNegativeDecimal = decimal18_4.pipe(z.string().refine(
+  (value) => new Prisma.Decimal(value).gte(0), "value must be a non-negative number"
+));
 
 const optionalTraceDate = z.coerce.date().optional();
 
@@ -56,8 +43,8 @@ export const remitoCreateSchema = z.object({
   branchId: z.string().trim().min(1, "branchId is required"),
   issuedBranchId: z.string().trim().optional(),
   surgeryId: z.string().trim().optional(),
-  origin: z.enum(REMITO_ORIGINS as unknown as [string, ...string[]]),
-  salidaReason: z.enum(REMITO_SALIDA_REASONS as unknown as [string, ...string[]]),
+  origin: z.enum(REMITO_ORIGINS),
+  salidaReason: z.enum(REMITO_SALIDA_REASONS),
   boxId: z.string().trim().nullable().optional(),
   presupuestoId: z.string().trim().nullable().optional(),
   destinatarioContactId: z.string().trim().nullable().optional(),
@@ -82,7 +69,7 @@ export const remitoDraftUpdateSchema = z
     branchId: z.string().trim().min(1).optional(),
     issuedBranchId: z.string().trim().min(1).optional(),
     surgeryId: z.string().trim().nullable().optional(),
-    salidaReason: z.enum(REMITO_SALIDA_REASONS as unknown as [string, ...string[]]).optional(),
+    salidaReason: z.enum(REMITO_SALIDA_REASONS).optional(),
     boxId: z.string().trim().nullable().optional(),
     presupuestoId: z.string().trim().nullable().optional(),
     destinatarioContactId: z.string().trim().nullable().optional(),
@@ -104,8 +91,8 @@ export type RemitoDraftUpdateInput = z.infer<typeof remitoDraftUpdateSchema>;
 // ─── State transition ──────────────────────────────────────────────────────
 export const remitoStateTransitionSchema = z
   .object({
-    newState: z.enum(REMITO_STATES as unknown as [string, ...string[]]).optional(),
-    state: z.enum(REMITO_STATES as unknown as [string, ...string[]]).optional(),
+    newState: z.enum(REMITO_STATES).optional(),
+    state: z.enum(REMITO_STATES).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .transform((value) => ({
@@ -128,6 +115,7 @@ export const remitoDevolucionItemSchema = z.object({
 
 export const remitoDevolucionSchema = z.object({
   items: z.array(remitoDevolucionItemSchema).min(1, "devolucion items must not be empty"),
+  idempotencyKey: z.string().trim().min(1).max(128).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -139,9 +127,9 @@ export const remitoListQuerySchema = z
   .object({
     surgeryId: z.string().trim().optional(),
     branchId: z.string().trim().optional(),
-    state: z.enum(REMITO_STATES as unknown as [string, ...string[]]).optional(),
-    origin: z.enum(REMITO_ORIGINS as unknown as [string, ...string[]]).optional(),
-    salidaReason: z.enum(REMITO_SALIDA_REASONS as unknown as [string, ...string[]]).optional(),
+    state: z.enum(REMITO_STATES).optional(),
+    origin: z.enum(REMITO_ORIGINS).optional(),
+    salidaReason: z.enum(REMITO_SALIDA_REASONS).optional(),
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
     take: z.coerce.number().int().nonnegative().optional(),

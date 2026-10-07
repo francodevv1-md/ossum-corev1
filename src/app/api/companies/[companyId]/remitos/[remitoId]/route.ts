@@ -59,6 +59,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const result = await deleteRemito({
       companyId: ctx.companyId,
       remitoId,
+      deletedById: ctx.actorUserId,
       prisma,
     });
 

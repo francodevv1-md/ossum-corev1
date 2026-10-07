@@ -12,9 +12,19 @@ import type { PrismaClient, Devolucion as PrismaDevolucion } from "@prisma/clien
 
 import { createAuditEvent } from "../audit";
 import { requireCompanyId } from "../tenant";
-import { badRequest, notFound } from "../api/errors";
+import { ApiError, badRequest, notFound } from "../api/errors";
 import { emitCrossDomainNotification } from "./internal-notifications.service";
 import { acceptCajasAccounting } from "./cajas-accounting.service";
+import { positiveQuantity } from "../validators/decimal18-4";
+
+type DevolucionDb = PrismaClient | Prisma.TransactionClient;
+async function inDevolucionTransaction<T>(db: DevolucionDb, action: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return "$transaction" in db ? db.$transaction(action) : action(db);
+}
+
+export async function lockRemitoForReturn(tx: Prisma.TransactionClient, companyId: string, remitoId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "Remito" WHERE "id" = ${remitoId} AND "companyId" = ${companyId} FOR UPDATE`;
+}
 
 // ─── Catálogos (single source of truth; validator re-exporta estos) ─────────
 export const DEVOLUCION_STATES = [
@@ -50,15 +60,10 @@ export const DEVOLUCION_READ_ROLES = [
 const DEFAULT_LIST_TAKE = 50;
 
 // ─── Errores ─────────────────────────────────────────────────────────────────
-export class DevolucionError extends Error {
-  readonly code: string;
-  readonly status?: number;
-
-  constructor(code: string, message: string, status?: number) {
-    super(message);
+export class DevolucionError extends ApiError {
+  constructor(code: string, message: string, status = 500) {
+    super(status, code, message);
     this.name = "DevolucionError";
-    this.code = code;
-    this.status = status;
   }
 }
 
@@ -194,6 +199,7 @@ async function applyConfirmedDevolucionToRemito(
     throw badRequest("devolucion items must be a non-empty array", "devolucion_empty_items");
   }
 
+  await lockRemitoForReturn(tx, params.companyId, devolucion.remitoId);
   const remito = await tx.remito.findFirst({
     where: { id: devolucion.remitoId, companyId: params.companyId },
     select: {
@@ -261,13 +267,13 @@ async function applyConfirmedDevolucionToRemito(
     }
 
     await tx.remitoItem.update({
-      where: { id: remitoItemId },
+      where: { id: remitoItemId, companyId: params.companyId, remitoId: remito.id },
       data: { returnedQuantity: newReturnedQuantity },
     });
   }
 
   const updatedItems = await tx.remitoItem.findMany({
-    where: { remitoId: remito.id },
+    where: { remitoId: remito.id, companyId: params.companyId },
     select: { quantity: true, returnedQuantity: true },
   });
 
@@ -282,7 +288,7 @@ async function applyConfirmedDevolucionToRemito(
   const newState = allReturned ? "Devuelto" : anyReturned ? "Parcialmente_devuelto" : "Entregado";
 
   await tx.remito.update({
-    where: { id: remito.id },
+    where: { id: remito.id, companyId: params.companyId, state: remito.state },
     data: {
       state: newState,
       ...(newState === "Devuelto" && !remito.returnedAt ? { returnedAt: new Date() } : {}),
@@ -314,7 +320,7 @@ export interface CreateDevolucionInput {
   reason?: string;
   createdById?: string;
   metadata?: Record<string, unknown> | null;
-  prisma: PrismaClient;
+  prisma: DevolucionDb;
 }
 
 export interface ListDevolucionesInput {
@@ -333,7 +339,7 @@ export interface ListDevolucionesInput {
 export interface GetDevolucionInput {
   companyId: string;
   devolucionId: string;
-  prisma: PrismaClient;
+  prisma: DevolucionDb;
 }
 
 export interface ConfirmDevolucionInput {
@@ -341,7 +347,7 @@ export interface ConfirmDevolucionInput {
   devolucionId: string;
   updatedById?: string;
   cajasAccounting?: unknown;
-  prisma: PrismaClient;
+  prisma: DevolucionDb;
 }
 
 export interface RejectDevolucionInput {
@@ -357,7 +363,7 @@ export interface UpdateDevolucionStateInput {
   devolucionId: string;
   newState: string;
   updatedById?: string;
-  prisma: PrismaClient;
+  prisma: DevolucionDb;
 }
 
 export interface DeleteDevolucionInput {
@@ -386,8 +392,8 @@ export async function createDevolucion(input: CreateDevolucionInput) {
         "invalid_devolucion_item_description"
       );
     }
-    const returnedNumber = Number(item.returnedQuantity);
-    if (!Number.isFinite(returnedNumber) || returnedNumber <= 0) {
+    const quantity = positiveQuantity.safeParse(item.returnedQuantity);
+    if (!quantity.success) {
       throw badRequest(
         `items[${index}].returnedQuantity must be a positive number`,
         "invalid_devolucion_item_quantity"
@@ -398,7 +404,7 @@ export async function createDevolucion(input: CreateDevolucionInput) {
       consumoItemId: item.consumoItemId ?? null,
       sku: item.sku ?? null,
       description: item.description,
-      returnedQuantity: toDecimal(item.returnedQuantity),
+      returnedQuantity: toDecimal(quantity.data),
       unit: item.unit ?? null,
       lotNumber: item.lotNumber?.trim() || null,
       serialNumber: item.serialNumber?.trim() || null,
@@ -444,7 +450,7 @@ export async function createDevolucion(input: CreateDevolucionInput) {
   const createdById = requireCreatedById(input.createdById);
   const surgeryId = input.surgeryId ?? remito.surgeryId ?? (consumoSnapshot?.surgeryId ?? null);
 
-  const devolucion = await prisma.$transaction(async (tx) => {
+  const devolucion = await inDevolucionTransaction(prisma, async (tx) => {
     const created = await tx.devolucion.create({
       data: {
         companyId,
@@ -601,7 +607,7 @@ export async function confirmDevolucion(input: ConfirmDevolucionInput) {
     );
   }
 
-  return prisma.$transaction(async (tx) => {
+  return inDevolucionTransaction(prisma, async (tx) => {
     // Claim Pendiente atomically before applying quantities. The preliminary read above
     // preserves the existing not-found/invalid-state semantics, but cannot serialize
     // two callers that both observed Pendiente before entering their transactions.
@@ -732,7 +738,7 @@ export async function rejectDevolucion(input: RejectDevolucionInput) {
 
   return prisma.$transaction(async (tx) => {
     const result = await tx.devolucion.update({
-      where: { id: input.devolucionId },
+      where: { id: input.devolucionId, companyId, state: current.state },
       data: {
         state: "Rechazada",
         reason: input.reason ?? null,
@@ -754,6 +760,11 @@ export async function rejectDevolucion(input: RejectDevolucionInput) {
         createdAt: true,
         updatedAt: true,
       },
+    }).catch((error: unknown) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new DevolucionError("devolucion_state_conflict", "Devolucion changed. Reload before changing its state.", 409);
+      }
+      throw error;
     });
 
     if (updatedById) {
@@ -814,9 +825,9 @@ export async function updateDevolucionState(input: UpdateDevolucionStateInput) {
     );
   }
 
-  return prisma.$transaction(async (tx) => {
+  return inDevolucionTransaction(prisma, async (tx) => {
     const result = await tx.devolucion.update({
-      where: { id: input.devolucionId },
+      where: { id: input.devolucionId, companyId, state: currentState },
       data: {
         state: newState,
         updatedById,
@@ -837,6 +848,11 @@ export async function updateDevolucionState(input: UpdateDevolucionStateInput) {
         createdAt: true,
         updatedAt: true,
       },
+    }).catch((error: unknown) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new DevolucionError("devolucion_state_conflict", "Devolucion changed. Reload before changing its state.", 409);
+      }
+      throw error;
     });
 
     if (updatedById) {

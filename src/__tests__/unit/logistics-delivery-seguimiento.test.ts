@@ -46,6 +46,7 @@ describe("Logística y Seguimiento Quirúrgico Integrado", () => {
       state: "Emitido",
       visibleNumber: 501,
       deliveredAt: null,
+      updatedAt: new Date("2026-10-07T12:00:00Z"),
     };
 
     const updateRemitoMock = vi.fn().mockResolvedValue({
@@ -107,7 +108,7 @@ describe("Logística y Seguimiento Quirúrgico Integrado", () => {
     expect(result.id).toBe("entry-123");
     expect(updateRemitoMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "rem-1" },
+        where: { id: "rem-1", companyId: "comp-1", surgeryId: "surg-1", state: "Emitido", updatedAt: mockRemito.updatedAt },
         data: expect.objectContaining({
           state: "Entregado",
           updatedById: "user-1",

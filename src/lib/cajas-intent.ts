@@ -3,6 +3,7 @@ import {
   listSurgeryBoxAssignmentsApi,
   type BoxAssignmentDetail,
 } from "./api/cajas-assignments";
+import type { RemitoApiRow } from "./api/remitos";
 
 export interface BuildDispatchIntentItem {
   id: string; // remitoItemId
@@ -41,13 +42,18 @@ export function buildCajasDispatchPayload(
   if (!remitoItems.length) {
     return null;
   }
+  const preparationLines = assignment.preparation.lines.map((line) => ({
+    ...line,
+    lotNumberSnapshot: line.lotNumber === undefined ? line.lotNumberSnapshot : line.lotNumber,
+    serialNumberSnapshot: line.serialNumber === undefined ? line.serialNumberSnapshot : line.serialNumber,
+  }));
 
   const lines = remitoItems.map((item) => {
     let prepLine: NonNullable<BoxAssignmentDetail["preparation"]>["lines"][number] | undefined;
 
     if (item.preparationLineId) {
       // 1. Explicit preparationLineId must exist and be active; never fall back to SKU matching
-      prepLine = assignment.preparation!.lines.find((l) => l.id === item.preparationLineId && l.isActive);
+      prepLine = preparationLines.find((l) => l.id === item.preparationLineId && l.isActive);
       if (!prepLine) {
         throw new Error(
           `Explicit preparation line "${item.preparationLineId}" not found or inactive in assignment ${assignment.id}.`
@@ -55,7 +61,7 @@ export function buildCajasDispatchPayload(
       }
     } else {
       // 2. Match active candidate preparation lines by SKU or articleId
-      const candidates = assignment.preparation!.lines.filter((l) => {
+      const candidates = preparationLines.filter((l) => {
         if (!l.isActive) return false;
         const itemSku = item.sku?.trim().toLowerCase();
         const lineSku = l.sku?.trim().toLowerCase();
@@ -98,12 +104,12 @@ export function buildCajasDispatchPayload(
     }
 
     // 3. Universal traceability validation across all paths
-    if (item.lotNumber && (prepLine.lotNumberSnapshot ?? "") !== item.lotNumber) {
+    if ((item.lotNumber ?? null) !== (prepLine.lotNumberSnapshot ?? null)) {
       throw new Error(
         `Incompatible lot number "${item.lotNumber}" for preparation line "${prepLine.id}" (expected "${prepLine.lotNumberSnapshot ?? ""}").`
       );
     }
-    if (item.serialNumber && (prepLine.serialNumberSnapshot ?? "") !== item.serialNumber) {
+    if ((item.serialNumber ?? null) !== (prepLine.serialNumberSnapshot ?? null)) {
       throw new Error(
         `Incompatible serial number "${item.serialNumber}" for preparation line "${prepLine.id}" (expected "${prepLine.serialNumberSnapshot ?? ""}").`
       );
@@ -132,6 +138,39 @@ export function buildCajasDispatchPayload(
 }
 
 export type CajasDispatchIntentPayload = NonNullable<ReturnType<typeof buildCajasDispatchPayload>>;
+
+// Resolve authoritative linkage once per command. Callers retain the result for exact retries.
+export async function buildCajasRemitoEmissionIntent(
+  companyId: string,
+  remito: RemitoApiRow,
+): Promise<{ cajasDispatch: CajasDispatchIntentPayload } | undefined> {
+  if (remito.companyId !== companyId) throw new Error("Remito company does not match the current context.");
+  const linkage = remito.metadata?.cajas;
+  let assignment: BoxAssignmentDetail | null;
+  if (linkage != null) {
+    if (typeof linkage !== "object" || Array.isArray(linkage) ||
+        !("assignmentId" in linkage) || typeof linkage.assignmentId !== "string" || !linkage.assignmentId.trim()) {
+      throw new Error("Cajas assignment marker is missing a valid assignment ID.");
+    }
+    assignment = await getBoxAssignmentApi(companyId, linkage.assignmentId);
+    if (!assignment || assignment.id !== linkage.assignmentId) throw new Error("Linked Cajas assignment is unavailable.");
+  } else {
+    if (!remito.surgeryId) return undefined;
+    assignment = await findActiveCajasAssignmentForSurgery(companyId, remito.surgeryId);
+    if (!assignment) return undefined; // Only a confirmed no-assignment result permits generic emission.
+  }
+  if (assignment.companyId !== companyId || assignment.surgeryId !== remito.surgeryId || !assignment.isActive) {
+    throw new Error("Cajas assignment is unavailable for this company/surgery context.");
+  }
+  if (!assignment.preparation?.lines.length) throw new Error("Cajas emission requires preparation with active lines.");
+  const payload = buildCajasDispatchPayload(assignment, remito);
+  if (!payload) throw new Error("Cajas emission requires persisted Remito items.");
+  if (new Set(payload.lines.map((line) => line.preparationLineId)).size !== payload.lines.length) {
+    throw new Error("Ambiguous dispatch: multiple items match the same preparation line.");
+  }
+  // A new observed command after an edit/reload must not reuse a previously accepted semantic key.
+  return { cajasDispatch: { ...payload, idempotencyKey: `dispatch-${crypto.randomUUID()}` } };
+}
 
 export interface BuildAccountingIntentItem {
   id: string; // sourceItemId (consumoItemId or devolucionItemId)
@@ -288,5 +327,7 @@ export async function findActiveCajasAssignmentForSurgery(
     );
   }
 
-  return await getBoxAssignmentApi(companyId, activeAssignments[0].id);
+  const detail = await getBoxAssignmentApi(companyId, activeAssignments[0].id);
+  if (!detail || detail.id !== activeAssignments[0].id) throw new Error("Selected active Cajas assignment is unavailable.");
+  return detail;
 }

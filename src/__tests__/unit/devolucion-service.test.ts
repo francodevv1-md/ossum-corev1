@@ -315,6 +315,7 @@ describe("confirmDevolucion", () => {
       .mockResolvedValue(buildDevolucion({ state: "Pendiente", visibleNumber: 1 }));
     const validatedAt = new Date("2026-07-07T11:00:00.000Z");
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "remito-1" }]),
       devolucion: {
         findFirst: vi
           .fn()
@@ -377,11 +378,11 @@ describe("confirmDevolucion", () => {
       data: expect.objectContaining({ state: "Confirmada", updatedById: "user-1", validatedAt: expect.any(Date) }),
     });
     expect(tx.remitoItem.update).toHaveBeenCalledWith({
-      where: { id: "remito-item-1" },
+      where: { id: "remito-item-1", companyId: "company-1", remitoId: "remito-1" },
       data: { returnedQuantity: new Prisma.Decimal(2) },
     });
     expect(tx.remito.update).toHaveBeenCalledWith({
-      where: { id: "remito-1" },
+      where: { id: "remito-1", companyId: "company-1", state: "Entregado" },
       data: { state: "Parcialmente_devuelto", updatedById: "user-1" },
     });
     expect(createAuditEvent).toHaveBeenCalledWith(
@@ -414,6 +415,7 @@ describe("confirmDevolucion", () => {
   it("rejects a cross-company remito item without applying a partial return", async () => {
     const findFirst = vi.fn().mockResolvedValue(buildDevolucion({ state: "Pendiente", visibleNumber: 1 }));
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "remito-1" }]),
       devolucion: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         findFirst: vi
@@ -456,6 +458,7 @@ describe("confirmDevolucion", () => {
   it("rejects an over-return before mutating any remito item or state", async () => {
     const findFirst = vi.fn().mockResolvedValue(buildDevolucion({ state: "Pendiente", visibleNumber: 1 }));
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "remito-1" }]),
       devolucion: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         findFirst: vi
@@ -505,6 +508,7 @@ describe("confirmDevolucion", () => {
     });
     let claimed = false;
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "remito-1" }]),
       devolucion: {
         updateMany: vi.fn().mockImplementation(async () => {
           if (claimed) return { count: 0 };

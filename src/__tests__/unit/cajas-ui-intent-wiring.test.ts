@@ -567,6 +567,7 @@ describe("Cajas UI-to-Document Intent Wiring, Associations & Guards", () => {
       };
 
       const tx: any = {
+        $queryRaw: vi.fn().mockResolvedValue([{ id: "remito-cajas" }]),
         devolucion: {
           findFirst: vi.fn(async () => devolucion),
           updateMany: vi.fn(async () => ({ count: 1 })),
@@ -619,6 +620,7 @@ describe("Cajas UI-to-Document Intent Wiring, Associations & Guards", () => {
 
       let devState = "Pendiente";
       const tx: any = {
+        $queryRaw: vi.fn().mockResolvedValue([{ id: "remito-normal" }]),
         devolucion: {
           findFirst: vi.fn(async () => ({ ...devolucion, state: devState })),
           updateMany: vi.fn(async () => {

@@ -19,8 +19,7 @@ import {
   type CreateRemitoPayload, type RemitoApiRow, type RemitoDevPreset, type RemitoOrigin, type RemitoSalidaReason,
   type UpdateRemitoDraftPayload, updateRemitoDraft,
 } from "@/lib/api/remitos"
-import { getBoxAssignmentApi } from "@/lib/api/cajas-assignments"
-import { buildCajasDispatchPayload, findActiveCajasAssignmentForSurgery, type CajasDispatchIntentPayload } from "@/lib/cajas-intent"
+import { buildCajasRemitoEmissionIntent } from "@/lib/cajas-intent"
 
 type DraftItem = { itemId?: string; sku: string; description: string; quantity: string; unit: string; boxId?: string; presupuestoItemId?: string; lotNumber: string; serialNumber: string; expirationDate: string; metadata?: Record<string, unknown> }
 type Draft = { origin: RemitoOrigin; salidaReason: RemitoSalidaReason; branchId: string; issuedBranchId: string; surgeryId: string; boxId: string; presupuestoId: string; destinatarioContactId: string; destinatarioNombre: string; domicilio: string; localidad: string; provincia: string; transporte: string; packageCount: string; declaredValue: string; observaciones: string; destinatarioSnapshot: Record<string, unknown> | null; shippingAddressSnapshot: Record<string, unknown> | null; transportSnapshot: Record<string, unknown> | null; metadata: Record<string, unknown> | null; items: DraftItem[] }
@@ -67,12 +66,15 @@ export function OperationalRemitoWorkspace({ remitoId }: { remitoId?: string }) 
 }
 
 function OperationalRemitoWorkspaceSession({ remitoId }: { remitoId?: string }) {
-  const router = useRouter(); const { activeCompany, currentUser, currentUserLoading, isLoading } = useAuth(); const companyId = activeCompany?.id
+  const router = useRouter(); const { activeCompany, currentUser, currentUserLoading, isLoading, isAuthenticated } = useAuth(); const companyId = activeCompany?.id
   const editing = Boolean(remitoId); const [draft, setDraft] = useState<Draft>(emptyDraft); const [baseline, setBaseline] = useState<Draft | null>(null); const [loaded, setLoaded] = useState<RemitoApiRow | null>(null); const [loading, setLoading] = useState(editing); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [errors, setErrors] = useState<Errors>({}); const [conflict, setConflict] = useState(false); const [leaveOpen, setLeaveOpen] = useState(false); const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null); const [preset, setPreset] = useState<RemitoDevPreset | null>(null)
   const [recoveryReady, setRecoveryReady] = useState(false); const [recoveryCandidate, setRecoveryCandidate] = useState<{ draft: RecoveryDraft; staleBase: boolean } | null>(null); const [recoveryWarning, setRecoveryWarning] = useState(""); const recoveryWarned = useRef(false)
   const recoverButtonRef = useRef<HTMLButtonElement | null>(null); const continueEditingRef = useRef<HTMLButtonElement | null>(null); const recoveryOpenerRef = useRef<HTMLElement | null>(null); const leaveOpenerRef = useRef<HTMLElement | null>(null); const branchIdEditedRef = useRef(false); const presetDefaultAttemptedRef = useRef(false)
   const workspaceHeadingRef = useRef<HTMLHeadingElement | null>(null); const instanceGenerationRef = useRef(0)
   const refs = useRef<Record<string, HTMLElement | null>>({}); const dirty = JSON.stringify(draft) !== JSON.stringify(baseline ?? emptyDraft()); const locked = Boolean(loaded && loaded.state !== "Borrador")
+  const emissionKey = JSON.stringify([isLoading, currentUserLoading, isAuthenticated, loading, loaded?.updatedAt, draft])
+  const emissionRef = useRef({ key: emissionKey, pending: false, prepared: false, intent: undefined as Awaited<ReturnType<typeof buildCajasRemitoEmissionIntent>> })
+  if (emissionRef.current.key !== emissionKey) emissionRef.current = { key: emissionKey, pending: false, prepared: false, intent: undefined }
   const recoveryContext: RemitoWorkspaceDraftContext | null = currentUser?.id && companyId ? { userId: currentUser.id, companyId, mode: editing ? "edit" : "create", ...(editing ? { remitoId } : {}) } : null
   const warnRecoveryOnce = () => { if (!recoveryWarned.current) { recoveryWarned.current = true; setRecoveryWarning("No se pudo conservar una copia temporal de estos cambios.") } }
   const clearRecovery = () => { if (recoveryContext && !clearRemitoWorkspaceDraft(recoveryContext)) warnRecoveryOnce() }
@@ -112,8 +114,32 @@ function OperationalRemitoWorkspaceSession({ remitoId }: { remitoId?: string }) 
   const updateItem = (index: number, key: keyof DraftItem, value: string) => { setDraft((current) => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item) })); setErrors((current) => { const { [`item-${index}-${key}`]: _, ...rest } = current; return rest }) }
   const requestLeave = (action: () => void, opener?: HTMLElement) => { if (saving) return; if (!dirty) return action(); leaveOpenerRef.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null); setPendingLeave(() => action); setLeaveOpen(true) }
   const save = async () => { const nextErrors = validate(draft); if (Object.keys(nextErrors).length) { const generation = instanceGenerationRef.current; setErrors(nextErrors); requestAnimationFrame(() => { if (isCurrentInstance(generation)) refs.current[Object.keys(nextErrors)[0]]?.focus() }); return false } if (!companyId) { setError("No hay empresa activa."); return false }; const generation = instanceGenerationRef.current; setSaving(true); setError(""); setConflict(false); try { const createPayload = payloadFor(draft); const result = editing && loaded ? await updateRemitoDraft(companyId, loaded.id, { ...(() => { const { origin: _origin, ...patch } = createPayload; return patch })(), expectedUpdatedAt: loaded.updatedAt } as UpdateRemitoDraftPayload) : await createRemito(companyId, createPayload); if (!isCurrentInstance(generation)) return false; const next = fromRemito(result); setLoaded(result); setDraft(next); setBaseline(next); clearRecovery(); toast.success("Borrador guardado"); if (!editing) router.replace(`/remitos/${result.id}/editar`); return true } catch (cause) { if (!isCurrentInstance(generation)) return false; const isConflict = cause instanceof ApiClientError && cause.status === 409 && cause.code === "remito_update_conflict"; setConflict(isConflict); setError(isConflict ? "Otro usuario actualizó este borrador. Tus cambios locales se conservaron." : cause instanceof Error ? cause.message : "No se pudo guardar el borrador."); return false } finally { if (isCurrentInstance(generation)) setSaving(false) } }
-  const emit = async () => { if (!loaded || dirty || locked || !companyId) return; const generation = instanceGenerationRef.current; setSaving(true); try { let cajasDispatch: CajasDispatchIntentPayload | undefined = undefined; const assignmentId = (loaded.metadata as { cajas?: { assignmentId?: string } } | null)?.cajas?.assignmentId; if (assignmentId) { const assignment = await getBoxAssignmentApi(companyId, assignmentId); if (assignment) { const payload = buildCajasDispatchPayload(assignment, loaded); if (payload) cajasDispatch = payload } } else if (loaded.surgeryId) { const assignment = await findActiveCajasAssignmentForSurgery(companyId, loaded.surgeryId); if (assignment) { const payload = buildCajasDispatchPayload(assignment, loaded); if (payload) cajasDispatch = payload } } await emitirRemito(companyId, loaded.id, cajasDispatch ? { cajasDispatch } : undefined); if (!isCurrentInstance(generation)) return; clearRecovery(); toast.success(`Remito emitido`); router.replace("/remitos") } catch (cause) { if (!isCurrentInstance(generation)) return; setError(cause instanceof Error ? cause.message : "No se pudo emitir el remito.") } finally { if (isCurrentInstance(generation)) setSaving(false) } }
-  const reload = async () => { if (!companyId || !remitoId) return; if (dirty && !window.confirm("Se descartarán los cambios locales. ¿Continuar?")) return; const generation = instanceGenerationRef.current; setLoading(true); try { const row = await fetchRemito(companyId, remitoId); if (!isCurrentInstance(generation)) return; const next = fromRemito(row); setLoaded(row); setDraft(next); setBaseline(next); clearRecovery(); setConflict(false); setError("") } finally { if (isCurrentInstance(generation)) setLoading(false) } }
+  const emit = async () => {
+    if (!loaded || dirty || locked || !companyId || saving || loading || isLoading || currentUserLoading || isAuthenticated === false) return
+    const scope = emissionRef.current
+    if (scope.pending) return
+    scope.pending = true
+    const generation = instanceGenerationRef.current
+    const isCurrent = () => isCurrentInstance(generation) && emissionRef.current === scope
+    setSaving(true); setError("")
+    try {
+      if (!scope.prepared) {
+        const intent = await buildCajasRemitoEmissionIntent(companyId, loaded)
+        if (!isCurrent()) throw new Error("El contexto cambió; la emisión fue cancelada.")
+        scope.intent = intent; scope.prepared = true
+      }
+      if (!isCurrent()) throw new Error("El contexto cambió; la emisión fue cancelada.")
+      await emitirRemito(companyId, loaded.id, scope.intent)
+      if (!isCurrent()) return
+      clearRecovery(); toast.success("Remito emitido"); router.replace("/remitos")
+    } catch (cause) {
+      if (isCurrentInstance(generation)) setError(cause instanceof Error ? cause.message : "No se pudo emitir el remito.")
+    } finally {
+      scope.pending = false
+      if (isCurrentInstance(generation)) setSaving(false)
+    }
+  }
+  const reload = async () => { if (!companyId || !remitoId) return; if (dirty && !window.confirm("Se descartarán los cambios locales. ¿Continuar?")) return; emissionRef.current = { ...emissionRef.current, pending: false, prepared: false, intent: undefined }; const generation = instanceGenerationRef.current; setLoading(true); try { const row = await fetchRemito(companyId, remitoId); if (!isCurrentInstance(generation)) return; const next = fromRemito(row); setLoaded(row); setDraft(next); setBaseline(next); clearRecovery(); setConflict(false); setError("") } finally { if (isCurrentInstance(generation)) setLoading(false) } }
   const applyPreset = () => { if (!preset?.available || dirty && !window.confirm("Este ejemplo reemplazará los cambios sin guardar. ¿Continuar?")) return; const example = preset.example; setDraft({ ...emptyDraft(), branchId: preset.branch.id, issuedBranchId: preset.branch.id, surgeryId: example.surgeryId, origin: example.origin, salidaReason: example.salidaReason, destinatarioNombre: example.recipientSnapshot.nombre ?? "", destinatarioSnapshot: example.recipientSnapshot, shippingAddressSnapshot: example.shippingAddressSnapshot, transportSnapshot: example.transportSnapshot, packageCount: example.packageCount == null ? "" : String(example.packageCount), declaredValue: example.declaredValue == null ? "" : String(example.declaredValue), metadata: example.metadata, items: example.items.map((item) => ({ ...emptyItem(), ...item, quantity: String(item.quantity) })) }) }
   if (loading || isLoading || currentUserLoading) return <WorkspaceSkeleton />
   if (error && !loaded && editing) return <LockedState message={error} />

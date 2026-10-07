@@ -117,6 +117,9 @@ export interface BoxAssignmentDetail {
       isActive: boolean;
       dispatchedQuantity?: number;
       stockScopeReferenceId?: string | null;
+      lotNumber?: string | null;
+      serialNumber?: string | null;
+      // Compatibility with legacy in-memory preparation descriptors, not the GET wire fields.
       lotNumberSnapshot?: string | null;
       serialNumberSnapshot?: string | null;
       articleReference?: { sourceArticleId: string } | null;

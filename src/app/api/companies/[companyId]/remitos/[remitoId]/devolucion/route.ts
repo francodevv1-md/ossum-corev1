@@ -43,6 +43,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       companyId: ctx.companyId,
       remitoId,
       items: body.items,
+      idempotencyKey: body.idempotencyKey,
       updatedById: ctx.actorUserId,
       prisma,
     });

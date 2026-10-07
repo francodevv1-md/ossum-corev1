@@ -19,6 +19,10 @@ export function readMailFile(file: Blob, filename: string): Promise<EmailAttachm
 }
 
 export async function loadAuthorizationFeed(companyId: string, surgeryId: string, authorizationOnly = true) {
+  if (!surgeryId) {
+    // Honest surface: the caller did not resolve a technical id; do not build a malformed URL.
+    return mapSeguimientoFeedResponse([], 100)
+  }
   const response = await apiFetch<SeguimientoFeedApiResponse>(
     `/api/companies/${encodeURIComponent(companyId)}/surgeries/${encodeURIComponent(surgeryId)}/seguimiento?take=100${authorizationOnly ? "&entryType=authorization_evidence" : ""}`
   )
@@ -27,6 +31,7 @@ export async function loadAuthorizationFeed(companyId: string, surgeryId: string
 
 /** Follow only explicit source links; never infer authorization from an unrelated image. */
 export async function loadAuthorizationAttachments(companyId: string, surgeryId: string, selected: SeguimientoEntryView, knownEntries: SeguimientoEntryView[] = [], additional: EmailAttachment[] = []): Promise<EmailAttachment[]> {
+  if (!surgeryId) throw new Error("Falta el identificador técnico de la cirugía. Actualizá la vista antes de adjuntar evidencia.")
   const attachments: EmailAttachment[] = []
   let entries = knownEntries
   let fetchedSources = false

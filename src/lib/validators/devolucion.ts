@@ -4,6 +4,7 @@
 // src/lib/services/devolucion.service.ts to keep a single source of truth.
 
 import { z } from "zod";
+import { positiveQuantity } from "./decimal18-4";
 import { DEVOLUCION_STATES, DEVOLUCION_TRANSITIONS } from "../services/devolucion.service";
 
 export { DEVOLUCION_STATES, DEVOLUCION_TRANSITIONS };
@@ -11,13 +12,6 @@ export { DEVOLUCION_STATES, DEVOLUCION_TRANSITIONS };
 export type DevolucionState = (typeof DEVOLUCION_STATES)[number];
 
 // ─── Decimal-friendly quantity schema ──────────────────────────────────────
-const positiveQuantity = z
-  .union([z.number(), z.string()])
-  .transform((value) => String(value))
-  .refine((value) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0;
-  }, "quantity must be a positive number");
 
 const optionalTraceDate = z.coerce.date().optional();
 

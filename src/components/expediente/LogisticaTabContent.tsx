@@ -13,10 +13,11 @@ import { LogisticaPanel } from "@/components/expediente/LogisticaPanel"
 import { MaterialTransitoPanel } from "@/components/expediente/MaterialTransitoPanel"
 import { RemitosPanel, type RemitosPanelRemito } from "@/components/expediente/RemitosPanel"
 import { useRemitos } from "@/hooks/useRemitos"
+import { useAuth } from "@/components/auth/AuthProvider"
 import { getRemitoDestinatarioName, getRemitoVisibleNumber, type RemitoApiItem, type RemitoApiRow } from "@/lib/api/remitos"
 import { useTrazabilidad } from "@/hooks/useTrazabilidad"
 import type { TraceItemRow } from "@/lib/api/trazabilidad"
-import { buildCajasDispatchPayload, findActiveCajasAssignmentForSurgery, type CajasDispatchIntentPayload } from "@/lib/cajas-intent"
+import { buildCajasRemitoEmissionIntent } from "@/lib/cajas-intent"
 
 type TransitPanelSource = "remitos" | "fallback"
 
@@ -121,6 +122,46 @@ function LogisticaTabContentBackend({
     transition: transitionRemito,
   } = useRemitos(remitoFilters)
   const { trace, refresh: refreshTrace } = useTrazabilidad(surgeryBackendId)
+  const { currentUser, currentUserLoading, isLoading, isAuthenticated } = useAuth()
+  const emissionKey = JSON.stringify([companyId, currentUser?.id, currentUserLoading, isLoading, isAuthenticated, surgeryBackendId, freshnessKey])
+  const emissionRef = useRef({ key: emissionKey, pendingId: null as string | null, commands: new Map<string, { version: string; intent: Awaited<ReturnType<typeof buildCajasRemitoEmissionIntent>> }>() })
+  if (emissionRef.current.key !== emissionKey) emissionRef.current = { key: emissionKey, pendingId: null, commands: new Map() }
+  const [preflight, setPreflight] = useState<{ scope: typeof emissionRef.current; id: string } | null>(null)
+  const rowsRef = useRef(backendRemitos)
+  rowsRef.current = backendRemitos
+  const generationRef = useRef(0)
+  useEffect(() => () => { generationRef.current += 1 }, [])
+
+  const emit = async (remito: RemitosPanelRemito) => {
+    const scope = emissionRef.current
+    if (scope.pendingId || remitoMutatingId) throw new Error("La emisión ya está en curso")
+    const raw = backendRemitos.find((row) => row.id === remito.apiId)
+    if (!raw) throw new Error("El remito backend no está disponible")
+    if (!companyId || !remitosReady || remitosLoading || isLoading || currentUserLoading || raw.surgeryId !== surgeryBackendId) {
+      throw new Error("El contexto de remitos no está disponible")
+    }
+    const generation = generationRef.current
+    const isCurrent = () => generationRef.current === generation && emissionRef.current === scope &&
+      rowsRef.current.some((row) => row.id === raw.id && row.updatedAt === raw.updatedAt)
+    scope.pendingId = raw.id
+    setPreflight({ scope, id: raw.id })
+    try {
+      let command = scope.commands.get(raw.id)
+      if (!command || command.version !== raw.updatedAt) {
+        const intent = await buildCajasRemitoEmissionIntent(companyId, raw)
+        if (!isCurrent()) throw new Error("El contexto cambió; la emisión fue cancelada.")
+        command = { version: raw.updatedAt, intent }
+        scope.commands.set(raw.id, command)
+      }
+      if (!isCurrent()) throw new Error("El contexto cambió; la emisión fue cancelada.")
+      const result = await emitRemito(raw.id, command.intent)
+      scope.commands.delete(raw.id)
+      return result
+    } finally {
+      scope.pendingId = null
+      if (generationRef.current === generation) setPreflight((current) => current?.scope === scope ? null : current)
+    }
+  }
 
   useEffect(() => {
     if (!hasObservedFreshnessKey.current) {
@@ -253,21 +294,8 @@ function LogisticaTabContentBackend({
                 surgery={surgery}
                 remitos={panelRemitos}
                 box={box}
-                mutatingId={remitoMutatingId}
-                onEmit={async (remito) => {
-                  let cajasDispatch: CajasDispatchIntentPayload | undefined = undefined
-                  if (companyId && surgeryBackendId) {
-                    const assignment = await findActiveCajasAssignmentForSurgery(companyId, surgeryBackendId)
-                    if (assignment) {
-                      const rawRemito = backendRemitos.find((r) => r.id === remito.apiId)
-                      if (rawRemito) {
-                        const payload = buildCajasDispatchPayload(assignment, rawRemito)
-                        if (payload) cajasDispatch = payload
-                      }
-                    }
-                  }
-                  return emitRemito(remito.apiId, cajasDispatch ? { cajasDispatch } : undefined)
-                }}
+                mutatingId={remitoMutatingId ?? (preflight?.scope === emissionRef.current ? preflight.id : null)}
+                onEmit={emit}
                 onTransition={(remito, state) => transitionRemito(remito.apiId, state)}
               />
             </div>

@@ -663,6 +663,7 @@ export async function createSeguimientoEntry(
           state: true,
           visibleNumber: true,
           deliveredAt: true,
+          updatedAt: true,
         },
       });
 
@@ -673,12 +674,23 @@ export async function createSeguimientoEntry(
             : new Date();
 
         await tx.remito.update({
-          where: { id: remito.id },
+          where: {
+            id: remito.id,
+            companyId: input.companyId,
+            surgeryId: input.surgeryId,
+            state: remito.state,
+            updatedAt: remito.updatedAt,
+          },
           data: {
             state: "Entregado",
             deliveredAt: remito.deliveredAt ?? deliveredAt,
             updatedById: input.authorId,
           },
+        }).catch((error: unknown) => {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+            throw conflict("Remito changed. Reload before confirming delivery.", "remito_state_conflict");
+          }
+          throw error;
         });
 
         await createAuditEvent({

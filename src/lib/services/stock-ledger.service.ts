@@ -326,6 +326,8 @@ export async function getStockAvailability(
     where: { companyId },
     select: {
       articleId: true,
+      remitoId: true,
+      remitoItemId: true,
       movementType: true,
       quantity: true,
       lotCode: true,
@@ -339,12 +341,14 @@ export async function getStockAvailability(
   const activeRemitos = await db.remito.findMany({
     where: {
       companyId,
-      state: { in: ["Emitido", "En tránsito", "En transito", "Enviado"] },
+      state: { in: ["Emitido", "En_transito", "En tránsito", "En transito", "Enviado"] },
       deliveredAt: null,
     },
     select: {
+      id: true,
       items: {
         select: {
+          id: true,
           itemId: true,
           sku: true,
           quantity: true,
@@ -377,6 +381,7 @@ export async function getStockAvailability(
   const articleExpiringMap = new Map<string, boolean>();
   const articleExpiredMap = new Map<string, boolean>();
   const articleLastMovementMap = new Map<string, Date>();
+  const postedDispatchByLine = new Map<string, Prisma.Decimal>();
 
   const now = new Date();
   const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
@@ -385,6 +390,11 @@ export async function getStockAvailability(
     const delta = calculateMovementDelta(m.movementType, m.quantity);
     const current = articlePhysicalMap.get(m.articleId) || 0;
     articlePhysicalMap.set(m.articleId, current + delta);
+    if (m.remitoId && m.remitoItemId && (m.movementType === "DISPATCH_OUT" || m.movementType === "RETURN_IN")) {
+      const key = JSON.stringify([m.remitoId, m.remitoItemId, m.articleId]);
+      const quantity = m.quantity.abs();
+      postedDispatchByLine.set(key, (postedDispatchByLine.get(key) ?? new Prisma.Decimal(0)).plus(m.movementType === "DISPATCH_OUT" ? quantity : quantity.negated()));
+    }
 
     if (m.lotCode || m.serialNumber) {
       const set = articleLotsMap.get(m.articleId) || new Set<string>();
@@ -407,14 +417,22 @@ export async function getStockAvailability(
     }
   }
 
-  // Build in-transit map per article (by articleId or sku)
+  // Resolve legacy SKU-only lines once; never mix the SKU and technical-ID namespaces.
+  const byId = new Map(eligibleArticles.map((article) => [article.id, article.id]));
+  const bySku = new Map(eligibleArticles.map((article) => [article.sku, article.id]));
+  const articleKey = (item: { itemId: string | null; sku: string | null }) => item.itemId ? byId.get(item.itemId) : item.sku ? bySku.get(item.sku) : undefined;
+  // Transit is informational. Only the unposted documentary remainder reduces availability.
   const inTransitMap = new Map<string, number>();
+  const unpostedTransitMap = new Map<string, number>();
   for (const remito of activeRemitos) {
     for (const item of remito.items) {
-      const key = item.itemId || item.sku || "";
+      const key = articleKey(item);
       if (!key) continue;
-      const netTransit = Math.max(0, item.quantity.toNumber() - item.returnedQuantity.toNumber());
-      inTransitMap.set(key, (inTransitMap.get(key) || 0) + netTransit);
+      const netTransit = Prisma.Decimal.max(0, item.quantity.minus(item.returnedQuantity));
+      const posted = Prisma.Decimal.max(0, postedDispatchByLine.get(JSON.stringify([remito.id, item.id, key])) ?? 0);
+      const unposted = Prisma.Decimal.max(0, netTransit.minus(posted));
+      inTransitMap.set(key, (inTransitMap.get(key) || 0) + netTransit.toNumber());
+      unpostedTransitMap.set(key, (unpostedTransitMap.get(key) || 0) + unposted.toNumber());
     }
   }
 
@@ -422,7 +440,7 @@ export async function getStockAvailability(
   const reservedMap = new Map<string, number>();
   for (const remito of pendingRemitos) {
     for (const item of remito.items) {
-      const key = item.itemId || item.sku || "";
+      const key = articleKey(item);
       if (!key) continue;
       reservedMap.set(key, (reservedMap.get(key) || 0) + item.quantity.toNumber());
     }
@@ -431,9 +449,9 @@ export async function getStockAvailability(
   // 5. Aggregate projection for each article
   const allItems: ArticleStockAvailability[] = articles.map((article) => {
     const physical = articlePhysicalMap.get(article.id) || 0;
-    const inTransit = inTransitMap.get(article.id) || inTransitMap.get(article.sku) || 0;
-    const reserved = reservedMap.get(article.id) || reservedMap.get(article.sku) || 0;
-    const available = Math.max(0, physical - inTransit - reserved);
+    const inTransit = inTransitMap.get(article.id) || 0;
+    const reserved = reservedMap.get(article.id) || 0;
+    const available = Math.max(0, physical - (unpostedTransitMap.get(article.id) || 0) - reserved);
     const commProfile = article.commercialProfiles?.[0];
     const cost = commProfile ? commProfile.referenceCost.toNumber() : 0;
     const price = commProfile ? commProfile.referenceSalePrice.toNumber() : 0;
