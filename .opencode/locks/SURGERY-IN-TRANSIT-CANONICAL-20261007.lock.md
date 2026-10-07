@@ -1,0 +1,24 @@
+# Surgery in_transit canonical state ownership
+
+- task: SURGERY-IN-TRANSIT-CANONICAL-20261007
+- role: Frontend UI / directed implementation
+- selected model: openai/gpt-6
+- status: editing
+- owner: GPT-6.1 in_transit implementer
+- owned files:
+  - src/lib/validators/surgery.validator.ts (CX_STATUS, CX_STATUS_LABELS, UI_TO_CANONICAL, CX_STATUS_TRANSITIONS, mapUiToCanonicalCxStatus)
+  - src/lib/api/surgery-adapter.ts (normalizeSurgeryState: in_transit → "En tránsito")
+  - src/lib/api/backend-surgeries.ts (mapUiStateToCanonicalCxStatus: En tránsito/in_transit/in transit → in_transit)
+  - src/lib/services/surgery.service.ts (no edits; updateSurgeryCxStatus already uses validateCxStatusTransition which now recognizes in_transit)
+  - src/__tests__/unit/surgery-legacy-state-removal.test.ts (refresh in_transit assertions; preserve other 28 tests)
+  - src/__tests__/unit/automations-terminal.test.ts (no edits; in_transit is non-terminal)
+  - src/__tests__/unit/in-transit-canonical.test.ts (new)
+  - knowledge/specs/SURGERY-IN-TRANSIT-CANONICAL-20261007/**
+  - knowledge/worklog/SURGERY_IN_TRANSIT_CANONICAL_20261007.md
+  - this lock
+- approval: Franco explicitly requested this correction as a separate package, distinct from SURGERY-STATUS-BACKEND-AUTHORITY-20261007, excluding schema migrations (cxStatus is a String field, not a Prisma enum), Auth/roles productive, production/staging, real data, deploy, push and PR.
+- prior overlap check: SURGERY-STATUS-BACKEND-AUTHORITY-20261007 released; SURGERY-BUDGET-CONTRACT-STABILITY-20261007 status editing. SURGERY-PALETTE-CORRECTION released.
+- allowed commands: read/search/diff, focused Vitest, scoped TypeScript, local commit.
+- forbidden: schema migrations, Prisma enum creation, Auth/roles, dependency installs, live DB writes, server restarts, push, PR, merge, deploy, destructive Git, foreign hunk overwrites, changes to executeScheduledSurgery scheduled gate.
+- validation: failing reproduction first (surgery-adapter with cxStatus=in_transit returning Pendiente), focused regression after each fix, scoped tsc with incremental:false; preservation of the scheduled canonical state.
+- stop: ownership overlap, ambiguous business rule, schema/Auth/production data required.

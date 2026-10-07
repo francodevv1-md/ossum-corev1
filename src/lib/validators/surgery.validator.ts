@@ -60,6 +60,7 @@ export const CX_STATUS = [
   "authorized",
   "pending",
   "scheduled",
+  "in_transit",
   "performed",
   "finalized",
   "suspended",
@@ -97,6 +98,7 @@ export const CX_STATUS_LABELS: Record<CxStatus, string> = {
   authorized: "Autorizada",
   pending: "Pendiente",
   scheduled: "Programada",
+  in_transit: "En tránsito",
   performed: "Realizada",
   finalized: "Finalizada",
   suspended: "Suspendida",
@@ -118,11 +120,12 @@ export const CX_TERMINAL_STATUSES = ["finalized", "cancelled"] as const satisfie
 
 export const CX_STATUS_TRANSITIONS: Partial<Record<CxStatus, readonly CxStatus[]>> = {
   unauthorized: ["authorized", "pending", "scheduled", "suspended", "cancelled"],
-  authorized: ["pending", "scheduled", "suspended", "cancelled"],
-  pending: ["authorized", "scheduled", "suspended", "cancelled"],
-  scheduled: ["performed", "suspended", "cancelled"],
+  authorized: ["pending", "scheduled", "in_transit", "suspended", "cancelled"],
+  pending: ["authorized", "scheduled", "in_transit", "suspended", "cancelled"],
+  scheduled: ["in_transit", "performed", "suspended", "cancelled"],
+  in_transit: ["performed", "suspended", "cancelled"],
   performed: ["finalized", "suspended"],
-  suspended: ["authorized", "pending", "scheduled", "cancelled"],
+  suspended: ["authorized", "pending", "scheduled", "in_transit", "cancelled"],
   cancelled: [],
   finalized: [],
 };
@@ -130,14 +133,18 @@ export const CX_STATUS_TRANSITIONS: Partial<Record<CxStatus, readonly CxStatus[]
 const UI_TO_CANONICAL: Record<string, CxStatus> = {
   pendiente: "pending",
   autorizada: "authorized",
-  "en transito": "scheduled",
+  "en tránsito": "in_transit",
+  "en transito": "in_transit",
   realizada: "performed",
   finalizada: "finalized",
   suspendida: "suspended",
   cancelada: "cancelled",
   "sin autorizar": "unauthorized",
   scheduled: "scheduled",
+  programada: "scheduled",
   programmed: "scheduled",
+  "in transit": "in_transit",
+  in_transit: "in_transit",
 };
 
 export function mapUiToCanonicalCxStatus(value: string): CxStatus | null {

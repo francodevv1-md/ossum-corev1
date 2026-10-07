@@ -61,6 +61,7 @@ export function mapUiStateToCanonicalCxStatus(state?: string | null): string {
     case "en transito":
     case "in transit":
     case "in_transit":
+      return "in_transit"
     case "scheduled":
     case "scheduled":
     case "programada":

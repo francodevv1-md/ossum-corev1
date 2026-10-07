@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../../src/__tests__/setup.ts",
+    "../../../src/lib/api/surgery-adapter.ts",
+    "../../../src/lib/api/backend-surgeries.ts",
+    "../../../src/lib/validators/surgery.validator.ts",
+    "../../../src/__tests__/unit/in-transit-canonical.test.ts"
+  ]
+}

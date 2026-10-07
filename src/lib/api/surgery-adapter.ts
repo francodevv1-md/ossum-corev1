@@ -422,6 +422,11 @@ function normalizeSurgeryState(status: string | null): SurgeryState {
     case "en tránsito":
     case "en transito":
       return "En tránsito"
+    case "in transit":
+    case "in_transit":
+    case "en tránsito":
+    case "en transito":
+      return "En tránsito"
     case "performed":
     case "realizada":
       return "Realizada"
