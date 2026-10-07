@@ -51,5 +51,102 @@ node knowledge/specs/SURGERY-COMPROBANTES-CONNECTED-20261006/qa/browser.mjs
 4. All four reads must complete successfully; otherwise show error/reload, not a partial list presented as complete. Paginate every endpoint.
 5. Snapshots include company/surgery/reload revision; old responses and already-open details cannot survive scope changes. No animated exit of stale rows.
 6. Budgets/remittances/payments are not invoice debt. Invoice balances come from backend, zero remains zero, currencies stay distinct. Payment amount is receipt total; detail shows only imputations to this CX's invoices.
-7. Open means actual loaded detail. PDF/print/edit are **explicitly unavailable** here until a real document-specific integration is tested. Do not reuse fake DocumentViewerDialog data/download toast or mutate via FiscalEvidenceDialog in this read-only register.
+7. Open means actual loaded detail. Follow-up step 1 enables NR browser printing only. PDF download/edit and other types' printing remain unavailable. Do not reuse fake DocumentViewerDialog data/download toast or mutate via FiscalEvidenceDialog in this read-only register.
 8. Run the exact four-file suite after edits; unchanged test hashes do not validate changed consumers.
+
+## Follow-up step 1 — remito printing
+- Approved scope: NR print only; step 2 waits for explicit user confirmation. One product source changed; no test files changed.
+- Synthetic check below mounts the existing actual source fixture and intercepts detail GET only. Success invokes printing of backend row HTML; failures/popup blocking/scope rejection/reload are checked. Native OS print UI is not certified by a headless browser.
+- TypeScript Diagnose: first run reported three nullable date arguments to `formatDate`; API dates are nullable. Fixed only those presentation calls with explicit absent-date placeholders; no helper/type changes.
+- Replay: start the isolated Vite server above; extract the `js remito-print-check` fence to Node stdin with `--input-type=module` from repo root. No temporary test file required.
+- Results: **27/27 existing tests PASS**, scoped TypeScript PASS after date guards, isolated component build PASS (2126 modules), original synthetic desktop/mobile/dark/reduced-motion replay PASS, new print check PASS. No test-file or QA-fixture edits. Full application build/live DB/physical printer/OS dialog not certified.
+- Directed independent read-only review: no blocking findings; recorded tests reviewed, not independently rerun.
+- Harness Diagnose: Windows PowerShell's default stdin encoding mangled accented selector text; reran with explicit UTF-8 input/output. No product or fixture change for that failure.
+
+```powershell
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+$text = Get-Content -Raw -Encoding UTF8 'knowledge/specs/SURGERY-COMPROBANTES-CONNECTED-20261006/VALIDATION.md'
+$code = [regex]::Match($text, '(?s)```js remito-print-check\r?\n(.*?)\r?\n```').Groups[1].Value
+$code | node --input-type=module -
+```
+
+```js remito-print-check
+import { chromium } from "./node_modules/playwright/index.mjs"
+import assert from "node:assert/strict"
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage()
+  const errors = []
+  page.on("pageerror", error => errors.push(error.message))
+  await page.goto("http://127.0.0.1:5187/", { waitUntil: "networkidle" })
+  await page.getByRole("button", { name: "Acciones NR 93" }).waitFor()
+  await page.evaluate(() => {
+    const originalFetch = window.fetch
+    const originalOpen = window.open.bind(window)
+    window.__printQA = { mode: "success", prints: 0, requests: 0, html: "", popup: null }
+    window.open = (...args) => {
+      if (window.__printQA.mode === "blocked") return null
+      const popup = originalOpen(...args)
+      window.__printQA.popup = popup
+      popup.print = () => { window.__printQA.prints++; window.__printQA.html = popup.document.documentElement.outerHTML }
+      return popup
+    }
+    window.fetch = async (input, init) => {
+      const url = new URL(String(input), location.origin)
+      if (url.pathname !== "/api/companies/company-qa/remitos/remito-qa-001") return originalFetch(input, init)
+      if ((init?.method ?? "GET") !== "GET") throw new Error("Unexpected write")
+      const qa = window.__printQA
+      qa.requests++
+      if (qa.mode === "late") await new Promise(resolve => { qa.release = resolve })
+      if (qa.mode === "error") return new Response(JSON.stringify({ error: { message: "synthetic failure" } }), { status: 503 })
+      const row = {
+        id: "remito-qa-001", companyId: "company-qa", surgeryId: "surgery-qa", visibleNumber: 93,
+        state: "Entregado", origin: "manual", createdAt: "2026-10-01", issuedAt: null, deliveredAt: null, returnedAt: null,
+        destinatarioSnapshot: { nombre: "Hospital <script>invalid()</script>", cuitDni: "30-12345678-9" },
+        shippingAddressSnapshot: { domicilio: "Dirección de entrega" }, metadata: { observaciones: "Observación real" },
+        items: [{ sku: "ART-1", description: "Material real <b>sin ejecutar</b>", quantity: "2", unit: "u", returnedQuantity: "1" }],
+      }
+      if (qa.mode === "company") row.companyId = "another-company"
+      if (qa.mode === "surgery") row.surgeryId = "another-surgery"
+      if (qa.mode === "id") row.id = "another-remito"
+      return new Response(JSON.stringify({ data: row }), { headers: { "Content-Type": "application/json" } })
+    }
+  })
+  const print = async () => {
+    await page.getByRole("button", { name: "Acciones NR 93" }).click()
+    const menu = page.getByRole("menu")
+    assert.equal(await menu.getByRole("menuitem", { name: "Descargar PDF · No disponible" }).getAttribute("aria-disabled"), "true")
+    await menu.getByRole("menuitem", { name: "Imprimir", exact: true }).click()
+  }
+  await print()
+  await page.waitForFunction(() => window.__printQA.prints === 1)
+  const html = await page.evaluate(() => window.__printQA.html)
+  assert.ok(html.includes("Material real &lt;b&gt;sin ejecutar&lt;/b&gt;"))
+  assert.ok(html.includes("Hospital &lt;script&gt;invalid()&lt;/script&gt;"))
+  assert.ok(html.includes("Dirección de entrega") && html.includes("Observación real"))
+  assert.ok(!html.includes("El recorrido documental"))
+  await page.evaluate(() => window.__printQA.popup.close())
+  for (const mode of ["blocked", "error", "company", "surgery", "id"]) {
+    await page.evaluate(mode => { window.__printQA.mode = mode; window.__printQA.prints = 0 }, mode)
+    await print()
+    await page.getByRole("alert").waitFor()
+    const result = await page.evaluate(() => ({ prints: window.__printQA.prints, closed: window.__printQA.popup.closed }))
+    assert.equal(result.prints, 0)
+    assert.equal(result.closed, true)
+  }
+  await page.evaluate(() => { window.__printQA.mode = "late" })
+  await print()
+  await page.getByRole("status").filter({ hasText: "Preparando remito" }).waitFor()
+  await page.getByRole("button", { name: "Recargar" }).click()
+  await page.getByRole("button", { name: "Acciones NR 93" }).waitFor()
+  await page.evaluate(() => window.__printQA.release())
+  assert.equal(await page.evaluate(() => window.__printQA.popup.closed), true)
+  assert.equal(await page.evaluate(() => window.__printQA.prints), 0)
+  await page.evaluate(() => { window.__printQA.mode = "success" })
+  await print()
+  await page.waitForFunction(() => window.__printQA.prints === 1)
+  await page.evaluate(() => window.__printQA.popup.close())
+  assert.deepEqual(errors, [])
+  console.log("PASS: real popup/document HTML, escaping, unavailable download, popup blocker, HTTP error, company/surgery/id rejection, late reload cancellation, retry")
+} finally { await browser.close() }
+```

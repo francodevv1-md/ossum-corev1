@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
 import { FileText, Search, RefreshCw, ArrowUpRight, MoreHorizontal, Download, Printer, Pencil, CircleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,8 @@ import type { Surgery, Comprobante, Presupuesto } from "@/types"
 import type { ResumenCobranzaSurgery } from "@/lib/cobros.utils"
 import { COMPROBANTE_LABELS, comprobanteRecords, documentMoney, type ComprobanteType } from "./comprobantes-model"
 import { ComprobanteDetail } from "./ComprobanteDetail"
+import { fetchRemito } from "@/lib/api/remitos"
+import { buildOperationalRemitoPrintHtml } from "@/lib/remito-print-template"
 
 interface ComprobantesAsociadosProps {
   surgery: Surgery
@@ -35,16 +37,27 @@ export function ComprobantesAsociados({ surgery }: ComprobantesAsociadosProps) {
   const { activeCompany } = useAuth()
   const data = useSurgeryComprobantes(activeCompany?.id, surgery.backendId)
   // Reset filters and selected record on company/surgery changes. Do not animate old-scope exits.
-  return <ComprobantesRegister key={JSON.stringify([activeCompany?.id, surgery.backendId])} data={data} />
+  return <ComprobantesRegister key={JSON.stringify([activeCompany?.id, surgery.backendId])} data={data} companyId={activeCompany?.id} surgeryId={surgery.backendId} />
 }
 
-function ComprobantesRegister({ data }: { data: ReturnType<typeof useSurgeryComprobantes> }) {
+function ComprobantesRegister({ data, companyId, surgeryId }: { data: ReturnType<typeof useSurgeryComprobantes>; companyId?: string; surgeryId?: string }) {
   const reducedMotion = useReducedMotion()
   const indicatorId = useId()
   const [search, setSearch] = useState("")
   const [type, setType] = useState<ComprobanteType | "all">("all")
   const [state, setState] = useState("all")
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [printing, setPrinting] = useState(false)
+  const [printError, setPrintError] = useState<string | null>(null)
+  const pendingPrint = useRef<Window | null>(null)
+  useEffect(() => {
+    setPrinting(false)
+    setPrintError(null)
+    return () => {
+      pendingPrint.current?.close()
+      pendingPrint.current = null
+    }
+  }, [data.status])
   const records = comprobanteRecords(data.budgets, data.invoices, data.remittances, data.payments)
   const states = [...new Set(records.map(row => row.state))].sort()
   const query = search.trim().toLocaleLowerCase("es-AR")
@@ -56,6 +69,64 @@ function ComprobantesRegister({ data }: { data: ReturnType<typeof useSurgeryComp
     : data.status === "missing-identity" ? "Esta cirugía no tiene identidad backend. No se muestran datos locales."
     : "Cargando comprobantes vinculados…"
 
+  async function printRemito(id: string) {
+    if (!ready || !companyId || !surgeryId || pendingPrint.current) return
+    setPrintError(null)
+    // Open during the user gesture, before awaiting HTTP, to avoid popup blockers.
+    const popup = window.open("", "_blank", "width=900,height=700")
+    if (!popup) {
+      setPrintError("El navegador bloqueó la ventana de impresión. Permití las ventanas emergentes y volvé a intentar.")
+      return
+    }
+    pendingPrint.current = popup
+    setPrinting(true)
+    try {
+      popup.opener = null
+      popup.document.body.textContent = "Preparando remito para imprimir…"
+      const remito = await fetchRemito(companyId, id)
+      if (pendingPrint.current !== popup || popup.closed) return
+      if (remito.id !== id || remito.companyId !== companyId || remito.surgeryId !== surgeryId) throw new Error("Remito fuera de alcance")
+      const recipient = remito.destinatarioSnapshot
+      const html = buildOperationalRemitoPrintHtml({
+        title: `Remito ${remito.visibleNumber ?? "Sin numeración"}`,
+        documentNumber: String(remito.visibleNumber ?? "Sin numeración"),
+        state: remito.state, origin: remito.origin,
+        issuedAt: remito.issuedAt ? formatDate(remito.issuedAt) : "—", createdAt: formatDate(remito.createdAt),
+        destinationName: recipient?.nombre, cuitDni: recipient?.cuitDni,
+        address: remito.shippingAddressSnapshot?.domicilio ?? recipient?.domicilio,
+        locality: remito.shippingAddressSnapshot?.localidad ?? recipient?.localidad,
+        province: remito.shippingAddressSnapshot?.provincia ?? recipient?.provincia,
+        surgeryLabel: remito.surgeryId, boxId: remito.boxId, presupuestoId: remito.presupuestoId,
+        internalId: remito.id,
+        observations: typeof remito.metadata?.observaciones === "string" ? remito.metadata.observaciones : null,
+        metaFields: [
+          { label: "Entregado", value: remito.deliveredAt ? formatDate(remito.deliveredAt) : "—" },
+          { label: "Devuelto", value: remito.returnedAt ? formatDate(remito.returnedAt) : "—" },
+          { label: "Sucursal", value: remito.branchId },
+          { label: "Motivo salida", value: remito.salidaReason },
+          { label: "Transporte", value: remito.transportSnapshot?.nombre },
+          { label: "Bultos", value: remito.packageCount },
+          { label: "Valor declarado", value: remito.declaredValue },
+        ],
+        includeReturned: true,
+        items: remito.items.map(item => ({ code: item.sku, description: item.description, quantity: item.quantity, unit: item.unit, returnedQuantity: item.returnedQuantity })),
+      })
+      popup.document.open()
+      popup.document.write(html)
+      popup.document.close()
+      popup.focus()
+      popup.print()
+    } catch {
+      popup.close()
+      if (pendingPrint.current === popup) setPrintError("No pudimos preparar la impresión de este remito. Volvé a intentar.")
+    } finally {
+      if (pendingPrint.current === popup) {
+        pendingPrint.current = null
+        setPrinting(false)
+      }
+    }
+  }
+
   return (
     <div className="space-y-4 text-slate-900 dark:text-slate-100">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -65,6 +136,9 @@ function ComprobantesRegister({ data }: { data: ReturnType<typeof useSurgeryComp
           <RefreshCw className="size-3.5" aria-hidden />Recargar
         </Button>
       </div>
+
+      {printing && ready && <p role="status" className="text-xs text-muted-foreground">Preparando remito para imprimir…</p>}
+      {printError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{printError}</p>}
 
       {!ready && data.status !== "error" && <div role="status" className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">{statusText}</div>}
       {data.status === "error" && <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
@@ -118,7 +192,7 @@ function ComprobantesRegister({ data }: { data: ReturnType<typeof useSurgeryComp
               </DropdownMenuTrigger><DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuItem onSelect={() => setSelectedKey(row.key)}><ArrowUpRight className="size-4" />Abrir comprobante</DropdownMenuItem>
                 <DropdownMenuItem disabled><Download className="size-4" />Descargar PDF · No disponible</DropdownMenuItem>
-                <DropdownMenuItem disabled><Printer className="size-4" />Imprimir · No disponible</DropdownMenuItem>
+                <DropdownMenuItem disabled={row.type !== "NR" || printing} onSelect={() => { void printRemito(row.id) }}><Printer className="size-4" />{row.type === "NR" ? "Imprimir" : "Imprimir · No disponible"}</DropdownMenuItem>
                 <DropdownMenuItem disabled><Pencil className="size-4" />Modificar · No disponible</DropdownMenuItem>
               </DropdownMenuContent></DropdownMenu></TableCell>
             </motion.tr>)}
