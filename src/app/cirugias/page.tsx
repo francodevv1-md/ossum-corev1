@@ -263,6 +263,26 @@ export default function CirugiasPage() {
     filters.clearFilters()
   }
 
+  const hasSearch = Boolean(filters.search.trim()) || filters.searchChips.length > 0
+  const searchMatchCount = useMemo(() => hasSearch
+    ? filters.filterSearchData(store.surgeries).length
+    : 0, [hasSearch, filters.filterSearchData, store.surgeries])
+  const searchFeedback = hasSearch && filtered.length === 0 ? (
+    <div role="status" aria-live="polite" className="border-b border-slate-300 bg-amber-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-800 dark:bg-amber-950/20 dark:text-slate-200">
+      {searchMatchCount > 0 ? (
+        <>
+          <p>La búsqueda coincide con {searchMatchCount} cirugías, pero otros filtros las ocultan.</p>
+          <button type="button" className="mt-1 font-semibold underline" onClick={() => {
+            presetOwnershipRef.current = null
+            filters.clearFilters(true)
+          }}>Quitar otros filtros y conservar búsqueda</button>
+        </>
+      ) : (
+        <p>No hay coincidencias para esta búsqueda en las cirugías cargadas. Revisá el texto y la empresa/sucursal activa.</p>
+      )}
+    </div>
+  ) : null
+
   const opTabCounts = useMemo(() => {
     return computeOpTabCounts(store.surgeries, (id) => store.getConsumoBySurgeryId(id)?.state ?? null)
   }, [store.surgeries, store])
@@ -458,8 +478,10 @@ export default function CirugiasPage() {
           // when filter UX becomes a bottleneck.
           <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">
             <MobileCirugiasToolbar
-              search={filters.search}
-              onSearchChange={filters.setSearch}
+              key={backendSurgeries.trustContextKey}
+              surgeries={store.surgeries}
+              chips={filters.searchChips}
+              onChipsChange={filters.setSearchChips}
               activeFilterCount={filters.activeFilterCount}
               hasActiveFilters={filters.hasActiveFilters}
               onClearFilters={clearAllFilters}
@@ -467,6 +489,7 @@ export default function CirugiasPage() {
               onNewSurgery={actions.openNewSurgeryDialog}
               resultCount={filtered.length}
             />
+            {searchFeedback}
             <div className="min-h-0 flex-1 overflow-y-auto">
               <MobileCirugiasList
                 surgeries={filtered}
@@ -545,9 +568,10 @@ export default function CirugiasPage() {
             {/* ═══════════════════════════════════════════════════════════ */}
             <div className="mx-1 mt-1 shrink-0 border border-slate-300 bg-gradient-to-b from-white via-slate-50 to-slate-100/80 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950/90 lg:mx-2 lg:mt-2">
               <CirugiasModuleBar
+                key={backendSurgeries.trustContextKey}
+                surgeries={store.surgeries}
                 searchChips={filters.searchChips}
                 onSearchChipsChange={filters.setSearchChips}
-                onSmartSearch={() => {}}
                 colVisOpen={columns.colVisOpen}
                 setColVisOpen={columns.setColVisOpen}
                 columns={CIRUGIAS_COLUMNS}
@@ -659,6 +683,7 @@ export default function CirugiasPage() {
 
             {/* ── Table & Context Tray Container ── */}
             <div className="mx-1 -mt-px flex min-h-0 flex-1 flex-col border border-slate-300 border-t-0 bg-white dark:border-slate-800 dark:bg-slate-950 lg:mx-2">
+              {searchFeedback}
               <div className="min-h-0 min-w-0 flex-1">
                 <CirugiasDataGrid
                   data={filtered}

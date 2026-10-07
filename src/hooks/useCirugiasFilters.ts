@@ -13,6 +13,7 @@ import type { FilterChip, SearchChip, DateFilter } from "@/lib/cirugias.types"
 import { ALL_STATES, FACTURACION_OPTIONS } from "@/lib/cirugias.constants"
 import { getFacturacionStatus } from "@/lib/cirugias.utils"
 import { normalizeAccents } from "@/lib/utils"
+import { matchesSurgerySearchText, normalizeSurgerySearch } from "@/lib/cirugias/search"
 
 export function useCirugiasFilters() {
   const store = useOrtoTrackStore()
@@ -93,6 +94,9 @@ export function useCirugiasFilters() {
 
   // ── CHATZAI-025: Match surgery against a single search chip ──
   const matchesSearchChip = useCallback((surgery: Surgery, chip: SearchChip): boolean => {
+    if (chip.match === "text" || chip.field === "general") {
+      return matchesSurgerySearchText(surgery, chip.value, chip.field)
+    }
     switch (chip.field) {
       case "medico": {
         // Match by contacto ID (via surgeonContactId) or by surgeon name
@@ -134,19 +138,6 @@ export function useCirugiasFilters() {
           if (normalizeAccents(surgery.institution || "").includes(q)) return true
         }
         return false
-      }
-      case "general": {
-        // General search: search across all text fields (accent-insensitive)
-        const q = normalizeAccents(chip.value)
-        return (
-          normalizeAccents(surgery.patient || "").includes(q) ||
-          normalizeAccents(surgery.surgeon || "").includes(q) ||
-          normalizeAccents(surgery.institution || "").includes(q) ||
-          normalizeAccents(surgery.client || "").includes(q) ||
-          normalizeAccents(surgery.prNumber || "").includes(q) ||
-          normalizeAccents(surgery.expedienteNumber || "").includes(q) ||
-          normalizeAccents(surgery.id).includes(q)
-        )
       }
       default:
         return false
@@ -195,33 +186,25 @@ export function useCirugiasFilters() {
     }
   }, [store])
 
+  const filterSearchData = useCallback((data: Surgery[]): Surgery[] => {
+    const filtered = applySearchChips(data, searchChips)
+    const q = normalizeSurgerySearch(search)
+    if (!q) return filtered
+    return filtered.filter((s) => {
+      if (matchesSurgerySearchText(s, q)) return true
+      if (searchInPR && store.getPresupuestosBySurgeryId(s.id).some(p => normalizeSurgerySearch(p.id).includes(q))) return true
+      if (searchInNR && store.getRemitosBySurgeryId(s.id).some(r => normalizeSurgerySearch(r.id).includes(q))) return true
+      if (searchInFV) {
+        return normalizeSurgerySearch(s.facturaNumber || "").includes(q)
+          || store.getComprobantesBySurgeryId(s.id).some(c => c.type === "FV" && normalizeSurgerySearch(c.number || "").includes(q))
+      }
+      return false
+    })
+  }, [applySearchChips, searchChips, search, searchInPR, searchInNR, searchInFV, store])
+
   // ── Filtered & sorted data (sort handled separately) ──
   const filterData = useCallback((data: Surgery[]): Surgery[] => {
-    let filtered = data
-
-    // CHATZAI-025: Search chips take precedence over simple search
-    // If search chips exist, use them for filtering
-    if (searchChips.length > 0) {
-      filtered = applySearchChips(filtered, searchChips)
-    } else if (search) {
-      // Legacy simple search — always searches patient; extended fields via "Buscar también en" (accent-insensitive)
-      const q = normalizeAccents(search)
-      filtered = filtered.filter((s) => {
-        const prId = store.getPresupuestosBySurgeryId(s.id)[0]?.id || ""
-        const nrId = store.getRemitosBySurgeryId(s.id)[0]?.id || ""
-        const fvNum = s.facturaNumber || store.getComprobantesBySurgeryId(s.id).find(c => c.type === "FV")?.number || ""
-
-        let match = normalizeAccents(s.patient || "").includes(q)
-        if (!match && searchInMedico) match = normalizeAccents(s.surgeon || "").includes(q)
-        if (!match && searchInInstitucion) match = normalizeAccents(s.institution || "").includes(q)
-        if (!match && searchInCliente) match = normalizeAccents(s.client || "").includes(q)
-        if (!match && searchInPR) match = normalizeAccents(s.prNumber || "").includes(q) || normalizeAccents(prId).includes(q)
-        if (!match && searchInExpediente) match = normalizeAccents(s.expedienteNumber || "").includes(q)
-        if (!match && searchInNR) match = normalizeAccents(nrId).includes(q)
-        if (!match && searchInFV) match = normalizeAccents(fvNum).includes(q)
-        return match
-      })
-    }
+    let filtered = filterSearchData(data)
 
     // KPI filter
     if (kpiFilter) {
@@ -366,12 +349,12 @@ export function useCirugiasFilters() {
     }
 
     return filtered
-  }, [search, searchChips, kpiFilter, stateFilters, classFilters, clientFilters, institutionFilters, prepFilters, docFilters, factFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter, facturacionStatus, store, searchInMedico, searchInInstitucion, searchInCliente, searchInPR, searchInExpediente, searchInNR, searchInFV, applySearchChips, getSurgeryDateForType])
+  }, [filterSearchData, kpiFilter, stateFilters, classFilters, clientFilters, institutionFilters, prepFilters, docFilters, factFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter, facturacionStatus, store, getSurgeryDateForType])
 
   // ── Active filter chips ──
   const activeFilterChips = useMemo((): FilterChip[] => {
     const chips: FilterChip[] = []
-    if (search) chips.push({ key: "search", label: `Paciente: "${search}"`, onClear: () => setSearch("") })
+    if (search) chips.push({ key: "search", label: `Búsqueda: "${search}"`, onClear: () => setSearch("") })
     if (kpiFilter) chips.push({ key: "kpi", label: kpiFilter === "En preparación" ? "KPI Preparación: En preparación" : `KPI: ${kpiFilter === "docIncompleta" ? "Doc. incompleta" : kpiFilter === "pendFacturar" ? "Pend. facturar" : kpiFilter}`, onClear: () => setKpiFilter(null) })
     stateFilters.forEach(f => chips.push({ key: `state-${f}`, label: `Estado: ${f}`, onClear: () => setStateFilters(prev => prev.filter(x => x !== f)) }))
     prepFilters.forEach(f => chips.push({ key: `prep-${f}`, label: `Prep: ${f}`, onClear: () => setPrepFilters(prev => prev.filter(x => x !== f)) }))
@@ -491,9 +474,18 @@ export function useCirugiasFilters() {
   }, [search, searchChips, kpiFilter, stateFilters, prepFilters, docFilters, factFilters, clientFilters, classFilters, institutionFilters, coordinadorFilters, urgenteFilter, provinciaFilters, vendedorFilters, dateFrom, dateTo, dateFilters, hasExtendedSearch, expedienteNumFilter, nrNumFilter, fvNumFilter, numeroAutorizacionFilter, instrumentadorFilter, localidadFilter, fechaAutorizacionFrom, fechaAutorizacionTo, fechaFacturaFrom, fechaFacturaTo, sinFechaCx, conPrFilter, conConsumoFilter, conFacturaFilter, selectedPreset])
 
   // ── Clear all filters (including search chips) ──
-  const clearFilters = useCallback(() => {
-    setSearch("")
-    setSearchChips([])
+  const clearFilters = useCallback((preserveSearch = false) => {
+    if (!preserveSearch) {
+      setSearch("")
+      setSearchChips([])
+      setSearchInMedico(false)
+      setSearchInInstitucion(false)
+      setSearchInCliente(false)
+      setSearchInPR(false)
+      setSearchInExpediente(false)
+      setSearchInNR(false)
+      setSearchInFV(false)
+    }
     setRawStateFilters([])
     setClassFilters([])
     setClientFilters([])
@@ -508,13 +500,6 @@ export function useCirugiasFilters() {
     setDateFrom("")
     setDateTo("")
     setKpiFilter(null)
-    setSearchInMedico(false)
-    setSearchInInstitucion(false)
-    setSearchInCliente(false)
-    setSearchInPR(false)
-    setSearchInExpediente(false)
-    setSearchInNR(false)
-    setSearchInFV(false)
     // CHATZAI-025-4C: Clear enhanced date filters
     setDateFilters([])
     // CHATZAI-025-4C: Clear new advanced filter fields
@@ -600,6 +585,7 @@ export function useCirugiasFilters() {
     facturacionStatus,
     // Actions
     filterData,
+    filterSearchData,
     clearFilters,
     clearExtendedSearch,
   }

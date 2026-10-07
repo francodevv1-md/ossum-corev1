@@ -1,69 +1,36 @@
 "use client"
 
-import React, { useState, useRef, useMemo, useCallback } from "react"
+import React, { useState, useRef, useMemo, useId } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, X, User, Building2, Hospital, CreditCard, Hash } from "lucide-react"
+import { Search, X, Hash } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import { useOrtoTrackStore } from "@/lib/store"
-import type { Contacto, ContactRole } from "@/types"
+import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover"
 import type { SearchChip, SearchChipField } from "@/lib/cirugias.types"
 import { cn } from "@/lib/utils"
-import { normalizeAccents } from "@/lib/utils"
+import { generateId } from "@/lib/idGenerators"
+import {
+  getSurgerySearchSuggestions,
+  normalizeSurgerySearch,
+  type SurgerySearchRecord,
+  type SurgerySearchSuggestion,
+} from "@/lib/cirugias/search"
 
 // ═══════════════════════════════════════════════════════════════
 // Props
 // ═══════════════════════════════════════════════════════════════
 
-interface SmartSurgerySearchProps {
+export interface SmartSurgerySearchProps {
+  /** Supply only surgeries authorized for the caller's current scope. */
+  surgeries: readonly SurgerySearchRecord[]
   chips: SearchChip[]
   onChipsChange: (chips: SearchChip[]) => void
-  onSearch: () => void
 }
 
 // ═══════════════════════════════════════════════════════════════
 // Constants
 // ═══════════════════════════════════════════════════════════════
-
-/**
- * CHATZAI-025A.2: Role config for grouped suggestions.
- * Each entry defines a search context: role + groups → chip field.
- * All groups are searched independently so "López" appears in both
- * Médicos and Pacientes when matching contacts exist.
- */
-const ROLE_CONFIG: Array<{
-  role: ContactRole
-  groups: string[]
-  field: SearchChipField
-  label: string
-  singular: string
-  icon: React.ElementType
-}> = [
-  { role: "cliente", groups: ["medicos"], field: "medico", label: "Médicos", singular: "Médico", icon: User },
-  { role: "cliente", groups: ["pacientes"], field: "paciente", label: "Pacientes", singular: "Paciente", icon: User },
-  { role: "cliente", groups: ["obras_sociales", "art", "particulares", "prepagas"], field: "cliente", label: "Clientes / OS", singular: "Cliente", icon: CreditCard },
-  { role: "cliente", groups: ["instituciones"], field: "institucion", label: "Instituciones", singular: "Institución", icon: Hospital },
-]
-
-/**
- * CHATZAI-025A.2: Surgery-level suggestion types.
- * These search directly in surgery data, not in contactos.
- */
-interface SurgerySuggestion {
-  surgeryId: string
-  display: string
-  context: string
-  field: SearchChipField
-}
 
 const FIELD_BADGE_COLORS: Record<SearchChipField, string> = {
   medico: "bg-violet-50 border-violet-200 text-violet-700 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300",
@@ -73,298 +40,66 @@ const FIELD_BADGE_COLORS: Record<SearchChipField, string> = {
   general: "bg-gray-50 border-gray-200 text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
 }
 
-/** Max results per group — balanced so one category doesn't dominate */
-const MAX_RESULTS_PER_GROUP = 5
-
-/** Max surgery-level suggestions */
-const MAX_SURGERY_SUGGESTIONS = 3
-
-// ═══════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════
-
-function generateChipId(): string {
-  return `chip-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-/**
- * Build surgery-level suggestions by searching directly in surgery data.
- * This complements contacto-based suggestions for cases where a name
- * appears in surgery data but not (yet) in contactos, or for surgery
- * IDs/PR numbers.
- */
-function buildSurgerySuggestions(
-  query: string,
-  surgeries: Array<{ id: string; patient: string; surgeon: string; institution: string; client: string; prNumber?: string; expedienteNumber?: string }>,
-  existingContactoMatches: Set<string>, // contacto names already matched, to avoid duplicates
-): SurgerySuggestion[] {
-  const q = normalizeAccents(query.trim().toLowerCase())
-  if (!q) return []
-
-  const suggestions: SurgerySuggestion[] = []
-  const seen = new Set<string>() // avoid duplicate suggestions
-
-  for (const s of surgeries) {
-    // Check patient — only add if not already matched via contactos
-    const patientNorm = normalizeAccents(s.patient || "").toLowerCase()
-    if (patientNorm.includes(q) && !existingContactoMatches.has(s.patient)) {
-      const key = `paciente-${s.patient}`
-      if (!seen.has(key) && suggestions.length < MAX_SURGERY_SUGGESTIONS) {
-        seen.add(key)
-        suggestions.push({
-          surgeryId: s.id,
-          display: s.patient,
-          context: `Paciente — ${s.id}`,
-          field: "paciente",
-        })
-      }
-    }
-
-    // Check surgeon — only add if not already matched via contactos
-    const surgeonNorm = normalizeAccents(s.surgeon || "").toLowerCase()
-    if (surgeonNorm.includes(q) && !existingContactoMatches.has(s.surgeon)) {
-      const key = `medico-${s.surgeon}`
-      if (!seen.has(key) && suggestions.length < MAX_SURGERY_SUGGESTIONS) {
-        seen.add(key)
-        suggestions.push({
-          surgeryId: s.id,
-          display: s.surgeon,
-          context: `Médico — ${s.id}`,
-          field: "medico",
-        })
-      }
-    }
-
-    // Check surgery ID
-    if (normalizeAccents(s.id).toLowerCase().includes(q)) {
-      const key = `id-${s.id}`
-      if (!seen.has(key) && suggestions.length < MAX_SURGERY_SUGGESTIONS) {
-        seen.add(key)
-        suggestions.push({
-          surgeryId: s.id,
-          display: s.id,
-          context: `Cirugía`,
-          field: "general",
-        })
-      }
-    }
-
-    // Check PR number
-    if (s.prNumber && normalizeAccents(s.prNumber).toLowerCase().includes(q)) {
-      const key = `pr-${s.prNumber}`
-      if (!seen.has(key) && suggestions.length < MAX_SURGERY_SUGGESTIONS) {
-        seen.add(key)
-        suggestions.push({
-          surgeryId: s.id,
-          display: s.prNumber,
-          context: `Presupuesto — ${s.id}`,
-          field: "general",
-        })
-      }
-    }
-
-    // Check expediente number
-    if (s.expedienteNumber && normalizeAccents(s.expedienteNumber).toLowerCase().includes(q)) {
-      const key = `exp-${s.expedienteNumber}`
-      if (!seen.has(key) && suggestions.length < MAX_SURGERY_SUGGESTIONS) {
-        seen.add(key)
-        suggestions.push({
-          surgeryId: s.id,
-          display: s.expedienteNumber,
-          context: `Expediente — ${s.id}`,
-          field: "general",
-        })
-      }
-    }
-
-    // Check institution
-    const instNorm = normalizeAccents(s.institution || "").toLowerCase()
-    if (instNorm.includes(q) && !existingContactoMatches.has(s.institution)) {
-      const key = `inst-${s.institution}`
-      if (!seen.has(key) && suggestions.length < MAX_SURGERY_SUGGESTIONS) {
-        seen.add(key)
-        suggestions.push({
-          surgeryId: s.id,
-          display: s.institution,
-          context: `Institución — ${s.id}`,
-          field: "institucion",
-        })
-      }
-    }
-
-    // Check client
-    const clientNorm = normalizeAccents(s.client || "").toLowerCase()
-    if (clientNorm.includes(q) && !existingContactoMatches.has(s.client)) {
-      const key = `cliente-${s.client}`
-      if (!seen.has(key) && suggestions.length < MAX_SURGERY_SUGGESTIONS) {
-        seen.add(key)
-        suggestions.push({
-          surgeryId: s.id,
-          display: s.client,
-          context: `Cliente — ${s.id}`,
-          field: "cliente",
-        })
-      }
-    }
-  }
-
-  return suggestions
-}
-
 // ═══════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════
 
-export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurgerySearchProps) {
-  const store = useOrtoTrackStore()
+export function SmartSurgerySearch({ surgeries, chips, onChipsChange }: SmartSurgerySearchProps) {
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const listId = useId()
 
-  // ── Grouped suggestions from contactos ──
-  // CHATZAI-025A.2: All ROLE_CONFIG groups are searched independently.
-  // If "López" matches in both "medicos" and "pacientes" contactos,
-  // both groups will appear in the dropdown.
-  const contactoSuggestions = useMemo(() => {
-    if (!query.trim()) return []
-
-    return ROLE_CONFIG.map(({ role, groups, field, label, icon }) => {
-      const contacts = store.searchContactos(query.trim(), role, groups.length > 0 ? groups : undefined)
-        .filter((c) => c.estado === "activo")
-        .slice(0, MAX_RESULTS_PER_GROUP)
-
-      return { role, field, label, icon, contacts }
-    }).filter((g) => g.contacts.length > 0)
-  }, [query, store])
-
-  // ── Collect names already found in contactos to avoid duplicates in surgery suggestions ──
-  const contactoMatchedNames = useMemo(() => {
-    const names = new Set<string>()
-    for (const group of contactoSuggestions) {
-      for (const c of group.contacts) {
-        names.add(c.nombreFantasia || c.nombre)
-      }
-    }
-    return names
-  }, [contactoSuggestions])
-
-  // ── Surgery-level suggestions (complement contactos) ──
-  const surgerySuggestions = useMemo(() => {
-    if (!query.trim()) return []
-    return buildSurgerySuggestions(query, store.surgeries, contactoMatchedNames)
-  }, [query, store.surgeries, contactoMatchedNames])
-
-  // ── Has any suggestions at all ──
-  const hasSuggestions = contactoSuggestions.length > 0 || surgerySuggestions.length > 0
-
-  // ── Check if a contacto is already chipped ──
-  const isAlreadyChipped = useCallback(
-    (contactoId: string, field: SearchChipField) =>
-      chips.some((c) => c.field === field && c.value === contactoId),
-    [chips]
+  const isAlreadyChipped = (suggestion: SurgerySearchSuggestion) => chips.some((chip) =>
+    chip.field === suggestion.field
+    && (chip.match === "text" || chip.field === "general")
+    && normalizeSurgerySearch(chip.value) === normalizeSurgerySearch(suggestion.value),
   )
+  const suggestions = useMemo(() => getSurgerySearchSuggestions(surgeries, query), [surgeries, query])
+  const options = suggestions.filter((suggestion) => !isAlreadyChipped(suggestion))
 
-  // ── Check if a surgery suggestion is already chipped ──
-  const isSurgerySuggestionChipped = useCallback(
-    (suggestion: SurgerySuggestion) =>
-      chips.some((c) => c.field === suggestion.field && c.value === suggestion.surgeryId),
-    [chips]
-  )
-
-  // ── Add chip from contacto suggestion ──
-  const handleSelectContact = useCallback(
-    (contacto: Contacto, field: SearchChipField) => {
-      if (isAlreadyChipped(contacto.id, field)) return
-
-      const fieldLabel = ROLE_CONFIG.find((r) => r.field === field)?.singular || field
-      const display = contacto.nombreFantasia || contacto.nombre
-      const chip: SearchChip = {
-        id: generateChipId(),
-        field,
-        value: contacto.id,
-        label: `${fieldLabel}: ${display}`,
-      }
-      onChipsChange([...chips, chip])
-      setQuery("")
-      setOpen(false)
-      inputRef.current?.focus()
-    },
-    [chips, onChipsChange, isAlreadyChipped]
-  )
-
-  // ── Add chip from surgery suggestion ──
-  const handleSelectSurgerySuggestion = useCallback(
-    (suggestion: SurgerySuggestion) => {
-      if (isSurgerySuggestionChipped(suggestion)) return
-
-      const fieldLabel = ROLE_CONFIG.find((r) => r.field === suggestion.field)?.singular || suggestion.field
-      const chip: SearchChip = {
-        id: generateChipId(),
-        field: suggestion.field,
-        value: suggestion.surgeryId,
-        label: `${fieldLabel}: ${suggestion.display}`,
-      }
-      onChipsChange([...chips, chip])
-      setQuery("")
-      setOpen(false)
-      inputRef.current?.focus()
-    },
-    [chips, onChipsChange, isSurgerySuggestionChipped]
-  )
-
-  // ── Add general search chip (Enter) ──
-  const handleAddGeneralChip = useCallback(() => {
-    if (!query.trim()) return
-
-    // Check if this exact general chip already exists
-    if (chips.some((c) => c.field === "general" && c.value === query.trim())) return
-
-    const chip: SearchChip = {
-      id: generateChipId(),
-      field: "general",
-      value: query.trim(),
-      label: `Búsqueda: ${query.trim()}`,
-    }
-    onChipsChange([...chips, chip])
+  const addChip = (suggestion: SurgerySearchSuggestion) => {
+    if (!normalizeSurgerySearch(suggestion.value)) return
+    if (!isAlreadyChipped(suggestion)) onChipsChange([...chips, { ...suggestion, id: generateId("chip") }])
+    inputRef.current?.focus()
     setQuery("")
     setOpen(false)
-    inputRef.current?.focus()
-  }, [query, chips, onChipsChange])
+    setActiveIndex(-1)
+  }
+  const addGeneralChip = () => addChip({ field: "general", value: query.trim(), match: "text", label: `Búsqueda: ${query.trim()}` })
 
-  // ── Remove chip ──
-  const handleRemoveChip = useCallback(
-    (chipId: string) => {
-      onChipsChange(chips.filter((c) => c.id !== chipId))
-    },
-    [chips, onChipsChange]
-  )
-
-  // ── Key handlers ──
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault()
-        if (query.trim()) {
-          handleAddGeneralChip()
-          onSearch()
-        } else if (chips.length > 0) {
-          onSearch()
-        }
-      }
-      if (e.key === "Backspace" && !query && chips.length > 0) {
-        onChipsChange(chips.slice(0, -1))
-      }
-    },
-    [query, chips, handleAddGeneralChip, onSearch, onChipsChange]
-  )
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return
+    if (e.key === "Enter") {
+      e.preventDefault()
+      if (open && options[activeIndex]) addChip(options[activeIndex])
+      else addGeneralChip()
+    } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && options.length > 0) {
+      e.preventDefault()
+      setOpen(true)
+      const next = e.key === "ArrowDown"
+        ? (activeIndex + 1) % options.length
+        : (activeIndex <= 0 ? options.length - 1 : activeIndex - 1)
+      setActiveIndex(next)
+      document.getElementById(`${listId}-${next}`)?.scrollIntoView?.({ block: "nearest" })
+    } else if (e.key === "Escape") {
+      setOpen(false)
+      setActiveIndex(-1)
+    } else if (e.key === "Backspace" && !query && chips.length > 0) {
+      onChipsChange(chips.slice(0, -1))
+    }
+  }
 
   return (
     <div className="flex w-full items-center gap-1.5">
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+        <PopoverAnchor asChild>
           <div
+            ref={anchorRef}
             className={cn(
-               "flex min-h-9 flex-1 flex-wrap items-center gap-1 rounded-sm border border-slate-300 bg-white px-2 py-1 shadow-sm dark:border-slate-700 dark:bg-slate-900",
+               "flex min-h-9 min-w-0 flex-1 flex-wrap items-center gap-1 rounded-sm border border-slate-300 bg-white px-2 py-1 shadow-sm dark:border-slate-700 dark:bg-slate-900",
                 "cursor-text",
                 "focus-within:border-slate-400 focus-within:ring-1 focus-within:ring-slate-300 dark:focus-within:border-slate-500 dark:focus-within:ring-slate-600",
                 "hover:border-slate-400 dark:hover:border-slate-500"
@@ -378,6 +113,7 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
               {chips.map((chip) => (
                 <motion.div
                   key={chip.id}
+                  className="max-w-full"
                   layout
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -387,16 +123,19 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
                   <Badge
                     variant="outline"
                     className={cn(
-                      "h-5 shrink-0 gap-0.5 border px-1.5 text-[10px] font-semibold shadow-sm",
+                      "h-5 max-w-full gap-0.5 border px-1.5 text-[10px] font-semibold shadow-sm",
                       FIELD_BADGE_COLORS[chip.field]
                     )}
                   >
-                    {chip.label}
+                    <span className="min-w-0 truncate">{chip.label}</span>
                     <button
-                      className="ml-0.5 hover:opacity-70 transition-opacity"
+                      type="button"
+                      aria-label={`Quitar ${chip.label}`}
+                      className="ml-0.5 shrink-0 hover:opacity-70 transition-opacity"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleRemoveChip(chip.id)
+                        onChipsChange(chips.filter((c) => c.id !== chip.id))
+                        setActiveIndex(-1)
                       }}
                     >
                       <X className="size-2.5" />
@@ -411,12 +150,19 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
                 <Search className="absolute left-0.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <Input
                 ref={inputRef}
+                inputMode="search"
+                role="combobox"
+                aria-label="Buscar cirugías"
+                aria-autocomplete="list"
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-controls={listId}
+                aria-activedescendant={open && options[activeIndex] ? `${listId}-${activeIndex}` : undefined}
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value)
-                  if (e.target.value.trim()) {
-                    setOpen(true)
-                  }
+                  setActiveIndex(-1)
+                  setOpen(Boolean(normalizeSurgerySearch(e.target.value)))
                 }}
                 onFocus={() => {
                   if (query.trim()) setOpen(true)
@@ -425,114 +171,61 @@ export function SmartSurgerySearch({ chips, onChipsChange, onSearch }: SmartSurg
                 placeholder={
                   chips.length > 0
                     ? "Agregar filtro..."
-                    : "Buscar paciente, médico, cliente o institución..."
+                    : "Paciente, médico, cliente, institución, CX/PR/expediente…"
                 }
                 className="h-7 w-full border-0 bg-transparent px-0 pl-5 text-[13px] shadow-none outline-none placeholder:text-slate-400 focus-visible:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
           </div>
-        </PopoverTrigger>
+        </PopoverAnchor>
 
         <PopoverContent
           align="start"
           className="w-[var(--radix-popover-trigger-width)] border-slate-300 p-0 shadow-md dark:border-slate-700 dark:bg-slate-950"
           onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            if (anchorRef.current?.contains(e.target as Node)) e.preventDefault()
+          }}
         >
-          <Command shouldFilter={false}>
-            <CommandList>
-              <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">
-                {query.trim() ? "No se encontraron resultados" : "Escribe para buscar"}
-              </CommandEmpty>
-
-              {/* ── Contactos-based suggestions (grouped by category) ── */}
-              {contactoSuggestions.map((group) => (
-                <CommandGroup key={group.field} heading={group.label}>
-                  {group.contacts.map((contacto) => {
-                    const Icon = group.icon
-                    const alreadyAdded = isAlreadyChipped(contacto.id, group.field)
-                    const display = contacto.nombreFantasia || contacto.nombre
-                    return (
-                      <CommandItem
-                        key={`${group.field}-${contacto.id}`}
-                        value={`${group.field}-${contacto.id}`}
-                        disabled={alreadyAdded}
-                        onSelect={() => handleSelectContact(contacto, group.field)}
-                        className="flex items-center gap-2 text-xs"
-                      >
-                        <Icon className="size-3.5 text-muted-foreground" />
-                        <span className="flex-1">{display}</span>
-                        {contacto.datosMedico?.especialidad && (
-                          <span className="text-[10px] text-muted-foreground">{contacto.datosMedico.especialidad}</span>
-                        )}
-                        {contacto.cuit && (
-                          <span className="text-[10px] text-muted-foreground">CUIT {contacto.cuit}</span>
-                        )}
-                        {contacto.dni && (
-                          <span className="text-[10px] text-muted-foreground">DNI {contacto.dni}</span>
-                        )}
-                        {alreadyAdded && (
-                          <span className="text-[10px] text-muted-foreground italic">agregado</span>
-                        )}
-                      </CommandItem>
-                    )
-                  })}
-                </CommandGroup>
-              ))}
-
-              {/* ── Surgery-level suggestions (from surgery data directly) ── */}
-              {surgerySuggestions.length > 0 && (
-                <CommandGroup heading="En cirugías">
-                  {surgerySuggestions.map((sug) => {
-                    const alreadyAdded = isSurgerySuggestionChipped(sug)
-                    return (
-                      <CommandItem
-                        key={`surgery-${sug.surgeryId}-${sug.field}`}
-                        value={`surgery-${sug.surgeryId}-${sug.field}`}
-                        disabled={alreadyAdded}
-                        onSelect={() => handleSelectSurgerySuggestion(sug)}
-                        className="flex items-center gap-2 text-xs"
-                      >
-                        <Hash className="size-3.5 text-muted-foreground" />
-                        <span className="flex-1">{sug.display}</span>
-                        <span className="text-[10px] text-muted-foreground">{sug.context}</span>
-                        {alreadyAdded && (
-                          <span className="text-[10px] text-muted-foreground italic">agregado</span>
-                        )}
-                      </CommandItem>
-                    )
-                  })}
-                </CommandGroup>
-              )}
-
-              {/* General search option */}
-              {query.trim() && (
-                <CommandGroup heading="Búsqueda general">
-                  <CommandItem
-                    value="__general__"
-                    onSelect={handleAddGeneralChip}
-                    className="flex items-center gap-2 text-xs"
-                  >
-                    <Search className="size-3.5 text-muted-foreground" />
-                    <span>Buscar: &quot;{query.trim()}&quot;</span>
-                    <span className="ml-auto text-[10px] text-muted-foreground">Enter</span>
-                  </CommandItem>
-                </CommandGroup>
-              )}
-            </CommandList>
-          </Command>
+          <div id={listId} role="listbox" aria-label="Sugerencias de cirugías" className="max-h-72 overflow-y-auto p-1">
+            {options.map((suggestion, index) => (
+              <button
+                key={`${suggestion.field}:${normalizeSurgerySearch(suggestion.value)}`}
+                id={`${listId}-${index}`}
+                type="button"
+                role="option"
+                tabIndex={-1}
+                aria-selected={index === activeIndex}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => addChip(suggestion)}
+                className={cn("flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-xs hover:bg-accent", index === activeIndex && "bg-accent")}
+              >
+                <Hash className="size-3.5 shrink-0 text-muted-foreground" />
+                <span>{suggestion.label}</span>
+              </button>
+            ))}
+          </div>
+          {suggestions.length === 0 && query.trim() && (
+            <p className="px-3 py-2 text-xs text-muted-foreground" role="status">Sin sugerencias en las cirugías cargadas de esta empresa/sucursal.</p>
+          )}
+          {query.trim() && (
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={addGeneralChip} className="flex w-full items-center gap-2 border-t px-3 py-2 text-left text-xs hover:bg-accent">
+              <Search className="size-3.5 shrink-0" />
+              <span>Buscar: &quot;{query.trim()}&quot;</span>
+              <span className="ml-auto text-[10px] text-muted-foreground">Enter</span>
+            </button>
+          )}
         </PopoverContent>
       </Popover>
 
       <Button
+        type="button"
         size="sm"
         variant="outline"
         className="h-9 shrink-0 rounded-sm border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:px-2.5"
-        onClick={() => {
-          if (query.trim()) {
-            handleAddGeneralChip()
-          }
-          onSearch()
-        }}
+        onClick={addGeneralChip}
+        disabled={!normalizeSurgerySearch(query)}
         aria-label="Ejecutar búsqueda"
       >
         <Search className="size-3.5" />

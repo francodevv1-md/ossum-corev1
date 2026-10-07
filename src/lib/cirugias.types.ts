@@ -46,7 +46,8 @@ export type SearchChipField = "medico" | "paciente" | "cliente" | "institucion" 
 export interface SearchChip {
   id: string
   field: SearchChipField
-  value: string        // contacto ID or search term (for general)
+  value: string        // contact ID for legacy chips, search text when match is "text"
+  match?: "text"      // explicit text matching; omitted on legacy contact chips
   label: string        // display text e.g. "Médico: Dr. Sosa"
 }
 

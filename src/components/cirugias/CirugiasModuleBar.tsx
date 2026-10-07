@@ -5,11 +5,12 @@ import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { useSidebar } from "@/components/layout/app-shell"
 import { Button } from "@/components/ui/button"
 import { SmartSurgerySearch } from "./SmartSurgerySearch"
+import type { SurgerySearchRecord } from "@/lib/cirugias/search"
 
 interface CirugiasModuleBarProps {
+  surgeries: readonly SurgerySearchRecord[]
   searchChips: import("@/lib/cirugias.types").SearchChip[]
   onSearchChipsChange: (chips: import("@/lib/cirugias.types").SearchChip[]) => void
-  onSmartSearch: () => void
   colVisOpen: boolean
   setColVisOpen: (v: boolean) => void
   columns: ReadonlyArray<{ key: string; label: string }>
@@ -29,9 +30,9 @@ interface CirugiasModuleBarProps {
 }
 
 export function CirugiasModuleBar({
+  surgeries,
   searchChips,
   onSearchChipsChange,
-  onSmartSearch,
   colVisOpen,
   setColVisOpen,
   columns,
@@ -98,9 +99,9 @@ export function CirugiasModuleBar({
 
         <div className="min-w-0 flex-1">
           <SmartSurgerySearch
+            surgeries={surgeries}
             chips={searchChips}
             onChipsChange={onSearchChipsChange}
-            onSearch={onSmartSearch}
           />
         </div>
       </div>

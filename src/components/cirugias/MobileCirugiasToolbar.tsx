@@ -1,12 +1,11 @@
 "use client"
 
 import React from "react"
-import { Filter, Plus, Search, X } from "lucide-react"
+import { Filter, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SmartSurgerySearch, type SmartSurgerySearchProps } from "./SmartSurgerySearch"
 
-interface MobileCirugiasToolbarProps {
-  search: string
-  onSearchChange: (value: string) => void
+interface MobileCirugiasToolbarProps extends SmartSurgerySearchProps {
   activeFilterCount: number
   hasActiveFilters: boolean
   onClearFilters: () => void
@@ -23,8 +22,9 @@ interface MobileCirugiasToolbarProps {
  *   counter stays in the body list, never as its own row.
  */
 export function MobileCirugiasToolbar({
-  search,
-  onSearchChange,
+  surgeries,
+  chips,
+  onChipsChange,
   activeFilterCount,
   hasActiveFilters,
   onClearFilters,
@@ -59,35 +59,9 @@ export function MobileCirugiasToolbar({
       </div>
 
       <div className="flex items-center gap-2">
-        <label className="relative flex flex-1 items-center">
-          <Search
-            className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400"
-            aria-hidden
-          />
-          <input
-            type="search"
-            inputMode="search"
-            placeholder="Buscar paciente, cirujano, institución…"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className={cn(
-              "h-10 w-full rounded-full border border-slate-200 bg-slate-100 pl-10 pr-9 text-sm",
-              "placeholder:text-slate-400 focus:border-blue-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20",
-              "dark:border-slate-800 dark:bg-slate-900 dark:placeholder:text-slate-500 dark:focus:border-blue-400 dark:focus:bg-slate-950",
-            )}
-            aria-label="Buscar cirugías"
-          />
-          {search ? (
-            <button
-              type="button"
-              onClick={() => onSearchChange("")}
-              className="absolute right-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-500 transition active:scale-90 hover:bg-slate-200 dark:hover:bg-slate-800"
-              aria-label="Limpiar búsqueda"
-            >
-              <X className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          ) : null}
-        </label>
+        <div className="min-w-0 flex-1">
+          <SmartSurgerySearch surgeries={surgeries} chips={chips} onChipsChange={onChipsChange} />
+        </div>
 
         <button
           type="button"
